@@ -1,12 +1,13 @@
 // src/Sidebar.js
 import React from 'react';
 import './Sidebar.css';
+import logo from './assests/logo/scorelectlogo-grey.jpeg';
 
 const Sidebar = ({ onNavigate, onLogout, onSportChange }) => {
   return (
     <div className="sidebar">
       <div className="user-info">
-        <h2>Scorelect</h2>
+        <img src={logo} alt="Scorelect Logo" className="logo" />
       </div>
       <nav>
         <ul>

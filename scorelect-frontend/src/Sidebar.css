@@ -1,3 +1,4 @@
+/* src/Sidebar.css */
 .sidebar {
     width: 250px;
     background-color: #5E2E8F;
@@ -11,6 +12,13 @@
   
   .sidebar .user-info {
     margin-bottom: 20px;
+  }
+  
+  .logo {
+    width: 250px; /* Adjust the width as needed */
+    margin-bottom: 20px;
+    margin-top: 20px;
+
   }
   
   nav ul {
@@ -37,7 +45,8 @@
   
   nav ul li button:hover,
   nav ul li select:hover {
-    background-color: #AC1EA6;
+    background-color: #6d21af;
   }
+  
   
   

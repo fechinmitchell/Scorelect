@@ -1,7 +1,7 @@
-// src/PitchGraphic.js
 import React, { useState, useRef, useEffect } from 'react';
 import { Stage, Layer, Rect, Line, Circle, Arc } from 'react-konva';
 import Modal from 'react-modal';
+import './PitchGraphic.css';
 
 const PitchGraphic = () => {
   const [coords, setCoords] = useState([]);
@@ -79,7 +79,19 @@ const PitchGraphic = () => {
   };
 
   const handleFormSubmit = () => {
-    setCoords([...coords, formData]);
+    const updatedFormData = {
+      action: formData.action || actionCodes[0],
+      team: formData.team || counties[0],
+      player: formData.player || '',
+      position: formData.position || positions[0],
+      pressure: formData.pressure || 'y',
+      foot: formData.foot || 'r',
+      minute: formData.minute || '',
+      x: formData.x,
+      y: formData.y,
+      type: formData.type,
+    };
+    setCoords([...coords, updatedFormData]);
     setOpenDialog(false);
     setRecentActions([formData.action, ...recentActions.filter(action => action !== formData.action)]);
     setRecentTeams([formData.team, ...recentTeams.filter(team => team !== formData.team)]);
@@ -117,45 +129,34 @@ const PitchGraphic = () => {
   const renderGAAPitch = () => (
     <Layer>
       <Rect x={0} y={0} width={canvasWidth} height={canvasHeight} fill="#90EE90" />
-
       {/* Side and goal lines */}
       <Line points={[0, 0, canvasWidth, 0, canvasWidth, canvasHeight, 0, canvasHeight, 0, 0]} stroke="#000" strokeWidth={2} />
-
       {/* Goals */}
       <Line points={[canvasWidth, yScale * 40.75, xScale * 145.2, yScale * 40.75, xScale * 145.2, yScale * 47.25, canvasWidth, yScale * 47.25]} stroke="#000" strokeWidth={2} />
       <Line points={[0, yScale * 40.75, xScale * -0.2, yScale * 40.75, xScale * -0.2, yScale * 47.25, 0, yScale * 47.25]} stroke="#000" strokeWidth={2} />
-
       {/* 6 yard boxes */}
       <Line points={[canvasWidth, yScale * 37, xScale * 139, yScale * 37, xScale * 139, yScale * 51, canvasWidth, yScale * 51]} stroke="#000" strokeWidth={2} />
       <Line points={[0, yScale * 37, xScale * 6, yScale * 37, xScale * 6, yScale * 51, 0, yScale * 51]} stroke="#000" strokeWidth={2} />
-
       {/* Large rectangles */}
       <Line points={[0, yScale * 34.5, xScale * 14, yScale * 34.5, xScale * 14, yScale * 53.5, 0, yScale * 53.5]} stroke="#000" strokeWidth={2} />
       <Line points={[canvasWidth, yScale * 34.5, xScale * 131, yScale * 34.5, xScale * 131, yScale * 53.5, canvasWidth, yScale * 53.5]} stroke="#000" strokeWidth={2} />
-
       {/* Halfway small line */}
       <Line points={[xScale * 72.5, yScale * 39, xScale * 72.5, yScale * 49]} stroke="#000" strokeWidth={2} />
-
       {/* Peno lines */}
       <Line points={[xScale * 11, yScale * 43.5, xScale * 11, yScale * 44.5]} stroke="#000" strokeWidth={2} />
       <Line points={[xScale * 134, yScale * 43.5, xScale * 134, yScale * 44.5]} stroke="#000" strokeWidth={2} />
-
       {/* Half Circles */}
       <Arc x={xScale * 124} y={yScale * 44} innerRadius={0} outerRadius={xScale * 12} angle={180} rotation={90} stroke="#000" strokeWidth={2} />
       <Arc x={xScale * 21} y={yScale * 44} innerRadius={0} outerRadius={xScale * 12} angle={180} rotation={270} stroke="#000" strokeWidth={2} />
-
       {/* 14 yard lines */}
       <Line points={[xScale * 14, 0, xScale * 14, canvasHeight]} stroke="#000" strokeWidth={2} />
       <Line points={[xScale * 131, 0, xScale * 131, canvasHeight]} stroke="#000" strokeWidth={2} />
-
       {/* 21 yard lines */}
       <Line points={[xScale * 21, 0, xScale * 21, canvasHeight]} stroke="#000" strokeWidth={2} />
       <Line points={[xScale * 124, 0, xScale * 124, canvasHeight]} stroke="#000" strokeWidth={2} />
-
       {/* 45 yard lines */}
       <Line points={[xScale * 45, 0, xScale * 45, canvasHeight]} stroke="#000" strokeWidth={2} />
       <Line points={[xScale * 100, 0, xScale * 100, canvasHeight]} stroke="#000" strokeWidth={2} />
-
       {/* 65 yard lines */}
       <Line points={[xScale * 65, 0, xScale * 65, canvasHeight]} stroke="#000" strokeWidth={2} />
       <Line points={[xScale * 80, 0, xScale * 80, canvasHeight]} stroke="#000" strokeWidth={2} />
@@ -163,61 +164,65 @@ const PitchGraphic = () => {
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <div style={{ display: 'flex' }}>
-        <Stage width={canvasWidth} height={canvasHeight} onClick={handleClick} ref={stageRef}>
-          {renderGAAPitch()}
-          <Layer>
-            {coords.map((coord, index) => {
-              if (coord.type.includes('pass') || coord.type.includes('kickout')) {
-                return (
-                  <Line
-                    key={index}
-                    points={[
-                      coord.from.x * xScale,
-                      coord.from.y * yScale,
-                      coord.to.x * xScale,
-                      coord.to.y * yScale
-                    ]}
-                    stroke={coord.type.includes('unsuccessful') ? 'red' : 'yellow'}
-                    strokeWidth={2}
-                  />
-                );
-              }
-              return (
-                <Circle
-                  key={index}
-                  x={coord.x * xScale}
-                  y={coord.y * yScale}
-                  radius={5}
-                  fill={coord.type.includes('unsuccessful') ? 'red' : 'blue'}
-                />
-              );
-            })}
-          </Layer>
-        </Stage>
-        <div style={{ marginLeft: '20px', width: '300px', padding: '10px', border: '1px solid #ddd' }}>
-          <h3>Instructions</h3>
-          <p>Action Codes:</p>
-          <ul>
-            <li><b>p</b>: Successful Pass</li>
-            <li><b>u</b>: Unsuccessful Pass</li>
-            <li><b>k</b>: Successful Kickout</li>
-            <li><b>c</b>: Unsuccessful Kickout</li>
-            <li><b>g</b>: Successful Action</li>
-            <li><b>b</b>: Unsuccessful Action</li>
-          </ul>
-          <p>Click on the pitch to record an action at that location. Use the keys above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
-            <button onClick={handleClearMarkers}>Clear Markers</button>
-            <button onClick={handleUndoLastMarker}>Undo Last Marker</button>
-            <button onClick={handleDownloadData}>Download Data</button>
-            <button onClick={toggleModal}>View Coordinates</button>
+    <div className="pitch-container">
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'row' }}>
+            <Stage width={canvasWidth} height={canvasHeight} onClick={handleClick} ref={stageRef}>
+              {renderGAAPitch()}
+              <Layer>
+                {coords.map((coord, index) => {
+                  if (coord.type.includes('pass') || coord.type.includes('kickout')) {
+                    return (
+                      <Line
+                        key={index}
+                        points={[
+                          coord.from.x * xScale,
+                          coord.from.y * yScale,
+                          coord.to.x * xScale,
+                          coord.to.y * yScale
+                        ]}
+                        stroke={coord.type.includes('unsuccessful') ? 'red' : 'yellow'}
+                        strokeWidth={2}
+                      />
+                    );
+                  }
+                  return (
+                    <Circle
+                      key={index}
+                      x={coord.x * xScale}
+                      y={coord.y * yScale}
+                      radius={5}
+                      fill={coord.type.includes('unsuccessful') ? 'red' : 'blue'}
+                    />
+                  );
+                })}
+              </Layer>
+            </Stage>
+            <div className="instructions-container">
+              <h3>Instructions</h3>
+              <p>Action Codes:</p>
+              <ul>
+                <li><b>p</b>: Successful Pass</li>
+                <li><b>u</b>: Unsuccessful Pass</li>
+                <li><b>k</b>: Successful Kickout</li>
+                <li><b>c</b>: Unsuccessful Kickout</li>
+                <li><b>g</b>: Successful Action</li>
+                <li><b>b</b>: Unsuccessful Action</li>
+              </ul>
+              <p>Click on the pitch to record an action at that location. Use the keys above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
+              <div className="button-container">
+                <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
+                <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
+                <button className="button" onClick={handleDownloadData}>Download Data</button>
+                <button className="button" onClick={toggleModal}>View Coordinates</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
       {openDialog && (
-        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: 'white', padding: '20px', border: '1px solid #ddd' }}>
+        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: 'Grey', padding: '20px', border: '1px solid #ddd' }}>
           <h3>Enter Action Details</h3>
           <div>
             <label>
@@ -276,9 +281,9 @@ const PitchGraphic = () => {
               <input type="text" name="minute" value={formData.minute} onChange={handleChange} />
             </label>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
-            <button onClick={handleCloseDialog}>Cancel</button>
-            <button onClick={handleFormSubmit}>Submit</button>
+          <div className="button-container">
+            <button className="button" onClick={handleCloseDialog}>Cancel</button>
+            <button className="button" onClick={handleFormSubmit}>Submit</button>
           </div>
         </div>
       )}
@@ -302,7 +307,7 @@ const PitchGraphic = () => {
       >
         <h2>Coordinates Data</h2>
         <button onClick={toggleModal}>Close</button>
-        <div style={{ marginTop: '10px', backgroundColor: '#f9f9f9', padding: '10px', border: '1px solid #ccc' }}>
+        <div style={{ marginTop: '10px', backgroundColor: 'Grey', padding: '10px', border: '1px solid #ccc' }}>
           <ul style={{ listStyleType: 'none', padding: '0' }}>
             {coords.map((coord, index) => (
               <li key={index}>

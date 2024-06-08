@@ -1,7 +1,6 @@
-/* src/Sidebar.css */
 .sidebar {
     width: 250px;
-    background-color: #444;
+    background-color: #5E2E8F;
     color: white;
     display: flex;
     flex-direction: column;
@@ -27,7 +26,7 @@
   nav ul li button,
   nav ul li select {
     width: 100%;
-    background-color: #555;
+    background-color: #501387;
     color: white;
     border: none;
     padding: 10px;
@@ -38,6 +37,7 @@
   
   nav ul li button:hover,
   nav ul li select:hover {
-    background-color: #666;
+    background-color: #AC1EA6;
   }
+  
   

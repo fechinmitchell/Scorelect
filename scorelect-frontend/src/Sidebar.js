@@ -29,5 +29,3 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange }) => {
 };
 
 export default Sidebar;
-
-

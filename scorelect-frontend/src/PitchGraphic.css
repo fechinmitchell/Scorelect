@@ -1,0 +1,90 @@
+.pitch-container {
+    background-color: #2e2e2e; /* Dark background for the pitch */
+    padding: 20px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1; /* Make the pitch container take available space */
+    overflow: auto; /* Allow scrolling */
+  }
+  
+  .button-container {
+    display: flex;
+    flex-direction: column; /* Stack buttons vertically */
+    justify-content: space-between;
+    width: 100%;
+  }
+  
+  .button {
+    background-color: #501387;
+    color: white;
+    border: none;
+    padding: 5px 10px; /* Reduce padding for smaller buttons */
+    cursor: pointer;
+    font-size: 0.8rem; /* Smaller font size */
+    margin: 5px 0; /* Add margin between buttons */
+  }
+  
+  .button:hover {
+    background-color: #5e2e8f;
+  }
+  
+  .instructions-container {
+    background-color: #2e2e2e;
+    padding: 20px;
+    border-radius: 10px;
+    margin-left: 20px; /* Space between pitch and instructions */
+    color: white;
+    max-width: 300px; /* Adjust the max-width as needed */
+    flex-shrink: 0; /* Prevent instructions from shrinking */
+  }
+  
+  .instructions-container h3,
+  .instructions-container p,
+  .instructions-container ul,
+  .instructions-container li {
+    color: white;
+  }
+  
+  @media (max-width: 768px) {
+    .main-container {
+      flex-direction: column;
+    }
+  
+    .sidebar {
+      width: 100%;
+      margin-bottom: 20px;
+    }
+  
+    .content-area {
+      flex: 1;
+      overflow: visible;
+    }
+  
+    .pitch-container {
+      width: 100%;
+      padding: 10px;
+      overflow-x: auto; /* Allow horizontal scrolling */
+    }
+  
+    .instructions-container {
+      margin-left: 0;
+      margin-top: 20px; /* Space between pitch and instructions for smaller screens */
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .button-container {
+      flex-direction: row; /* Stack buttons horizontally */
+      flex-wrap: wrap; /* Allow buttons to wrap to the next line */
+      justify-content: space-between;
+    }
+  
+    .button {
+      width: 48%; /* Take nearly half the width */
+      margin: 5px 1%; /* Add margin between buttons */
+    }
+  }
+  

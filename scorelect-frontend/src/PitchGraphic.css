@@ -10,6 +10,14 @@
     overflow: auto; /* Allow scrolling */
   }
   
+  .content {
+    display: flex;
+    flex-direction: row; /* Ensure pitch and instructions are side by side */
+    align-items: center;
+    width: 100%;
+    overflow: auto; /* Ensure the content can scroll */
+  }
+  
   .button-container {
     display: flex;
     flex-direction: column; /* Stack buttons vertically */

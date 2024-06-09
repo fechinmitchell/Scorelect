@@ -14,8 +14,8 @@ const PitchGraphic = () => {
 
   const pitchWidth = 145;
   const pitchHeight = 88;
-  const canvasWidth = 800;
-  const canvasHeight = 600;
+  const canvasWidth = 775; // Reduced size
+  const canvasHeight = 625; // Reduced size
   const xScale = canvasWidth / pitchWidth;
   const yScale = canvasHeight / pitchHeight;
 
@@ -165,59 +165,55 @@ const PitchGraphic = () => {
 
   return (
     <div className="pitch-container">
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{ display: 'flex', flexDirection: 'row' }}>
-            <Stage width={canvasWidth} height={canvasHeight} onClick={handleClick} ref={stageRef}>
-              {renderGAAPitch()}
-              <Layer>
-                {coords.map((coord, index) => {
-                  if (coord.type.includes('pass') || coord.type.includes('kickout')) {
-                    return (
-                      <Line
-                        key={index}
-                        points={[
-                          coord.from.x * xScale,
-                          coord.from.y * yScale,
-                          coord.to.x * xScale,
-                          coord.to.y * yScale
-                        ]}
-                        stroke={coord.type.includes('unsuccessful') ? 'red' : 'yellow'}
-                        strokeWidth={2}
-                      />
-                    );
-                  }
-                  return (
-                    <Circle
-                      key={index}
-                      x={coord.x * xScale}
-                      y={coord.y * yScale}
-                      radius={5}
-                      fill={coord.type.includes('unsuccessful') ? 'red' : 'blue'}
-                    />
-                  );
-                })}
-              </Layer>
-            </Stage>
-            <div className="instructions-container">
-              <h3>Instructions</h3>
-              <p>Action Codes:</p>
-              <ul>
-                <li><b>p</b>: Successful Pass</li>
-                <li><b>u</b>: Unsuccessful Pass</li>
-                <li><b>k</b>: Successful Kickout</li>
-                <li><b>c</b>: Unsuccessful Kickout</li>
-                <li><b>g</b>: Successful Action</li>
-                <li><b>b</b>: Unsuccessful Action</li>
-              </ul>
-              <p>Click on the pitch to record an action at that location. Use the keys above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
-              <div className="button-container">
-                <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
-                <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
-                <button className="button" onClick={handleDownloadData}>Download Data</button>
-                <button className="button" onClick={toggleModal}>View Coordinates</button>
-              </div>
-            </div>
+      <div className="content">
+        <Stage width={canvasWidth} height={canvasHeight} onClick={handleClick} ref={stageRef}>
+          {renderGAAPitch()}
+          <Layer>
+            {coords.map((coord, index) => {
+              if (coord.type.includes('pass') || coord.type.includes('kickout')) {
+                return (
+                  <Line
+                    key={index}
+                    points={[
+                      coord.from.x * xScale,
+                      coord.from.y * yScale,
+                      coord.to.x * xScale,
+                      coord.to.y * yScale
+                    ]}
+                    stroke={coord.type.includes('unsuccessful') ? 'red' : 'yellow'}
+                    strokeWidth={2}
+                  />
+                );
+              }
+              return (
+                <Circle
+                  key={index}
+                  x={coord.x * xScale}
+                  y={coord.y * yScale}
+                  radius={5}
+                  fill={coord.type.includes('unsuccessful') ? 'red' : 'blue'}
+                />
+              );
+            })}
+          </Layer>
+        </Stage>
+        <div className="instructions-container">
+          <h3>Instructions</h3>
+          <p>Action Codes:</p>
+          <ul>
+            <li><b>p</b>: Successful Pass</li>
+            <li><b>u</b>: Unsuccessful Pass</li>
+            <li><b>k</b>: Successful Kickout</li>
+            <li><b>c</b>: Unsuccessful Kickout</li>
+            <li><b>g</b>: Successful Action</li>
+            <li><b>b</b>: Unsuccessful Action</li>
+          </ul>
+          <p>Click on the pitch to record an action at that location. Use the keys above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
+          <div className="button-container">
+            <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
+            <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
+            <button className="button" onClick={handleDownloadData}>Download Data</button>
+            <button className="button" onClick={toggleModal}>View Coordinates</button>
           </div>
         </div>
       </div>

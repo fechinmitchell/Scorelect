@@ -8,14 +8,14 @@ const PitchGraphic = () => {
   const [currentCoords, setCurrentCoords] = useState([]);
   const [actionType, setActionType] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
-  const [formData, setFormData] = useState({ action: '', team: '', player: '', position: '', pressure: '', foot: '', minute: '' });
+  const [formData, setFormData] = useState({ action: '', team: '', playerName: '', player: '', position: '', pressure: '', foot: '', minute: '' });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const stageRef = useRef();
 
   const pitchWidth = 145;
   const pitchHeight = 88;
-  const canvasWidth = 775; // Reduced size
-  const canvasHeight = 625; // Reduced size
+  const canvasWidth = 800;
+  const canvasHeight = 600;
   const xScale = canvasWidth / pitchWidth;
   const yScale = canvasHeight / pitchHeight;
 
@@ -82,6 +82,7 @@ const PitchGraphic = () => {
     const updatedFormData = {
       action: formData.action || actionCodes[0],
       team: formData.team || counties[0],
+      playerName: formData.playerName || '',
       player: formData.player || '',
       position: formData.position || positions[0],
       pressure: formData.pressure || 'y',
@@ -95,7 +96,7 @@ const PitchGraphic = () => {
     setOpenDialog(false);
     setRecentActions([formData.action, ...recentActions.filter(action => action !== formData.action)]);
     setRecentTeams([formData.team, ...recentTeams.filter(team => team !== formData.team)]);
-    setFormData({ action: '', team: '', player: '', position: '', pressure: '', foot: '', minute: '' });
+    setFormData({ action: '', team: '', playerName: '', player: '', position: '', pressure: '', foot: '', minute: '' });
   };
 
   const handleChange = (e) => {
@@ -218,64 +219,54 @@ const PitchGraphic = () => {
         </div>
       </div>
       {openDialog && (
-        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: 'Grey', padding: '20px', border: '1px solid #ddd' }}>
+        <div className="dialog-container">
           <h3>Enter Action Details</h3>
-          <div>
-            <label>
-              Action:
-              <select name="action" value={formData.action} onChange={handleChange}>
-                {recentActions.map(action => <option key={action} value={action}>{action}</option>)}
-                {actionCodes.map(action => <option key={action} value={action}>{action}</option>)}
-              </select>
-            </label>
+          <div className="form-group">
+            <label>Action:</label>
+            <select name="action" value={formData.action} onChange={handleChange}>
+              {recentActions.map(action => <option key={action} value={action}>{action}</option>)}
+              {actionCodes.map(action => <option key={action} value={action}>{action}</option>)}
+            </select>
           </div>
-          <div>
-            <label>
-              Team:
-              <select name="team" value={formData.team} onChange={handleChange}>
-                {recentTeams.map(team => <option key={team} value={team}>{team}</option>)}
-                {counties.map(county => <option key={county} value={county}>{county}</option>)}
-              </select>
-            </label>
+          <div className="form-group">
+            <label>Team:</label>
+            <select name="team" value={formData.team} onChange={handleChange}>
+              {recentTeams.map(team => <option key={team} value={team}>{team}</option>)}
+              {counties.map(county => <option key={county} value={county}>{county}</option>)}
+            </select>
           </div>
-          <div>
-            <label>
-              Player Number:
-              <input type="text" name="player" value={formData.player} onChange={handleChange} />
-            </label>
+          <div className="form-group">
+            <label>Player Name:</label>
+            <input type="text" name="playerName" value={formData.playerName} onChange={handleChange} />
           </div>
-          <div>
-            <label>
-              Position:
-              <select name="position" value={formData.position} onChange={handleChange}>
-                {positions.map(position => <option key={position} value={position}>{position}</option>)}
-              </select>
-            </label>
+          <div className="form-group">
+            <label>Player Number:</label>
+            <input type="text" name="player" value={formData.player} onChange={handleChange} />
           </div>
-          <div>
-            <label>
-              Pressure:
-              <select name="pressure" value={formData.pressure} onChange={handleChange}>
-                <option value="y">Yes</option>
-                <option value="n">No</option>
-              </select>
-            </label>
+          <div className="form-group">
+            <label>Position:</label>
+            <select name="position" value={formData.position} onChange={handleChange}>
+              {positions.map(position => <option key={position} value={position}>{position}</option>)}
+            </select>
           </div>
-          <div>
-            <label>
-              Foot:
-              <select name="foot" value={formData.foot} onChange={handleChange}>
-                <option value="r">Right</option>
-                <option value="l">Left</option>
-                <option value="h">Hand</option>
-              </select>
-            </label>
+          <div className="form-group">
+            <label>Pressure:</label>
+            <select name="pressure" value={formData.pressure} onChange={handleChange}>
+              <option value="y">Yes</option>
+              <option value="n">No</option>
+            </select>
           </div>
-          <div>
-            <label>
-              Minute:
-              <input type="text" name="minute" value={formData.minute} onChange={handleChange} />
-            </label>
+          <div className="form-group">
+            <label>Foot:</label>
+            <select name="foot" value={formData.foot} onChange={handleChange}>
+              <option value="r">Right</option>
+              <option value="l">Left</option>
+              <option value="h">Hand</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Minute:</label>
+            <input type="text" name="minute" value={formData.minute} onChange={handleChange} />
           </div>
           <div className="button-container">
             <button className="button" onClick={handleCloseDialog}>Cancel</button>
@@ -296,7 +287,7 @@ const PitchGraphic = () => {
             marginRight: '-50%',
             transform: 'translate(-50%, -50%)',
             width: '80%',
-            maxHeight: '80%',
+            maxHeight: '60%', // Make the modal smaller
             overflowY: 'auto'
           }
         }}
@@ -309,7 +300,8 @@ const PitchGraphic = () => {
               <li key={index}>
                 <strong>Action:</strong> {coord.action}<br />
                 <strong>Team:</strong> {coord.team}<br />
-                <strong>Player:</strong> {coord.player}<br />
+                <strong>Player Number:</strong> {coord.player}<br />
+                <strong>Player Name:</strong> {coord.playerName}<br />
                 <strong>Position:</strong> {coord.position}<br />
                 <strong>Pressure:</strong> {coord.pressure}<br />
                 <strong>Foot:</strong> {coord.foot}<br />

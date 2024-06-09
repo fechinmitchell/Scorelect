@@ -1,8 +1,7 @@
-// src/SoccerPitch.js
 import React, { useState, useRef, useEffect } from 'react';
-import { Stage, Layer, Rect, Line, Arc, Circle } from 'react-konva';
+import { Stage, Layer, Rect, Line, Circle, Arc } from 'react-konva';
 import Modal from 'react-modal';
-import './PitchGraphic.css'; // Assuming you want to use the same CSS file for both
+import './PitchGraphic.css';
 
 const SoccerPitch = () => {
   const [coords, setCoords] = useState([]);
@@ -79,7 +78,6 @@ const SoccerPitch = () => {
   };
 
   const handleFormSubmit = () => {
-    // Ensure all form data is captured
     const updatedFormData = {
       action: formData.action || actionCodes[0],
       team: formData.team || counties[0],
@@ -171,163 +169,152 @@ const SoccerPitch = () => {
 
   return (
     <div className="pitch-container">
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <div style={{ display: 'flex' }}>
-          <Stage width={canvasWidth} height={canvasHeight} onClick={handleClick} ref={stageRef}>
-            {renderSoccerPitch()}
-            <Layer>
-              {coords.map((coord, index) => {
-                if (coord.type.includes('pass') || coord.type.includes('kickout')) {
-                  return (
-                    <Line
-                      key={index}
-                      points={[
-                        coord.from.x * xScale,
-                        coord.from.y * yScale,
-                        coord.to.x * xScale,
-                        coord.to.y * yScale
-                      ]}
-                      stroke={coord.type.includes('unsuccessful') ? 'red' : 'yellow'}
-                      strokeWidth={2}
-                    />
-                  );
-                }
+      <div className="content">
+        <Stage width={canvasWidth} height={canvasHeight} onClick={handleClick} ref={stageRef}>
+          {renderSoccerPitch()}
+          <Layer>
+            {coords.map((coord, index) => {
+              if (coord.type.includes('pass') || coord.type.includes('kickout')) {
                 return (
-                  <Circle
+                  <Line
                     key={index}
-                    x={coord.x * xScale}
-                    y={coord.y * yScale}
-                    radius={5}
-                    fill={coord.type.includes('unsuccessful') ? 'red' : 'blue'}
+                    points={[
+                      coord.from.x * xScale,
+                      coord.from.y * yScale,
+                      coord.to.x * xScale,
+                      coord.to.y * yScale
+                    ]}
+                    stroke={coord.type.includes('unsuccessful') ? 'red' : 'yellow'}
+                    strokeWidth={2}
                   />
                 );
-              })}
-            </Layer>
-          </Stage>
-          <div className="instructions-container">
-            <h3>Instructions</h3>
-            <p>Action Codes:</p>
-            <ul>
-              <li><b>p</b>: Successful Pass</li>
-              <li><b>u</b>: Unsuccessful Pass</li>
-              <li><b>k</b>: Successful Kickout</li>
-              <li><b>c</b>: Unsuccessful Kickout</li>
-              <li><b>g</b>: Successful Action</li>
-              <li><b>b</b>: Unsuccessful Action</li>
-            </ul>
-            <p>Click on the pitch to record an action at that location. Use the keys above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
-            <div className="button-container">
-              <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
-              <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
-              <button className="button" onClick={handleDownloadData}>Download Data</button>
-              <button className="button" onClick={toggleModal}>View Coordinates</button>
-            </div>
+              }
+              return (
+                <Circle
+                  key={index}
+                  x={coord.x * xScale}
+                  y={coord.y * yScale}
+                  radius={5}
+                  fill={coord.type.includes('unsuccessful') ? 'red' : 'blue'}
+                />
+              );
+            })}
+          </Layer>
+        </Stage>
+        <div className="instructions-container">
+          <h3>Instructions</h3>
+          <p>Action Codes:</p>
+          <ul>
+            <li><b>p</b>: Successful Pass</li>
+            <li><b>u</b>: Unsuccessful Pass</li>
+            <li><b>k</b>: Successful Kickout</li>
+            <li><b>c</b>: Unsuccessful Kickout</li>
+            <li><b>g</b>: Successful Action</li>
+            <li><b>b</b>: Unsuccessful Action</li>
+          </ul>
+          <p>Click on the pitch to record an action at that location. Use the keys above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
+          <div className="button-container">
+            <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
+            <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
+            <button className="button" onClick={handleDownloadData}>Download Data</button>
+            <button className="button" onClick={toggleModal}>View Coordinates</button>
           </div>
         </div>
-        <Modal
-          isOpen={isModalOpen}
-          onRequestClose={toggleModal}
-          contentLabel="Coordinates Data"
-          style={{
-            content: {
-              top: '50%',
-              left: '50%',
-              right: 'auto',
-              bottom: 'auto',
-              marginRight: '-50%',
-              transform: 'translate(-50%, -50%)',
-              width: '80%',
-              maxHeight: '80%',
-              overflowY: 'auto'
-            }
-          }}
-        >
-          <h2>Coordinates Data</h2>
-          <button onClick={toggleModal}>Close</button>
-          <div style={{ marginTop: '10px', backgroundColor: 'Grey', padding: '10px', border: '1px solid #ccc' }}>
-            <ul style={{ listStyleType: 'none', padding: '0' }}>
-              {coords.map((coord, index) => (
-                <li key={index} style={{ marginBottom: '10px' }}>
-                  <strong>Action:</strong> {coord.action}<br />
-                  <strong>Team:</strong> {coord.team}<br />
-                  <strong>Player:</strong> {coord.player}<br />
-                  <strong>Position:</strong> {coord.position}<br />
-                  <strong>Pressure:</strong> {coord.pressure}<br />
-                  <strong>Foot:</strong> {coord.foot}<br />
-                  <strong>Minute:</strong> {coord.minute}<br />
-                  <strong>X:</strong> {coord.x.toFixed(2)}, <strong>Y:</strong> {coord.y.toFixed(2)}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </Modal>
-        {openDialog && (
-          <div className="dialog-container">
-            <h3>Enter Action Details</h3>
-            <div>
-              <label>
-                Action:
-                <select name="action" value={formData.action} onChange={handleChange}>
-                  {recentActions.map(action => <option key={action} value={action}>{action}</option>)}
-                  {actionCodes.map(action => <option key={action} value={action}>{action}</option>)}
-                </select>
-              </label>
-            </div>
-            <div>
-              <label>
-                Team:
-                <select name="team" value={formData.team} onChange={handleChange}>
-                  {recentTeams.map(team => <option key={team} value={team}>{team}</option>)}
-                  {counties.map(county => <option key={county} value={county}>{county}</option>)}
-                </select>
-              </label>
-            </div>
-            <div>
-              <label>
-                Player Number:
-                <input type="text" name="player" value={formData.player} onChange={handleChange} />
-              </label>
-            </div>
-            <div>
-              <label>
-                Position:
-                <select name="position" value={formData.position} onChange={handleChange}>
-                  {positions.map(position => <option key={position} value={position}>{position}</option>)}
-                </select>
-              </label>
-            </div>
-            <div>
-              <label>
-                Pressure:
-                <select name="pressure" value={formData.pressure} onChange={handleChange}>
-                  <option value="y">Yes</option>
-                  <option value="n">No</option>
-                </select>
-              </label>
-            </div>
-            <div>
-              <label>
-                Foot:
-                <select name="foot" value={formData.foot} onChange={handleChange}>
-                  <option value="r">Right</option>
-                  <option value="l">Left</option>
-                  <option value="h">Hand</option>
-                </select>
-              </label>
-            </div>
-            <div>
-              <label>
-                Minute:
-                <input type="text" name="minute" value={formData.minute} onChange={handleChange} />
-              </label>
-            </div>
-            <div className="button-container">
-              <button className="button" onClick={handleCloseDialog}>Cancel</button>
-              <button className="button" onClick={handleFormSubmit}>Submit</button>
-            </div>
-          </div>
-        )}
       </div>
+      {openDialog && (
+        <div className="dialog-container">
+          <h3>Enter Action Details</h3>
+          <div className="form-group">
+            <label>Action:</label>
+            <select name="action" value={formData.action} onChange={handleChange}>
+              {recentActions.map(action => <option key={action} value={action}>{action}</option>)}
+              {actionCodes.map(action => <option key={action} value={action}>{action}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Team:</label>
+            <select name="team" value={formData.team} onChange={handleChange}>
+              {recentTeams.map(team => <option key={team} value={team}>{team}</option>)}
+              {counties.map(county => <option key={county} value={county}>{county}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Player Name:</label>
+            <input type="text" name="playerName" value={formData.playerName} onChange={handleChange} />
+          </div>
+          <div className="form-group">
+            <label>Player Number:</label>
+            <input type="text" name="player" value={formData.player} onChange={handleChange} />
+          </div>
+          <div className="form-group">
+            <label>Position:</label>
+            <select name="position" value={formData.position} onChange={handleChange}>
+              {positions.map(position => <option key={position} value={position}>{position}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Pressure:</label>
+            <select name="pressure" value={formData.pressure} onChange={handleChange}>
+              <option value="y">Yes</option>
+              <option value="n">No</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Foot:</label>
+            <select name="foot" value={formData.foot} onChange={handleChange}>
+              <option value="r">Right</option>
+              <option value="l">Left</option>
+              <option value="h">Hand</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Minute:</label>
+            <input type="text" name="minute" value={formData.minute} onChange={handleChange} />
+          </div>
+          <div className="button-container">
+            <button className="button" onClick={handleCloseDialog}>Cancel</button>
+            <button className="button" onClick={handleFormSubmit}>Submit</button>
+          </div>
+        </div>
+      )}
+      <Modal
+        isOpen={isModalOpen}
+        onRequestClose={toggleModal}
+        contentLabel="Coordinates Data"
+        style={{
+          content: {
+            top: '50%',
+            left: '50%',
+            right: 'auto',
+            bottom: 'auto',
+            marginRight: '-50%',
+            transform: 'translate(-50%, -50%)',
+            width: '80%',
+            maxHeight: '80%',
+            overflowY: 'auto'
+          }
+        }}
+      >
+        <h2>Coordinates Data</h2>
+        <button onClick={toggleModal}>Close</button>
+        <div style={{ marginTop: '10px', backgroundColor: 'Grey', padding: '10px', border: '1px solid #ccc' }}>
+          <ul style={{ listStyleType: 'none', padding: '0' }}>
+            {coords.map((coord, index) => (
+              <li key={index}>
+                <strong>Action:</strong> {coord.action}<br />
+                <strong>Team:</strong> {coord.team}<br />
+                <strong>Player Number:</strong> {coord.player}<br />
+                <strong>Player Name:</strong> {coord.playerName}<br />
+                <strong>Position:</strong> {coord.position}<br />
+                <strong>Pressure:</strong> {coord.pressure}<br />
+                <strong>Foot:</strong> {coord.foot}<br />
+                <strong>Minute:</strong> {coord.minute}<br />
+                <strong>X:</strong> {coord.x.toFixed(2)}, <strong>Y:</strong> {coord.y.toFixed(2)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </Modal>
     </div>
   );
 };

@@ -59,16 +59,12 @@ const SoccerPitch = () => {
     if (actionType === 'pass' || actionType === 'badpass' || actionType === 'kickout' || actionType === 'badkickout') {
       setCurrentCoords([...currentCoords, newCoord]);
       if (currentCoords.length === 1) {
-        let newCoords = [...coords];
-        if (actionType === 'pass') newCoords.push({ from: currentCoords[0], to: newCoord, type: 'successful pass' });
-        if (actionType === 'badpass') newCoords.push({ from: currentCoords[0], to: newCoord, type: 'unsuccessful pass' });
-        if (actionType === 'kickout') newCoords.push({ from: currentCoords[0], to: newCoord, type: 'successful kickout' });
-        if (actionType === 'badkickout') newCoords.push({ from: currentCoords[0], to: newCoord, type: 'unsuccessful kickout' });
-        setCoords(newCoords);
-        setCurrentCoords([]);
+        setFormData({ ...formData, from: currentCoords[0], to: newCoord, type: actionType });
+        setOpenDialog(true);
       }
     } else if (actionType === 'action' || actionType === 'badaction') {
-      setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType });
+      const actionTypeWithStatus = actionType === 'action' ? 'successful action' : 'unsuccessful action';
+      setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionTypeWithStatus });
       setOpenDialog(true);
     }
   };
@@ -89,12 +85,15 @@ const SoccerPitch = () => {
       x: formData.x,
       y: formData.y,
       type: formData.type,
+      from: formData.from,
+      to: formData.to
     };
     setCoords([...coords, updatedFormData]);
     setOpenDialog(false);
     setRecentActions([formData.action, ...recentActions.filter(action => action !== formData.action)]);
     setRecentTeams([formData.team, ...recentTeams.filter(team => team !== formData.team)]);
-    setFormData({ action: '', team: '', player: '', position: '', pressure: '', foot: '', minute: '' });
+    setFormData({ action: '', team: '', player: '', position: '', pressure: '', foot: '', minute: '', from: null, to: null });
+    setCurrentCoords([]);
   };
 
   const handleChange = (e) => {
@@ -167,6 +166,35 @@ const SoccerPitch = () => {
     </Layer>
   );
 
+  const getColor = (type) => {
+    switch (type) {
+      case 'pass':
+      case 'successful pass':
+        return 'blue';
+      case 'badpass':
+      case 'unsuccessful pass':
+        return 'yellow';
+      case 'kickout':
+      case 'successful kickout':
+        return 'purple';
+      case 'badkickout':
+      case 'unsuccessful kickout':
+        return 'orange';
+      case 'action':
+      case 'successful action':
+        return 'green';
+      case 'badaction':
+      case 'unsuccessful action':
+        return 'red';
+      default:
+        return 'black';
+    }
+  };
+
+  useEffect(() => {
+    console.log('Coords updated:', coords);
+  }, [coords]);
+
   return (
     <div className="pitch-container">
       <div className="content">
@@ -174,7 +202,8 @@ const SoccerPitch = () => {
           {renderSoccerPitch()}
           <Layer>
             {coords.map((coord, index) => {
-              if (coord.type.includes('pass') || coord.type.includes('kickout')) {
+              console.log('Rendering coord:', coord);
+              if (coord.from && coord.to) {
                 return (
                   <Line
                     key={index}
@@ -184,7 +213,7 @@ const SoccerPitch = () => {
                       coord.to.x * xScale,
                       coord.to.y * yScale
                     ]}
-                    stroke={coord.type.includes('unsuccessful') ? 'red' : 'yellow'}
+                    stroke={getColor(coord.type)}
                     strokeWidth={2}
                   />
                 );
@@ -195,7 +224,7 @@ const SoccerPitch = () => {
                   x={coord.x * xScale}
                   y={coord.y * yScale}
                   radius={5}
-                  fill={coord.type.includes('unsuccessful') ? 'red' : 'blue'}
+                  fill={getColor(coord.type)}
                 />
               );
             })}
@@ -203,16 +232,13 @@ const SoccerPitch = () => {
         </Stage>
         <div className="instructions-container">
           <h3>Instructions</h3>
-          <p>Action Codes:</p>
-          <ul>
-            <li><b>p</b>: Successful Pass</li>
-            <li><b>u</b>: Unsuccessful Pass</li>
-            <li><b>k</b>: Successful Kickout</li>
-            <li><b>c</b>: Unsuccessful Kickout</li>
-            <li><b>g</b>: Successful Action</li>
-            <li><b>b</b>: Unsuccessful Action</li>
-          </ul>
-          <p>Click on the pitch to record an action at that location. Use the keys above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
+          <div className="action-buttons">
+            <button className="action-button pass" onClick={() => setActionType('pass')}>Successful Pass (p)</button>
+            <button className="action-button badpass" onClick={() => setActionType('badpass')}>Unsuccessful Pass (u)</button>
+            <button className="action-button action" onClick={() => setActionType('action')}>Successful Action (g)</button>
+            <button className="action-button badaction" onClick={() => setActionType('badaction')}>Unsuccessful Action (b)</button>
+          </div>
+          <p>Click on the pitch to record an action at that location. Use the buttons above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
           <div className="button-container">
             <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
             <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
@@ -290,7 +316,7 @@ const SoccerPitch = () => {
             marginRight: '-50%',
             transform: 'translate(-50%, -50%)',
             width: '80%',
-            maxHeight: '80%',
+            maxHeight: '60%', // Make the modal smaller
             overflowY: 'auto'
           }
         }}
@@ -309,7 +335,16 @@ const SoccerPitch = () => {
                 <strong>Pressure:</strong> {coord.pressure}<br />
                 <strong>Foot:</strong> {coord.foot}<br />
                 <strong>Minute:</strong> {coord.minute}<br />
-                <strong>X:</strong> {coord.x.toFixed(2)}, <strong>Y:</strong> {coord.y.toFixed(2)}
+                {coord.from && coord.to ? (
+                  <>
+                    <strong>From X:</strong> {coord.from.x.toFixed(2)}, <strong>From Y:</strong> {coord.from.y.toFixed(2)}<br />
+                    <strong>To X:</strong> {coord.to.x.toFixed(2)}, <strong>To Y:</strong> {coord.to.y.toFixed(2)}
+                  </>
+                ) : (
+                  <>
+                    <strong>X:</strong> {coord.x.toFixed(2)}, <strong>Y:</strong> {coord.y.toFixed(2)}
+                  </>
+                )}
               </li>
             ))}
           </ul>

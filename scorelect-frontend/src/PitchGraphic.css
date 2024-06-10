@@ -39,6 +39,45 @@
     background-color: #5e2e8f;
   }
   
+  .action-buttons {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .action-button {
+    background-color: #501387;
+    color: black;
+    border: 1px solid;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    margin: 5px 0;
+  }
+  
+  .action-button.pass {
+    border-color: blue;
+  }
+  
+  .action-button.badpass {
+    border-color: yellow;
+  }
+  
+  .action-button.kickout {
+    border-color: purple;
+  }
+  
+  .action-button.badkickout {
+    border-color: orange;
+  }
+  
+  .action-button.action {
+    border-color: green;
+  }
+  
+  .action-button.badaction {
+    border-color: red;
+  }
+  
   .instructions-container {
     background-color: #2e2e2e;
     padding: 20px;
@@ -128,3 +167,4 @@
       margin: 5px 1%; /* Add margin between buttons */
     }
   }
+  

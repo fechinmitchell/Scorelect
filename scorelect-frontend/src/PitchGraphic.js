@@ -69,7 +69,8 @@ const PitchGraphic = () => {
         setCurrentCoords([]);
       }
     } else if (actionType === 'action' || actionType === 'badaction') {
-      setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType });
+      const actionTypeWithStatus = actionType === 'action' ? 'successful action' : 'unsuccessful action';
+      setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionTypeWithStatus });
       setOpenDialog(true);
     }
   };
@@ -79,6 +80,15 @@ const PitchGraphic = () => {
   };
 
   const handleFormSubmit = () => {
+    const actionTypeMap = {
+      pass: 'successful pass',
+      badpass: 'unsuccessful pass',
+      kickout: 'successful kickout',
+      badkickout: 'unsuccessful kickout',
+      action: 'successful action',
+      badaction: 'unsuccessful action'
+    };
+
     const updatedFormData = {
       action: formData.action || actionCodes[0],
       team: formData.team || counties[0],
@@ -90,7 +100,7 @@ const PitchGraphic = () => {
       minute: formData.minute || '',
       x: formData.x,
       y: formData.y,
-      type: formData.type,
+      type: actionTypeMap[formData.type] || formData.type,
     };
     setCoords([...coords, updatedFormData]);
     setOpenDialog(false);
@@ -164,6 +174,29 @@ const PitchGraphic = () => {
     </Layer>
   );
 
+  const getColor = (type) => {
+    switch (type) {
+      case 'successful pass':
+        return 'blue';
+      case 'unsuccessful pass':
+        return 'yellow';
+      case 'successful kickout':
+        return 'purple';
+      case 'unsuccessful kickout':
+        return 'orange';
+      case 'successful action':
+        return 'green';
+      case 'unsuccessful action':
+        return 'red';
+      default:
+        return 'black';
+    }
+  };
+
+  useEffect(() => {
+    console.log('Coords updated:', coords);
+  }, [coords]);
+
   return (
     <div className="pitch-container">
       <div className="content">
@@ -171,6 +204,7 @@ const PitchGraphic = () => {
           {renderGAAPitch()}
           <Layer>
             {coords.map((coord, index) => {
+              console.log('Rendering coord:', coord);
               if (coord.type.includes('pass') || coord.type.includes('kickout')) {
                 return (
                   <Line
@@ -181,7 +215,7 @@ const PitchGraphic = () => {
                       coord.to.x * xScale,
                       coord.to.y * yScale
                     ]}
-                    stroke={coord.type.includes('unsuccessful') ? 'red' : 'yellow'}
+                    stroke={getColor(coord.type)}
                     strokeWidth={2}
                   />
                 );
@@ -192,7 +226,7 @@ const PitchGraphic = () => {
                   x={coord.x * xScale}
                   y={coord.y * yScale}
                   radius={5}
-                  fill={coord.type.includes('unsuccessful') ? 'red' : 'blue'}
+                  fill={getColor(coord.type)}
                 />
               );
             })}
@@ -200,16 +234,15 @@ const PitchGraphic = () => {
         </Stage>
         <div className="instructions-container">
           <h3>Instructions</h3>
-          <p>Action Codes:</p>
-          <ul>
-            <li><b>p</b>: Successful Pass</li>
-            <li><b>u</b>: Unsuccessful Pass</li>
-            <li><b>k</b>: Successful Kickout</li>
-            <li><b>c</b>: Unsuccessful Kickout</li>
-            <li><b>g</b>: Successful Action</li>
-            <li><b>b</b>: Unsuccessful Action</li>
-          </ul>
-          <p>Click on the pitch to record an action at that location. Use the keys above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
+          <div className="action-buttons">
+            <button className="action-button pass" onClick={() => setActionType('pass')}>Successful Pass (p)</button>
+            <button className="action-button badpass" onClick={() => setActionType('badpass')}>Unsuccessful Pass (u)</button>
+            <button className="action-button kickout" onClick={() => setActionType('kickout')}>Successful Kickout (k)</button>
+            <button className="action-button badkickout" onClick={() => setActionType('badkickout')}>Unsuccessful Kickout (c)</button>
+            <button className="action-button action" onClick={() => setActionType('action')}>Successful Action (g)</button>
+            <button className="action-button badaction" onClick={() => setActionType('badaction')}>Unsuccessful Action (b)</button>
+          </div>
+          <p>Click on the pitch to record an action at that location. Use the buttons above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
           <div className="button-container">
             <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
             <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
@@ -306,7 +339,7 @@ const PitchGraphic = () => {
                 <strong>Pressure:</strong> {coord.pressure}<br />
                 <strong>Foot:</strong> {coord.foot}<br />
                 <strong>Minute:</strong> {coord.minute}<br />
-                <strong>X:</strong> {coord.x.toFixed(2)}, <strong>Y:</strong> {coord.y.toFixed(2)}
+                <strong>X:</strong> {coord.x !== undefined ? coord.x.toFixed(2) : ''}, <strong>Y:</strong> {coord.y !== undefined ? coord.y.toFixed(2) : ''}
               </li>
             ))}
           </ul>
@@ -317,3 +350,4 @@ const PitchGraphic = () => {
 };
 
 export default PitchGraphic;
+

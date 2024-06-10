@@ -46,7 +46,7 @@
   
   .action-button {
     background-color: #501387;
-    color: black;
+    color: rgb(184, 184, 184); /* Change text color to white */
     border: 1px solid;
     padding: 5px 10px;
     cursor: pointer;

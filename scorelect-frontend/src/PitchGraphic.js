@@ -8,7 +8,8 @@ const PitchGraphic = () => {
   const [currentCoords, setCurrentCoords] = useState([]);
   const [actionType, setActionType] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
-  const [formData, setFormData] = useState({ action: '', team: '', playerName: '', player: '', position: '', pressure: '', foot: '', minute: '' });
+  const [openLineDialog, setOpenLineDialog] = useState(false);
+  const [formData, setFormData] = useState({ action: '', team: '', playerName: '', player: '', position: '', pressure: '', foot: '', minute: '', from: null, to: null });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const stageRef = useRef();
 
@@ -21,7 +22,7 @@ const PitchGraphic = () => {
 
   const actionCodes = [
     'point', 'wide', 'goal', 'goal miss', 'free', 'missed free', 'short', 'blocked', 'offensive mark', 'offensive mark wide', 'post',
-    'free short', 'free wide', 'mark wide', 'missed 45', 'penalty goal', 'pen miss'
+    'free short', 'free wide', 'mark wide', 'missed 45', 'penalty goal', 'pen miss', 'successful pass', 'unsuccessful pass', 'successful kickout', 'unsuccessful kickout'
   ];
 
   const positions = [
@@ -60,13 +61,8 @@ const PitchGraphic = () => {
     if (actionType === 'pass' || actionType === 'badpass' || actionType === 'kickout' || actionType === 'badkickout') {
       setCurrentCoords([...currentCoords, newCoord]);
       if (currentCoords.length === 1) {
-        let newCoords = [...coords];
-        if (actionType === 'pass') newCoords.push({ from: currentCoords[0], to: newCoord, type: 'successful pass' });
-        if (actionType === 'badpass') newCoords.push({ from: currentCoords[0], to: newCoord, type: 'unsuccessful pass' });
-        if (actionType === 'kickout') newCoords.push({ from: currentCoords[0], to: newCoord, type: 'successful kickout' });
-        if (actionType === 'badkickout') newCoords.push({ from: currentCoords[0], to: newCoord, type: 'unsuccessful kickout' });
-        setCoords(newCoords);
-        setCurrentCoords([]);
+        setFormData({ ...formData, from: currentCoords[0], to: newCoord, type: actionType });
+        setOpenLineDialog(true);
       }
     } else if (actionType === 'action' || actionType === 'badaction') {
       const actionTypeWithStatus = actionType === 'action' ? 'successful action' : 'unsuccessful action';
@@ -79,16 +75,11 @@ const PitchGraphic = () => {
     setOpenDialog(false);
   };
 
-  const handleFormSubmit = () => {
-    const actionTypeMap = {
-      pass: 'successful pass',
-      badpass: 'unsuccessful pass',
-      kickout: 'successful kickout',
-      badkickout: 'unsuccessful kickout',
-      action: 'successful action',
-      badaction: 'unsuccessful action'
-    };
+  const handleCloseLineDialog = () => {
+    setOpenLineDialog(false);
+  };
 
+  const handleFormSubmit = () => {
     const updatedFormData = {
       action: formData.action || actionCodes[0],
       team: formData.team || counties[0],
@@ -100,13 +91,17 @@ const PitchGraphic = () => {
       minute: formData.minute || '',
       x: formData.x,
       y: formData.y,
-      type: actionTypeMap[formData.type] || formData.type,
+      type: formData.type,
+      from: formData.from,
+      to: formData.to
     };
     setCoords([...coords, updatedFormData]);
     setOpenDialog(false);
+    setOpenLineDialog(false);
     setRecentActions([formData.action, ...recentActions.filter(action => action !== formData.action)]);
     setRecentTeams([formData.team, ...recentTeams.filter(team => team !== formData.team)]);
-    setFormData({ action: '', team: '', playerName: '', player: '', position: '', pressure: '', foot: '', minute: '' });
+    setFormData({ action: '', team: '', playerName: '', player: '', position: '', pressure: '', foot: '', minute: '', from: null, to: null });
+    setCurrentCoords([]);
   };
 
   const handleChange = (e) => {
@@ -176,16 +171,22 @@ const PitchGraphic = () => {
 
   const getColor = (type) => {
     switch (type) {
+      case 'pass':
       case 'successful pass':
         return 'blue';
+      case 'badpass':
       case 'unsuccessful pass':
         return 'yellow';
+      case 'kickout':
       case 'successful kickout':
         return 'purple';
+      case 'badkickout':
       case 'unsuccessful kickout':
         return 'orange';
+      case 'action':
       case 'successful action':
         return 'green';
+      case 'badaction':
       case 'unsuccessful action':
         return 'red';
       default:
@@ -205,7 +206,7 @@ const PitchGraphic = () => {
           <Layer>
             {coords.map((coord, index) => {
               console.log('Rendering coord:', coord);
-              if (coord.type.includes('pass') || coord.type.includes('kickout')) {
+              if (coord.from && coord.to) {
                 return (
                   <Line
                     key={index}
@@ -307,6 +308,62 @@ const PitchGraphic = () => {
           </div>
         </div>
       )}
+      {openLineDialog && (
+        <div className="dialog-container">
+          <h3>Enter Action Details for Line</h3>
+          <div className="form-group">
+            <label>Action:</label>
+            <select name="action" value={formData.action} onChange={handleChange}>
+              {recentActions.map(action => <option key={action} value={action}>{action}</option>)}
+              {actionCodes.map(action => <option key={action} value={action}>{action}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Team:</label>
+            <select name="team" value={formData.team} onChange={handleChange}>
+              {recentTeams.map(team => <option key={team} value={team}>{team}</option>)}
+              {counties.map(county => <option key={county} value={county}>{county}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Player Name:</label>
+            <input type="text" name="playerName" value={formData.playerName} onChange={handleChange} />
+          </div>
+          <div className="form-group">
+            <label>Player Number:</label>
+            <input type="text" name="player" value={formData.player} onChange={handleChange} />
+          </div>
+          <div className="form-group">
+            <label>Position:</label>
+            <select name="position" value={formData.position} onChange={handleChange}>
+              {positions.map(position => <option key={position} value={position}>{position}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Pressure:</label>
+            <select name="pressure" value={formData.pressure} onChange={handleChange}>
+              <option value="y">Yes</option>
+              <option value="n">No</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Foot:</label>
+            <select name="foot" value={formData.foot} onChange={handleChange}>
+              <option value="r">Right</option>
+              <option value="l">Left</option>
+              <option value="h">Hand</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Minute:</label>
+            <input type="text" name="minute" value={formData.minute} onChange={handleChange} />
+          </div>
+          <div className="button-container">
+            <button className="button" onClick={handleCloseLineDialog}>Cancel</button>
+            <button className="button" onClick={handleFormSubmit}>Submit</button>
+          </div>
+        </div>
+      )}
       <Modal
         isOpen={isModalOpen}
         onRequestClose={toggleModal}
@@ -339,7 +396,16 @@ const PitchGraphic = () => {
                 <strong>Pressure:</strong> {coord.pressure}<br />
                 <strong>Foot:</strong> {coord.foot}<br />
                 <strong>Minute:</strong> {coord.minute}<br />
-                <strong>X:</strong> {coord.x !== undefined ? coord.x.toFixed(2) : ''}, <strong>Y:</strong> {coord.y !== undefined ? coord.y.toFixed(2) : ''}
+                {coord.from && coord.to ? (
+                  <>
+                    <strong>From X:</strong> {coord.from.x.toFixed(2)}, <strong>From Y:</strong> {coord.from.y.toFixed(2)}<br />
+                    <strong>To X:</strong> {coord.to.x.toFixed(2)}, <strong>To Y:</strong> {coord.to.y.toFixed(2)}
+                  </>
+                ) : (
+                  <>
+                    <strong>X:</strong> {coord.x.toFixed(2)}, <strong>Y:</strong> {coord.y.toFixed(2)}
+                  </>
+                )}
               </li>
             ))}
           </ul>
@@ -350,4 +416,3 @@ const PitchGraphic = () => {
 };
 
 export default PitchGraphic;
-

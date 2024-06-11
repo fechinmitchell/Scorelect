@@ -9,8 +9,20 @@ const PitchGraphic = () => {
   const [actionType, setActionType] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
   const [openLineDialog, setOpenLineDialog] = useState(false);
-  const [formData, setFormData] = useState({ action: '', team: '', playerName: '', player: '', position: '', pressure: '', foot: '', minute: '', from: null, to: null });
+  const [formData, setFormData] = useState({
+    action: 'point',
+    team: 'Armagh',
+    playerName: '',
+    player: '',
+    position: 'forward',
+    pressure: 'Yes',
+    foot: 'Right',
+    minute: '',
+    from: null,
+    to: null
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [customInput, setCustomInput] = useState({ action: '', team: '', position: '', pressure: '', foot: '' });
   const stageRef = useRef();
 
   const pitchWidth = 145;
@@ -20,21 +32,27 @@ const PitchGraphic = () => {
   const xScale = canvasWidth / pitchWidth;
   const yScale = canvasHeight / pitchHeight;
 
-  const actionCodes = [
+  const initialActionCodes = [
     'point', 'wide', 'goal', 'goal miss', 'free', 'missed free', 'short', 'blocked', 'offensive mark', 'offensive mark wide', 'post',
     'free short', 'free wide', 'mark wide', 'missed 45', 'penalty goal', 'pen miss', 'successful pass', 'unsuccessful pass', 'successful kickout', 'unsuccessful kickout'
   ];
 
-  const positions = [
+  const initialPositions = [
     'forward', 'midfield', 'back', 'goalkeeper'
   ];
 
-  const counties = [
+  const initialCounties = [
     'Antrim', 'Armagh', 'Carlow', 'Cavan', 'Clare', 'Cork', 'Derry', 'Donegal', 'Down', 'Dublin', 'Fermanagh', 'Galway', 'Kerry',
     'Kildare', 'Kilkenny', 'Laois', 'Leitrim', 'Limerick', 'Longford', 'Louth', 'Mayo', 'Meath', 'Monaghan', 'Offaly', 'Roscommon',
     'Sligo', 'Tipperary', 'Tyrone', 'Waterford', 'Westmeath', 'Wexford', 'Wicklow'
   ];
 
+  const pressures = ['Yes', 'No'];
+  const feet = ['Right', 'Left', 'Hand'];
+
+  const [actionCodes, setActionCodes] = useState(initialActionCodes);
+  const [positions, setPositions] = useState(initialPositions);
+  const [counties, setCounties] = useState(initialCounties);
   const [recentActions, setRecentActions] = useState([]);
   const [recentTeams, setRecentTeams] = useState([]);
 
@@ -80,14 +98,35 @@ const PitchGraphic = () => {
   };
 
   const handleFormSubmit = () => {
+    if (customInput.action) {
+      setActionCodes([...actionCodes, customInput.action]);
+      formData.action = customInput.action;
+    }
+    if (customInput.team) {
+      setCounties([...counties, customInput.team]);
+      formData.team = customInput.team;
+    }
+    if (customInput.position) {
+      setPositions([...positions, customInput.position]);
+      formData.position = customInput.position;
+    }
+    if (customInput.pressure) {
+      pressures.push(customInput.pressure);
+      formData.pressure = customInput.pressure;
+    }
+    if (customInput.foot) {
+      feet.push(customInput.foot);
+      formData.foot = customInput.foot;
+    }
+
     const updatedFormData = {
       action: formData.action || actionCodes[0],
       team: formData.team || counties[0],
       playerName: formData.playerName || '',
       player: formData.player || '',
       position: formData.position || positions[0],
-      pressure: formData.pressure || 'y',
-      foot: formData.foot || 'r',
+      pressure: formData.pressure || pressures[0],
+      foot: formData.foot || feet[0],
       minute: formData.minute || '',
       x: formData.x,
       y: formData.y,
@@ -100,8 +139,20 @@ const PitchGraphic = () => {
     setOpenLineDialog(false);
     setRecentActions([formData.action, ...recentActions.filter(action => action !== formData.action)]);
     setRecentTeams([formData.team, ...recentTeams.filter(team => team !== formData.team)]);
-    setFormData({ action: '', team: '', playerName: '', player: '', position: '', pressure: '', foot: '', minute: '', from: null, to: null });
+    setFormData({
+      action: 'point',
+      team: 'Armagh',
+      playerName: '',
+      player: '',
+      position: 'forward',
+      pressure: 'Yes',
+      foot: 'Right',
+      minute: '',
+      from: null,
+      to: null
+    });
     setCurrentCoords([]);
+    setCustomInput({ action: '', team: '', position: '', pressure: '', foot: '' });
   };
 
   const handleChange = (e) => {
@@ -260,14 +311,28 @@ const PitchGraphic = () => {
             <select name="action" value={formData.action} onChange={handleChange}>
               {recentActions.map(action => <option key={action} value={action}>{action}</option>)}
               {actionCodes.map(action => <option key={action} value={action}>{action}</option>)}
+              <option value="custom">Add New Action</option>
             </select>
+            {formData.action === 'custom' && (
+              <div className="form-group">
+                <label>New Action:</label>
+                <input type="text" name="customAction" value={customInput.action} onChange={(e) => setCustomInput({ ...customInput, action: e.target.value })} />
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label>Team:</label>
             <select name="team" value={formData.team} onChange={handleChange}>
               {recentTeams.map(team => <option key={team} value={team}>{team}</option>)}
               {counties.map(county => <option key={county} value={county}>{county}</option>)}
+              <option value="custom">Add New Team</option>
             </select>
+            {formData.team === 'custom' && (
+              <div className="form-group">
+                <label>New Team Name:</label>
+                <input type="text" name="customTeam" value={customInput.team} onChange={(e) => setCustomInput({ ...customInput, team: e.target.value })} />
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label>Player Name:</label>
@@ -281,22 +346,40 @@ const PitchGraphic = () => {
             <label>Position:</label>
             <select name="position" value={formData.position} onChange={handleChange}>
               {positions.map(position => <option key={position} value={position}>{position}</option>)}
+              <option value="custom">Add New Position</option>
             </select>
+            {formData.position === 'custom' && (
+              <div className="form-group">
+                <label>New Position:</label>
+                <input type="text" name="customPosition" value={customInput.position} onChange={(e) => setCustomInput({ ...customInput, position: e.target.value })} />
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label>Pressure:</label>
             <select name="pressure" value={formData.pressure} onChange={handleChange}>
-              <option value="y">Yes</option>
-              <option value="n">No</option>
+              {pressures.map(pressure => <option key={pressure} value={pressure}>{pressure}</option>)}
+              <option value="custom">Add New Pressure</option>
             </select>
+            {formData.pressure === 'custom' && (
+              <div className="form-group">
+                <label>New Pressure:</label>
+                <input type="text" name="customPressure" value={customInput.pressure} onChange={(e) => setCustomInput({ ...customInput, pressure: e.target.value })} />
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label>Foot:</label>
             <select name="foot" value={formData.foot} onChange={handleChange}>
-              <option value="r">Right</option>
-              <option value="l">Left</option>
-              <option value="h">Hand</option>
+              {feet.map(foot => <option key={foot} value={foot}>{foot}</option>)}
+              <option value="custom">Add New Foot</option>
             </select>
+            {formData.foot === 'custom' && (
+              <div className="form-group">
+                <label>New Foot:</label>
+                <input type="text" name="customFoot" value={customInput.foot} onChange={(e) => setCustomInput({ ...customInput, foot: e.target.value })} />
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label>Minute:</label>
@@ -316,14 +399,28 @@ const PitchGraphic = () => {
             <select name="action" value={formData.action} onChange={handleChange}>
               {recentActions.map(action => <option key={action} value={action}>{action}</option>)}
               {actionCodes.map(action => <option key={action} value={action}>{action}</option>)}
+              <option value="custom">Add New Action</option>
             </select>
+            {formData.action === 'custom' && (
+              <div className="form-group">
+                <label>New Action:</label>
+                <input type="text" name="customAction" value={customInput.action} onChange={(e) => setCustomInput({ ...customInput, action: e.target.value })} />
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label>Team:</label>
             <select name="team" value={formData.team} onChange={handleChange}>
               {recentTeams.map(team => <option key={team} value={team}>{team}</option>)}
               {counties.map(county => <option key={county} value={county}>{county}</option>)}
+              <option value="custom">Add New Team</option>
             </select>
+            {formData.team === 'custom' && (
+              <div className="form-group">
+                <label>New Team Name:</label>
+                <input type="text" name="customTeam" value={customInput.team} onChange={(e) => setCustomInput({ ...customInput, team: e.target.value })} />
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label>Player Name:</label>
@@ -337,22 +434,40 @@ const PitchGraphic = () => {
             <label>Position:</label>
             <select name="position" value={formData.position} onChange={handleChange}>
               {positions.map(position => <option key={position} value={position}>{position}</option>)}
+              <option value="custom">Add New Position</option>
             </select>
+            {formData.position === 'custom' && (
+              <div className="form-group">
+                <label>New Position:</label>
+                <input type="text" name="customPosition" value={customInput.position} onChange={(e) => setCustomInput({ ...customInput, position: e.target.value })} />
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label>Pressure:</label>
             <select name="pressure" value={formData.pressure} onChange={handleChange}>
-              <option value="y">Yes</option>
-              <option value="n">No</option>
+              {pressures.map(pressure => <option key={pressure} value={pressure}>{pressure}</option>)}
+              <option value="custom">Add New Pressure</option>
             </select>
+            {formData.pressure === 'custom' && (
+              <div className="form-group">
+                <label>New Pressure:</label>
+                <input type="text" name="customPressure" value={customInput.pressure} onChange={(e) => setCustomInput({ ...customInput, pressure: e.target.value })} />
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label>Foot:</label>
             <select name="foot" value={formData.foot} onChange={handleChange}>
-              <option value="r">Right</option>
-              <option value="l">Left</option>
-              <option value="h">Hand</option>
+              {feet.map(foot => <option key={foot} value={foot}>{foot}</option>)}
+              <option value="custom">Add New Foot</option>
             </select>
+            {formData.foot === 'custom' && (
+              <div className="form-group">
+                <label>New Foot:</label>
+                <input type="text" name="customFoot" value={customInput.foot} onChange={(e) => setCustomInput({ ...customInput, foot: e.target.value })} />
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label>Minute:</label>

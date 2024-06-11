@@ -309,9 +309,9 @@ const PitchGraphic = () => {
           <div className="form-group">
             <label>Action:</label>
             <select name="action" value={formData.action} onChange={handleChange}>
+              <option value="custom">Add New Action</option>
               {recentActions.map(action => <option key={action} value={action}>{action}</option>)}
               {actionCodes.map(action => <option key={action} value={action}>{action}</option>)}
-              <option value="custom">Add New Action</option>
             </select>
             {formData.action === 'custom' && (
               <div className="form-group">
@@ -323,9 +323,9 @@ const PitchGraphic = () => {
           <div className="form-group">
             <label>Team:</label>
             <select name="team" value={formData.team} onChange={handleChange}>
+              <option value="custom">Add New Team</option>
               {recentTeams.map(team => <option key={team} value={team}>{team}</option>)}
               {counties.map(county => <option key={county} value={county}>{county}</option>)}
-              <option value="custom">Add New Team</option>
             </select>
             {formData.team === 'custom' && (
               <div className="form-group">
@@ -345,8 +345,8 @@ const PitchGraphic = () => {
           <div className="form-group">
             <label>Position:</label>
             <select name="position" value={formData.position} onChange={handleChange}>
-              {positions.map(position => <option key={position} value={position}>{position}</option>)}
               <option value="custom">Add New Position</option>
+              {positions.map(position => <option key={position} value={position}>{position}</option>)}
             </select>
             {formData.position === 'custom' && (
               <div className="form-group">
@@ -358,8 +358,8 @@ const PitchGraphic = () => {
           <div className="form-group">
             <label>Pressure:</label>
             <select name="pressure" value={formData.pressure} onChange={handleChange}>
-              {pressures.map(pressure => <option key={pressure} value={pressure}>{pressure}</option>)}
               <option value="custom">Add New Pressure</option>
+              {pressures.map(pressure => <option key={pressure} value={pressure}>{pressure}</option>)}
             </select>
             {formData.pressure === 'custom' && (
               <div className="form-group">
@@ -371,8 +371,8 @@ const PitchGraphic = () => {
           <div className="form-group">
             <label>Foot:</label>
             <select name="foot" value={formData.foot} onChange={handleChange}>
-              {feet.map(foot => <option key={foot} value={foot}>{foot}</option>)}
               <option value="custom">Add New Foot</option>
+              {feet.map(foot => <option key={foot} value={foot}>{foot}</option>)}
             </select>
             {formData.foot === 'custom' && (
               <div className="form-group">
@@ -397,9 +397,9 @@ const PitchGraphic = () => {
           <div className="form-group">
             <label>Action:</label>
             <select name="action" value={formData.action} onChange={handleChange}>
+              <option value="custom">Add New Action</option>
               {recentActions.map(action => <option key={action} value={action}>{action}</option>)}
               {actionCodes.map(action => <option key={action} value={action}>{action}</option>)}
-              <option value="custom">Add New Action</option>
             </select>
             {formData.action === 'custom' && (
               <div className="form-group">
@@ -411,9 +411,9 @@ const PitchGraphic = () => {
           <div className="form-group">
             <label>Team:</label>
             <select name="team" value={formData.team} onChange={handleChange}>
+              <option value="custom">Add New Team</option>
               {recentTeams.map(team => <option key={team} value={team}>{team}</option>)}
               {counties.map(county => <option key={county} value={county}>{county}</option>)}
-              <option value="custom">Add New Team</option>
             </select>
             {formData.team === 'custom' && (
               <div className="form-group">
@@ -433,8 +433,8 @@ const PitchGraphic = () => {
           <div className="form-group">
             <label>Position:</label>
             <select name="position" value={formData.position} onChange={handleChange}>
-              {positions.map(position => <option key={position} value={position}>{position}</option>)}
               <option value="custom">Add New Position</option>
+              {positions.map(position => <option key={position} value={position}>{position}</option>)}
             </select>
             {formData.position === 'custom' && (
               <div className="form-group">
@@ -446,8 +446,8 @@ const PitchGraphic = () => {
           <div className="form-group">
             <label>Pressure:</label>
             <select name="pressure" value={formData.pressure} onChange={handleChange}>
-              {pressures.map(pressure => <option key={pressure} value={pressure}>{pressure}</option>)}
               <option value="custom">Add New Pressure</option>
+              {pressures.map(pressure => <option key={pressure} value={pressure}>{pressure}</option>)}
             </select>
             {formData.pressure === 'custom' && (
               <div className="form-group">
@@ -459,8 +459,8 @@ const PitchGraphic = () => {
           <div className="form-group">
             <label>Foot:</label>
             <select name="foot" value={formData.foot} onChange={handleChange}>
-              {feet.map(foot => <option key={foot} value={foot}>{foot}</option>)}
               <option value="custom">Add New Foot</option>
+              {feet.map(foot => <option key={foot} value={foot}>{foot}</option>)}
             </select>
             {formData.foot === 'custom' && (
               <div className="form-group">

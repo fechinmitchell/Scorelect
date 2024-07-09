@@ -148,7 +148,7 @@ def save_game():
 
 @app.route('/load-games', methods=['POST'])
 def load_games():
-    try: 
+    try:
         data = request.json
         user_id = data.get('uid')
 

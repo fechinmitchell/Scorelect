@@ -1,91 +1,89 @@
 .sidebar {
-    width: 250px;
-    background-color: #5E2E8F;
-    color: white;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 20px;
-    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
-    transition: width 0.3s ease;
+  width: 250px;
+  background-color: #5E2E8F;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+  transition: width 0.3s ease;
+}
+
+.sidebar.collapsed {
+  width: 60px;
+  align-items: flex-start; /* Align button to the left */
+}
+
+.sidebar .user-info {
+  margin-bottom: 20px; /* Adjusted to create space below the logo */
+}
+
+.logo {
+  width: 100%; /* Adjust the width as needed */
+  margin-bottom: 20px; /* Adjusted to create space below the logo */
+}
+
+.sidebar.collapsed .logo {
+  display: none;
+}
+
+nav ul {
+  list-style-type: none;
+  padding: 0;
+  width: 100%;
+}
+
+nav ul li {
+  margin: 15px 0;
+}
+
+nav ul li button,
+nav ul li select {
+  width: 100%;
+  background-color: #501387;
+  color: white;
+  border: none;
+  padding: 10px;
+  cursor: pointer;
+  font-size: 1rem;
+  text-align: left;
+}
+
+nav ul li select {
+  margin-top: 5px; /* Adjusted to move the select up */
+}
+
+nav ul li button:hover,
+nav ul li select:hover {
+  background-color: #6d21af;
+}
+
+.toggle-button {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  align-self: flex-start;
+  margin-bottom: 20px;
+}
+
+.toggle-button:focus {
+  outline: none;
+}
+
+/* Media Queries */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 60px;
   }
-  
+
   .sidebar.collapsed {
     width: 60px;
-    align-items: flex-start; /* Align button to the left */
   }
-  
-  .sidebar .user-info {
-    margin-bottom: 10px; /* Adjusted to create space below the logo */
-  }
-  
-  .logo {
-    width: 250px; /* Adjust the width as needed */
-    margin-bottom: 10px; /* Adjusted to create space below the logo */
-    margin-top: 20px;
-  }
-  
-  .sidebar.collapsed .logo {
-    display: none;
-  }
-  
-  nav ul {
-    list-style-type: none;
-    padding: 0;
-    width: 100%;
-  }
-  
-  nav ul li {
-    margin: 10px 0;
-  }
-  
-  nav ul li button,
-  nav ul li select {
-    width: 100%;
-    background-color: #501387;
-    color: white;
-    border: none;
-    padding: 10px;
-    cursor: pointer;
-    font-size: 1rem;
-    text-align: left;
-  }
-  
-  nav ul li select {
-    margin-top: 5px; /* Adjusted to move the select up */
-  }
-  
-  nav ul li button:hover,
-  nav ul li select:hover {
-    background-color: #6d21af;
-  }
-  
+
   .toggle-button {
-    background: none;
-    border: none;
-    color: white;
-    font-size: 1.5rem;
-    cursor: pointer;
-    align-self: flex-start;
-    margin-bottom: 10px;
-  }
-  
-  .toggle-button:focus {
-    outline: none;
-  }
-  
-  /* Media Queries */
-  @media (max-width: 768px) {
-    .sidebar {
-      width: 60px;
-    }
-  
-    .sidebar.collapsed {
-      width: 60px;
-    }
-  
-    .toggle-button {
-      display: block;
-    }
-  }
-  
+    display: block;
+  } 
+}

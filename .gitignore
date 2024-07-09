@@ -19,9 +19,22 @@
 .env.production.local
 .env
 .history
-
+ 
+# logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# miscellaneous
 node_modules/
 /.cache
+
+# Firebase credentials
+/scorelect-backend/scorelect-42e8d-firebase-adminsdk-c3hj0-40a366a549.json
+firebase_credentials.json
+
+# Environment variables
+.env
+
+# Render configuration
+render.yaml

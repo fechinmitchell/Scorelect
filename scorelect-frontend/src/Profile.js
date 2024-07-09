@@ -1,0 +1,115 @@
+// src/Profile.js
+import React, { useEffect, useState } from 'react';
+import { getAuth, signOut } from 'firebase/auth';
+import { firestore } from './firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
+import './Profile.css';
+
+const Profile = ({ onLogout }) => {
+  const [user, setUser] = useState(null);
+  const [subscription, setSubscription] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+
+    if (currentUser) {
+      setUser(currentUser);
+      fetchUserSubscription(currentUser.uid);
+    } else {
+      navigate('/signin');
+    }
+  }, [navigate]);
+
+  const fetchUserSubscription = async (uid) => {
+    try {
+      const userDoc = await getDoc(doc(firestore, 'users', uid));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        if (userData.subscriptionId) {
+          const response = await fetch(`http://localhost:5001/get-subscription`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ subscriptionId: userData.subscriptionId }),
+          });
+
+          const subscriptionData = await response.json();
+          if (subscriptionData.error) {
+            console.error(subscriptionData.error);
+          } else {
+            setSubscription(subscriptionData);
+          }
+        } else {
+          setSubscription(null);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching user subscription:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    try {
+      const response = await fetch(`http://localhost:5001/cancel-subscription`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ subscriptionId: subscription.id }),
+      });
+
+      const result = await response.json();
+      if (result.error) {
+        console.error(result.error);
+      } else {
+        alert('Subscription canceled');
+        setSubscription(null);
+      }
+    } catch (error) {
+      console.error('Error canceling subscription:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    const auth = getAuth();
+    await signOut(auth);
+    onLogout();
+    navigate('/signin');
+  };
+
+  if (loading) {
+    return <p>Loading...</p>;
+  }
+
+  return (
+    <div className="profile-container">
+      <h2>Profile</h2>
+      {user && (
+        <>
+          <p>Email: {user.email}</p>
+          <button onClick={handleLogout} className="logout-button">Logout</button>
+          {subscription ? (
+            <>
+              <h3>Subscription Details</h3>
+              <p>Status: {subscription.status}</p>
+              <p>Next Billing Date: {new Date(subscription.current_period_end * 1000).toLocaleDateString()}</p>
+              <button className="cancel-button" onClick={handleCancelSubscription}>Cancel Subscription</button>
+            </>
+          ) : (
+            <p>No active subscription</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
+export default Profile;
+ 

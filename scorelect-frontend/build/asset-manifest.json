@@ -1,15 +1,18 @@
 {
   "files": {
-    "main.css": "/static/css/main.dc82b79d.css",
-    "main.js": "/static/js/main.fdd93c31.js",
+    "main.css": "/static/css/main.1ec548ed.css",
+    "main.js": "/static/js/main.fb3937c7.js",
     "static/js/453.93f25938.chunk.js": "/static/js/453.93f25938.chunk.js",
+    "static/media/galwaybg.jpeg": "/static/media/galwaybg.b676ae3833de27839fbf.jpeg",
+    "static/media/scorelectlogo.jpeg": "/static/media/scorelectlogo.d500f3d76a8b783757f3.jpeg",
+    "static/media/scorelectlogo-grey.jpeg": "/static/media/scorelectlogo-grey.e1d6f8f6ab17beb8c111.jpeg",
     "index.html": "/index.html",
-    "main.dc82b79d.css.map": "/static/css/main.dc82b79d.css.map",
-    "main.fdd93c31.js.map": "/static/js/main.fdd93c31.js.map",
+    "main.1ec548ed.css.map": "/static/css/main.1ec548ed.css.map",
+    "main.fb3937c7.js.map": "/static/js/main.fb3937c7.js.map",
     "453.93f25938.chunk.js.map": "/static/js/453.93f25938.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.dc82b79d.css",
-    "static/js/main.fdd93c31.js"
+    "static/css/main.1ec548ed.css",
+    "static/js/main.fb3937c7.js"
   ]
 }

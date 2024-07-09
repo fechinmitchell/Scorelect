@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@stripe/react-stripe-js": "^2.7.1",
+    "@stripe/stripe-js": "^3.5.0",
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}
+ 

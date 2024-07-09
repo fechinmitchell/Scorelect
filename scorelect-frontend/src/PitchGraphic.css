@@ -1,172 +1,236 @@
 .pitch-container {
-    background-color: #2e2e2e; /* Dark background for the pitch */
-    padding: 20px;
-    border-radius: 10px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    flex: 1; /* Make the pitch container take available space */
-    overflow: auto; /* Allow scrolling */
-  }
-  
-  .content {
-    display: flex;
-    flex-direction: row; /* Ensure pitch and instructions are side by side */
-    align-items: center;
-    width: 100%;
-    overflow: auto; /* Ensure the content can scroll */
-  }
-  
-  .button-container {
-    display: flex;
-    flex-direction: column; /* Stack buttons vertically */
-    justify-content: space-between;
-    width: 100%;
-  }
-  
-  .button {
-    background-color: #501387;
-    color: white;
-    border: none;
-    padding: 5px 10px; /* Reduce padding for smaller buttons */
-    cursor: pointer;
-    font-size: 0.8rem; /* Smaller font size */
-    margin: 5px 0; /* Add margin between buttons */
-  }
-  
-  .button:hover {
-    background-color: #5e2e8f;
-  }
-  
-  .action-buttons {
-    display: flex;
-    flex-direction: column;
-  }
-  
-  .action-button {
-    background-color: #501387;
-    color: rgb(184, 184, 184); /* Change text color to white */
-    border: 1px solid;
-    padding: 5px 10px;
-    cursor: pointer;
-    font-size: 0.8rem;
-    margin: 5px 0;
-  }
-  
-  .action-button.pass {
-    border-color: blue;
-  }
-  
-  .action-button.badpass {
-    border-color: yellow;
-  }
-  
-  .action-button.kickout {
-    border-color: purple;
-  }
-  
-  .action-button.badkickout {
-    border-color: orange;
-  }
-  
-  .action-button.action {
-    border-color: green;
-  }
-  
-  .action-button.badaction {
-    border-color: red;
-  }
-  
-  .instructions-container {
-    background-color: #2e2e2e;
-    padding: 20px;
-    border-radius: 10px;
-    margin-left: 20px; /* Space between pitch and instructions */
-    color: white;
-    max-width: 300px; /* Adjust the max-width as needed */
-    flex-shrink: 0; /* Prevent instructions from shrinking */
-  }
-  
-  .instructions-container h3,
-  .instructions-container p,
-  .instructions-container ul,
-  .instructions-container li {
-    color: white;
-  }
-  
-  .dialog-container {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background-color: #3e3e3e;
-    padding: 20px;
-    border-radius: 10px;
-    border: 1px solid rgb(0, 0, 0);
-    max-width: 400px;
-    width: 100%;
-    max-height: 95vh; /* Adjust the height as needed */
-    overflow-y: auto; /* Make the dialog scrollable */ 
-  }
-  
-  .form-group {
-    margin-bottom: 10px;
+  background-color: #2e2e2e; /* Dark background for the pitch */
+  padding: 20px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1; /* Make the pitch container take available space */
+  overflow: auto; /* Allow scrolling */
+}
 
-  }
-  
-  .form-group label {
-    display: block;
-    margin-bottom: 5px;
-    color: white;
-  }
-  
-  .form-group input,
-  .form-group select {
-    width: 100%;
-    padding: 5px;
-    border: 1px solid rgb(0, 0, 0);
-    border-radius: 5px;
-    background-color: #2e2e2e;
-    color: white;
-  }
-  
-  @media (max-width: 768px) {
-    .main-container {
+.content {
+  display: flex;
+  flex-direction: row-reverse; /* Ensure pitch and instructions are side by side */
+  align-items: center;
+  width: 100%;
+  overflow: auto; /* Ensure the content can scroll */
+}
+
+.button-container {
+  display: flex;
+  flex-direction: column; /* Stack buttons vertically */
+  justify-content: space-between;
+  width: 100%;
+}
+
+.button {
+  background-color: #501387;
+  color: white;
+  border: none;
+  padding: 10px 20px; /* Adjust padding for consistent button size */
+  cursor: pointer;
+  font-size: 0.8rem; /* Smaller font size */
+  margin: 5px 0; /* Add margin between buttons */
+}
+
+.button:hover {
+  background-color: #5e2e8f;
+}
+
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+}
+
+.action-button {
+  background-color: #501387;
+  color: rgb(184, 184, 184); /* Change text color to white */
+  border: 1px solid;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  margin: 5px 0;
+}
+
+.action-button.pass {
+  border-color: blue;
+}
+
+.action-button.assist {
+  border-color: green;
+}
+
+.action-button.shot {
+  border-color: red;
+}
+
+.action-button.miss {
+  border-color: yellow;
+}
+
+.action-button.turnover {
+  border-color: orange;
+}
+
+.action-button.rebound {
+  border-color: purple;
+}
+
+.action-button.pass {
+  border-color: blue;
+}
+
+.action-button.run {
+  border-color: green;
+}
+
+.action-button.tackle {
+  border-color: red;
+}
+
+.action-button.touchdown {
+  border-color: yellow;
+}
+
+.action-button.fieldgoal {
+  border-color: purple;
+}
+
+.action-button.interception {
+  border-color: orange;
+}
+
+.action-button.fumble {
+  border-color: brown;
+}
+
+.action-button.badpass {
+  border-color: yellow;
+}
+
+.action-button.kickout {
+  border-color: purple;
+}
+
+.action-button.badkickout {
+  border-color: orange;
+}
+
+.action-button.action {
+  border-color: green;
+}
+
+.action-button.badaction {
+  border-color: red;
+}
+
+.instructions-container {
+  background-color: #2e2e2e;
+  padding: 20px;
+  border-radius: 10px;
+  margin-right: 20px; /* Space between pitch and instructions */
+  color: white;
+  max-width: 300px; /* Adjust the max-width as needed */
+  flex-shrink: 0; /* Prevent instructions from shrinking */
+}
+
+.instructions-container h3,
+.instructions-container p,
+.instructions-container ul,
+.instructions-container li {
+  color: white;
+}
+
+.dialog-container {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: #3e3e3e;
+  padding: 20px;
+  border-radius: 10px;
+  border: 1px solid rgb(0, 0, 0);
+  max-width: 400px;
+  width: 100%;
+  max-height: 95vh; /* Adjust the height as needed */
+  overflow-y: auto; /* Make the dialog scrollable */ 
+}
+
+.form-group {
+  margin-bottom: 10px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  color: white;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 5px;
+  border: 1px solid rgb(0, 0, 0);
+  border-radius: 5px;
+  background-color: #2e2e2e;
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .main-container {
       flex-direction: column;
-    }
-  
-    .sidebar {
+  }
+
+  .sidebar {
       width: 100%;
       margin-bottom: 20px;
-    }
-  
-    .content-area {
+  }
+
+  .content-area {
       flex: 1;
       overflow: visible;
-    }
-  
-    .pitch-container {
+  }
+
+  .pitch-container {
       width: 100%;
       padding: 10px;
       overflow-x: auto; /* Allow horizontal scrolling */
-    }
-  
-    .instructions-container {
-      margin-left: 0;
-      margin-top: 20px; /* Space between pitch and instructions for smaller screens */
-    }
   }
-  
-  @media (max-width: 480px) {
-    .button-container {
+
+  .instructions-container {
+      margin-right: 0;
+      margin-top: 20px; /* Space between pitch and instructions for smaller screens */
+  }
+}
+
+@media (max-width: 480px) {
+  .button-container {
       flex-direction: row; /* Stack buttons horizontally */
       flex-wrap: wrap; /* Allow buttons to wrap to the next line */
       justify-content: space-between;
-    }
-  
-    .button {
+  }
+
+  .button {
       width: 48%; /* Take nearly half the width */
       margin: 5px 1%; /* Add margin between buttons */
-    }
   }
+}
+
+.custom-slider-container {
+  display: flex;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.custom-slider-container label {
+  margin-right: 10px;
+  color: white;
+}
+
+.custom-slider {
+  flex: 1;
+}
+
+ 

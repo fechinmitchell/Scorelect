@@ -27,7 +27,7 @@ const SignUp = () => {
     try {
       await createUserWithEmailAndPassword(auth, email, password);
       setMessage('Successfully signed up!');
-      navigate('/pitch');
+      navigate('/upgrade');
     } catch (error) {
       console.error('Error signing up:', error);
       setMessage(error.message);
@@ -78,9 +78,8 @@ const SignUp = () => {
           <button type="button" onClick={() => navigate('/signin')} className="link-button">Sign In</button>
         </div>
       </form>
-    </div>
+    </div> 
   );
 };
 
 export default SignUp;
-

@@ -1,9 +1,16 @@
+// src/PitchGraphic.js
 import React, { useState, useRef, useEffect } from 'react';
 import { Stage, Layer, Rect, Line, Circle, Arc } from 'react-konva';
 import Modal from 'react-modal';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore'; // Remove 'collection' from this line
+import { firestore } from './firebase';
+import { useNavigate, useLocation } from 'react-router-dom';
+import Swal from 'sweetalert2';
 import './PitchGraphic.css';
-
-const PitchGraphic = () => {
+import './SavedGames.css';
+ 
+const PitchGraphic = ({ userType }) => {
   const [coords, setCoords] = useState([]);
   const [currentCoords, setCurrentCoords] = useState([]);
   const [actionType, setActionType] = useState('');
@@ -24,13 +31,42 @@ const PitchGraphic = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [customInput, setCustomInput] = useState({ action: '', team: '', position: '', pressure: '', foot: '' });
   const stageRef = useRef();
+  const [downloadsRemaining, setDownloadsRemaining] = useState(1);
+  const [user, setUser] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const pitchWidth = 145;
   const pitchHeight = 88;
-  const canvasWidth = 800;
-  const canvasHeight = 600;
-  const xScale = canvasWidth / pitchWidth;
-  const yScale = canvasHeight / pitchHeight;
+  const [canvasSize, setCanvasSize] = useState({ width: 800, height: 484.8 });
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const xScale = canvasSize.width / pitchWidth;
+  const yScale = canvasSize.height / pitchHeight;
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [gameName, setGameName] = useState('');
+
+  useEffect(() => {
+    if (location.state && location.state.loadedCoords) {
+      setCoords(location.state.loadedCoords);
+    }
+  }, [location.state]);
+
+  const handleSaveGame = async () => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (user && userType === 'paid') {
+      const sportType = 'GAA';
+      await setDoc(doc(firestore, 'savedGames', user.uid, 'games', gameName), {
+        gameData: coords,
+        name: gameName,
+        date: new Date().toISOString(),
+        sport: sportType
+      });
+      setIsSaveModalOpen(false);
+    } else {
+      Swal.fire('Please upgrade to save games.');
+    }
+  };
 
   const initialActionCodes = [
     'point', 'wide', 'goal', 'goal miss', 'free', 'missed free', 'short', 'blocked', 'offensive mark', 'offensive mark wide', 'post',
@@ -71,6 +107,42 @@ const PitchGraphic = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const auth = getAuth();
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setUser(user);
+        const docRef = doc(firestore, 'users', user.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const userData = docSnap.data();
+          const lastDownloadDate = userData.lastDownloadDate;
+          const today = new Date().toLocaleDateString();
+          if (lastDownloadDate === today) {
+            setDownloadsRemaining(userData.downloadsRemaining);
+          } else {
+            await setDoc(docRef, { lastDownloadDate: today, downloadsRemaining: 1 }, { merge: true });
+            setDownloadsRemaining(1);
+          }
+        } else {
+          await setDoc(docRef, { lastDownloadDate: new Date().toLocaleDateString(), downloadsRemaining: 1 });
+          setDownloadsRemaining(1);
+        }
+      } else {
+        const storedDownloadCount = localStorage.getItem('downloadCount');
+        const lastDownloadDate = localStorage.getItem('lastDownloadDate');
+        const today = new Date().toLocaleDateString();
+        if (lastDownloadDate === today) {
+          setDownloadsRemaining(parseInt(storedDownloadCount, 10) || 0);
+        } else {
+          localStorage.setItem('lastDownloadDate', today);
+          localStorage.setItem('downloadCount', '1');
+          setDownloadsRemaining(1);
+        }
+      }
+    });
+  }, []);
+
   const handleClick = (e) => {
     const stage = e.target.getStage();
     const point = stage.getPointerPosition();
@@ -89,6 +161,10 @@ const PitchGraphic = () => {
     }
   };
 
+  const handleTap = (e) => {
+    handleClick(e);
+  };
+
   const handleCloseDialog = () => {
     setOpenDialog(false);
   };
@@ -97,7 +173,7 @@ const PitchGraphic = () => {
     setOpenLineDialog(false);
   };
 
-  const handleFormSubmit = () => {
+  const handleFormSubmit = async () => {
     if (customInput.action) {
       setActionCodes([...actionCodes, customInput.action]);
       formData.action = customInput.action;
@@ -167,7 +243,23 @@ const PitchGraphic = () => {
     setCoords(coords.slice(0, -1));
   };
 
-  const handleDownloadData = () => {
+  const handleDownloadData = async () => {
+    if (userType === 'free' && downloadsRemaining <= 0) {
+      Swal.fire({
+        title: 'Download Limit Reached',
+        text: 'You have reached your download limit for today. Please upgrade for more downloads.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Upgrade Now',
+        cancelButtonText: 'Cancel'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          navigate('/signup');
+        }
+      });
+      return;
+    }
+  
     const jsonData = JSON.stringify(coords, null, 2);
     const blob = new Blob([jsonData], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -177,26 +269,43 @@ const PitchGraphic = () => {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  
+    const today = new Date().toLocaleDateString();
+  
+    if (userType === 'free') {
+      const newDownloadsRemaining = downloadsRemaining - 1;
+      setDownloadsRemaining(newDownloadsRemaining);
+      if (user) {
+        const docRef = doc(firestore, 'users', user.uid);
+        await setDoc(docRef, { downloadsRemaining: newDownloadsRemaining, lastDownloadDate: today }, { merge: true });
+      } else {
+        localStorage.setItem('downloadCount', newDownloadsRemaining.toString());
+      }
+    }
   };
 
   const toggleModal = () => {
     setIsModalOpen(!isModalOpen);
   };
 
+  const handleResize = (width, height) => {
+    setCanvasSize({ width, height });
+  };
+
   const renderGAAPitch = () => (
     <Layer>
-      <Rect x={0} y={0} width={canvasWidth} height={canvasHeight} fill="#90EE90" />
+      <Rect x={0} y={0} width={canvasSize.width} height={canvasSize.height} fill="#00A86B" />
       {/* Side and goal lines */}
-      <Line points={[0, 0, canvasWidth, 0, canvasWidth, canvasHeight, 0, canvasHeight, 0, 0]} stroke="#000" strokeWidth={2} />
+      <Line points={[0, 0, canvasSize.width, 0, canvasSize.width, canvasSize.height, 0, canvasSize.height, 0, 0]} stroke="#000" strokeWidth={2} />
       {/* Goals */}
-      <Line points={[canvasWidth, yScale * 40.75, xScale * 145.2, yScale * 40.75, xScale * 145.2, yScale * 47.25, canvasWidth, yScale * 47.25]} stroke="#000" strokeWidth={2} />
+      <Line points={[canvasSize.width, yScale * 40.75, xScale * 145.2, yScale * 40.75, xScale * 145.2, yScale * 47.25, canvasSize.width, yScale * 47.25]} stroke="#000" strokeWidth={2} />
       <Line points={[0, yScale * 40.75, xScale * -0.2, yScale * 40.75, xScale * -0.2, yScale * 47.25, 0, yScale * 47.25]} stroke="#000" strokeWidth={2} />
       {/* 6 yard boxes */}
-      <Line points={[canvasWidth, yScale * 37, xScale * 139, yScale * 37, xScale * 139, yScale * 51, canvasWidth, yScale * 51]} stroke="#000" strokeWidth={2} />
+      <Line points={[canvasSize.width, yScale * 37, xScale * 139, yScale * 37, xScale * 139, yScale * 51, canvasSize.width, yScale * 51]} stroke="#000" strokeWidth={2} />
       <Line points={[0, yScale * 37, xScale * 6, yScale * 37, xScale * 6, yScale * 51, 0, yScale * 51]} stroke="#000" strokeWidth={2} />
       {/* Large rectangles */}
       <Line points={[0, yScale * 34.5, xScale * 14, yScale * 34.5, xScale * 14, yScale * 53.5, 0, yScale * 53.5]} stroke="#000" strokeWidth={2} />
-      <Line points={[canvasWidth, yScale * 34.5, xScale * 131, yScale * 34.5, xScale * 131, yScale * 53.5, canvasWidth, yScale * 53.5]} stroke="#000" strokeWidth={2} />
+      <Line points={[canvasSize.width, yScale * 34.5, xScale * 131, yScale * 34.5, xScale * 131, yScale * 53.5, canvasSize.width, yScale * 53.5]} stroke="#000" strokeWidth={2} />
       {/* Halfway small line */}
       <Line points={[xScale * 72.5, yScale * 39, xScale * 72.5, yScale * 49]} stroke="#000" strokeWidth={2} />
       {/* Peno lines */}
@@ -206,17 +315,17 @@ const PitchGraphic = () => {
       <Arc x={xScale * 124} y={yScale * 44} innerRadius={0} outerRadius={xScale * 12} angle={180} rotation={90} stroke="#000" strokeWidth={2} />
       <Arc x={xScale * 21} y={yScale * 44} innerRadius={0} outerRadius={xScale * 12} angle={180} rotation={270} stroke="#000" strokeWidth={2} />
       {/* 14 yard lines */}
-      <Line points={[xScale * 14, 0, xScale * 14, canvasHeight]} stroke="#000" strokeWidth={2} />
-      <Line points={[xScale * 131, 0, xScale * 131, canvasHeight]} stroke="#000" strokeWidth={2} />
+      <Line points={[xScale * 14, 0, xScale * 14, canvasSize.height]} stroke="#000" strokeWidth={2} />
+      <Line points={[xScale * 131, 0, xScale * 131, canvasSize.height]} stroke="#000" strokeWidth={2} />
       {/* 21 yard lines */}
-      <Line points={[xScale * 21, 0, xScale * 21, canvasHeight]} stroke="#000" strokeWidth={2} />
-      <Line points={[xScale * 124, 0, xScale * 124, canvasHeight]} stroke="#000" strokeWidth={2} />
+      <Line points={[xScale * 21, 0, xScale * 21, canvasSize.height]} stroke="#000" strokeWidth={2} />
+      <Line points={[xScale * 124, 0, xScale * 124, canvasSize.height]} stroke="#000" strokeWidth={2} />
       {/* 45 yard lines */}
-      <Line points={[xScale * 45, 0, xScale * 45, canvasHeight]} stroke="#000" strokeWidth={2} />
-      <Line points={[xScale * 100, 0, xScale * 100, canvasHeight]} stroke="#000" strokeWidth={2} />
+      <Line points={[xScale * 45, 0, xScale * 45, canvasSize.height]} stroke="#000" strokeWidth={2} />
+      <Line points={[xScale * 100, 0, xScale * 100, canvasSize.height]} stroke="#000" strokeWidth={2} />
       {/* 65 yard lines */}
-      <Line points={[xScale * 65, 0, xScale * 65, canvasHeight]} stroke="#000" strokeWidth={2} />
-      <Line points={[xScale * 80, 0, xScale * 80, canvasHeight]} stroke="#000" strokeWidth={2} />
+      <Line points={[xScale * 65, 0, xScale * 65, canvasSize.height]} stroke="#000" strokeWidth={2} />
+      <Line points={[xScale * 80, 0, xScale * 80, canvasSize.height]} stroke="#000" strokeWidth={2} />
     </Layer>
   );
 
@@ -252,11 +361,57 @@ const PitchGraphic = () => {
   return (
     <div className="pitch-container">
       <div className="content">
-        <Stage width={canvasWidth} height={canvasHeight} onClick={handleClick} ref={stageRef}>
+        <div className="instructions-container">
+          <h3>Instructions</h3>
+          <div className="action-buttons">
+            <button className="action-button pass" onClick={() => setActionType('pass')}>Successful Pass (p)</button>
+            <button className="action-button badpass" onClick={() => setActionType('badpass')}>Unsuccessful Pass (u)</button>
+            <button className="action-button kickout" onClick={() => setActionType('kickout')}>Successful Kickout (k)</button>
+            <button className="action-button badkickout" onClick={() => setActionType('badkickout')}>Unsuccessful Kickout (c)</button>
+            <button className="action-button action" onClick={() => setActionType('action')}>Successful Action (g)</button>
+            <button className="action-button badaction" onClick={() => setActionType('badaction')}>Unsuccessful Action (b)</button>
+          </div>
+          <p>Click on the pitch to record an action at that location. Use the buttons above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
+          <div className="button-container">
+            <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
+            <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
+            <button className="button" onClick={handleDownloadData}>{userType === 'free' ? `Download Data (${downloadsRemaining} left)` : 'Download Data (Unlimited)'}</button>
+            <button className="button" onClick={toggleModal}>View Coordinates</button>
+            <button className="button" onClick={() => setIsSaveModalOpen(true)}>Save Game</button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
+              <button className="button" onClick={() => handleResize(375, 227.3)}>iPhone</button>
+              <button className="button" onClick={() => handleResize(600, 363.6)}>iPad</button>
+              <button className="button" onClick={() => handleResize(800, 484.8)}>Computer</button>
+            </div>
+            <div className="custom-slider-container">
+              <label htmlFor="customZoom">Custom:</label>
+              <input
+                type="range"
+                id="customZoom"
+                min="0.5"
+                max="2"
+                step="0.1"
+                value={zoomLevel}
+                onChange={(e) => {
+                  setZoomLevel(e.target.value);
+                  handleResize(canvasSize.width * e.target.value, canvasSize.height * e.target.value);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+        <Stage
+          width={canvasSize.width}
+          height={canvasSize.height}
+          onClick={handleClick}
+          onTap={handleTap}
+          ref={stageRef}
+          scaleX={zoomLevel}
+          scaleY={zoomLevel}
+        >
           {renderGAAPitch()}
           <Layer>
             {coords.map((coord, index) => {
-              console.log('Rendering coord:', coord);
               if (coord.from && coord.to) {
                 return (
                   <Line
@@ -284,24 +439,6 @@ const PitchGraphic = () => {
             })}
           </Layer>
         </Stage>
-        <div className="instructions-container">
-          <h3>Instructions</h3>
-          <div className="action-buttons">
-            <button className="action-button pass" onClick={() => setActionType('pass')}>Successful Pass (p)</button>
-            <button className="action-button badpass" onClick={() => setActionType('badpass')}>Unsuccessful Pass (u)</button>
-            <button className="action-button kickout" onClick={() => setActionType('kickout')}>Successful Kickout (k)</button>
-            <button className="action-button badkickout" onClick={() => setActionType('badkickout')}>Unsuccessful Kickout (c)</button>
-            <button className="action-button action" onClick={() => setActionType('action')}>Successful Action (g)</button>
-            <button className="action-button badaction" onClick={() => setActionType('badaction')}>Unsuccessful Action (b)</button>
-          </div>
-          <p>Click on the pitch to record an action at that location. Use the buttons above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
-          <div className="button-container">
-            <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
-            <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
-            <button className="button" onClick={handleDownloadData}>Download Data</button>
-            <button className="button" onClick={toggleModal}>View Coordinates</button>
-          </div>
-        </div>
       </div>
       {openDialog && (
         <div className="dialog-container">
@@ -526,8 +663,76 @@ const PitchGraphic = () => {
           </ul>
         </div>
       </Modal>
+      <Modal
+        isOpen={isSaveModalOpen}
+        onRequestClose={() => setIsSaveModalOpen(false)}
+        contentLabel="Save Game"
+        style={{
+          content: {
+            top: '50%',
+            left: '50%',
+            right: 'auto',
+            bottom: 'auto',
+            marginRight: '-50%',
+            transform: 'translate(-50%, -50%)',
+            width: '50%',
+            maxHeight: '60%', // Make the modal smaller
+            overflowY: 'auto',
+            background: '#2e2e2e',
+            padding: '20px',
+            borderRadius: '10px',
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)'
+          }
+        }}
+      >
+        <h2>Save Game</h2>
+            <input
+            type="text"
+            value={gameName}
+            onChange={(e) => setGameName(e.target.value)}
+            placeholder="Enter game name"
+            style={{
+                width: '97%',
+                padding: '10px',
+                margin: '5px',
+                borderRadius: '5px',
+                border: '1px solid #ccc',
+                marginRight: '20px'  // Added this line to move the element to the left by 20px
+            }}
+        />
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <button 
+            onClick={handleSaveGame} 
+            style={{
+              background: '#007bff',
+              color: '#fff',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              transition: 'background 0.3s'
+            }}
+          >
+            Save
+          </button>
+          <button 
+            onClick={() => setIsSaveModalOpen(false)}
+            style={{
+              background: '#6c757d',
+              color: '#fff',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              transition: 'background 0.3s'
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      </Modal>
     </div>
   );
-};
+}  
 
 export default PitchGraphic;

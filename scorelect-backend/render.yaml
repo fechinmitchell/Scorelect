@@ -31,4 +31,3 @@ services:
         sync: false
       - key: FIREBASE_UNIVERSE_DOMAIN
         sync: false
-

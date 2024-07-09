@@ -36,5 +36,3 @@ firebase_credentials.json
 # Environment variables
 .env
 
-# Render configuration
-render.yaml

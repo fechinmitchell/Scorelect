@@ -17,24 +17,29 @@ const Success = ({ setUserRole }) => {
       const uid = query.get('uid');
 
       if (sessionId && uid) {
-        const user = auth.currentUser;
-        if (user) {
+        try {
           // Fetch the session from Stripe to get the subscription ID
-          const response = await fetch(`${process.env.REACT_APP_API_URL}/get-subscription`, {
+          const response = await fetch(`${process.env.REACT_APP_API_URL}/retrieve-session`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ subscriptionId: sessionId }),
+            body: JSON.stringify({ sessionId }),
           });
 
-          const subscriptionData = await response.json();
-          if (!subscriptionData.error) {
-            const subscriptionId = subscriptionData.id;
+          const session = await response.json();
+          if (session && session.subscription) {
+            const subscriptionId = session.subscription;
+
+            // Update Firestore with the subscription ID
             await setDoc(doc(firestore, 'users', uid), { role: 'paid', subscriptionId }, { merge: true });
+
             setUserRole('paid');
           }
+        } catch (error) {
+          console.error('Error updating user role:', error);
         }
+
         // Redirect to the main home page after successful payment
         window.location.href = 'https://www.scorelect.com/';
       }

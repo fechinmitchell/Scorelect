@@ -21,15 +21,3 @@ root.render(
 );
 
 reportWebVitals();
-
- 
-
-
-
-
-
-
-
-
-
-

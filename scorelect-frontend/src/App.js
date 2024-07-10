@@ -1,3 +1,4 @@
+// src/App.js
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { getAuth, signOut } from 'firebase/auth';
@@ -16,6 +17,7 @@ import SavedGames from './SavedGames';
 import Success from './Success'; // Import Success component
 import Cancel from './Cancel'; // Import Cancel component
 import { ToastContainer, toast } from 'react-toastify';
+import { Analytics } from '@vercel/analytics/react';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 
@@ -99,6 +101,7 @@ const App = () => {
             <Route path="/cancel" element={<Cancel />} />
             <Route path="*" element={<Navigate replace to="/" />} />
           </Routes>
+          <Analytics /> {/* Add the Analytics component here */}
         </div>
       </div>
     </div>

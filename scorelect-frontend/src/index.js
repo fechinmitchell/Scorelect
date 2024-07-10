@@ -6,6 +6,7 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { BrowserRouter } from 'react-router-dom';
 import StripeSetup from './StripeSetup';
+import { Analytics } from '@vercel/analytics/react';
 
 const container = document.getElementById('root');
 const root = createRoot(container);
@@ -15,9 +16,11 @@ root.render(
     <BrowserRouter>
       <StripeSetup>
         <App />
+        <Analytics />
       </StripeSetup>
     </BrowserRouter>
   </React.StrictMode>
 );
 
 reportWebVitals();
+

@@ -26,6 +26,11 @@ csp = {
         'https://fonts.googleapis.com',
         "'unsafe-inline'"
     ],
+    'style-src-elem': [
+        "'self'",
+        'https://fonts.googleapis.com',
+        "'unsafe-inline'"
+    ],
     'font-src': [
         "'self'",
         'https://fonts.gstatic.com',
@@ -160,4 +165,3 @@ def load_games():
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
-

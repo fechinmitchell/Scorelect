@@ -70,38 +70,26 @@ cred = credentials.Certificate(firebase_config)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-@app.route('/create-subscription', methods=['POST'])
-def create_subscription():
+@app.route('/create-checkout-session', methods=['POST'])
+def create_checkout_session():
     try:
         data = request.json
         email = data.get('email')
-        payment_method_id = data.get('payment_method')
+        uid = data.get('uid')
 
-        # Create a new customer
-        customer = stripe.Customer.create(
-            payment_method=payment_method_id,
-            email=email,
-            invoice_settings={
-                'default_payment_method': payment_method_id,
-            },
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            customer_email=email,
+            line_items=[{
+                'price': 'price_1PSb9kRsFqpmi3sgRjiYWmAp',  # Replace with your actual price ID
+                'quantity': 1,
+            }],
+            mode='subscription',
+            success_url='https://scorelect.com/success?session_id={CHECKOUT_SESSION_ID}',
+            cancel_url='https://scorelect.com/cancel',
         )
 
-        # Create a subscription
-        subscription = stripe.Subscription.create(
-            customer=customer.id,
-            items=[
-                {
-                    'price': 'price_1PSb9kRsFqpmi3sgRjiYWmAp',  # Update with your actual test price ID
-                },
-            ],
-            expand=['latest_invoice.payment_intent'],
-        )
-
-        # Update user role in Firestore
-        user_doc_ref = db.collection('users').document(data.get('uid'))
-        user_doc_ref.set({'role': 'paid', 'stripeCustomerId': customer.id, 'subscriptionId': subscription.id}, merge=True)
-
-        return jsonify(subscription)
+        return jsonify({'id': session.id})
     except Exception as e:
         return jsonify(error=str(e)), 400
 
@@ -148,7 +136,7 @@ def save_game():
 
 @app.route('/load-games', methods=['POST'])
 def load_games():
-    try:
+    try: 
         data = request.json
         user_id = data.get('uid')
 
@@ -161,3 +149,4 @@ def load_games():
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
+

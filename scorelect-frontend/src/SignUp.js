@@ -1,4 +1,3 @@
-// src/SignUp.js
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
@@ -78,7 +77,7 @@ const SignUp = () => {
           <button type="button" onClick={() => navigate('/signin')} className="link-button">Sign In</button>
         </div>
       </form>
-    </div> 
+    </div>
   );
 };
 

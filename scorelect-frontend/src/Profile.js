@@ -1,4 +1,3 @@
-// src/Profile.js
 import React, { useEffect, useState } from 'react';
 import { getAuth, signOut } from 'firebase/auth';
 import { firestore } from './firebase';
@@ -30,7 +29,7 @@ const Profile = ({ onLogout }) => {
       if (userDoc.exists()) {
         const userData = userDoc.data();
         if (userData.subscriptionId) {
-          const response = await fetch(`http://localhost:5001/get-subscription`, {
+          const response = await fetch(`${process.env.REACT_APP_API_URL}/get-subscription`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -57,7 +56,7 @@ const Profile = ({ onLogout }) => {
 
   const handleCancelSubscription = async () => {
     try {
-      const response = await fetch(`http://localhost:5001/cancel-subscription`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/cancel-subscription`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -112,4 +111,3 @@ const Profile = ({ onLogout }) => {
 };
 
 export default Profile;
- 

@@ -1,4 +1,3 @@
-// src/App.js
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { getAuth, signOut } from 'firebase/auth';
@@ -14,6 +13,8 @@ import Sidebar from './Sidebar';
 import Upgrade from './Upgrade';
 import Profile from './Profile';
 import SavedGames from './SavedGames';
+import Success from './Success'; // Import Success component
+import Cancel from './Cancel'; // Import Cancel component
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
@@ -94,6 +95,8 @@ const App = () => {
             <Route path="/soccer" element={<SoccerPitch userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />} />
             <Route path="/basketball" element={<BasketballCourt userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />} />
             <Route path="/americanfootball" element={<AmericanFootballPitch userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />} />
+            <Route path="/success" element={<Success setUserRole={setUserRole} />} />
+            <Route path="/cancel" element={<Cancel />} />
             <Route path="*" element={<Navigate replace to="/" />} />
           </Routes>
         </div>
@@ -101,5 +104,5 @@ const App = () => {
     </div>
   );
 };
- 
+
 export default App;

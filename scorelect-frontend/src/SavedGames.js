@@ -1,4 +1,3 @@
-// src/SavedGames.js
 import React, { useEffect, useState } from 'react';
 import { getAuth } from 'firebase/auth';
 import { firestore } from './firebase';

@@ -1,4 +1,3 @@
-// src/StripeSetup.js
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 
@@ -9,4 +8,3 @@ const StripeSetup = ({ children }) => {
 };
 
 export default StripeSetup;
- 

@@ -21,7 +21,8 @@ const Success = ({ setUserRole }) => {
           await setDoc(doc(firestore, 'users', user.uid), { role: 'paid' }, { merge: true });
           setUserRole('paid');
         }
-        navigate('/profile');
+        // Redirect to the main home page after successful payment
+        window.location.href = 'https://www.scorelect.com/';
       }
     };
 
@@ -31,7 +32,7 @@ const Success = ({ setUserRole }) => {
   return (
     <div>
       <h2>Payment Successful</h2>
-      <p>You will be redirected to your profile shortly...</p>
+      <p>You will be redirected to the main home page shortly...</p>
     </div>
   );
 };

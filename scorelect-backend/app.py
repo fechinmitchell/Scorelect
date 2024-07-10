@@ -85,7 +85,7 @@ def create_checkout_session():
                 'quantity': 1,
             }],
             mode='subscription',
-            success_url=f'https://scorelect.com/success?session_id={{CHECKOUT_SESSION_ID}}&uid={uid}',
+            success_url='https://scorelect.com/success?session_id={CHECKOUT_SESSION_ID}',
             cancel_url='https://scorelect.com/cancel',
         )
 
@@ -119,6 +119,17 @@ def get_subscription():
     except Exception as e:
         return jsonify(error=str(e)), 400
 
+@app.route('/retrieve-session', methods=['POST'])
+def retrieve_session():
+    try:
+        data = request.json
+        session_id = data.get('session_id')
+        session = stripe.checkout.Session.retrieve(session_id)
+
+        return jsonify(session)
+    except Exception as e:
+        return jsonify(error=str(e)), 400
+
 @app.route('/save-game', methods=['POST'])
 def save_game():
     try:
@@ -133,18 +144,6 @@ def save_game():
         return jsonify({"success": True})
     except Exception as e:
         return jsonify(error=str(e)), 400
-
-@app.route('/retrieve-session', methods=['POST'])
-def retrieve_session():
-    try:
-        data = request.json
-        session_id = data.get('session_id')
-        session = stripe.checkout.Session.retrieve(session_id)
-
-        return jsonify(session)
-    except Exception as e:
-        return jsonify(error=str(e)), 400
-
 
 @app.route('/load-games', methods=['POST'])
 def load_games():
@@ -161,3 +160,4 @@ def load_games():
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
+

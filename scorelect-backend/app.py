@@ -85,7 +85,7 @@ def create_checkout_session():
                 'quantity': 1,
             }],
             mode='subscription',
-            success_url='https://scorelect.com/success?session_id={CHECKOUT_SESSION_ID}',
+            success_url=f'https://scorelect.com/success?session_id={{CHECKOUT_SESSION_ID}}&uid={uid}',
             cancel_url='https://scorelect.com/cancel',
         )
 
@@ -113,7 +113,7 @@ def get_subscription():
     try:
         data = request.json
         subscription_id = data.get('subscriptionId')
-        subscription = stripe.Subscriptions.retrieve(subscription_id)
+        subscription = stripe.Subscription.retrieve(subscription_id)
 
         return jsonify(subscription)
     except Exception as e:
@@ -149,4 +149,3 @@ def load_games():
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
-

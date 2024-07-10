@@ -1,3 +1,4 @@
+// src/Profile.js
 import React, { useEffect, useState } from 'react';
 import { getAuth, signOut } from 'firebase/auth';
 import { firestore } from './firebase';
@@ -61,7 +62,7 @@ const Profile = ({ onLogout }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ subscriptionId: subscription.id }),
+        body: JSON.stringify({ subscriptionId: subscription.id, uid: user.uid }),
       });
 
       const result = await response.json();

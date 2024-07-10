@@ -14,12 +14,26 @@ const Success = ({ setUserRole }) => {
     const updateUserRole = async () => {
       const query = new URLSearchParams(location.search);
       const sessionId = query.get('session_id');
+      const uid = query.get('uid');
 
-      if (sessionId) {
+      if (sessionId && uid) {
         const user = auth.currentUser;
         if (user) {
-          await setDoc(doc(firestore, 'users', user.uid), { role: 'paid' }, { merge: true });
-          setUserRole('paid');
+          // Fetch the session from Stripe to get the subscription ID
+          const response = await fetch(`${process.env.REACT_APP_API_URL}/get-subscription`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ subscriptionId: sessionId }),
+          });
+
+          const subscriptionData = await response.json();
+          if (!subscriptionData.error) {
+            const subscriptionId = subscriptionData.id;
+            await setDoc(doc(firestore, 'users', uid), { role: 'paid', subscriptionId }, { merge: true });
+            setUserRole('paid');
+          }
         }
         // Redirect to the main home page after successful payment
         window.location.href = 'https://www.scorelect.com/';

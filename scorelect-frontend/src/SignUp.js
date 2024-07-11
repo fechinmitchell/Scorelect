@@ -1,3 +1,4 @@
+// src/Signup.js
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
@@ -26,7 +27,7 @@ const SignUp = () => {
     try {
       await createUserWithEmailAndPassword(auth, email, password);
       setMessage('Successfully signed up!');
-      navigate('/upgrade');
+      window.location.href = 'https://buy.stripe.com/9AQcQEbrCdMJ5567ss';
     } catch (error) {
       console.error('Error signing up:', error);
       setMessage(error.message);
@@ -40,38 +41,50 @@ const SignUp = () => {
       <form onSubmit={handleSignUp} className="auth-form">
         <img src={logo} alt="Scorelect Logo" className="logo" />
         <h2>Sign Up</h2>
+        <h3 className="pro-price">Pro for €5/$5.50 a month</h3>
+        <div className="pro-features">
+          <h3>Benefits of Scorelect Pro</h3>
+          <ul>
+            <li>Unlimited data collection downloads</li>
+            <li>Unlimited access to saved games</li>
+            <li>Priority customer support</li>
+            <li>Ad-free experience</li>
+          </ul>
+        </div>
         {message && <div className="auth-message">{message}</div>}
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email"
-          required
-        />
-        <input
-          type="text"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-          placeholder="Full Name"
-          required
-        />
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password"
-          required
-        />
-        <input
-          type="password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          placeholder="Confirm Password"
-          required
-        />
-        <button type="submit" disabled={loading}>
-          {loading ? 'Signing Up...' : 'Sign Up'}
-        </button>
+        <div className="form-fields">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            required
+          />
+          <input
+            type="text"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            placeholder="Full Name"
+            required
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            required
+          />
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Confirm Password"
+            required
+          />
+          <button type="submit" disabled={loading}>
+            {loading ? 'Signing Up...' : 'Sign Up'}
+          </button>
+        </div>
         <div className="switch-auth">
           <span>Already have an account?</span>
           <button type="button" onClick={() => navigate('/signin')} className="link-button">Sign In</button>

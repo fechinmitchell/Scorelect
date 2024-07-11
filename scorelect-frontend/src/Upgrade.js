@@ -30,7 +30,7 @@ const Upgrade = ({ setUserRole }) => {
 
   return (
     <div className="upgrade-container">
-      <h2>Upgrade to Scorelect Pro for $2 a month</h2>
+      <h2>Upgrade to Scorelect Pro for €5/$5.50 a month</h2>
       <p>Unlock premium features and enhance your experience.</p>
       <div className="upgrade-benefits">
         <h3>Benefits:</h3>

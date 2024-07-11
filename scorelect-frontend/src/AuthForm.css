@@ -1,88 +1,124 @@
 /* AuthForm.css */
 .auth-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    background-size: cover;
-    background-position: center;
-  }
-  
-  .auth-form {
-    background: rgba(255, 255, 255, 0.9);
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    width: 100%;
-    max-width: 400px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-  
-  .auth-form input {
-    width: 100%;
-    padding: 10px 15px;
-    margin: 10px 0;
-    box-sizing: border-box;
-  }
-  
-  .auth-form button {
-    width: 100%;
-    padding: 10px 15px;
-    background: #007bff;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-  }
-  
-  .auth-form button:hover {
-    background: #0056b3;
-  }
-  
-  .auth-form .logo {
-    display: block;
-    margin: 0 auto 20px;
-    max-width: 100px;
-  }
-   
-  .auth-form h2 {
-    text-align: center;
-    color: #733daa; /* Change the color to match the sidebar */
-  }
-  
-  .auth-form p {
-    text-align: center;
-  }
-  
-  .auth-form span {
-    color: black;
-  }
-  
-  .auth-form .switch-auth {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin-top: 10px;
-  }
-  
-  .auth-form .switch-auth .link-button {
-    background: none;
-    border: none;
-    color: black;
-    cursor: pointer;
-    text-decoration: underline;
-    margin-left: 5px;
-  }
-  
-  .auth-form .switch-auth .link-button:hover {
-    color: #007bff;
-  }
-  
-  .auth-message {
-    color: red;
-    text-align: center;
-    margin-bottom: 10px;
-  }
-  
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-size: cover;
+  background-position: center;
+}
+
+.auth-form {
+  background: rgba(255, 255, 255, 0.9);
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.auth-form input {
+  width: 100%;
+  padding: 10px 15px;
+  margin: 10px 0;
+  box-sizing: border-box;
+}
+
+.auth-form button {
+  width: 100%;
+  padding: 10px 15px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.auth-form button:hover {
+  background: #0056b3;
+}
+
+.auth-form .logo {
+  display: block;
+  margin: 0 auto 10px; /* Reduce margin */
+  max-width: 100px;
+}
+
+.auth-form h2 {
+  text-align: center;
+  color: #733daa; /* Change the color to match the sidebar */
+}
+
+.auth-form p {
+  text-align: center;
+}
+
+.auth-form span {
+  color: black;
+}
+
+.auth-form .switch-auth {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.auth-form .switch-auth .link-button {
+  background: none;
+  border: none;
+  color: black;
+  cursor: pointer;
+  text-decoration: underline;
+  margin-left: 5px;
+}
+
+.auth-form .switch-auth .link-button:hover {
+  color: #007bff;
+}
+
+.auth-message {
+  color: red;
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.auth-form h3.pro-price {
+  text-align: center;
+  color: #333; /* Darker text color */
+  margin-top: 5px; /* Reduce margin */
+}
+
+/* Pro Features Section */
+.pro-features {
+  text-align: left;
+  margin-top: 10px; /* Reduce margin */
+  color: #2c3e50; /* Change this to any color you prefer */
+}
+
+.pro-features h3 {
+  color: #2980b9;
+  margin-top: 0; /* Reduce margin */
+}
+
+.pro-features ul {
+  list-style: none;
+  padding: 0;
+}
+
+.pro-features ul li {
+  margin: 5px 0; /* Reduce margin */
+  padding-left: 20px;
+  position: relative;
+  color: #2c3e50; /* Change this to any color you prefer */
+}
+
+.pro-features ul li:before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: #27ae60;
+}

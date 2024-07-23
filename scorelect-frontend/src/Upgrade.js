@@ -4,6 +4,7 @@ import { getAuth } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
 import './Upgrade.css';
+import './AuthForm.css';
 
 const Upgrade = ({ setUserRole }) => {
   const [loading, setLoading] = useState(false);
@@ -32,14 +33,15 @@ const Upgrade = ({ setUserRole }) => {
     <div className="upgrade-container">
       <h2>Upgrade to Scorelect Pro for €5/$5.50 a month</h2>
       <p>Unlock premium features and enhance your experience.</p>
-      <div className="upgrade-benefits">
-        <h3>Benefits:</h3>
-        <ul>
-          <li>Unlimited sessions</li>
-          <li>Access to advanced analytics</li>
-          <li>Priority support</li>
-        </ul>
-      </div>
+      <div className="pro-features">
+          <h3>Benefits of Scorelect Pro</h3>
+          <ul>
+            <li>Unlimited data collection downloads</li>
+            <li>Unlimited access to saved games</li>
+            <li>Priority customer support</li>
+            <li>Ad-free experience</li>
+          </ul>
+        </div>
       <button onClick={handleUpgrade} className="upgrade-button" disabled={loading}>
         {loading ? 'Processing...' : 'Upgrade Now'}
       </button>

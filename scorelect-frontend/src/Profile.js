@@ -1,4 +1,3 @@
-// src/Profile.js
 import React, { useEffect, useState } from 'react';
 import { getAuth, signOut } from 'firebase/auth';
 import { firestore } from './firebase';
@@ -29,7 +28,9 @@ const Profile = ({ onLogout }) => {
       const userDoc = await getDoc(doc(firestore, 'users', uid));
       if (userDoc.exists()) {
         const userData = userDoc.data();
+        console.log('User Data:', userData);
         if (userData.subscriptionId) {
+          console.log('Fetching subscription with ID:', userData.subscriptionId);
           const response = await fetch(`${process.env.REACT_APP_API_URL}/get-subscription`, {
             method: 'POST',
             headers: {
@@ -37,16 +38,24 @@ const Profile = ({ onLogout }) => {
             },
             body: JSON.stringify({ subscriptionId: userData.subscriptionId }),
           });
-
+  
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+  
           const subscriptionData = await response.json();
+          console.log('Subscription Data:', subscriptionData);
           if (subscriptionData.error) {
-            console.error(subscriptionData.error);
+            console.error('Subscription error:', subscriptionData.error);
           } else {
             setSubscription(subscriptionData);
           }
         } else {
+          console.log('No subscription ID found for user');
           setSubscription(null);
         }
+      } else {
+        console.log('User document not found');
       }
     } catch (error) {
       console.error('Error fetching user subscription:', error);
@@ -65,7 +74,12 @@ const Profile = ({ onLogout }) => {
         body: JSON.stringify({ subscriptionId: subscription.id, uid: user.uid }),
       });
 
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
       const result = await response.json();
+      console.log('Cancel Subscription Result:', result);
       if (result.error) {
         console.error(result.error);
       } else {
@@ -79,9 +93,13 @@ const Profile = ({ onLogout }) => {
 
   const handleLogout = async () => {
     const auth = getAuth();
-    await signOut(auth);
-    onLogout();
-    navigate('/signin');
+    try {
+      await signOut(auth);
+      onLogout();
+      navigate('/signin');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
   if (loading) {
@@ -103,7 +121,7 @@ const Profile = ({ onLogout }) => {
               <button className="cancel-button" onClick={handleCancelSubscription}>Cancel Subscription</button>
             </>
           ) : (
-            <p>No active subscription</p>
+            <p>Please contact fetzmitchell@gmail.com with any issues.</p>
           )}
         </>
       )}

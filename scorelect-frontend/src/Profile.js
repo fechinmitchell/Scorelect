@@ -121,7 +121,7 @@ const Profile = ({ onLogout }) => {
               <button className="cancel-button" onClick={handleCancelSubscription}>Cancel Subscription</button>
             </>
           ) : (
-            <p>Please contact scorelectapp@gmail.com with any issues.</p>
+            <p>Please contact scorelectapp@gmail.com with any issues</p>
           )}
         </>
       )}

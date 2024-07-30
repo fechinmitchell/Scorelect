@@ -18,6 +18,7 @@ import Success from './Success'; // Import Success component
 import Cancel from './Cancel'; // Import Cancel component
 import { ToastContainer, toast } from 'react-toastify';
 import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 
@@ -102,6 +103,7 @@ const App = () => {
             <Route path="*" element={<Navigate replace to="/" />} />
           </Routes>
           <Analytics /> {/* Add the Analytics component here */}
+          <SpeedInsights /> {/* Add the SpeedInsights component here */}
         </div>
       </div>
     </div>

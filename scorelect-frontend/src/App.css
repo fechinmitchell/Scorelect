@@ -62,7 +62,37 @@ body {
     width: 100%;
     margin: 5px 0;
   }
+
+  .main-container {
+    flex-direction: column;
+  }
+
+  .content-area {
+    padding: 0.5rem;
+  }
+
+  .pitch-container {
+    padding: 1rem;
+  }
 }
 
- 
+/* Additional media queries for iPhone screen sizes */
+@media (max-width: 375px) { /* iPhone SE, iPhone 6/7/8 */
+  .content-area {
+    padding: 0.25rem;
+  }
 
+  .button {
+    font-size: 0.875rem;
+  }
+}
+
+@media (max-width: 320px) { /* iPhone 5/5S/5C */
+  .content-area {
+    padding: 0.25rem;
+  }
+
+  .button {
+    font-size: 0.75rem;
+  }
+}

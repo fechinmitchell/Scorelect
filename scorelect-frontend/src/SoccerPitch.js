@@ -797,67 +797,72 @@ const handleDownloadFilteredData = async () => {
         </div>
 
         <Stage
-          width={canvasSize.width}
-          height={canvasSize.height}
-          onClick={handleClick}
-          onContextMenu={handleRightClick}
-          onTap={handleTap}
-          ref={stageRef}
-          scaleX={zoomLevel}
-          scaleY={zoomLevel}
-        >
-          {renderSoccerPitch()}
-          {isContextMenuOpen && renderContextMenu()}
-          <Layer>
-            {coords.map((coord, index) => {
-              if (coord.from && coord.to) {
-                return (
-                  <Line
-                    key={index}
-                    points={[
-                      coord.from.x * xScale,
-                      coord.from.y * yScale,
-                      coord.to.x * xScale,
-                      coord.to.y * yScale
-                    ]}
-                    stroke={getColor(coord.type)}
-                    strokeWidth={2}
-                  />
-                );
-              }
-              return (
-                <Group key={index}>
-                  <Circle
-                    x={coord.x * xScale}
-                    y={coord.y * yScale}
-                    radius={6}
-                    fill={getColor(coord.type)}
-                  />
-                  {displayPlayerNumber && (
-                    <Text
-                      x={coord.x * xScale - 5}
-                      y={coord.y * yScale - 3}
-                      text={coord.player}
-                      fontSize={8}
-                      fill="white"
-                      align="center"
-                    />
-                  )}
-                  {displayPlayerName && (
-                    <Text
-                      x={coord.x * xScale - 28}
-                      y={coord.y * yScale - 16}
-                      text={coord.playerName}
-                      fontSize={10}
-                      fill="black"
-                      align="center"
-                    />
-                  )}
-                </Group>
-              );
-            })}
-          </Layer>
-        </Stage>
+  width={canvasSize.width}
+  height={canvasSize.height}
+  onClick={handleClick}
+  onContextMenu={handleRightClick}
+  onTap={handleTap}
+  ref={stageRef}
+  scaleX={zoomLevel}
+  scaleY={zoomLevel}
+>
+  {renderSoccerPitch()}
+  {isContextMenuOpen && renderContextMenu()}
+  <Layer>
+    {coords.map((coord, index) => {
+      if (coord.from && coord.to) {
+        return (
+          <Line
+            key={index}
+            points={[
+              coord.from.x * xScale,
+              coord.from.y * yScale,
+              coord.to.x * xScale,
+              coord.to.y * yScale
+            ]}
+            stroke={getColor(coord.type)}
+            strokeWidth={2}
+          />
+        );
+      }
+      return (
+        <Group key={index}>
+          <Circle
+            x={coord.x * xScale}
+            y={coord.y * yScale}
+            radius={6}
+            fill={getColor(coord.type)}
+          />
+          {displayPlayerNumber && (
+            <Text
+              x={coord.x * xScale}
+              y={coord.y * yScale - 4}  // Adjusted to align the text vertically better
+              text={coord.player}
+              fontSize={8}
+              fill="white"
+              align="center"
+              width={10}  // Set the width to ensure consistent alignment
+              offsetX={coord.player.length === 1 ? 4.5 : 4.5}  // Fine-tuned offset values for better centering
+              />
+          )}
+          {displayPlayerName && (
+            <Text
+              x={coord.x * xScale}
+              y={coord.y * yScale - 16}  // Position the name above the marker
+              text={coord.playerName}
+              fontSize={10}
+              fill="black"
+              align="center"
+              width={coord.playerName.length * 6}  // Adjust the width based on the name length
+              offsetX={(coord.playerName.length * 6) / 2}  // Center the text horizontally
+            />
+          )}
+        </Group>
+      );
+    })}
+  </Layer>
+</Stage>
+
       </div>
       {openDialog && (
         <div className="dialog-container">

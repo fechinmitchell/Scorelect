@@ -788,22 +788,26 @@ const PitchGraphic = ({ userType }) => {
                   />
                   {displayPlayerNumber && (
                     <Text
-                      x={coord.x * xScale - 5}
-                      y={coord.y * yScale - 3}
+                      x={coord.x * xScale}
+                      y={coord.y * yScale - 3.5} // Adjusted to align the text vertically better
                       text={coord.player}
                       fontSize={8}
                       fill="white"
                       align="center"
+                      width={10} // Set the width to ensure consistent alignment
+                      offsetX={coord.player.length === 1 ? 5 : coord.player.length * 3} // Center the text horizontally based on its length
                     />
                   )}
                   {displayPlayerName && (
                     <Text
-                      x={coord.x * xScale - 28}
-                      y={coord.y * yScale - 16}
+                      x={coord.x * xScale}
+                      y={coord.y * yScale - 16} // Position the name above the marker
                       text={coord.playerName}
                       fontSize={10}
                       fill="black"
                       align="center"
+                      width={coord.playerName.length * 6} // Adjust the width based on the name length
+                      offsetX={(coord.playerName.length * 6) / 2} // Center the text horizontally
                     />
                   )}
                 </Group>

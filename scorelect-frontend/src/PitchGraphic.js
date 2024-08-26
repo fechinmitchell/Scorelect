@@ -392,12 +392,21 @@ const PitchGraphic = ({ userType }) => {
   };
 
   const toggleDownloadModal = () => {
-    setIsDownloadModalOpen(!isDownloadModalOpen);
+    if (userType === 'paid') {
+      setIsDownloadModalOpen(!isDownloadModalOpen);
+    } else {
+      Swal.fire('This feature is only available for paid users.');
+    }
   };
-
+  
   const toggleScreenshotModal = () => {
-    setIsScreenshotModalOpen(!isScreenshotModalOpen);
+    if (userType === 'paid') {
+      setIsScreenshotModalOpen(!isScreenshotModalOpen);
+    } else {
+      Swal.fire('This feature is only available for paid users.');
+    }
   };
+  
 
   const handleResize = (width, height) => {
     setCanvasSize({ width, height });

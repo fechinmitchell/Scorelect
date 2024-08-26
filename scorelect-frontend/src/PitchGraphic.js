@@ -1095,64 +1095,111 @@ const PitchGraphic = ({ userType }) => {
         </div>
       </Modal>
       <Modal
-        isOpen={isAddActionModalOpen}
-        onRequestClose={() => setIsAddActionModalOpen(false)}
-        contentLabel="Add New Action"
-        style={{
-          content: {
-            top: '50%',
-            left: '50%',
-            right: 'auto',
-            bottom: 'auto',
-            marginRight: '-50%',
-            transform: 'translate(-50%, -50%)',
-            width: '50%',
-            maxHeight: '60%',
-            overflowY: 'auto',
-            background: '#2e2e2e',
-            padding: '20px',
-            borderRadius: '10px',
-            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)'
-          }
-        }}
-      >
-        <h2>Add New Action</h2>
-        <div className="form-group">
-          <label>Action Name:</label>
-          <input
-            type="text"
-            value={customInput.action}
-            onChange={(e) => setCustomInput({ ...customInput, action: e.target.value })}
-            placeholder="Enter action name"
-          />
-        </div>
-        <div className="form-group">
-          <label>Color:</label>
-          <input
-            type="color"
-            value={customInput.color}
-            onChange={(e) => setCustomInput({ ...customInput, color: e.target.value })}
-          />
-        </div>
-        <div className="form-group">
-          <label>Type:</label>
-          <select
-            value={customInput.type}
-            onChange={(e) => setCustomInput({ ...customInput, type: e.target.value })}
-          >
-            <option value="marker">Marker</option>
-            <option value="line">Line</option>
-          </select>
-        </div>
-        <div className="button-container">
-          <button onClick={() => handleAddAction(customInput.action, customInput.color, customInput.type)}>
-            Add
-          </button>
-          <button onClick={() => setIsAddActionModalOpen(false)}>
-            Cancel
-          </button>
-        </div>
-      </Modal>
+  isOpen={isAddActionModalOpen}
+  onRequestClose={() => setIsAddActionModalOpen(false)}
+  contentLabel="Add New Action"
+  style={{
+    content: {
+      top: '50%',
+      left: '50%',
+      right: 'auto',
+      bottom: 'auto',
+      marginRight: '-50%',
+      transform: 'translate(-50%, -50%)',
+      width: '50%',
+      maxHeight: '60%',
+      overflowY: 'auto',
+      background: '#2e2e2e',
+      padding: '20px',
+      borderRadius: '10px',
+      boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+    },
+  }}
+>
+  <h2>Add New Action</h2>
+  <div className="form-group">
+    <label>Action Name:</label>
+    <input
+      type="text"
+      value={customInput.action}
+      onChange={(e) => setCustomInput({ ...customInput, action: e.target.value })}
+      placeholder="Enter action name"
+      style={{
+        width: '97%',
+        padding: '10px',
+        margin: '5px',
+        borderRadius: '5px',
+        border: '1px solid #ccc',
+        marginRight: '20px',
+      }}
+    />
+  </div>
+  <div className="form-group">
+    <label>Color:</label>
+    <input
+      type="color"
+      value={customInput.color}
+      onChange={(e) => setCustomInput({ ...customInput, color: e.target.value })}
+      style={{
+        width: '97%',
+        padding: '10px',
+        margin: '5px',
+        borderRadius: '5px',
+        border: '1px solid #ccc',
+        marginRight: '20px',
+      }}
+    />
+  </div>
+  <div className="form-group">
+    <label>Type:</label>
+    <select
+      value={customInput.type}
+      onChange={(e) => setCustomInput({ ...customInput, type: e.target.value })}
+      style={{
+        width: '97%',
+        padding: '10px',
+        margin: '5px',
+        borderRadius: '5px',
+        border: '1px solid #ccc',
+        marginRight: '20px',
+      }}
+    >
+      <option value="marker">Marker</option>
+      <option value="line">Line</option>
+    </select>
+  </div>
+  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+    <button
+      onClick={() => handleAddAction(customInput.action, customInput.color, customInput.type)}
+      style={{
+        background: '#007bff',
+        color: '#fff',
+        padding: '10px 20px',
+        border: 'none',
+        borderRadius: '5px',
+        cursor: 'pointer',
+        transition: 'background 0.3s',
+      }}
+    >
+      Add
+    </button>
+    <button
+      onClick={() => setIsAddActionModalOpen(false)}
+      style={{
+        background: '#6c757d',
+        color: '#fff',
+        padding: '10px 20px',
+        border: 'none',
+        borderRadius: '5px',
+        cursor: 'pointer',
+        transition: 'background 0.3s',
+      }}
+    >
+      Cancel
+    </button>
+  </div>
+</Modal>
+
       <Modal
   isOpen={isDownloadModalOpen}
   onRequestClose={() => setIsDownloadModalOpen(false)}

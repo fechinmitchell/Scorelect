@@ -1,15 +1,17 @@
-// src/PitchGraphic.js
 import React, { useState, useRef, useEffect } from 'react';
-import { Stage, Layer, Rect, Line, Circle, Arc } from 'react-konva';
+import { Stage, Layer, Rect, Line, Circle, Arc, Group, Text } from 'react-konva';
 import Modal from 'react-modal';
+import Konva from 'konva';
+import html2canvas from 'html2canvas';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore'; // Remove 'collection' from this line
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import './PitchGraphic.css';
 import './SavedGames.css';
- 
+import AggregatedData from './AggregatedData';
+
 const PitchGraphic = ({ userType }) => {
   const [coords, setCoords] = useState([]);
   const [currentCoords, setCurrentCoords] = useState([]);
@@ -29,12 +31,29 @@ const PitchGraphic = ({ userType }) => {
     to: null
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [customInput, setCustomInput] = useState({ action: '', team: '', position: '', pressure: '', foot: '' });
+  const [customInput, setCustomInput] = useState({ action: '', team: '', position: '', pressure: '', foot: '', color: '#000000', type: 'marker' });
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+  const [isAddActionModalOpen, setIsAddActionModalOpen] = useState(false);
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+  const [isScreenshotModalOpen, setIsScreenshotModalOpen] = useState(false);
+  const [actionButtons, setActionButtons] = useState([]);
+  const [downloadTeam, setDownloadTeam] = useState('');
+  const [downloadPlayer, setDownloadPlayer] = useState('');
+  const [downloadAction, setDownloadAction] = useState('');
+  const [screenshotTeam, setScreenshotTeam] = useState('');
+  const [screenshotPlayer, setScreenshotPlayer] = useState('');
+  const [screenshotAction, setScreenshotAction] = useState('');
   const stageRef = useRef();
   const [downloadsRemaining, setDownloadsRemaining] = useState(1);
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const [pitchColor, setPitchColor] = useState('#00A86B');
+  const [lineColor, setLineColor] = useState('#000000');
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [displayPlayerNumber, setDisplayPlayerNumber] = useState(false);
+  const [displayPlayerName, setDisplayPlayerName] = useState(false);
 
   const pitchWidth = 145;
   const pitchHeight = 88;
@@ -45,11 +64,35 @@ const PitchGraphic = ({ userType }) => {
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [gameName, setGameName] = useState('');
 
+    // Aggregate data by team and action
+    const aggregateData = coords.reduce((acc, curr) => {
+      const { team, action } = curr;
+      if (!acc[team]) {
+        acc[team] = {};
+      }
+      if (!acc[team][action]) {
+        acc[team][action] = 0;
+      }
+      acc[team][action]++;
+      return acc;
+    }, {});
+
   useEffect(() => {
     if (location.state && location.state.loadedCoords) {
       setCoords(location.state.loadedCoords);
     }
   }, [location.state]);
+
+  useEffect(() => {
+    setActionButtons([
+      { label: 'Point', value: 'point', color: '#00ff00', type: 'marker' },
+      { label: 'Wide', value: 'wide', color: '#ff0000', type: 'marker' },
+      { label: 'Goal', value: 'goal', color: '#0000ff', type: 'marker' },
+      { label: 'Miss', value: 'miss', color: '#ff00ff', type: 'marker' },
+      { label: 'Pass Completed', value: 'successful pass', color: '#00ffff', type: 'line' },
+      { label: 'Pass Incomplete', value: 'unsuccessful pass', color: '#ffff00', type: 'line' }
+    ]);
+  }, []);
 
   const handleSaveGame = async () => {
     const auth = getAuth();
@@ -148,21 +191,29 @@ const PitchGraphic = ({ userType }) => {
     const point = stage.getPointerPosition();
     const newCoord = { x: point.x / xScale, y: point.y / yScale };
 
-    if (actionType === 'pass' || actionType === 'badpass' || actionType === 'kickout' || actionType === 'badkickout') {
+    if (actionType && actionType.type === 'line') {
       setCurrentCoords([...currentCoords, newCoord]);
       if (currentCoords.length === 1) {
-        setFormData({ ...formData, from: currentCoords[0], to: newCoord, type: actionType });
+        setFormData({ ...formData, from: currentCoords[0], to: newCoord, type: actionType.value });
         setOpenLineDialog(true);
       }
-    } else if (actionType === 'action' || actionType === 'badaction') {
-      const actionTypeWithStatus = actionType === 'action' ? 'successful action' : 'unsuccessful action';
-      setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionTypeWithStatus });
+    } else if (actionType) {
+      setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType.value });
       setOpenDialog(true);
     }
   };
 
   const handleTap = (e) => {
     handleClick(e);
+  };
+
+  const handleRightClick = (e) => {
+    e.evt.preventDefault();
+    const stage = e.target.getStage();
+    const point = stage.getPointerPosition();
+    setCurrentCoords({ x: point.x / xScale, y: point.y / yScale });
+    setIsContextMenuOpen(true);
+    setContextMenuPosition({ x: point.x, y: point.y });
   };
 
   const handleCloseDialog = () => {
@@ -228,11 +279,17 @@ const PitchGraphic = ({ userType }) => {
       to: null
     });
     setCurrentCoords([]);
-    setCustomInput({ action: '', team: '', position: '', pressure: '', foot: '' });
+    setCustomInput({ action: '', team: '', position: '', pressure: '', foot: '', color: '#000000', type: 'marker' });
+    setIsContextMenuOpen(false);
   };
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleActionButtonClick = (action) => {
+    setActionType(action);
+    setFormData({ ...formData, action: action.value });
   };
 
   const handleClearMarkers = () => {
@@ -243,23 +300,317 @@ const PitchGraphic = ({ userType }) => {
     setCoords(coords.slice(0, -1));
   };
 
-  const handleDownloadData = async () => {
-    if (userType === 'free' && downloadsRemaining <= 0) {
-      Swal.fire({
-        title: 'Download Limit Reached',
-        text: 'You have reached your download limit for today. Please upgrade for more downloads.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Upgrade Now',
-        cancelButtonText: 'Cancel'
-      }).then((result) => {
-        if (result.isConfirmed) {
-          navigate('/signup');
-        }
-      });
-      return;
-    }
+  const handleDownloadScreenshot = async () => {
+    const filteredCoords = coords.filter(coord => {
+      return (
+        (screenshotTeam ? coord.team === screenshotTeam : true) &&
+        (screenshotPlayer ? coord.playerName === screenshotPlayer : true) &&
+        (screenshotAction ? coord.action === screenshotAction : true)
+      );
+    });
   
+    const screenshotLayer = document.createElement('div');
+    document.body.appendChild(screenshotLayer);
+  
+    const stage = new Konva.Stage({
+      container: screenshotLayer,
+      width: pitchWidth * xScale,
+      height: pitchHeight * yScale
+    });
+  
+    const layer = new Konva.Layer();
+    stage.add(layer);
+  
+    renderGAAPitchForScreenshot(layer);
+  
+    filteredCoords.forEach(coord => {
+      if (coord.from && coord.to) {
+        const line = new Konva.Line({
+          points: [
+            coord.from.x * xScale,
+            coord.from.y * yScale,
+            coord.to.x * xScale,
+            coord.to.y * yScale
+          ],
+          stroke: getColor(coord.type),
+          strokeWidth: 2
+        });
+        layer.add(line);
+      } else {
+        const shape = new Konva.Circle({
+          x: coord.x * xScale,
+          y: coord.y * yScale,
+          radius: 5,
+          fill: getColor(coord.type)
+        });
+        layer.add(shape);
+  
+        if (displayPlayerNumber && coord.player) {
+          const playerNumberText = new Konva.Text({
+            x: coord.x * xScale - 5,
+            y: coord.y * yScale - 3,
+            text: coord.player,
+            fontSize: 8,
+            fill: "white",
+            align: "center"
+          });
+          layer.add(playerNumberText);
+        }
+  
+        if (displayPlayerName && coord.playerName) {
+          const playerNameText = new Konva.Text({
+            x: coord.x * xScale - 28,
+            y: coord.y * yScale - 16,
+            text: coord.playerName,
+            fontSize: 10,
+            fill: "black",
+            align: "center"
+          });
+          layer.add(playerNameText);
+        }
+      }
+    });
+  
+    layer.draw();
+  
+    html2canvas(screenshotLayer, {
+      width: pitchWidth * xScale,
+      height: pitchHeight * yScale,
+    }).then(canvas => {
+      const link = document.createElement('a');
+      link.href = canvas.toDataURL('image/png');
+      link.download = 'screenshot.png';
+      link.click();
+      document.body.removeChild(screenshotLayer);
+    });
+  
+    setIsScreenshotModalOpen(false);
+  };
+
+  const toggleModal = () => {
+    setIsModalOpen(!isModalOpen);
+  };
+
+  const toggleDownloadModal = () => {
+    setIsDownloadModalOpen(!isDownloadModalOpen);
+  };
+
+  const toggleScreenshotModal = () => {
+    setIsScreenshotModalOpen(!isScreenshotModalOpen);
+  };
+
+  const handleResize = (width, height) => {
+    setCanvasSize({ width, height });
+  };
+
+  const renderGAAPitch = () => (
+    <Layer>
+      <Rect x={0} y={0} width={canvasSize.width} height={canvasSize.height} fill={pitchColor} />
+      <Line points={[0, 0, canvasSize.width, 0, canvasSize.width, canvasSize.height, 0, canvasSize.height, 0, 0]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[canvasSize.width, yScale * 40.75, xScale * 145.2, yScale * 40.75, xScale * 145.2, yScale * 47.25, canvasSize.width, yScale * 47.25]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[0, yScale * 40.75, xScale * -0.2, yScale * 40.75, xScale * -0.2, yScale * 47.25, 0, yScale * 47.25]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[canvasSize.width, yScale * 37, xScale * 139, yScale * 37, xScale * 139, yScale * 51, canvasSize.width, yScale * 51]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[0, yScale * 37, xScale * 6, yScale * 37, xScale * 6, yScale * 51, 0, yScale * 51]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[0, yScale * 34.5, xScale * 14, yScale * 34.5, xScale * 14, yScale * 53.5, 0, yScale * 53.5]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[canvasSize.width, yScale * 34.5, xScale * 131, yScale * 34.5, xScale * 131, yScale * 53.5, canvasSize.width, yScale * 53.5]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[xScale * 72.5, yScale * 39, xScale * 72.5, yScale * 49]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[xScale * 11, yScale * 43.5, xScale * 11, yScale * 44.5]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[xScale * 134, yScale * 43.5, xScale * 134, yScale * 44.5]} stroke={lineColor} strokeWidth={2} />
+      <Arc x={xScale * 124} y={yScale * 44} innerRadius={0} outerRadius={xScale * 12} angle={180} rotation={90} stroke={lineColor} strokeWidth={2} />
+      <Arc x={xScale * 21} y={yScale * 44} innerRadius={0} outerRadius={xScale * 12} angle={180} rotation={270} stroke={lineColor} strokeWidth={2} />
+      <Line points={[xScale * 14, 0, xScale * 14, canvasSize.height]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[xScale * 131, 0, xScale * 131, canvasSize.height]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[xScale * 21, 0, xScale * 21, canvasSize.height]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[xScale * 124, 0, xScale * 124, canvasSize.height]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[xScale * 45, 0, xScale * 45, canvasSize.height]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[xScale * 100, 0, xScale * 100, canvasSize.height]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[xScale * 65, 0, xScale * 65, canvasSize.height]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[xScale * 80, 0, xScale * 80, canvasSize.height]} stroke={lineColor} strokeWidth={2} />
+
+      {/* "SCORELECT" in the end zones */}
+      <Text text="SCORELECT.COM" x={xScale * 22.5} y={canvasSize.height / 40.25} fontSize={canvasSize.width / 60} f  fill="#D3D3D3" opacity={0.7} rotation={0} align="center" />
+      <Text text="SCORELECT.COM" x={canvasSize.width - xScale * 22.5} y={canvasSize.height / 1.02} fontSize={canvasSize.width / 60} fill="#D3D3D3" opacity={0.7} rotation={180} align="center" />
+
+    </Layer>
+  );
+
+  const renderGAAPitchForScreenshot = (layer) => {
+    const fieldRect = new Konva.Rect({
+      x: 0,
+      y: 0,
+      width: canvasSize.width,
+      height: canvasSize.height,
+      fill: pitchColor
+    });
+    layer.add(fieldRect);
+
+    const lineColor = '#000';
+    const lineWidth = 2;
+
+    const fieldLines = new Konva.Line({
+      points: [0, 0, canvasSize.width, 0, canvasSize.width, canvasSize.height, 0, canvasSize.height, 0, 0],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(fieldLines);
+
+    const goalLines1 = new Konva.Line({
+      points: [canvasSize.width, yScale * 40.75, xScale * 145.2, yScale * 40.75, xScale * 145.2, yScale * 47.25, canvasSize.width, yScale * 47.25],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(goalLines1);
+    const goalLines2 = new Konva.Line({
+      points: [0, yScale * 40.75, xScale * -0.2, yScale * 40.75, xScale * -0.2, yScale * 47.25, 0, yScale * 47.25],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(goalLines2);
+
+    const sixYardBox1 = new Konva.Line({
+      points: [canvasSize.width, yScale * 37, xScale * 139, yScale * 37, xScale * 139, yScale * 51, canvasSize.width, yScale * 51],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(sixYardBox1);
+    const sixYardBox2 = new Konva.Line({
+      points: [0, yScale * 37, xScale * 6, yScale * 37, xScale * 6, yScale * 51, 0, yScale * 51],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(sixYardBox2);
+
+    const largeRectangle1 = new Konva.Line({
+      points: [0, yScale * 34.5, xScale * 14, yScale * 34.5, xScale * 14, yScale * 53.5, 0, yScale * 53.5],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(largeRectangle1);
+    const largeRectangle2 = new Konva.Line({
+      points: [canvasSize.width, yScale * 34.5, xScale * 131, yScale * 34.5, xScale * 131, yScale * 53.5, canvasSize.width, yScale * 53.5],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(largeRectangle2);
+
+    const halfwayLine = new Konva.Line({
+      points: [xScale * 72.5, yScale * 39, xScale * 72.5, yScale * 49],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(halfwayLine);
+
+    const penoLine1 = new Konva.Line({
+      points: [xScale * 11, yScale * 43.5, xScale * 11, yScale * 44.5],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(penoLine1);
+    const penoLine2 = new Konva.Line({
+      points: [xScale * 134, yScale * 43.5, xScale * 134, yScale * 44.5],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(penoLine2);
+
+    const halfCircle1 = new Konva.Arc({
+      x: xScale * 124,
+      y: yScale * 44,
+      innerRadius: 0,
+      outerRadius: xScale * 12,
+      angle: 180,
+      rotation: 90,
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(halfCircle1);
+    const halfCircle2 = new Konva.Arc({
+      x: xScale * 21,
+      y: yScale * 44,
+      innerRadius: 0,
+      outerRadius: xScale * 12,
+      angle: 180,
+      rotation: 270,
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(halfCircle2);
+
+    const yardLine14_1 = new Konva.Line({
+      points: [xScale * 14, 0, xScale * 14, canvasSize.height],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(yardLine14_1);
+    const yardLine14_2 = new Konva.Line({
+      points: [xScale * 131, 0, xScale * 131, canvasSize.height],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(yardLine14_2);
+
+    const yardLine21_1 = new Konva.Line({
+      points: [xScale * 21, 0, xScale * 21, canvasSize.height],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(yardLine21_1);
+    const yardLine21_2 = new Konva.Line({
+      points: [xScale * 124, 0, xScale * 124, canvasSize.height],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(yardLine21_2);
+
+    const yardLine45_1 = new Konva.Line({
+      points: [xScale * 45, 0, xScale * 45, canvasSize.height],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(yardLine45_1);
+    const yardLine45_2 = new Konva.Line({
+      points: [xScale * 100, 0, xScale * 100, canvasSize.height],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(yardLine45_2);
+
+    const yardLine65_1 = new Konva.Line({
+      points: [xScale * 65, 0, xScale * 65, canvasSize.height],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(yardLine65_1);
+    const yardLine65_2 = new Konva.Line({
+      points: [xScale * 80, 0, xScale * 80, canvasSize.height],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(yardLine65_2);
+  };
+
+  const getColor = (type) => {
+    const button = actionButtons.find(button => button.value === type);
+    return button ? button.color : 'black';
+  };
+
+  const handleDeleteAction = (actionToDelete) => {
+    Swal.fire({
+      title: 'Are you sure?',
+      text: 'Do you want to delete this action button?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonText: 'No, keep it'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        setActionButtons(actionButtons.filter(button => button.value !== actionToDelete));
+        setActionCodes(actionCodes.filter(action => action !== actionToDelete));
+      }
+    });
+  };
+
+  const handleDownloadData = async () => {
     const jsonData = JSON.stringify(coords, null, 2);
     const blob = new Blob([jsonData], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -269,115 +620,104 @@ const PitchGraphic = ({ userType }) => {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  
-    const today = new Date().toLocaleDateString();
-  
-    if (userType === 'free') {
-      const newDownloadsRemaining = downloadsRemaining - 1;
-      setDownloadsRemaining(newDownloadsRemaining);
-      if (user) {
-        const docRef = doc(firestore, 'users', user.uid);
-        await setDoc(docRef, { downloadsRemaining: newDownloadsRemaining, lastDownloadDate: today }, { merge: true });
-      } else {
-        localStorage.setItem('downloadCount', newDownloadsRemaining.toString());
-      }
+  };
+
+  const handleDownloadFilteredData = async () => {
+    const filteredCoords = coords.filter(coord => {
+      return (
+        (downloadTeam ? coord.team === downloadTeam : true) &&
+        (downloadPlayer ? coord.playerName === downloadPlayer : true) &&
+        (downloadAction ? coord.action === downloadAction : true)
+      );
+    });
+
+    const jsonData = JSON.stringify(filteredCoords, null, 2);
+    const blob = new Blob([jsonData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'filtered_coordinates.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    setIsDownloadModalOpen(false);
+  };
+
+  const handleAddAction = (newAction, newColor, newType) => {
+    if (!actionCodes.includes(newAction)) {
+      setActionButtons([...actionButtons, { label: newAction.charAt(0).toUpperCase() + newAction.slice(1), value: newAction, color: newColor, type: newType }]);
+      setActionCodes([...actionCodes, newAction]);
     }
+    setIsAddActionModalOpen(false);
   };
 
-  const toggleModal = () => {
-    setIsModalOpen(!isModalOpen);
-  };
-
-  const handleResize = (width, height) => {
-    setCanvasSize({ width, height });
-  };
-
-  const renderGAAPitch = () => (
-    <Layer>
-      <Rect x={0} y={0} width={canvasSize.width} height={canvasSize.height} fill="#00A86B" />
-      {/* Side and goal lines */}
-      <Line points={[0, 0, canvasSize.width, 0, canvasSize.width, canvasSize.height, 0, canvasSize.height, 0, 0]} stroke="#000" strokeWidth={2} />
-      {/* Goals */}
-      <Line points={[canvasSize.width, yScale * 40.75, xScale * 145.2, yScale * 40.75, xScale * 145.2, yScale * 47.25, canvasSize.width, yScale * 47.25]} stroke="#000" strokeWidth={2} />
-      <Line points={[0, yScale * 40.75, xScale * -0.2, yScale * 40.75, xScale * -0.2, yScale * 47.25, 0, yScale * 47.25]} stroke="#000" strokeWidth={2} />
-      {/* 6 yard boxes */}
-      <Line points={[canvasSize.width, yScale * 37, xScale * 139, yScale * 37, xScale * 139, yScale * 51, canvasSize.width, yScale * 51]} stroke="#000" strokeWidth={2} />
-      <Line points={[0, yScale * 37, xScale * 6, yScale * 37, xScale * 6, yScale * 51, 0, yScale * 51]} stroke="#000" strokeWidth={2} />
-      {/* Large rectangles */}
-      <Line points={[0, yScale * 34.5, xScale * 14, yScale * 34.5, xScale * 14, yScale * 53.5, 0, yScale * 53.5]} stroke="#000" strokeWidth={2} />
-      <Line points={[canvasSize.width, yScale * 34.5, xScale * 131, yScale * 34.5, xScale * 131, yScale * 53.5, canvasSize.width, yScale * 53.5]} stroke="#000" strokeWidth={2} />
-      {/* Halfway small line */}
-      <Line points={[xScale * 72.5, yScale * 39, xScale * 72.5, yScale * 49]} stroke="#000" strokeWidth={2} />
-      {/* Peno lines */}
-      <Line points={[xScale * 11, yScale * 43.5, xScale * 11, yScale * 44.5]} stroke="#000" strokeWidth={2} />
-      <Line points={[xScale * 134, yScale * 43.5, xScale * 134, yScale * 44.5]} stroke="#000" strokeWidth={2} />
-      {/* Half Circles */}
-      <Arc x={xScale * 124} y={yScale * 44} innerRadius={0} outerRadius={xScale * 12} angle={180} rotation={90} stroke="#000" strokeWidth={2} />
-      <Arc x={xScale * 21} y={yScale * 44} innerRadius={0} outerRadius={xScale * 12} angle={180} rotation={270} stroke="#000" strokeWidth={2} />
-      {/* 14 yard lines */}
-      <Line points={[xScale * 14, 0, xScale * 14, canvasSize.height]} stroke="#000" strokeWidth={2} />
-      <Line points={[xScale * 131, 0, xScale * 131, canvasSize.height]} stroke="#000" strokeWidth={2} />
-      {/* 21 yard lines */}
-      <Line points={[xScale * 21, 0, xScale * 21, canvasSize.height]} stroke="#000" strokeWidth={2} />
-      <Line points={[xScale * 124, 0, xScale * 124, canvasSize.height]} stroke="#000" strokeWidth={2} />
-      {/* 45 yard lines */}
-      <Line points={[xScale * 45, 0, xScale * 45, canvasSize.height]} stroke="#000" strokeWidth={2} />
-      <Line points={[xScale * 100, 0, xScale * 100, canvasSize.height]} stroke="#000" strokeWidth={2} />
-      {/* 65 yard lines */}
-      <Line points={[xScale * 65, 0, xScale * 65, canvasSize.height]} stroke="#000" strokeWidth={2} />
-      <Line points={[xScale * 80, 0, xScale * 80, canvasSize.height]} stroke="#000" strokeWidth={2} />
-    </Layer>
+  const renderActionButtons = () => (
+    <div className="action-buttons">
+      {actionButtons.map(action => (
+        <button
+          key={action.value}
+          className={`action-button ${action.value}`}
+          onClick={() => handleActionButtonClick(action)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            handleDeleteAction(action.value);
+          }}
+          style={{ borderColor: action.color, borderWidth: '2px', borderStyle: 'solid', backgroundColor: '#800080' }} 
+        >
+          {action.label}
+        </button>
+      ))}
+      <button className="action-button add-action" onClick={() => setIsAddActionModalOpen(true)}>Add Action</button>
+    </div>
   );
 
-  const getColor = (type) => {
-    switch (type) {
-      case 'pass':
-      case 'successful pass':
-        return 'blue';
-      case 'badpass':
-      case 'unsuccessful pass':
-        return 'yellow';
-      case 'kickout':
-      case 'successful kickout':
-        return 'purple';
-      case 'badkickout':
-      case 'unsuccessful kickout':
-        return 'orange';
-      case 'action':
-      case 'successful action':
-        return 'green';
-      case 'badaction':
-      case 'unsuccessful action':
-        return 'red';
-      default:
-        return 'black';
-    }
-  };
-
-  useEffect(() => {
-    console.log('Coords updated:', coords);
-  }, [coords]);
+  const renderContextMenu = () => (
+    <div className="context-menu" style={{ top: contextMenuPosition.y, left: contextMenuPosition.x }}>
+      <label>Player Number:</label>
+      <input type="text" value={formData.player} onChange={handleChange} name="player" />
+      <label>Action:</label>
+      <select name="action" value={formData.action} onChange={handleChange}>
+        {actionCodes.map(action => <option key={action} value={action}>{action}</option>)}
+      </select>
+      <button onClick={handleFormSubmit}>Submit</button>
+    </div>
+  );
 
   return (
     <div className="pitch-container">
       <div className="content">
         <div className="instructions-container">
           <h3>Instructions</h3>
-          <div className="action-buttons">
-            <button className="action-button pass" onClick={() => setActionType('pass')}>Successful Pass (p)</button>
-            <button className="action-button badpass" onClick={() => setActionType('badpass')}>Unsuccessful Pass (u)</button>
-            <button className="action-button kickout" onClick={() => setActionType('kickout')}>Successful Kickout (k)</button>
-            <button className="action-button badkickout" onClick={() => setActionType('badkickout')}>Unsuccessful Kickout (c)</button>
-            <button className="action-button action" onClick={() => setActionType('action')}>Successful Action (g)</button>
-            <button className="action-button badaction" onClick={() => setActionType('badaction')}>Unsuccessful Action (b)</button>
-          </div>
+          {renderActionButtons()}
           <p>Click on the pitch to record an action at that location. Use the buttons above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
+          <div className="toggle-switches">
+            <label>
+              <input
+                type="checkbox"
+                checked={displayPlayerNumber}
+                onChange={() => setDisplayPlayerNumber(!displayPlayerNumber)}
+              />
+              Player Number
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={displayPlayerName}
+                onChange={() => setDisplayPlayerName(!displayPlayerName)}
+              />
+              Player Name
+            </label>
+          </div>
           <div className="button-container">
             <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
             <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
             <button className="button" onClick={handleDownloadData}>{userType === 'free' ? `Download Data (${downloadsRemaining} left)` : 'Download Data (Unlimited)'}</button>
+            <button className="button" onClick={toggleDownloadModal}>Download Filtered Data</button>
+            <button className="button" onClick={toggleScreenshotModal}>Download Screenshot</button>
             <button className="button" onClick={toggleModal}>View Coordinates</button>
             <button className="button" onClick={() => setIsSaveModalOpen(true)}>Save Game</button>
+            <button className="button" onClick={() => setIsSettingsModalOpen(true)}>Settings</button>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
               <button className="button" onClick={() => handleResize(375, 227.3)}>iPhone</button>
               <button className="button" onClick={() => handleResize(600, 363.6)}>iPad</button>
@@ -404,12 +744,14 @@ const PitchGraphic = ({ userType }) => {
           width={canvasSize.width}
           height={canvasSize.height}
           onClick={handleClick}
+          onContextMenu={handleRightClick}
           onTap={handleTap}
           ref={stageRef}
           scaleX={zoomLevel}
           scaleY={zoomLevel}
         >
           {renderGAAPitch()}
+          {isContextMenuOpen && renderContextMenu()}
           <Layer>
             {coords.map((coord, index) => {
               if (coord.from && coord.to) {
@@ -428,13 +770,34 @@ const PitchGraphic = ({ userType }) => {
                 );
               }
               return (
-                <Circle
-                  key={index}
-                  x={coord.x * xScale}
-                  y={coord.y * yScale}
-                  radius={5}
-                  fill={getColor(coord.type)}
-                />
+                <Group key={index}>
+                  <Circle
+                    x={coord.x * xScale}
+                    y={coord.y * yScale}
+                    radius={6}
+                    fill={getColor(coord.type)}
+                  />
+                  {displayPlayerNumber && (
+                    <Text
+                      x={coord.x * xScale - 5}
+                      y={coord.y * yScale - 3}
+                      text={coord.player}
+                      fontSize={8}
+                      fill="white"
+                      align="center"
+                    />
+                  )}
+                  {displayPlayerName && (
+                    <Text
+                      x={coord.x * xScale - 28}
+                      y={coord.y * yScale - 16}
+                      text={coord.playerName}
+                      fontSize={10}
+                      fill="black"
+                      align="center"
+                    />
+                  )}
+                </Group>
               );
             })}
           </Layer>
@@ -629,7 +992,7 @@ const PitchGraphic = ({ userType }) => {
             marginRight: '-50%',
             transform: 'translate(-50%, -50%)',
             width: '80%',
-            maxHeight: '60%', // Make the modal smaller
+            maxHeight: '60%',
             overflowY: 'auto'
           }
         }}
@@ -676,7 +1039,7 @@ const PitchGraphic = ({ userType }) => {
             marginRight: '-50%',
             transform: 'translate(-50%, -50%)',
             width: '50%',
-            maxHeight: '60%', // Make the modal smaller
+            maxHeight: '60%',
             overflowY: 'auto',
             background: '#2e2e2e',
             padding: '20px',
@@ -686,23 +1049,23 @@ const PitchGraphic = ({ userType }) => {
         }}
       >
         <h2>Save Game</h2>
-            <input
-            type="text"
-            value={gameName}
-            onChange={(e) => setGameName(e.target.value)}
-            placeholder="Enter game name"
-            style={{
-                width: '97%',
-                padding: '10px',
-                margin: '5px',
-                borderRadius: '5px',
-                border: '1px solid #ccc',
-                marginRight: '20px'  // Added this line to move the element to the left by 20px
-            }}
+        <input
+          type="text"
+          value={gameName}
+          onChange={(e) => setGameName(e.target.value)}
+          placeholder="Enter game name"
+          style={{
+            width: '97%',
+            padding: '10px',
+            margin: '5px',
+            borderRadius: '5px',
+            border: '1px solid #ccc',
+            marginRight: '20px'
+          }}
         />
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <button 
-            onClick={handleSaveGame} 
+          <button
+            onClick={handleSaveGame}
             style={{
               background: '#007bff',
               color: '#fff',
@@ -715,7 +1078,7 @@ const PitchGraphic = ({ userType }) => {
           >
             Save
           </button>
-          <button 
+          <button
             onClick={() => setIsSaveModalOpen(false)}
             style={{
               background: '#6c757d',
@@ -731,8 +1094,348 @@ const PitchGraphic = ({ userType }) => {
           </button>
         </div>
       </Modal>
+      <Modal
+        isOpen={isAddActionModalOpen}
+        onRequestClose={() => setIsAddActionModalOpen(false)}
+        contentLabel="Add New Action"
+        style={{
+          content: {
+            top: '50%',
+            left: '50%',
+            right: 'auto',
+            bottom: 'auto',
+            marginRight: '-50%',
+            transform: 'translate(-50%, -50%)',
+            width: '50%',
+            maxHeight: '60%',
+            overflowY: 'auto',
+            background: '#2e2e2e',
+            padding: '20px',
+            borderRadius: '10px',
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)'
+          }
+        }}
+      >
+        <h2>Add New Action</h2>
+        <div className="form-group">
+          <label>Action Name:</label>
+          <input
+            type="text"
+            value={customInput.action}
+            onChange={(e) => setCustomInput({ ...customInput, action: e.target.value })}
+            placeholder="Enter action name"
+          />
+        </div>
+        <div className="form-group">
+          <label>Color:</label>
+          <input
+            type="color"
+            value={customInput.color}
+            onChange={(e) => setCustomInput({ ...customInput, color: e.target.value })}
+          />
+        </div>
+        <div className="form-group">
+          <label>Type:</label>
+          <select
+            value={customInput.type}
+            onChange={(e) => setCustomInput({ ...customInput, type: e.target.value })}
+          >
+            <option value="marker">Marker</option>
+            <option value="line">Line</option>
+          </select>
+        </div>
+        <div className="button-container">
+          <button onClick={() => handleAddAction(customInput.action, customInput.color, customInput.type)}>
+            Add
+          </button>
+          <button onClick={() => setIsAddActionModalOpen(false)}>
+            Cancel
+          </button>
+        </div>
+      </Modal>
+      <Modal
+  isOpen={isDownloadModalOpen}
+  onRequestClose={() => setIsDownloadModalOpen(false)}
+  contentLabel="Download Filtered Data"
+  style={{
+    content: {
+      top: '50%',
+      left: '50%',
+      right: 'auto',
+      bottom: 'auto',
+      marginRight: '-50%',
+      transform: 'translate(-50%, -50%)',
+      width: '50%',
+      maxHeight: '60%',
+      overflowY: 'auto',
+      background: '#2e2e2e',
+      padding: '20px',
+      borderRadius: '10px',
+      boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+    },
+  }}
+>
+  <h2>Download Filtered Data</h2>
+  <div className="form-group">
+    <label>Team:</label>
+    <select
+      value={downloadTeam}
+      onChange={(e) => setDownloadTeam(e.target.value)}
+      style={{
+        width: '97%',
+        padding: '10px',
+        margin: '5px',
+        borderRadius: '5px',
+        border: '1px solid #ccc',
+        marginRight: '20px',
+      }}
+    >
+      <option value="">All Teams</option>
+      {counties.map((county) => (
+        <option key={county} value={county}>
+          {county}
+        </option>
+      ))}
+    </select>
+  </div>
+  <div className="form-group">
+    <label>Player:</label>
+    <input
+      type="text"
+      value={downloadPlayer}
+      onChange={(e) => setDownloadPlayer(e.target.value)}
+      placeholder="Enter player name"
+      style={{
+        width: '97%',
+        padding: '10px',
+        margin: '5px',
+        borderRadius: '5px',
+        border: '1px solid #ccc',
+        marginRight: '20px',
+      }}
+    />
+  </div>
+  <div className="form-group">
+    <label>Action:</label>
+    <select
+      value={downloadAction}
+      onChange={(e) => setDownloadAction(e.target.value)}
+      style={{
+        width: '97%',
+        padding: '10px',
+        margin: '5px',
+        borderRadius: '5px',
+        border: '1px solid #ccc',
+        marginRight: '20px',
+      }}
+    >
+      <option value="">All Actions</option>
+      {actionCodes.map((action) => (
+        <option key={action} value={action}>
+          {action}
+        </option>
+      ))}
+    </select>
+  </div>
+  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+    <button
+      onClick={handleDownloadFilteredData}
+      style={{
+        background: '#007bff',
+        color: '#fff',
+        padding: '10px 20px',
+        border: 'none',
+        borderRadius: '5px',
+        cursor: 'pointer',
+        transition: 'background 0.3s',
+      }}
+    >
+      Download
+    </button>
+    <button
+      onClick={() => setIsDownloadModalOpen(false)}
+      style={{
+        background: '#6c757d',
+        color: '#fff',
+        padding: '10px 20px',
+        border: 'none',
+        borderRadius: '5px',
+        cursor: 'pointer',
+        transition: 'background 0.3s',
+      }}
+    >
+      Cancel
+    </button>
+  </div>
+</Modal>
+
+<Modal
+  isOpen={isScreenshotModalOpen}
+  onRequestClose={() => setIsScreenshotModalOpen(false)}
+  contentLabel="Download Screenshot"
+  style={{
+    content: {
+      top: '50%',
+      left: '50%',
+      right: 'auto',
+      bottom: 'auto',
+      marginRight: '-50%',
+      transform: 'translate(-50%, -50%)',
+      width: '50%',
+      maxHeight: '60%',
+      overflowY: 'auto',
+      background: '#2e2e2e',
+      padding: '20px',
+      borderRadius: '10px',
+      boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+    },
+  }}
+>
+  <h2>Download Screenshot</h2>
+  <div className="form-group">
+    <label>Filter by Team:</label>
+    <select
+      value={screenshotTeam}
+      onChange={(e) => setScreenshotTeam(e.target.value)}
+      style={{
+        width: '97%',
+        padding: '10px',
+        margin: '5px',
+        borderRadius: '5px',
+        border: '1px solid #ccc',
+        marginRight: '20px',
+      }}
+    >
+      <option value="">All Teams</option>
+      {counties.map((county) => (
+        <option key={county} value={county}>
+          {county}
+        </option>
+      ))}
+    </select>
+  </div>
+  <div className="form-group">
+    <label>Filter by Player:</label>
+    <input
+      type="text"
+      value={screenshotPlayer}
+      onChange={(e) => setScreenshotPlayer(e.target.value)}
+      placeholder="Enter player name"
+      style={{
+        width: '97%',
+        padding: '10px',
+        margin: '5px',
+        borderRadius: '5px',
+        border: '1px solid #ccc',
+        marginRight: '20px',
+      }}
+    />
+  </div>
+  <div className="form-group">
+    <label>Filter by Action:</label>
+    <select
+      value={screenshotAction}
+      onChange={(e) => setScreenshotAction(e.target.value)}
+      style={{
+        width: '97%',
+        padding: '10px',
+        margin: '5px',
+        borderRadius: '5px',
+        border: '1px solid #ccc',
+        marginRight: '20px',
+      }}
+    >
+      <option value="">All Actions</option>
+      {actionCodes.map((action) => (
+        <option key={action} value={action}>
+          {action}
+        </option>
+      ))}
+    </select>
+  </div>
+  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+    <button
+      onClick={handleDownloadScreenshot}
+      style={{
+        background: '#007bff',
+        color: '#fff',
+        padding: '10px 20px',
+        border: 'none',
+        borderRadius: '5px',
+        cursor: 'pointer',
+        transition: 'background 0.3s',
+      }}
+    >
+      Download Screenshot
+    </button>
+    <button
+      onClick={() => setIsScreenshotModalOpen(false)}
+      style={{
+        background: '#6c757d',
+        color: '#fff',
+        padding: '10px 20px',
+        border: 'none',
+        borderRadius: '5px',
+        cursor: 'pointer',
+        transition: 'background 0.3s',
+      }}
+    >
+      Cancel
+    </button>
+  </div>
+</Modal>
+
+      <Modal
+        isOpen={isSettingsModalOpen}
+        onRequestClose={() => setIsSettingsModalOpen(false)}
+        contentLabel="Settings"
+        style={{
+          content: {
+            top: '50%',
+            left: '50%',
+            right: 'auto',
+            bottom: 'auto',
+            marginRight: '-50%',
+            transform: 'translate(-50%, -50%)',
+            width: '50%',
+            maxHeight: '60%',
+            overflowY: 'auto',
+            background: '#2e2e2e',
+            padding: '20px',
+            borderRadius: '10px',
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)'
+          }
+        }}
+      >
+        <h2>Settings</h2>
+        <div className="form-group">
+          <label>Pitch Color:</label>
+          <input
+            type="color"
+            value={pitchColor}
+            onChange={(e) => setPitchColor(e.target.value)}
+          />
+        </div>
+        <div className="form-group">
+          <label>Line Color:</label>
+          <input
+            type="color"
+            value={lineColor}
+            onChange={(e) => setLineColor(e.target.value)}
+          />
+        </div>
+        <div className="button-container">
+          <button onClick={() => setIsSettingsModalOpen(false)}>
+            Save Settings
+          </button>
+        </div>
+      </Modal>
+      <div className="aggregated-data-container">
+        <AggregatedData data={aggregateData} />
+      </div>
+
     </div>
   );
-}  
+};
 
 export default PitchGraphic;

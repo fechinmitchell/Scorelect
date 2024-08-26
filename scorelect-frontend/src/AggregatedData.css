@@ -1,0 +1,42 @@
+.aggregated-data-container {
+    margin-top: 20px;
+    padding: 20px;
+    background-color: #2e2e2e;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    color: #ffffff;
+    width: 96%;
+    box-sizing: border-box;
+  }
+  
+  .team-data {
+    margin-bottom: 20px;
+    width: 100%;
+  }
+  
+  .team-data h3 {
+    margin-bottom: 10px;
+    color: #007bff;
+  }
+  
+  .team-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  
+  .action-data {
+    background-color: #3a3a3a;
+    padding: 10px;
+    border-radius: 5px;
+  }
+  
+  .action-name {
+    font-weight: bold;
+  }
+  
+  .action-count {
+    margin-left: 5px;
+    color: #007bff;
+  }
+  

@@ -1,20 +1,24 @@
-// src/AmericanFootballPitch.js
 import React, { useState, useRef, useEffect } from 'react';
-import { Stage, Layer, Rect, Line, Circle, Text } from 'react-konva';
+import { Stage, Layer, Rect, Line, Circle, Arc, Group, Text } from 'react-konva';
 import Modal from 'react-modal';
+import Konva from 'konva';
+import html2canvas from 'html2canvas';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import AggregatedData from './AggregatedData';
 import './PitchGraphic.css';
 import './SavedGames.css';
+import './AggregatedData.css';
 
 const AmericanFootballPitch = ({ userType }) => {
   const [coords, setCoords] = useState([]);
   const [currentCoords, setCurrentCoords] = useState([]);
   const [actionType, setActionType] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
+  const [openLineDialog, setOpenLineDialog] = useState(false);
   const [formData, setFormData] = useState({
     action: 'pass',
     team: 'Patriots',
@@ -25,30 +29,60 @@ const AmericanFootballPitch = ({ userType }) => {
     foot: 'Right',
     minute: '',
     from: null,
-    to: null
+    to: null,
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [customInput, setCustomInput] = useState({ action: '', team: '', position: '', pressure: '', foot: '' });
+  const [customInput, setCustomInput] = useState({ action: '', team: '', position: '', pressure: '', foot: '', color: '#000000', type: 'marker' });
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+  const [isAddActionModalOpen, setIsAddActionModalOpen] = useState(false);
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+  const [isScreenshotModalOpen, setIsScreenshotModalOpen] = useState(false);
+  const [actionButtons, setActionButtons] = useState([]);
+  const [downloadTeam, setDownloadTeam] = useState('');
+  const [downloadPlayer, setDownloadPlayer] = useState('');
+  const [downloadAction, setDownloadAction] = useState('');
+  const [screenshotTeam, setScreenshotTeam] = useState('');
+  const [screenshotPlayer, setScreenshotPlayer] = useState('');
+  const [screenshotAction, setScreenshotAction] = useState('');
   const stageRef = useRef();
   const [downloadsRemaining, setDownloadsRemaining] = useState(1);
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const [pitchColor, setPitchColor] = useState('#00A86B');
+  const [lineColor, setLineColor] = useState('#FFFFFF');
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
-  const pitchWidth = 120; // Full length of an American football field in yards (including end zones)
-  const pitchHeight = 53.3; // Full width of an American football field in yards
+  const pitchWidth = 120;
+  const pitchHeight = 53.3;
   const [canvasSize, setCanvasSize] = useState({ width: 960, height: 426.4 });
   const [zoomLevel, setZoomLevel] = useState(1);
   const xScale = canvasSize.width / pitchWidth;
   const yScale = canvasSize.height / pitchHeight;
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [gameName, setGameName] = useState('');
+  const [displayPlayerNumber, setDisplayPlayerNumber] = useState(false);
+  const [displayPlayerName, setDisplayPlayerName] = useState(false);
 
   useEffect(() => {
     if (location.state && location.state.loadedCoords) {
       setCoords(location.state.loadedCoords);
     }
   }, [location.state]);
+
+  useEffect(() => {
+    // Set initial action buttons
+    setActionButtons([
+      { label: 'Pass', value: 'pass', color: '#1E90FF', type: 'line' },
+      { label: 'Run', value: 'run', color: '#32CD32', type: 'line' },
+      { label: 'Tackle', value: 'tackle', color: '#FF4500', type: 'marker' },
+      { label: 'Touchdown', value: 'touchdown', color: '#FFD700', type: 'marker' },
+      { label: 'Field Goal', value: 'field goal', color: '#800080', type: 'marker' },
+      { label: 'Interception', value: 'interception', color: '#FF8C00', type: 'marker' },
+      { label: 'Fumble', value: 'fumble', color: '#8B4513', type: 'marker' },
+    ]);
+  }, []);
 
   const handleSaveGame = async () => {
     const auth = getAuth();
@@ -59,7 +93,7 @@ const AmericanFootballPitch = ({ userType }) => {
         gameData: coords,
         name: gameName,
         date: new Date().toISOString(),
-        sport: sportType
+        sport: sportType,
       });
       setIsSaveModalOpen(false);
     } else {
@@ -68,26 +102,72 @@ const AmericanFootballPitch = ({ userType }) => {
   };
 
   const initialActionCodes = [
-    'pass', 'run', 'tackle', 'touchdown', 'field goal', 'interception', 'fumble'
+    'pass',
+    'run',
+    'tackle',
+    'touchdown',
+    'field goal',
+    'interception',
+    'fumble',
   ];
 
   const nflTeams = [
-    'Patriots', 'Bills', 'Dolphins', 'Jets', 'Ravens', 'Bengals', 'Browns', 'Steelers',
-    'Texans', 'Colts', 'Jaguars', 'Titans', 'Broncos', 'Chiefs', 'Raiders', 'Chargers',
-    'Cowboys', 'Giants', 'Eagles', 'Commanders', 'Bears', 'Lions', 'Packers', 'Vikings',
-    'Falcons', 'Panthers', 'Saints', 'Buccaneers', 'Cardinals', 'Rams', '49ers', 'Seahawks'
+    'Patriots',
+    'Bills',
+    'Dolphins',
+    'Jets',
+    'Ravens',
+    'Bengals',
+    'Browns',
+    'Steelers',
+    'Texans',
+    'Colts',
+    'Jaguars',
+    'Titans',
+    'Broncos',
+    'Chiefs',
+    'Raiders',
+    'Chargers',
+    'Cowboys',
+    'Giants',
+    'Eagles',
+    'Commanders',
+    'Bears',
+    'Lions',
+    'Packers',
+    'Vikings',
+    'Falcons',
+    'Panthers',
+    'Saints',
+    'Buccaneers',
+    'Cardinals',
+    'Rams',
+    '49ers',
+    'Seahawks',
   ];
 
-  const positions = [
-    'Quarterback', 'Running Back', 'Wide Receiver', 'Tight End', 'Offensive Lineman',
-    'Defensive Lineman', 'Linebacker', 'Cornerback', 'Safety', 'Kicker', 'Punter'
+  const initialPositions = [
+    'Quarterback',
+    'Running Back',
+    'Wide Receiver',
+    'Tight End',
+    'Offensive Lineman',
+    'Defensive Lineman',
+    'Linebacker',
+    'Cornerback',
+    'Safety',
+    'Kicker',
+    'Punter',
   ];
-
+  
   const pressures = ['Yes', 'No'];
   const feet = ['Right', 'Left'];
 
   const [actionCodes, setActionCodes] = useState(initialActionCodes);
+  const [positions, setPositions] = useState(initialPositions);
   const [teams, setTeams] = useState(nflTeams);
+  const [recentActions, setRecentActions] = useState([]);
+  const [recentTeams, setRecentTeams] = useState([]);
 
   useEffect(() => {
     const handleKeyPress = (e) => {
@@ -144,26 +224,16 @@ const AmericanFootballPitch = ({ userType }) => {
   const handleClick = (e) => {
     const stage = e.target.getStage();
     const point = stage.getPointerPosition();
-    const newCoord = {
-      x: (point.x / canvasSize.width) * pitchWidth,
-      y: (point.y / canvasSize.height) * pitchHeight,
-    };
+    const newCoord = { x: point.x / xScale, y: point.y / yScale };
 
-    // Ensure the adjusted coordinates are within the playable area
-    if (newCoord.x < 0 || newCoord.x > pitchWidth || newCoord.y < 0 || newCoord.y > pitchHeight) {
-      return;
-    }
-
-    if (actionType === 'pass' || actionType === 'run' || actionType === 'tackle' || actionType === 'touchdown' || actionType === 'field goal' || actionType === 'interception' || actionType === 'fumble') {
+    if (actionType && actionType.type === 'line') {
       setCurrentCoords([...currentCoords, newCoord]);
       if (currentCoords.length === 1) {
-        setFormData({ ...formData, from: currentCoords[0], to: newCoord, type: actionType });
-      } else {
-        setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType });
-        setOpenDialog(true);
+        setFormData({ ...formData, from: currentCoords[0], to: newCoord, type: actionType.value });
+        setOpenLineDialog(true);
       }
     } else if (actionType) {
-      setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType });
+      setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType.value });
       setOpenDialog(true);
     }
   };
@@ -172,8 +242,21 @@ const AmericanFootballPitch = ({ userType }) => {
     handleClick(e);
   };
 
+  const handleRightClick = (e) => {
+    e.evt.preventDefault();
+    const stage = e.target.getStage();
+    const point = stage.getPointerPosition();
+    setCurrentCoords({ x: point.x / xScale, y: point.y / yScale });
+    setIsContextMenuOpen(true);
+    setContextMenuPosition({ x: point.x, y: point.y });
+  };
+
   const handleCloseDialog = () => {
     setOpenDialog(false);
+  };
+
+  const handleCloseLineDialog = () => {
+    setOpenLineDialog(false);
   };
 
   const handleFormSubmit = async () => {
@@ -186,7 +269,7 @@ const AmericanFootballPitch = ({ userType }) => {
       formData.team = customInput.team;
     }
     if (customInput.position) {
-      positions.push(customInput.position);
+      setPositions([...positions, customInput.position]);
       formData.position = customInput.position;
     }
     if (customInput.pressure) {
@@ -215,6 +298,9 @@ const AmericanFootballPitch = ({ userType }) => {
     };
     setCoords([...coords, updatedFormData]);
     setOpenDialog(false);
+    setOpenLineDialog(false);
+    setRecentActions([formData.action, ...recentActions.filter(action => action !== formData.action)]);
+    setRecentTeams([formData.team, ...recentTeams.filter(team => team !== formData.team)]);
     setFormData({
       action: 'pass',
       team: 'Patriots',
@@ -228,11 +314,17 @@ const AmericanFootballPitch = ({ userType }) => {
       to: null
     });
     setCurrentCoords([]);
-    setCustomInput({ action: '', team: '', position: '', pressure: '', foot: '' });
+    setCustomInput({ action: '', team: '', position: '', pressure: '', foot: '', color: '#000000', type: 'marker' });
+    setIsContextMenuOpen(false);
   };
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleActionButtonClick = (action) => {
+    setActionType(action);
+    setFormData({ ...formData, action: action.value });
   };
 
   const handleClearMarkers = () => {
@@ -243,23 +335,8 @@ const AmericanFootballPitch = ({ userType }) => {
     setCoords(coords.slice(0, -1));
   };
 
+  // Function to handle downloading all data
   const handleDownloadData = async () => {
-    if (userType === 'free' && downloadsRemaining <= 0) {
-      Swal.fire({
-        title: 'Download Limit Reached',
-        text: 'You have reached your download limit for today. Please upgrade for more downloads.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Upgrade Now',
-        cancelButtonText: 'Cancel'
-      }).then((result) => {
-        if (result.isConfirmed) {
-          navigate('/signup');
-        }
-      });
-      return;
-    }
-
     const jsonData = JSON.stringify(coords, null, 2);
     const blob = new Blob([jsonData], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -269,166 +346,352 @@ const AmericanFootballPitch = ({ userType }) => {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  };
 
-    const today = new Date().toLocaleDateString();
+  // Function to handle downloading filtered data
+  const handleDownloadFilteredData = async () => {
+    const filteredCoords = coords.filter(coord => {
+      return (
+        (downloadTeam ? coord.team === downloadTeam : true) &&
+        (downloadPlayer ? coord.playerName === downloadPlayer : true) &&
+        (downloadAction ? coord.action === downloadAction : true)  // Include action filter
+      );
+    });
 
-    if (userType === 'free') {
-      const newDownloadsRemaining = downloadsRemaining - 1;
-      setDownloadsRemaining(newDownloadsRemaining);
-      if (user) {
-        const docRef = doc(firestore, 'users', user.uid);
-        await setDoc(docRef, { downloadsRemaining: newDownloadsRemaining, lastDownloadDate: today }, { merge: true });
+    const jsonData = JSON.stringify(filteredCoords, null, 2);
+    const blob = new Blob([jsonData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'filtered_coordinates.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    setIsDownloadModalOpen(false);
+  };
+
+
+  const handleDownloadScreenshot = async () => {
+    const filteredCoords = coords.filter(coord => {
+      return (
+        (screenshotTeam ? coord.team === screenshotTeam : true) &&
+        (screenshotPlayer ? coord.playerName === screenshotPlayer : true) &&
+        (screenshotAction ? coord.action === screenshotAction : true)
+      );
+    });
+  
+    const screenshotLayer = document.createElement('div');
+    document.body.appendChild(screenshotLayer);
+  
+    const stage = new Konva.Stage({
+      container: screenshotLayer,
+      width: pitchWidth * xScale,
+      height: pitchHeight * yScale
+    });
+  
+    const layer = new Konva.Layer();
+    stage.add(layer);
+  
+    renderFootballFieldForScreenshot(layer);
+  
+    filteredCoords.forEach(coord => {
+      if (coord.from && coord.to) {
+        const line = new Konva.Line({
+          points: [
+            coord.from.x * xScale,
+            coord.from.y * yScale,
+            coord.to.x * xScale,
+            coord.to.y * yScale
+          ],
+          stroke: getColor(coord.type),
+          strokeWidth: 2
+        });
+        layer.add(line);
       } else {
-        localStorage.setItem('downloadCount', newDownloadsRemaining.toString());
+        const shape = new Konva.Circle({
+          x: coord.x * xScale,
+          y: coord.y * yScale,
+          radius: 5,
+          fill: getColor(coord.type)
+        });
+        layer.add(shape);
+  
+        if (displayPlayerNumber && coord.player) {
+          const playerNumberText = new Konva.Text({
+            x: coord.x * xScale - 5,
+            y: coord.y * yScale - 3,
+            text: coord.player,
+            fontSize: 8,
+            fill: "white",
+            align: "center"
+          });
+          layer.add(playerNumberText);
+        }
+  
+        if (displayPlayerName && coord.playerName) {
+          const playerNameText = new Konva.Text({
+            x: coord.x * xScale - 28,
+            y: coord.y * yScale - 16,
+            text: coord.playerName,
+            fontSize: 10,
+            fill: "black",
+            align: "center"
+          });
+          layer.add(playerNameText);
+        }
       }
-    }
+    });
+  
+    layer.draw();
+  
+    html2canvas(screenshotLayer, {
+      width: pitchWidth * xScale,
+      height: pitchHeight * yScale,
+    }).then(canvas => {
+      const link = document.createElement('a');
+      link.href = canvas.toDataURL('image/png');
+      link.download = 'screenshot.png';
+      link.click();
+      document.body.removeChild(screenshotLayer);
+    });
+  
+    setIsScreenshotModalOpen(false);
   };
 
   const toggleModal = () => {
     setIsModalOpen(!isModalOpen);
   };
 
+  const toggleDownloadModal = () => {
+    setIsDownloadModalOpen(!isDownloadModalOpen);
+  };
+
+  const toggleScreenshotModal = () => {
+    setIsScreenshotModalOpen(!isScreenshotModalOpen);
+  };
+
   const handleResize = (width, height) => {
     setCanvasSize({ width, height });
+  };
+  
+  const handleAddAction = (newAction, newColor, newType) => {
+    if (!actionCodes.includes(newAction)) {
+      setActionButtons([...actionButtons, { label: newAction.charAt(0).toUpperCase() + newAction.slice(1), value: newAction, color: newColor, type: newType }]);
+      setActionCodes([...actionCodes, newAction]);
+    }
+    setIsAddActionModalOpen(false);
   };
 
   const renderFootballField = () => (
     <Layer>
-      <Rect x={0} y={0} width={canvasSize.width} height={canvasSize.height} fill="#00A86B" />
-  
+      <Rect x={0} y={0} width={canvasSize.width} height={canvasSize.height} fill={pitchColor} />
+
       {/* Side and goal lines */}
-      <Line points={[0, 0, canvasSize.width, 0, canvasSize.width, canvasSize.height, 0, canvasSize.height, 0, 0]} stroke="#FFF" strokeWidth={2} />
-  
+      <Line points={[0, 0, canvasSize.width, 0, canvasSize.width, canvasSize.height, 0, canvasSize.height, 0, 0]} stroke={lineColor} strokeWidth={2} />
+
       {/* End zones */}
       <Rect x={0} y={0} width={xScale * 10} height={canvasSize.height} fill="#FF0000" opacity={0.3} />
-      <Rect x={canvasSize.width - (xScale * 10)} y={0} width={xScale * 10} height={canvasSize.height} fill="#FF0000" opacity={0.3} />
-  
+      <Rect x={canvasSize.width - xScale * 10} y={0} width={xScale * 10} height={canvasSize.height} fill="#FF0000" opacity={0.3} />
+
       {/* "SCORELECT" in the end zones */}
-      <Text
-        text="SCORELECT"
-        x={xScale * 2.5}
-        y={canvasSize.height / 1.175}
-        fontSize={canvasSize.width / 20}
-        fill="#FFF"
-        rotation={-90}
-        align="center"
-      />
-      <Text
-        text="SCORELECT"
-        x={canvasSize.width - (xScale * 2.5)}
-        y={canvasSize.height / 6}
-        fontSize={canvasSize.width / 20}
-        fill="#FFF"
-        rotation={90}
-        align="center"
-      />
-  
+      <Text text="SCORELECT" x={xScale * 2.5} y={canvasSize.height / 1.175} fontSize={canvasSize.width / 20} fill="#FFF" rotation={-90} align="center" />
+      <Text text="SCORELECT" x={canvasSize.width - xScale * 2.5} y={canvasSize.height / 6} fontSize={canvasSize.width / 20} fill="#FFF" rotation={90} align="center" />
+
       {/* Yard lines */}
       {[...Array(11)].map((_, i) => (
-        <Line key={i} points={[
-          xScale * (10 + i * 10), 0,
-          xScale * (10 + i * 10), canvasSize.height
-        ]} stroke="#FFF" strokeWidth={2} />
+        <Line key={i} points={[xScale * (10 + i * 10), 0, xScale * (10 + i * 10), canvasSize.height]} stroke={lineColor} strokeWidth={2} />
       ))}
-  
+
       {/* Hash marks */}
       {[...Array(11)].map((_, i) => (
         <>
-          <Line key={`left-${i}`} points={[
-            xScale * (10 + i * 10), yScale * 23.5,
-            xScale * (10 + i * 10), yScale * 29.8
-          ]} stroke="#FFF" strokeWidth={2} />
-          <Line key={`right-${i}`} points={[
-            xScale * (10 + i * 10), yScale * 53.3 - yScale * 23.5,
-            xScale * (10 + i * 10), yScale * 53.3 - yScale * 29.8
-          ]} stroke="#FFF" strokeWidth={2} />
+          <Line key={`left-${i}`} points={[xScale * (10 + i * 10), yScale * 23.5, xScale * (10 + i * 10), yScale * 29.8]} stroke={lineColor} strokeWidth={2} />
+          <Line key={`right-${i}`} points={[xScale * (10 + i * 10), yScale * 53.3 - yScale * 23.5, xScale * (10 + i * 10), yScale * 53.3 - yScale * 29.8]} stroke={lineColor} strokeWidth={2} />
         </>
       ))}
-  
+
       {/* Yard line numbers */}
       {Array.from({ length: 4 }, (_, i) => (
         <>
           {/* Left side */}
-          <Text
-            key={`left-${i}`}
-            text={`${10 + i * 10}`}
-            x={xScale * (19.6 + i * 10) - (canvasSize.width / 100)}
-            y={yScale * 3}
-            fontSize={canvasSize.width / 40}
-            fill="#FFF"
-            align="center"
-          />
-          <Text
-            key={`left-${i}-bottom`}
-            text={`${10 + i * 10}`}
-            x={xScale * (19.6 + i * 10) - (canvasSize.width / 100)}
-            y={canvasSize.height - yScale * 4}
-            fontSize={canvasSize.width / 40}
-            fill="#FFF"
-            align="center"
-          />
+          <Text key={`left-${i}`} text={`${10 + i * 10}`} x={xScale * (19.6 + i * 10) - canvasSize.width / 100} y={yScale * 3} fontSize={canvasSize.width / 40} fill={lineColor} align="center" />
+          <Text key={`left-${i}-bottom`} text={`${10 + i * 10}`} x={xScale * (19.6 + i * 10) - canvasSize.width / 100} y={canvasSize.height - yScale * 4} fontSize={canvasSize.width / 40} fill={lineColor} align="center" />
           {/* Right side */}
-          <Text
-            key={`right-${i}`}
-            text={`${10 + i * 10}`}
-            x={canvasSize.width - xScale * (20.4 + i * 10) - (canvasSize.width / 100)}
-            y={yScale * 3}
-            fontSize={canvasSize.width / 40}
-            fill="#FFF"
-            align="center"
-          />
-          <Text
-            key={`right-${i}-bottom`}
-            text={`${10 + i * 10}`}
-            x={canvasSize.width - xScale * (20.4 + i * 10) - (canvasSize.width / 100)}
-            y={canvasSize.height - yScale * 4}
-            fontSize={canvasSize.width / 40}
-            fill="#FFF"
-            align="center"
-          />
+          <Text key={`right-${i}`} text={`${10 + i * 10}`} x={canvasSize.width - xScale * (20.4 + i * 10) - canvasSize.width / 100} y={yScale * 3} fontSize={canvasSize.width / 40} fill={lineColor} align="center" />
+          <Text key={`right-${i}-bottom`} text={`${10 + i * 10}`} x={canvasSize.width - xScale * (20.4 + i * 10) - canvasSize.width / 100} y={canvasSize.height - yScale * 4} fontSize={canvasSize.width / 40} fill={lineColor} align="center" />
         </>
       ))}
-  
+
       {/* 50 yard line */}
-      <Text
-        text="50"
-        x={canvasSize.width / 2.0175 - (canvasSize.width / 100)}
-        y={yScale * 3}
-        fontSize={canvasSize.width / 40}
-        fill="#FFF"
-        align="center"
-      />
-      <Text
-        text="50"
-        x={canvasSize.width / 2.0175 - (canvasSize.width / 100)}
-        y={canvasSize.height - yScale * 4}
-        fontSize={canvasSize.width / 40}
-        fill="#FFF"
-        align="center"
-      />
+      <Text text="50" x={canvasSize.width / 2.0175 - canvasSize.width / 100} y={yScale * 3} fontSize={canvasSize.width / 40} fill={lineColor} align="center" />
+      <Text text="50" x={canvasSize.width / 2.0175 - canvasSize.width / 100} y={canvasSize.height - yScale * 4} fontSize={canvasSize.width / 40} fill={lineColor} align="center" />
     </Layer>
   );
 
-  const getColor = (type) => {
-    switch (type) {
-      case 'pass':
-        return 'blue';
-      case 'run':
-        return 'green';
-      case 'tackle':
-        return 'red';
-      case 'touchdown':
-        return 'yellow';
-      case 'field goal':
-        return 'purple';
-      case 'interception':
-        return 'orange';
-      case 'fumble':
-        return 'brown';
-      default:
-        return 'black';
+  const renderFootballFieldForScreenshot = (layer) => {
+    const fieldRect = new Konva.Rect({
+      x: 0,
+      y: 0,
+      width: canvasSize.width,
+      height: canvasSize.height,
+      fill: pitchColor
+    });
+    layer.add(fieldRect);
+
+    // Side and goal lines
+    const fieldLines = new Konva.Line({
+      points: [0, 0, canvasSize.width, 0, canvasSize.width, canvasSize.height, 0, canvasSize.height, 0, 0],
+      stroke: lineColor,
+      strokeWidth: 2
+    });
+    layer.add(fieldLines);
+
+    // End zones
+    const endZoneLeft = new Konva.Rect({
+      x: 0,
+      y: 0,
+      width: xScale * 10,
+      height: canvasSize.height,
+      fill: "#FF0000",
+      opacity: 0.3
+    });
+    layer.add(endZoneLeft);
+    const endZoneRight = new Konva.Rect({
+      x: canvasSize.width - xScale * 10,
+      y: 0,
+      width: xScale * 10,
+      height: canvasSize.height,
+      fill: "#FF0000",
+      opacity: 0.3
+    });
+    layer.add(endZoneRight);
+
+    // Yard lines
+    for (let i = 0; i < 11; i++) {
+      const yardLine = new Konva.Line({
+        points: [xScale * (10 + i * 10), 0, xScale * (10 + i * 10), canvasSize.height],
+        stroke: lineColor,
+        strokeWidth: 2
+      });
+      layer.add(yardLine);
     }
+
+    // Hash marks
+    for (let i = 0; i < 11; i++) {
+      const hashMarkLeft = new Konva.Line({
+        points: [xScale * (10 + i * 10), yScale * 23.5, xScale * (10 + i * 10), yScale * 29.8],
+        stroke: lineColor,
+        strokeWidth: 2
+      });
+      layer.add(hashMarkLeft);
+      const hashMarkRight = new Konva.Line({
+        points: [xScale * (10 + i * 10), yScale * 53.3 - yScale * 23.5, xScale * (10 + i * 10), yScale * 53.3 - yScale * 29.8],
+        stroke: lineColor,
+        strokeWidth: 2
+      });
+      layer.add(hashMarkRight);
+    }
+
+    // Yard line numbers
+    const yardLineNumbers = [10, 20, 30, 40, 50, 40, 30, 20, 10];
+    yardLineNumbers.forEach((number, i) => {
+      const textLeft = new Konva.Text({
+        text: `${number}`,
+        x: xScale * (19.6 + i * 10) - canvasSize.width / 100,
+        y: yScale * 3,
+        fontSize: canvasSize.width / 40,
+        fill: lineColor,
+        align: "center"
+      });
+      layer.add(textLeft);
+      const textRight = new Konva.Text({
+        text: `${number}`,
+        x: canvasSize.width - xScale * (20.4 + i * 10) - canvasSize.width / 100,
+        y: yScale * 3,
+        fontSize: canvasSize.width / 40,
+        fill: lineColor,
+        align: "center"
+      });
+      layer.add(textRight);
+    });
+
+    const fiftyYardLine = new Konva.Text({
+      text: "50",
+      x: canvasSize.width / 2.0175 - canvasSize.width / 100,
+      y: yScale * 3,
+      fontSize: canvasSize.width / 40,
+      fill: lineColor,
+      align: "center"
+    });
+    layer.add(fiftyYardLine);
   };
+
+  const getColor = (type) => {
+    const button = actionButtons.find((button) => button.value === type);
+    return button ? button.color : 'black';
+  };
+
+  const handleDeleteAction = (actionToDelete) => {
+    Swal.fire({
+      title: 'Are you sure?',
+      text: 'Do you want to delete this action button?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonText: 'No, keep it'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        setActionButtons(actionButtons.filter(button => button.value !== actionToDelete));
+        setActionCodes(actionCodes.filter(action => action !== actionToDelete));
+      }
+    });
+  };
+
+  const renderActionButtons = () => (
+    <div className="action-buttons">
+      {actionButtons.map(action => (
+        <button
+          key={action.value}
+          className={`action-button ${action.value}`}
+          onClick={() => handleActionButtonClick(action)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            handleDeleteAction(action.value);
+          }}
+          style={{ borderColor: action.color, borderWidth: '2px', borderStyle: 'solid', backgroundColor: '#800080' }} 
+        >
+          {action.label}
+        </button>
+      ))}
+      <button className="action-button add-action" onClick={() => setIsAddActionModalOpen(true)}>Add Action</button>
+    </div>
+  );
+  
+  const renderContextMenu = () => (
+    <div className="context-menu" style={{ top: contextMenuPosition.y, left: contextMenuPosition.x }}>
+      <label>Player Number:</label>
+      <input type="text" value={formData.player} onChange={handleChange} name="player" />
+      <label>Action:</label>
+      <select name="action" value={formData.action} onChange={handleChange}>
+        {actionCodes.map(action => <option key={action} value={action}>{action}</option>)}
+      </select>
+      <button onClick={handleFormSubmit}>Submit</button>
+    </div>
+  );
+
+  // Aggregate data by team and action
+  const aggregateData = coords.reduce((acc, curr) => {
+    const { team, action } = curr;
+    if (!acc[team]) {
+      acc[team] = {};
+    }
+    if (!acc[team][action]) {
+      acc[team][action] = 0;
+    }
+    acc[team][action]++;
+    return acc;
+  }, {});
 
   useEffect(() => {
     console.log('Coords updated:', coords);
@@ -436,29 +699,40 @@ const AmericanFootballPitch = ({ userType }) => {
 
   return (
     <div className="pitch-container">
-      <div className="content"> 
+      <div className="content">
         <div className="instructions-container">
           <h3>Instructions</h3>
-          <div className="action-buttons">
-            <button className="action-button pass" onClick={() => setActionType('pass')}>Pass (p)</button>
-            <button className="action-button run" onClick={() => setActionType('run')}>Run (r)</button>
-            <button className="action-button tackle" onClick={() => setActionType('tackle')}>Tackle (t)</button>
-            <button className="action-button touchdown" onClick={() => setActionType('touchdown')}>Touchdown (d)</button>
-            <button className="action-button fieldgoal" onClick={() => setActionType('field goal')}>Field Goal (f)</button>
-            <button className="action-button interception" onClick={() => setActionType('interception')}>Interception (i)</button>
-            <button className="action-button fumble" onClick={() => setActionType('fumble')}>Fumble (m)</button>
-          </div> 
+          {renderActionButtons()}
           <p>Click on the pitch to record an action at that location. Use the buttons above to specify the type of action.</p>
+          <div className="toggle-switches">
+            <label>
+              <input type="checkbox" checked={displayPlayerNumber} onChange={() => setDisplayPlayerNumber(!displayPlayerNumber)} />
+              Player Number
+            </label>
+            <label>
+              <input type="checkbox" checked={displayPlayerName} onChange={() => setDisplayPlayerName(!displayPlayerName)} />
+              Player Name
+            </label>
+          </div>
           <div className="button-container">
-            <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
-            <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
-            <button className="button" onClick={handleDownloadData}>{userType === 'free' ? `Download Data (${downloadsRemaining} left)` : 'Download Data (Unlimited)'}</button>
-            <button className="button" onClick={toggleModal}>View Coordinates</button>
-            <button className="button" onClick={() => setIsSaveModalOpen(true)}>Save Game</button>
+          <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
+          <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
+          <button className="button" onClick={handleDownloadData}>{userType === 'free' ? `Download Data (${downloadsRemaining} left)` : 'Download Data (Unlimited)'}</button>
+          <button className="button" onClick={toggleDownloadModal}>Download Filtered Data</button>
+          <button className="button" onClick={toggleScreenshotModal}>Download Screenshot</button>
+          <button className="button" onClick={toggleModal}>View Coordinates</button>
+          <button className="button" onClick={() => setIsSaveModalOpen(true)}>Save Game</button>
+          <button className="button" onClick={() => setIsSettingsModalOpen(true)}>Settings</button> {/* Settings button */}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
-              <button className="button" onClick={() => handleResize(375, 166.4)}>iPhone</button>
-              <button className="button" onClick={() => handleResize(600, 266.6)}>iPad</button>
-              <button className="button" onClick={() => handleResize(960, 426.4)}>Computer</button>
+              <button className="button" onClick={() => handleResize(375, 166.4)}>
+                iPhone
+              </button>
+              <button className="button" onClick={() => handleResize(600, 266.6)}>
+                iPad
+              </button>
+              <button className="button" onClick={() => handleResize(960, 426.4)}>
+                Computer
+              </button>
             </div>
             <div className="custom-slider-container">
               <label htmlFor="customZoom">Custom:</label>
@@ -481,39 +755,65 @@ const AmericanFootballPitch = ({ userType }) => {
           width={canvasSize.width}
           height={canvasSize.height}
           onClick={handleClick}
+          onContextMenu={handleRightClick}
           onTap={handleTap}
           ref={stageRef}
           scaleX={zoomLevel}
           scaleY={zoomLevel}
         >
           {renderFootballField()}
+          {isContextMenuOpen && renderContextMenu()}
           <Layer>
-            {coords.map((coord, index) => {
-              if (coord.from && coord.to) {
-                return (
-                  <Line
-                    key={index}
-                    points={[
-                      coord.from.x * (canvasSize.width / pitchWidth),
-                      coord.from.y * (canvasSize.height / pitchHeight),
-                      coord.to.x * (canvasSize.width / pitchWidth),
-                      coord.to.y * (canvasSize.height / pitchHeight)
-                    ]}
-                    stroke={getColor(coord.type)}
-                    strokeWidth={2}
-                  />
-                );
-              }
+          {coords.map((coord, index) => {
+            if (coord.from && coord.to) {
               return (
-                <Circle
+                <Line
                   key={index}
-                  x={coord.x * (canvasSize.width / pitchWidth)}
-                  y={coord.y * (canvasSize.height / pitchHeight)}
-                  radius={5}
-                  fill={getColor(coord.type)}
+                  points={[
+                    coord.from.x ? coord.from.x * xScale : 0,
+                    coord.from.y ? coord.from.y * yScale : 0,
+                    coord.to.x ? coord.to.x * xScale : 0,
+                    coord.to.y ? coord.to.y * yScale : 0,
+                  ]}
+                  stroke={getColor(coord.type)}
+                  strokeWidth={2}
                 />
               );
-            })}
+            } else if (coord.x !== undefined && coord.y !== undefined) {
+              return (
+                <Group key={index}>
+                  <Circle
+                    x={coord.x * xScale}
+                    y={coord.y * yScale}
+                    radius={6}
+                    fill={getColor(coord.type)}
+                  />
+                  {displayPlayerNumber && (
+                    <Text
+                      x={coord.x * xScale - 5}
+                      y={coord.y * yScale - 3}
+                      text={coord.player}
+                      fontSize={8}
+                      fill="white"
+                      align="center"
+                    />
+                  )}
+                  {displayPlayerName && (
+                    <Text
+                      x={coord.x * xScale - 28}
+                      y={coord.y * yScale - 16}
+                      text={coord.playerName}
+                      fontSize={10}
+                      fill="black"
+                      align="center"
+                    />
+                  )}
+                </Group>
+              );
+            }
+            return null;
+          })}
+
           </Layer>
         </Stage>
       </div>
@@ -524,6 +824,152 @@ const AmericanFootballPitch = ({ userType }) => {
             <label>Action:</label>
             <select name="action" value={formData.action} onChange={handleChange}>
               <option value="custom">Add New Action</option>
+              {recentActions.map((action) => (
+                <option key={action} value={action}>
+                  {action}
+                </option>
+              ))}
+              {actionCodes.map((action) => (
+                <option key={action} value={action}>
+                  {action}
+                </option>
+              ))}
+            </select>
+            {formData.action === 'custom' && (
+              <div className="form-group">
+                <label>New Action:</label>
+                <input
+                  type="text"
+                  name="customAction"
+                  value={customInput.action}
+                  onChange={(e) => setCustomInput({ ...customInput, action: e.target.value })}
+                />
+              </div>
+            )}
+          </div>
+          <div className="form-group">
+            <label>Team:</label>
+            <select name="team" value={formData.team} onChange={handleChange}>
+              <option value="custom">Add New Team</option>
+              {recentTeams.map((team) => (
+                <option key={team} value={team}>
+                  {team}
+                </option>
+              ))}
+              {teams.map((team) => (
+                <option key={team} value={team}>
+                  {team}
+                </option>
+              ))}
+            </select>
+            {formData.team === 'custom' && (
+              <div className="form-group">
+                <label>New Team Name:</label>
+                <input
+                  type="text"
+                  name="customTeam"
+                  value={customInput.team}
+                  onChange={(e) => setCustomInput({ ...customInput, team: e.target.value })}
+                />
+              </div>
+            )}
+          </div>
+          <div className="form-group">
+            <label>Player Name:</label>
+            <input type="text" name="playerName" value={formData.playerName} onChange={handleChange} />
+          </div>
+          <div className="form-group">
+            <label>Player Number:</label>
+            <input type="text" name="player" value={formData.player} onChange={handleChange} />
+          </div>
+          <div className="form-group">
+            <label>Position:</label>
+            <select name="position" value={formData.position} onChange={handleChange}>
+              <option value="custom">Add New Position</option>
+              {positions.map((position) => (
+                <option key={position} value={position}>
+                  {position}
+                </option>
+              ))}
+            </select>
+            {formData.position === 'custom' && (
+              <div className="form-group">
+                <label>New Position:</label>
+                <input
+                  type="text"
+                  name="customPosition"
+                  value={customInput.position}
+                  onChange={(e) => setCustomInput({ ...customInput, position: e.target.value })}
+                />
+              </div>
+            )}
+          </div>
+          <div className="form-group">
+            <label>Pressure:</label>
+            <select name="pressure" value={formData.pressure} onChange={handleChange}>
+              <option value="custom">Add New Pressure</option>
+              {pressures.map((pressure) => (
+                <option key={pressure} value={pressure}>
+                  {pressure}
+                </option>
+              ))}
+            </select>
+            {formData.pressure === 'custom' && (
+              <div className="form-group">
+                <label>New Pressure:</label>
+                <input
+                  type="text"
+                  name="customPressure"
+                  value={customInput.pressure}
+                  onChange={(e) => setCustomInput({ ...customInput, pressure: e.target.value })}
+                />
+              </div>
+            )}
+          </div>
+          <div className="form-group">
+            <label>Foot:</label>
+            <select name="foot" value={formData.foot} onChange={handleChange}>
+              <option value="custom">Add New Foot</option>
+              {feet.map((foot) => (
+                <option key={foot} value={foot}>
+                  {foot}
+                </option>
+              ))}
+            </select>
+            {formData.foot === 'custom' && (
+              <div className="form-group">
+                <label>New Foot:</label>
+                <input
+                  type="text"
+                  name="customFoot"
+                  value={customInput.foot}
+                  onChange={(e) => setCustomInput({ ...customInput, foot: e.target.value })}
+                />
+              </div>
+            )}
+          </div>
+          <div className="form-group">
+            <label>Minute:</label>
+            <input type="text" name="minute" value={formData.minute} onChange={handleChange} />
+          </div>
+          <div className="button-container">
+            <button className="button" onClick={handleCloseDialog}>
+              Cancel
+            </button>
+            <button className="button" onClick={handleFormSubmit}>
+              Submit
+            </button>
+          </div>
+        </div>
+      )}
+      {openLineDialog && (
+        <div className="dialog-container">
+          <h3>Enter Action Details for Line</h3>
+          <div className="form-group">
+            <label>Action:</label>
+            <select name="action" value={formData.action} onChange={handleChange}>
+              <option value="custom">Add New Action</option>
+              {recentActions.map(action => <option key={action} value={action}>{action}</option>)}
               {actionCodes.map(action => <option key={action} value={action}>{action}</option>)}
             </select>
             {formData.action === 'custom' && (
@@ -537,6 +983,7 @@ const AmericanFootballPitch = ({ userType }) => {
             <label>Team:</label>
             <select name="team" value={formData.team} onChange={handleChange}>
               <option value="custom">Add New Team</option>
+              {recentTeams.map(team => <option key={team} value={team}>{team}</option>)}
               {teams.map(team => <option key={team} value={team}>{team}</option>)}
             </select>
             {formData.team === 'custom' && (
@@ -598,7 +1045,7 @@ const AmericanFootballPitch = ({ userType }) => {
             <input type="text" name="minute" value={formData.minute} onChange={handleChange} />
           </div>
           <div className="button-container">
-            <button className="button" onClick={handleCloseDialog}>Cancel</button>
+            <button className="button" onClick={handleCloseLineDialog}>Cancel</button>
             <button className="button" onClick={handleFormSubmit}>Submit</button>
           </div>
         </div>
@@ -617,8 +1064,8 @@ const AmericanFootballPitch = ({ userType }) => {
             transform: 'translate(-50%, -50%)',
             width: '80%',
             maxHeight: '60%',
-            overflowY: 'auto'
-          }
+            overflowY: 'auto',
+          },
         }}
       >
         <h2>Coordinates Data</h2>
@@ -627,25 +1074,35 @@ const AmericanFootballPitch = ({ userType }) => {
           <ul style={{ listStyleType: 'none', padding: '0' }}>
             {coords.map((coord, index) => (
               <li key={index}>
-                <strong>Action:</strong> {coord.action}<br />
-                <strong>Team:</strong> {coord.team}<br />
-                <strong>Player Number:</strong> {coord.player}<br />
-                <strong>Player Name:</strong> {coord.playerName}<br />
-                <strong>Position:</strong> {coord.position}<br />
-                <strong>Pressure:</strong> {coord.pressure}<br />
-                <strong>Foot:</strong> {coord.foot}<br />
-                <strong>Minute:</strong> {coord.minute}<br />
-                {coord.from && coord.to ? (
-                  <>
-                    <strong>From X:</strong> {coord.from.x.toFixed(2)}, <strong>From Y:</strong> {coord.from.y.toFixed(2)}<br />
-                    <strong>To X:</strong> {coord.to.x.toFixed(2)}, <strong>To Y:</strong> {coord.to.y.toFixed(2)}
-                  </>
-                ) : (
-                  <>
-                    <strong>X:</strong> {coord.x.toFixed(2)}, <strong>Y:</strong> {coord.y.toFixed(2)}
-                  </>
-                )}
-              </li>
+              <strong>Action:</strong> {coord.action}
+              <br />
+              <strong>Team:</strong> {coord.team}
+              <br />
+              <strong>Player Number:</strong> {coord.player}
+              <br />
+              <strong>Player Name:</strong> {coord.playerName}
+              <br />
+              <strong>Position:</strong> {coord.position}
+              <br />
+              <strong>Pressure:</strong> {coord.pressure}
+              <br />
+              <strong>Foot:</strong> {coord.foot}
+              <br />
+              <strong>Minute:</strong> {coord.minute}
+              <br />
+              {coord.from && coord.to ? (
+                <>
+                  <strong>From X:</strong> {coord.from.x?.toFixed(2)}, <strong>From Y:</strong> {coord.from.y?.toFixed(2)}
+                  <br />
+                  <strong>To X:</strong> {coord.to.x?.toFixed(2)}, <strong>To Y:</strong> {coord.to.y?.toFixed(2)}
+                </>
+              ) : (
+                <>
+                  <strong>X:</strong> {coord.x?.toFixed(2)}, <strong>Y:</strong> {coord.y?.toFixed(2)}
+                </>
+              )}
+            </li>
+            
             ))}
           </ul>
         </div>
@@ -663,13 +1120,13 @@ const AmericanFootballPitch = ({ userType }) => {
             marginRight: '-50%',
             transform: 'translate(-50%, -50%)',
             width: '50%',
-            maxHeight: '60%', // Make the modal smaller
+            maxHeight: '60%',
             overflowY: 'auto',
             background: '#2e2e2e',
             padding: '20px',
             borderRadius: '10px',
-            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)'
-          }
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+          },
         }}
       >
         <h2>Save Game</h2>
@@ -684,12 +1141,12 @@ const AmericanFootballPitch = ({ userType }) => {
             margin: '5px',
             borderRadius: '5px',
             border: '1px solid #ccc',
-            marginRight: '20px'  // Added this line to move the element to the left by 20px
+            marginRight: '20px',
           }}
         />
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <button 
-            onClick={handleSaveGame} 
+          <button
+            onClick={handleSaveGame}
             style={{
               background: '#007bff',
               color: '#fff',
@@ -697,12 +1154,12 @@ const AmericanFootballPitch = ({ userType }) => {
               border: 'none',
               borderRadius: '5px',
               cursor: 'pointer',
-              transition: 'background 0.3s'
+              transition: 'background 0.3s',
             }}
           >
             Save
           </button>
-          <button 
+          <button
             onClick={() => setIsSaveModalOpen(false)}
             style={{
               background: '#6c757d',
@@ -711,18 +1168,422 @@ const AmericanFootballPitch = ({ userType }) => {
               border: 'none',
               borderRadius: '5px',
               cursor: 'pointer',
-              transition: 'background 0.3s'
+              transition: 'background 0.3s',
             }}
           >
             Cancel
           </button>
         </div>
       </Modal>
+      <Modal
+        isOpen={isAddActionModalOpen}
+        onRequestClose={() => setIsAddActionModalOpen(false)}
+        contentLabel="Add Action"
+        style={{
+          content: {
+            top: '50%',
+            left: '50%',
+            right: 'auto',
+            bottom: 'auto',
+            marginRight: '-50%',
+            transform: 'translate(-50%, -50%)',
+            width: '50%',
+            maxHeight: '60%',
+            overflowY: 'auto',
+            background: '#2e2e2e',
+            padding: '20px',
+            borderRadius: '10px',
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+          },
+        }}
+      >
+        <h2>Add Action</h2>
+        <div className="form-group">
+          <label>Action Name:</label>
+          <input
+            type="text"
+            value={customInput.action}
+            onChange={(e) => setCustomInput({ ...customInput, action: e.target.value })}
+            placeholder="Enter new action"
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px',
+            }}
+          />
+          <label>Marker Color:</label>
+          <input
+            type="color"
+            value={customInput.color}
+            onChange={(e) => setCustomInput({ ...customInput, color: e.target.value })}
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px',
+            }}
+          />
+          <label>Type:</label>
+          <select
+            value={customInput.type}
+            onChange={(e) => setCustomInput({ ...customInput, type: e.target.value })}
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px',
+            }}
+          >
+            <option value="marker">Marker</option>
+            <option value="line">Line</option>
+          </select>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <button
+            onClick={() => handleAddAction(customInput.action, customInput.color, customInput.type)}
+            style={{
+              background: '#007bff',
+              color: '#fff',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              transition: 'background 0.3s',
+            }}
+          >
+            Add Action
+          </button>
+          <button
+            onClick={() => setIsAddActionModalOpen(false)}
+            style={{
+              background: '#6c757d',
+              color: '#fff',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              transition: 'background 0.3s',
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      </Modal>
+      <Modal
+        isOpen={isDownloadModalOpen}
+        onRequestClose={() => setIsDownloadModalOpen(false)}
+        contentLabel="Download Filtered Data"
+        style={{
+          content: {
+            top: '50%',
+            left: '50%',
+            right: 'auto',
+            bottom: 'auto',
+            marginRight: '-50%',
+            transform: 'translate(-50%, -50%)',
+            width: '50%',
+            maxHeight: '60%',
+            overflowY: 'auto',
+            background: '#2e2e2e',
+            padding: '20px',
+            borderRadius: '10px',
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+          },
+        }}
+      >
+        <h2>Download Filtered Data</h2>
+        <div className="form-group">
+          <label>Team:</label>
+          <select
+            value={downloadTeam}
+            onChange={(e) => setDownloadTeam(e.target.value)}
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px',
+            }}
+          >
+            <option value="">All Teams</option>
+            {teams.map((team) => (
+              <option key={team} value={team}>
+                {team}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-group">
+          <label>Player:</label>
+          <input
+            type="text"
+            value={downloadPlayer}
+            onChange={(e) => setDownloadPlayer(e.target.value)}
+            placeholder="Enter player name"
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px',
+            }}
+          />
+        </div>
+        <div className="form-group">
+          <label>Action:</label>
+          <select
+            value={downloadAction}
+            onChange={(e) => setDownloadAction(e.target.value)}
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px',
+            }}
+          >
+            <option value="">All Actions</option>
+            {actionCodes.map((action) => (
+              <option key={action} value={action}>
+                {action}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <button
+            onClick={handleDownloadFilteredData}
+            style={{
+              background: '#007bff',
+              color: '#fff',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              transition: 'background 0.3s',
+            }}
+          >
+            Download
+          </button>
+          <button
+            onClick={() => setIsDownloadModalOpen(false)}
+            style={{
+              background: '#6c757d',
+              color: '#fff',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              transition: 'background 0.3s',
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      </Modal>
+      <Modal
+        isOpen={isScreenshotModalOpen}
+        onRequestClose={() => setIsScreenshotModalOpen(false)}
+        contentLabel="Download Screenshot"
+        style={{
+          content: {
+            top: '50%',
+            left: '50%',
+            right: 'auto',
+            bottom: 'auto',
+            marginRight: '-50%',
+            transform: 'translate(-50%, -50%)',
+            width: '50%',
+            maxHeight: '60%',
+            overflowY: 'auto',
+            background: '#2e2e2e',
+            padding: '20px',
+            borderRadius: '10px',
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+          },
+        }}
+      >
+        <h2>Download Screenshot</h2>
+        <div className="form-group">
+          <label>Team:</label>
+          <select
+            value={screenshotTeam}
+            onChange={(e) => setScreenshotTeam(e.target.value)}
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px',
+            }}
+          >
+            <option value="">All Teams</option>
+            {teams.map((team) => (
+              <option key={team} value={team}>
+                {team}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-group">
+          <label>Player:</label>
+          <input
+            type="text"
+            value={screenshotPlayer}
+            onChange={(e) => setScreenshotPlayer(e.target.value)}
+            placeholder="Enter player name"
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px',
+            }}
+          />
+        </div>
+        <div className="form-group">
+          <label>Action:</label>
+          <select
+            value={screenshotAction}
+            onChange={(e) => setScreenshotAction(e.target.value)}
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px',
+            }}
+          >
+            <option value="">All Actions</option>
+            {actionCodes.map((action) => (
+              <option key={action} value={action}>
+                {action}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <button
+            onClick={handleDownloadScreenshot}
+            style={{
+              background: '#007bff',
+              color: '#fff',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              transition: 'background 0.3s',
+            }}
+          >
+            Download
+          </button>
+          <button
+            onClick={() => setIsScreenshotModalOpen(false)}
+            style={{
+              background: '#6c757d',
+              color: '#fff',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              transition: 'background 0.3s',
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      </Modal>
+      <Modal
+        isOpen={isSettingsModalOpen}
+        onRequestClose={() => setIsSettingsModalOpen(false)}
+        contentLabel="Settings"
+        style={{
+          content: {
+            top: '50%',
+            left: '50%',
+            right: 'auto',
+            bottom: 'auto',
+            marginRight: '-50%',
+            transform: 'translate(-50%, -50%)',
+            width: '40%',
+            maxHeight: '60%',
+            overflowY: 'auto',
+            background: '#2e2e2e',
+            padding: '20px',
+            borderRadius: '10px',
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+          },
+        }}
+      >
+        <h2>Settings</h2>
+        <div className="form-group">
+          <label>Pitch Color:</label>
+          <input
+            type="color"
+            value={pitchColor}
+            onChange={(e) => setPitchColor(e.target.value)}
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px',
+            }}
+          />
+        </div>
+        <div className="form-group">
+          <label>Line Color:</label>
+          <input
+            type="color"
+            value={lineColor}
+            onChange={(e) => setLineColor(e.target.value)}
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px',
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <button
+            onClick={() => setIsSettingsModalOpen(false)}
+            style={{
+              background: '#007bff',
+              color: '#fff',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              transition: 'background 0.3s',
+            }}
+          >
+            Close
+          </button>
+        </div>
+      </Modal>
+
+      <div className="aggregated-data-container">
+        <AggregatedData data={aggregateData} />
+      </div>
     </div>
   );
-}
+};
 
 export default AmericanFootballPitch;
-
-
-

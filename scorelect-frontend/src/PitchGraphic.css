@@ -306,6 +306,17 @@
   }
 }
 
+.radio-buttons {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.radio-buttons label {
+  margin-right: 10px;
+}
+
+
 @media (max-width: 568px) and (orientation: landscape) { /* iPhone SE in landscape */
   .pitch-container {
     flex-direction: row;

@@ -1,14 +1,17 @@
-// src/SoccerPitch.js
 import React, { useState, useRef, useEffect } from 'react';
-import { Stage, Layer, Rect, Line, Circle, Arc } from 'react-konva';
+import { Stage, Layer, Rect, Line, Circle, Arc, Group, Text } from 'react-konva';
 import Modal from 'react-modal';
+import Konva from 'konva';
+import html2canvas from 'html2canvas';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import AggregatedData from './AggregatedData';
 import './PitchGraphic.css';
 import './SavedGames.css';
+import './AggregatedData.css';
 
 const SoccerPitch = ({ userType }) => {
   const [coords, setCoords] = useState([]);
@@ -29,12 +32,28 @@ const SoccerPitch = ({ userType }) => {
     to: null
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [customInput, setCustomInput] = useState({ action: '', team: '', position: '', pressure: '', foot: '' });
+  const [customInput, setCustomInput] = useState({ action: '', team: '', position: '', pressure: '', foot: '', color: '#000000', type: 'marker' });
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+  const [isAddActionModalOpen, setIsAddActionModalOpen] = useState(false);
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+  const [isScreenshotModalOpen, setIsScreenshotModalOpen] = useState(false);
+  const [actionButtons, setActionButtons] = useState([]);
+  const [downloadTeam, setDownloadTeam] = useState('');
+  const [downloadPlayer, setDownloadPlayer] = useState('');
+  const [downloadAction, setDownloadAction] = useState('');
+  const [screenshotTeam, setScreenshotTeam] = useState('');
+  const [screenshotPlayer, setScreenshotPlayer] = useState('');
+  const [screenshotAction, setScreenshotAction] = useState('');
   const stageRef = useRef();
   const [downloadsRemaining, setDownloadsRemaining] = useState(1);
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const [pitchColor, setPitchColor] = useState('#00A86B'); // State for pitch color
+  const [lineColor, setLineColor] = useState('#000000'); // State for line color
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false); // State for settings modal
+
 
   const pitchWidth = 105;
   const pitchHeight = 68;
@@ -44,12 +63,26 @@ const SoccerPitch = ({ userType }) => {
   const yScale = canvasSize.height / pitchHeight;
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [gameName, setGameName] = useState('');
+  const [displayPlayerNumber, setDisplayPlayerNumber] = useState(false);
+  const [displayPlayerName, setDisplayPlayerName] = useState(false);
 
   useEffect(() => {
     if (location.state && location.state.loadedCoords) {
       setCoords(location.state.loadedCoords);
     }
   }, [location.state]);
+
+  useEffect(() => {
+    // Set initial action buttons
+    setActionButtons([
+      { label: 'Goal', value: 'goal', color: '#ff0000', type: 'marker' },
+      { label: 'Assist', value: 'assist', color: '#ffa500', type: 'marker' },
+      { label: 'Shot on Target', value: 'shot on target', color: '#009900', type: 'marker' },
+      { label: 'Shot off Target', value: 'shot off target', color: '#aaaaaa', type: 'marker' },
+      { label: 'Pass Completed', value: 'pass completed', color: '#fff400', type: 'line' },
+      { label: 'Pass Incomplete', value: 'pass incomplete', color: '#000080', type: 'line' }
+    ]);
+  }, []);
 
   const handleSaveGame = async () => {
     const auth = getAuth();
@@ -70,7 +103,7 @@ const SoccerPitch = ({ userType }) => {
 
   const initialActionCodes = [
     'goal', 'assist', 'shot on target', 'shot off target', 'pass completed', 'pass incomplete'
-  ]; 
+  ];
 
   const initialPositions = [
     'forward', 'midfield', 'defense', 'goalkeeper'
@@ -147,21 +180,29 @@ const SoccerPitch = ({ userType }) => {
     const point = stage.getPointerPosition();
     const newCoord = { x: point.x / xScale, y: point.y / yScale };
 
-    if (actionType === 'pass' || actionType === 'badpass' || actionType === 'kickout' || actionType === 'badkickout') {
+    if (actionType && actionType.type === 'line') {
       setCurrentCoords([...currentCoords, newCoord]);
       if (currentCoords.length === 1) {
-        setFormData({ ...formData, from: currentCoords[0], to: newCoord, type: actionType });
+        setFormData({ ...formData, from: currentCoords[0], to: newCoord, type: actionType.value });
         setOpenLineDialog(true);
       }
-    } else if (actionType === 'action' || actionType === 'badaction') {
-      const actionTypeWithStatus = actionType === 'action' ? 'successful action' : 'unsuccessful action';
-      setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionTypeWithStatus });
+    } else if (actionType) {
+      setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType.value });
       setOpenDialog(true);
     }
   };
 
   const handleTap = (e) => {
     handleClick(e);
+  };
+
+  const handleRightClick = (e) => {
+    e.evt.preventDefault();
+    const stage = e.target.getStage();
+    const point = stage.getPointerPosition();
+    setCurrentCoords({ x: point.x / xScale, y: point.y / yScale });
+    setIsContextMenuOpen(true);
+    setContextMenuPosition({ x: point.x, y: point.y });
   };
 
   const handleCloseDialog = () => {
@@ -227,11 +268,17 @@ const SoccerPitch = ({ userType }) => {
       to: null
     });
     setCurrentCoords([]);
-    setCustomInput({ action: '', team: '', position: '', pressure: '', foot: '' });
+    setCustomInput({ action: '', team: '', position: '', pressure: '', foot: '', color: '#000000', type: 'marker' });
+    setIsContextMenuOpen(false);
   };
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleActionButtonClick = (action) => {
+    setActionType(action);
+    setFormData({ ...formData, action: action.value });
   };
 
   const handleClearMarkers = () => {
@@ -242,121 +289,443 @@ const SoccerPitch = ({ userType }) => {
     setCoords(coords.slice(0, -1));
   };
 
-  const handleDownloadData = async () => {
-    if (userType === 'free' && downloadsRemaining <= 0) {
-      Swal.fire({
-        title: 'Download Limit Reached',
-        text: 'You have reached your download limit for today. Please upgrade for more downloads.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Upgrade Now',
-        cancelButtonText: 'Cancel'
-      }).then((result) => {
-        if (result.isConfirmed) {
-          navigate('/signup');
-        }
-      });
-      return;
-    }
-
-    const jsonData = JSON.stringify(coords, null, 2);
-    const blob = new Blob([jsonData], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'coordinates.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-
-    const today = new Date().toLocaleDateString();
-
-    if (userType === 'free') {
-      const newDownloadsRemaining = downloadsRemaining - 1;
-      setDownloadsRemaining(newDownloadsRemaining);
-      if (user) {
-        const docRef = doc(firestore, 'users', user.uid);
-        await setDoc(docRef, { downloadsRemaining: newDownloadsRemaining, lastDownloadDate: today }, { merge: true });
+  const handleDownloadScreenshot = async () => {
+    const filteredCoords = coords.filter(coord => {
+      return (
+        (screenshotTeam ? coord.team === screenshotTeam : true) &&
+        (screenshotPlayer ? coord.playerName === screenshotPlayer : true) &&
+        (screenshotAction ? coord.action === screenshotAction : true)
+      );
+    });
+  
+    const screenshotLayer = document.createElement('div');
+    document.body.appendChild(screenshotLayer);
+  
+    // Set the stage dimensions to the exact pitch dimensions
+    const stage = new Konva.Stage({
+      container: screenshotLayer,
+      width: pitchWidth * xScale, // Set width based on pitch dimensions
+      height: pitchHeight * yScale // Set height based on pitch dimensions
+    });
+  
+    const layer = new Konva.Layer();
+    stage.add(layer);
+  
+    // Draw the pitch and filtered markers
+    renderSoccerPitchForScreenshot(layer);
+  
+    filteredCoords.forEach(coord => {
+      if (coord.from && coord.to) {
+        const line = new Konva.Line({
+          points: [
+            coord.from.x * xScale,
+            coord.from.y * yScale,
+            coord.to.x * xScale,
+            coord.to.y * yScale
+          ],
+          stroke: getColor(coord.type),
+          strokeWidth: 2
+        });
+        layer.add(line);
       } else {
-        localStorage.setItem('downloadCount', newDownloadsRemaining.toString());
+        const shape = new Konva.Circle({
+          x: coord.x * xScale,
+          y: coord.y * yScale,
+          radius: 5,
+          fill: getColor(coord.type)
+        });
+        layer.add(shape);
+  
+        // Add player number or name if the corresponding checkbox is checked
+        if (displayPlayerNumber && coord.player) {
+          const playerNumberText = new Konva.Text({
+            x: coord.x * xScale - 5,
+            y: coord.y * yScale - 3,
+            text: coord.player,
+            fontSize: 8,
+            fill: "white",
+            align: "center"
+          });
+          layer.add(playerNumberText);
+        }
+  
+        if (displayPlayerName && coord.playerName) {
+          const playerNameText = new Konva.Text({
+            x: coord.x * xScale - 28,
+            y: coord.y * yScale - 16,
+            text: coord.playerName,
+            fontSize: 10,
+            fill: "black",
+            align: "center"
+          });
+          layer.add(playerNameText);
+        }
       }
-    }
+    });
+  
+    layer.draw();
+  
+    html2canvas(screenshotLayer, {
+      width: pitchWidth * xScale,
+      height: pitchHeight * yScale,
+    }).then(canvas => {
+      const link = document.createElement('a');
+      link.href = canvas.toDataURL('image/png');
+      link.download = 'screenshot.png';
+      link.click();
+      document.body.removeChild(screenshotLayer);
+    });
+  
+    setIsScreenshotModalOpen(false);
   };
+  
+  
 
   const toggleModal = () => {
     setIsModalOpen(!isModalOpen);
+  };
+
+  const toggleDownloadModal = () => {
+    setIsDownloadModalOpen(!isDownloadModalOpen);
+  };
+
+  const toggleScreenshotModal = () => {
+    setIsScreenshotModalOpen(!isScreenshotModalOpen);
   };
 
   const handleResize = (width, height) => {
     setCanvasSize({ width, height });
   };
 
+  // JSX-based renderSoccerPitch function for React rendering
   const renderSoccerPitch = () => (
     <Layer>
-      <Rect x={0} y={0} width={canvasSize.width} height={canvasSize.height} fill="#00A86B" />
-
+      <Rect x={0} y={0} width={canvasSize.width} height={canvasSize.height} fill={pitchColor} />
+  
       {/* Side and goal lines */}
-      <Line points={[0, 0, canvasSize.width, 0, canvasSize.width, canvasSize.height, 0, canvasSize.height, 0, 0]} stroke="#000" strokeWidth={2} />
-
+      <Line points={[0, 0, canvasSize.width, 0, canvasSize.width, canvasSize.height, 0, canvasSize.height, 0, 0]} stroke={lineColor} strokeWidth={2} />
+  
       {/* Goals */}
-      <Line points={[canvasSize.width, yScale * 30.34, xScale * 105, yScale * 30.34, xScale * 105, yScale * 37.66, canvasSize.width, yScale * 37.66]} stroke="#000" strokeWidth={2} />
-      <Line points={[0, yScale * 30.34, xScale * 0, yScale * 30.34, xScale * 0, yScale * 37.66, 0, yScale * 37.66]} stroke="#000" strokeWidth={2} />
-
+      <Line points={[canvasSize.width, yScale * 30.34, xScale * 105, yScale * 30.34, xScale * 105, yScale * 37.66, canvasSize.width, yScale * 37.66]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[0, yScale * 30.34, xScale * 0, yScale * 30.34, xScale * 0, yScale * 37.66, 0, yScale * 37.66]} stroke={lineColor} strokeWidth={2} />
+  
       {/* 6-yard boxes */}
-      <Line points={[0, yScale * 23.1, xScale * 5.5, yScale * 23.1, xScale * 5.5, yScale * 44.9, 0, yScale * 44.9]} stroke="#000" strokeWidth={2} />
-      <Line points={[canvasSize.width, yScale * 23.1, xScale * 99.5, yScale * 23.1, xScale * 99.5, yScale * 44.9, canvasSize.width, yScale * 44.9]} stroke="#000" strokeWidth={2} />
-
+      <Line points={[0, yScale * 23.1, xScale * 5.5, yScale * 23.1, xScale * 5.5, yScale * 44.9, 0, yScale * 44.9]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[canvasSize.width, yScale * 23.1, xScale * 99.5, yScale * 23.1, xScale * 99.5, yScale * 44.9, canvasSize.width, yScale * 44.9]} stroke={lineColor} strokeWidth={2} />
+  
       {/* Penalty areas */}
-      <Line points={[0, yScale * 14, xScale * 16.5, yScale * 14, xScale * 16.5, yScale * 54, 0, yScale * 54]} stroke="#000" strokeWidth={2} />
-      <Line points={[canvasSize.width, yScale * 14, xScale * 88.5, yScale * 14, xScale * 88.5, yScale * 54, canvasSize.width, yScale * 54]} stroke="#000" strokeWidth={2} />
-
+      <Line points={[0, yScale * 14, xScale * 16.5, yScale * 14, xScale * 16.5, yScale * 54, 0, yScale * 54]} stroke={lineColor} strokeWidth={2} />
+      <Line points={[canvasSize.width, yScale * 14, xScale * 88.5, yScale * 14, xScale * 88.5, yScale * 54, canvasSize.width, yScale * 54]} stroke={lineColor} strokeWidth={2} />
+  
       {/* Penalty spots */}
-      <Circle x={xScale * 11} y={yScale * 34} radius={xScale * 0.4} fill="#000" />
-      <Circle x={xScale * 94} y={yScale * 34} radius={xScale * 0.4} fill="#000" />
-
+      <Circle x={xScale * 11} y={yScale * 34} radius={xScale * 0.4} fill={lineColor} />
+      <Circle x={xScale * 94} y={yScale * 34} radius={xScale * 0.4} fill={lineColor} />
+  
       {/* Halfway line */}
-      <Line points={[xScale * 52.5, 0, xScale * 52.5, canvasSize.height]} stroke="#000" strokeWidth={2} />
-
+      <Line points={[xScale * 52.5, 0, xScale * 52.5, canvasSize.height]} stroke={lineColor} strokeWidth={2} />
+  
       {/* Center circle */}
-      <Circle x={xScale * 52.5} y={yScale * 34} radius={xScale * 9.15} stroke="#000" strokeWidth={2} />
-
+      <Circle x={xScale * 52.5} y={yScale * 34} radius={xScale * 9.15} stroke={lineColor} strokeWidth={2} />
+  
       {/* Corner arcs */}
-      <Arc x={xScale * 0} y={yScale * 0} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={0} stroke="#000" strokeWidth={2} />
-      <Arc x={xScale * 0} y={yScale * 68} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={270} stroke="#000" strokeWidth={2} />
-      <Arc x={xScale * 105} y={yScale * 0} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={90} stroke="#000" strokeWidth={2} />
-      <Arc x={xScale * 105} y={yScale * 68} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={180} stroke="#000" strokeWidth={2} />
-
+      <Arc x={xScale * 0} y={yScale * 0} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={0} stroke={lineColor} strokeWidth={2} />
+      <Arc x={xScale * 0} y={yScale * 68} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={270} stroke={lineColor} strokeWidth={2} />
+      <Arc x={xScale * 105} y={yScale * 0} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={90} stroke={lineColor} strokeWidth={2} />
+      <Arc x={xScale * 105} y={yScale * 68} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={180} stroke={lineColor} strokeWidth={2} />
+  
       {/* Penalty arc */}
-      <Arc x={xScale * 94} y={yScale * 34} innerRadius={xScale * 9.15} outerRadius={xScale * 9.15} angle={105} rotation={127.5} stroke="#000" strokeWidth={2} />
-      <Arc x={xScale * 11} y={yScale * 34} innerRadius={xScale * 9.15} outerRadius={xScale * 9.15} angle={105} rotation={307.5} stroke="#000" strokeWidth={2} />
+      <Arc x={xScale * 94} y={yScale * 34} innerRadius={xScale * 9.15} outerRadius={xScale * 9.15} angle={105} rotation={127.5} stroke={lineColor} strokeWidth={2} />
+      <Arc x={xScale * 11} y={yScale * 34} innerRadius={xScale * 9.15} outerRadius={xScale * 9.15} angle={105} rotation={307.5} stroke={lineColor} strokeWidth={2} />
+
+      {/* "SCORELECT" in the end zones */}
+      <Text text="SCORELECT.COM" x={xScale * 22.5} y={canvasSize.height / 40.25} fontSize={canvasSize.width / 50} f  fill="#D3D3D3" opacity={0.7} rotation={0} align="center" />
+      <Text text="SCORELECT.COM" x={canvasSize.width - xScale * 22.5} y={canvasSize.height / 1.02} fontSize={canvasSize.width / 50} fill="#D3D3D3" opacity={0.7} rotation={180} align="center" />
 
     </Layer>
   );
+  
+
+  // Function-based renderSoccerPitchForScreenshot for Konva-based rendering
+  const renderSoccerPitchForScreenshot = (layer) => {
+    const fieldRect = new Konva.Rect({
+      x: 0,
+      y: 0,
+      width: canvasSize.width,
+      height: canvasSize.height,
+      fill: '#00A86B'
+    });
+    layer.add(fieldRect);
+
+    const lineColor = '#000';
+    const lineWidth = 2;
+
+    // Side and goal lines
+    const fieldLines = new Konva.Line({
+      points: [0, 0, canvasSize.width, 0, canvasSize.width, canvasSize.height, 0, canvasSize.height, 0, 0],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(fieldLines);
+
+    // Goals
+    const goalLines1 = new Konva.Line({
+      points: [canvasSize.width, yScale * 30.34, xScale * 105, yScale * 30.34, xScale * 105, yScale * 37.66, canvasSize.width, yScale * 37.66],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(goalLines1);
+    const goalLines2 = new Konva.Line({
+      points: [0, yScale * 30.34, xScale * 0, yScale * 30.34, xScale * 0, yScale * 37.66, 0, yScale * 37.66],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(goalLines2);
+
+    // 6-yard boxes
+    const sixYardBox1 = new Konva.Line({
+      points: [0, yScale * 23.1, xScale * 5.5, yScale * 23.1, xScale * 5.5, yScale * 44.9, 0, yScale * 44.9],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(sixYardBox1);
+    const sixYardBox2 = new Konva.Line({
+      points: [canvasSize.width, yScale * 23.1, xScale * 99.5, yScale * 23.1, xScale * 99.5, yScale * 44.9, canvasSize.width, yScale * 44.9],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(sixYardBox2);
+
+    // Penalty areas
+    const penaltyArea1 = new Konva.Line({
+      points: [0, yScale * 14, xScale * 16.5, yScale * 14, xScale * 16.5, yScale * 54, 0, yScale * 54],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(penaltyArea1);
+    const penaltyArea2 = new Konva.Line({
+      points: [canvasSize.width, yScale * 14, xScale * 88.5, yScale * 14, xScale * 88.5, yScale * 54, canvasSize.width, yScale * 54],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(penaltyArea2);
+
+    // Penalty spots
+    const penaltySpot1 = new Konva.Circle({
+      x: xScale * 11,
+      y: yScale * 34,
+      radius: xScale * 0.4,
+      fill: lineColor
+    });
+    layer.add(penaltySpot1);
+    const penaltySpot2 = new Konva.Circle({
+      x: xScale * 94,
+      y: yScale * 34,
+      radius: xScale * 0.4,
+      fill: lineColor
+    });
+    layer.add(penaltySpot2);
+
+    // Halfway line
+    const halfwayLine = new Konva.Line({
+      points: [xScale * 52.5, 0, xScale * 52.5, canvasSize.height],
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(halfwayLine);
+
+    // Center circle
+    const centerCircle = new Konva.Circle({
+      x: xScale * 52.5,
+      y: yScale * 34,
+      radius: xScale * 9.15,
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(centerCircle);
+
+    // Corner arcs
+    const cornerArc1 = new Konva.Arc({
+      x: xScale * 0,
+      y: yScale * 0,
+      innerRadius: 0,
+      outerRadius: xScale * 1,
+      angle: 90,
+      rotation: 0,
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(cornerArc1);
+    const cornerArc2 = new Konva.Arc({
+      x: xScale * 0,
+      y: yScale * 68,
+      innerRadius: 0,
+      outerRadius: xScale * 1,
+      angle: 90,
+      rotation: 270,
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(cornerArc2);
+    const cornerArc3 = new Konva.Arc({
+      x: xScale * 105,
+      y: yScale * 0,
+      innerRadius: 0,
+      outerRadius: xScale * 1,
+      angle: 90,
+      rotation: 90,
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(cornerArc3);
+    const cornerArc4 = new Konva.Arc({
+      x: xScale * 105,
+      y: yScale * 68,
+      innerRadius: 0,
+      outerRadius: xScale * 1,
+      angle: 90,
+      rotation: 180,
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(cornerArc4);
+
+    // Penalty arcs
+    const penaltyArc1 = new Konva.Arc({
+      x: xScale * 94,
+      y: yScale * 34,
+      innerRadius: xScale * 9.15,
+      outerRadius: xScale * 9.15,
+      angle: 105,
+      rotation: 127.5,
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(penaltyArc1);
+    const penaltyArc2 = new Konva.Arc({
+      x: xScale * 11,
+      y: yScale * 34,
+      innerRadius: xScale * 9.15,
+      outerRadius: xScale * 9.15,
+      angle: 105,
+      rotation: 307.5,
+      stroke: lineColor,
+      strokeWidth: lineWidth
+    });
+    layer.add(penaltyArc2);
+    
+  };
 
   const getColor = (type) => {
-    switch (type) {
-      case 'pass':
-      case 'successful pass':
-        return 'blue';
-      case 'badpass':
-      case 'unsuccessful pass':
-        return 'yellow';
-      case 'kickout':
-      case 'successful kickout':
-        return 'purple';
-      case 'badkickout':
-      case 'unsuccessful kickout':
-        return 'orange';
-      case 'action':
-      case 'successful action':
-        return 'green';
-      case 'badaction':
-      case 'unsuccessful action':
-        return 'red';
-      default:
-        return 'black';
-    }
+    const button = actionButtons.find(button => button.value === type);
+    return button ? button.color : 'black';
   };
+
+  const handleDeleteAction = (actionToDelete) => {
+    Swal.fire({
+      title: 'Are you sure?',
+      text: 'Do you want to delete this action button?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonText: 'No, keep it'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        setActionButtons(actionButtons.filter(button => button.value !== actionToDelete));
+        setActionCodes(actionCodes.filter(action => action !== actionToDelete));
+      }
+    });
+  };
+
+  // Function to handle downloading all data
+const handleDownloadData = async () => {
+  const jsonData = JSON.stringify(coords, null, 2);
+  const blob = new Blob([jsonData], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'coordinates.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+};
+
+// Function to handle downloading filtered data
+const handleDownloadFilteredData = async () => {
+  const filteredCoords = coords.filter(coord => {
+    return (
+      (downloadTeam ? coord.team === downloadTeam : true) &&
+      (downloadPlayer ? coord.playerName === downloadPlayer : true) &&
+      (downloadAction ? coord.action === downloadAction : true)  // Include action filter
+    );
+  });
+
+  const jsonData = JSON.stringify(filteredCoords, null, 2);
+  const blob = new Blob([jsonData], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'filtered_coordinates.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  setIsDownloadModalOpen(false);
+};
+
+
+
+  const handleAddAction = (newAction, newColor, newType) => {
+    if (!actionCodes.includes(newAction)) {
+      setActionButtons([...actionButtons, { label: newAction.charAt(0).toUpperCase() + newAction.slice(1), value: newAction, color: newColor, type: newType }]);
+      setActionCodes([...actionCodes, newAction]);
+    }
+    setIsAddActionModalOpen(false);
+  };
+
+  const renderActionButtons = () => (
+    <div className="action-buttons">
+      {actionButtons.map(action => (
+        <button
+          key={action.value}
+          className={`action-button ${action.value}`}
+          onClick={() => handleActionButtonClick(action)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            handleDeleteAction(action.value);
+          }}
+          style={{ borderColor: action.color, borderWidth: '2px', borderStyle: 'solid', backgroundColor: '#800080' }} 
+        >
+          {action.label}
+        </button>
+      ))}
+      <button className="action-button add-action" onClick={() => setIsAddActionModalOpen(true)}>Add Action</button>
+    </div>
+  );
+
+  const renderContextMenu = () => (
+    <div className="context-menu" style={{ top: contextMenuPosition.y, left: contextMenuPosition.x }}>
+      <label>Player Number:</label>
+      <input type="text" value={formData.player} onChange={handleChange} name="player" />
+      <label>Action:</label>
+      <select name="action" value={formData.action} onChange={handleChange}>
+        {actionCodes.map(action => <option key={action} value={action}>{action}</option>)}
+      </select>
+      <button onClick={handleFormSubmit}>Submit</button>
+    </div>
+  );
+
+  // Aggregate data by team and action
+  const aggregateData = coords.reduce((acc, curr) => {
+    const { team, action } = curr;
+    if (!acc[team]) {
+      acc[team] = {};
+    }
+    if (!acc[team][action]) {
+      acc[team][action] = 0;
+    }
+    acc[team][action]++;
+    return acc;
+  }, {});
 
   useEffect(() => {
     console.log('Coords updated:', coords);
@@ -367,53 +736,70 @@ const SoccerPitch = ({ userType }) => {
       <div className="content">
         <div className="instructions-container">
           <h3>Instructions</h3>
-          <div className="action-buttons">
-            <button className="action-button pass" onClick={() => setActionType('pass')}>Successful Pass (p)</button>
-            <button className="action-button badpass" onClick={() => setActionType('badpass')}>Unsuccessful Pass (u)</button>
-            <button className="action-button kickout" onClick={() => setActionType('kickout')}>Successful Kickout (k)</button>
-            <button className="action-button badkickout" onClick={() => setActionType('badkickout')}>Unsuccessful Kickout (c)</button>
-            <button className="action-button action" onClick={() => setActionType('action')}>Successful Action (g)</button>
-            <button className="action-button badaction" onClick={() => setActionType('badaction')}>Unsuccessful Action (b)</button>
-          </div>
+          {renderActionButtons()}
           <p>Click on the pitch to record an action at that location. Use the buttons above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
-          <div className="button-container">
-            <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
-            <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
-            <button className="button" onClick={handleDownloadData}>{userType === 'free' ? `Download Data (${downloadsRemaining} left)` : 'Download Data (Unlimited)'}</button>
-            <button className="button" onClick={toggleModal}>View Coordinates</button>
-            <button className="button" onClick={() => setIsSaveModalOpen(true)}>Save Game</button>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
-              <button className="button" onClick={() => handleResize(375, 243.5)}>iPhone</button>
-              <button className="button" onClick={() => handleResize(600, 389.6)}>iPad</button>
-              <button className="button" onClick={() => handleResize(800, 600)}>Computer</button>
-            </div>
-            <div className="custom-slider-container">
-              <label htmlFor="customZoom">Custom:</label>
-              <input
-                type="range"
-                id="customZoom"
-                min="0.5"
-                max="2"
-                step="0.1"
-                value={zoomLevel}
-                onChange={(e) => {
-                  setZoomLevel(e.target.value);
-                  handleResize(canvasSize.width * e.target.value, canvasSize.height * e.target.value);
-                }}
-              />
-            </div>
+          <div className="toggle-switches">
+          <label>
+            <input
+              type="checkbox"
+              checked={displayPlayerNumber}
+              onChange={() => setDisplayPlayerNumber(!displayPlayerNumber)}
+            />
+            Player Number
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={displayPlayerName}
+              onChange={() => setDisplayPlayerName(!displayPlayerName)}
+            />
+            Player Name
+          </label>
+        </div>
+        <div className="button-container">
+          <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
+          <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
+          <button className="button" onClick={handleDownloadData}>{userType === 'free' ? `Download Data (${downloadsRemaining} left)` : 'Download Data (Unlimited)'}</button>
+          <button className="button" onClick={toggleDownloadModal}>Download Filtered Data</button>
+          <button className="button" onClick={toggleScreenshotModal}>Download Screenshot</button>
+          <button className="button" onClick={toggleModal}>View Coordinates</button>
+          <button className="button" onClick={() => setIsSaveModalOpen(true)}>Save Game</button>
+          <button className="button" onClick={() => setIsSettingsModalOpen(true)}>Settings</button> {/* Settings button */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
+            <button className="button" onClick={() => handleResize(375, 243.5)}>iPhone</button>
+            <button className="button" onClick={() => handleResize(600, 389.6)}>iPad</button>
+            <button className="button" onClick={() => handleResize(800, 600)}>Computer</button>
+          </div>
+          <div className="custom-slider-container">
+            <label htmlFor="customZoom">Custom:</label>
+            <input
+              type="range"
+              id="customZoom"
+              min="0.5"
+              max="2"
+              step="0.1"
+              value={zoomLevel}
+              onChange={(e) => {
+                setZoomLevel(e.target.value);
+                handleResize(canvasSize.width * e.target.value, canvasSize.height * e.target.value);
+              }}
+            />
           </div>
         </div>
+        </div>
+
         <Stage
           width={canvasSize.width}
           height={canvasSize.height}
           onClick={handleClick}
+          onContextMenu={handleRightClick}
           onTap={handleTap}
           ref={stageRef}
           scaleX={zoomLevel}
           scaleY={zoomLevel}
         >
           {renderSoccerPitch()}
+          {isContextMenuOpen && renderContextMenu()}
           <Layer>
             {coords.map((coord, index) => {
               if (coord.from && coord.to) {
@@ -432,13 +818,34 @@ const SoccerPitch = ({ userType }) => {
                 );
               }
               return (
-                <Circle
-                  key={index}
-                  x={coord.x * xScale}
-                  y={coord.y * yScale}
-                  radius={5}
-                  fill={getColor(coord.type)}
-                />
+                <Group key={index}>
+                  <Circle
+                    x={coord.x * xScale}
+                    y={coord.y * yScale}
+                    radius={6}
+                    fill={getColor(coord.type)}
+                  />
+                  {displayPlayerNumber && (
+                    <Text
+                      x={coord.x * xScale - 5}
+                      y={coord.y * yScale - 3}
+                      text={coord.player}
+                      fontSize={8}
+                      fill="white"
+                      align="center"
+                    />
+                  )}
+                  {displayPlayerName && (
+                    <Text
+                      x={coord.x * xScale - 28}
+                      y={coord.y * yScale - 16}
+                      text={coord.playerName}
+                      fontSize={10}
+                      fill="black"
+                      align="center"
+                    />
+                  )}
+                </Group>
               );
             })}
           </Layer>
@@ -633,7 +1040,7 @@ const SoccerPitch = ({ userType }) => {
             marginRight: '-50%',
             transform: 'translate(-50%, -50%)',
             width: '80%',
-            maxHeight: '60%', // Make the modal smaller
+            maxHeight: '60%',
             overflowY: 'auto'
           }
         }}
@@ -668,6 +1075,48 @@ const SoccerPitch = ({ userType }) => {
         </div>
       </Modal>
       <Modal
+        isOpen={isSettingsModalOpen}
+        onRequestClose={() => setIsSettingsModalOpen(false)}
+        contentLabel="Settings"
+        style={{
+          content: {
+            top: '50%',
+            left: '50%',
+            right: 'auto',
+            bottom: 'auto',
+            marginRight: '-50%',
+            transform: 'translate(-50%, -50%)',
+            width: '50%',
+            maxHeight: '60%',
+            overflowY: 'auto',
+            background: '#2e2e2e',
+            padding: '20px',
+            borderRadius: '10px',
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+          },
+        }}
+      >
+        <h2>Settings</h2>
+        <div className="form-group">
+          <label>Pitch Color:</label>
+          <input
+            type="color"
+            value={pitchColor}
+            onChange={(e) => setPitchColor(e.target.value)}
+          />
+        </div>
+        <div className="form-group">
+          <label>Line Color:</label>
+          <input
+            type="color"
+            value={lineColor}
+            onChange={(e) => setLineColor(e.target.value)}
+          />
+        </div>
+        <button onClick={() => setIsSettingsModalOpen(false)}>Close</button>
+      </Modal>
+
+      <Modal
         isOpen={isSaveModalOpen}
         onRequestClose={() => setIsSaveModalOpen(false)}
         contentLabel="Save Game"
@@ -680,7 +1129,7 @@ const SoccerPitch = ({ userType }) => {
             marginRight: '-50%',
             transform: 'translate(-50%, -50%)',
             width: '50%',
-            maxHeight: '60%', // Make the modal smaller
+            maxHeight: '60%',
             overflowY: 'auto',
             background: '#2e2e2e',
             padding: '20px',
@@ -690,19 +1139,19 @@ const SoccerPitch = ({ userType }) => {
         }}
       >
         <h2>Save Game</h2>
-            <input
-            type="text"
-            value={gameName}
-            onChange={(e) => setGameName(e.target.value)}
-            placeholder="Enter game name"
-            style={{
-                width: '97%',
-                padding: '10px',
-                margin: '5px',
-                borderRadius: '5px',
-                border: '1px solid #ccc',
-                marginRight: '20px'  // Added this line to move the element to the left by 20px
-            }}
+        <input
+          type="text"
+          value={gameName}
+          onChange={(e) => setGameName(e.target.value)}
+          placeholder="Enter game name"
+          style={{
+            width: '97%',
+            padding: '10px',
+            margin: '5px',
+            borderRadius: '5px',
+            border: '1px solid #ccc',
+            marginRight: '20px'
+          }}
         />
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <button 
@@ -735,7 +1184,336 @@ const SoccerPitch = ({ userType }) => {
           </button>
         </div>
       </Modal>
+      <Modal
+        isOpen={isAddActionModalOpen}
+        onRequestClose={() => setIsAddActionModalOpen(false)}
+        contentLabel="Add Action"
+        style={{
+          content: {
+            top: '50%',
+            left: '50%',
+            right: 'auto',
+            bottom: 'auto',
+            marginRight: '-50%',
+            transform: 'translate(-50%, -50%)',
+            width: '50%',
+            maxHeight: '60%',
+            overflowY: 'auto',
+            background: '#2e2e2e',
+            padding: '20px',
+            borderRadius: '10px',
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)'
+          }
+        }}
+      >
+        <h2>Add Action</h2>
+        <div className="form-group">
+          <label>Action Name:</label>
+          <input
+            type="text"
+            value={customInput.action}
+            onChange={(e) => setCustomInput({ ...customInput, action: e.target.value })}
+            placeholder="Enter new action"
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px'
+            }}
+          />
+          <label>Marker Color:</label>
+          <input
+            type="color"
+            value={customInput.color}
+            onChange={(e) => setCustomInput({ ...customInput, color: e.target.value })}
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px'
+            }}
+          />
+          <label>Type:</label>
+          <select
+            value={customInput.type}
+            onChange={(e) => setCustomInput({ ...customInput, type: e.target.value })}
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px'
+            }}
+          >
+            <option value="marker">Marker</option>
+            <option value="line">Line</option>
+          </select>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <button
+            onClick={() => handleAddAction(customInput.action, customInput.color, customInput.type)}
+            style={{
+              background: '#007bff',
+              color: '#fff',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              transition: 'background 0.3s'
+            }}
+          >
+            Add Action
+          </button>
+          <button
+            onClick={() => setIsAddActionModalOpen(false)}
+            style={{
+              background: '#6c757d',
+              color: '#fff',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              transition: 'background 0.3s'
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      </Modal>
+      <Modal
+  isOpen={isDownloadModalOpen}
+  onRequestClose={toggleDownloadModal}
+  contentLabel="Download Filtered Data"
+  style={{
+    content: {
+      top: '50%',
+      left: '50%',
+      right: 'auto',
+      bottom: 'auto',
+      marginRight: '-50%',
+      transform: 'translate(-50%, -50%)',
+      width: '50%',
+      maxHeight: '60%',
+      overflowY: 'auto',
+      background: '#2e2e2e',
+      padding: '20px',
+      borderRadius: '10px',
+      boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+    },
+  }}
+>
+  <h2>Download Filtered Data</h2>
+  <div className="form-group">
+    <label>Team:</label>
+    <select
+      value={downloadTeam}
+      onChange={(e) => setDownloadTeam(e.target.value)}
+      style={{
+        width: '97%',
+        padding: '10px',
+        margin: '5px',
+        borderRadius: '5px',
+        border: '1px solid #ccc',
+        marginRight: '20px',
+      }}
+    >
+      <option value="">All Teams</option>
+      {teams.map((team) => (
+        <option key={team} value={team}>
+          {team}
+        </option>
+      ))}
+    </select>
+  </div>
+  <div className="form-group">
+    <label>Player:</label>
+    <input
+      type="text"
+      value={downloadPlayer}
+      onChange={(e) => setDownloadPlayer(e.target.value)}
+      placeholder="Enter player name"
+      style={{
+        width: '97%',
+        padding: '10px',
+        margin: '5px',
+        borderRadius: '5px',
+        border: '1px solid #ccc',
+        marginRight: '20px',
+      }}
+    />
+  </div>
+  <div className="form-group">
+    <label>Action:</label>
+    <select
+      value={downloadAction}
+      onChange={(e) => setDownloadAction(e.target.value)}
+      style={{
+        width: '97%',
+        padding: '10px',
+        margin: '5px',
+        borderRadius: '5px',
+        border: '1px solid #ccc',
+        marginRight: '20px',
+      }}
+    >
+      <option value="">All Actions</option>
+      {actionCodes.map((action) => (
+        <option key={action} value={action}>
+          {action}
+        </option>
+      ))}
+    </select>
+  </div>
+  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+    <button
+      onClick={handleDownloadFilteredData}
+      style={{
+        background: '#007bff',
+        color: '#fff',
+        padding: '10px 20px',
+        border: 'none',
+        borderRadius: '5px',
+        cursor: 'pointer',
+        transition: 'background 0.3s',
+      }}
+    >
+      Download
+    </button>
+    <button
+      onClick={toggleDownloadModal}
+      style={{
+        background: '#6c757d',
+        color: '#fff',
+        padding: '10px 20px',
+        border: 'none',
+        borderRadius: '5px',
+        cursor: 'pointer',
+        transition: 'background 0.3s',
+      }}
+    >
+      Cancel
+    </button>
+  </div>
+</Modal>
+
+      <Modal
+  isOpen={isScreenshotModalOpen}
+  onRequestClose={toggleScreenshotModal}
+  contentLabel="Download Screenshot"
+  style={{
+    content: {
+      top: '50%',
+      left: '50%',
+      right: 'auto',
+      bottom: 'auto',
+      marginRight: '-50%',
+      transform: 'translate(-50%, -50%)',
+      width: '50%',
+      maxHeight: '60%',
+      overflowY: 'auto',
+      background: '#2e2e2e',
+      padding: '20px',
+      borderRadius: '10px',
+      boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)'
+    }
+  }}
+>
+  <h2>Download Screenshot</h2>
+  <div className="form-group">
+    <label>Team:</label>
+    <select
+      value={screenshotTeam}
+      onChange={(e) => setScreenshotTeam(e.target.value)}
+      style={{
+        width: '97%',
+        padding: '10px',
+        margin: '5px',
+        borderRadius: '5px',
+        border: '1px solid #ccc',
+        marginRight: '20px'
+      }}
+    >
+      <option value="">All Teams</option>
+      {teams.map(team => <option key={team} value={team}>{team}</option>)}
+    </select>
+  </div>
+  <div className="form-group">
+    <label>Player:</label>
+    <input
+      type="text"
+      value={screenshotPlayer}
+      onChange={(e) => setScreenshotPlayer(e.target.value)}
+      placeholder="Enter player name"
+      style={{
+        width: '97%',
+        padding: '10px',
+        margin: '5px',
+        borderRadius: '5px',
+        border: '1px solid #ccc',
+        marginRight: '20px'
+      }}
+    />
+  </div>
+  <div className="form-group">
+    <label>Action:</label>
+    <select
+      value={screenshotAction}
+      onChange={(e) => setScreenshotAction(e.target.value)}
+      style={{
+        width: '97%',
+        padding: '10px',
+        margin: '5px',
+        borderRadius: '5px',
+        border: '1px solid #ccc',
+        marginRight: '20px'
+      }}
+    >
+      <option value="">All Actions</option>
+      {actionCodes.map(action => <option key={action} value={action}>{action}</option>)}
+    </select>
+  </div>
+  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+    <button
+      onClick={handleDownloadScreenshot}
+      style={{
+        background: '#007bff',
+        color: '#fff',
+        padding: '10px 20px',
+        border: 'none',
+        borderRadius: '5px',
+        cursor: 'pointer',
+        transition: 'background 0.3s'
+      }}
+    >
+      Download
+    </button>
+    <button
+      onClick={toggleScreenshotModal}
+      style={{
+        background: '#6c757d',
+        color: '#fff',
+        padding: '10px 20px',
+        border: 'none',
+        borderRadius: '5px',
+        cursor: 'pointer',
+        transition: 'background 0.3s'
+      }}
+    >
+      Cancel
+    </button>
+  </div>
+</Modal>
+
+      <div className="aggregated-data-container">
+        <AggregatedData data={aggregateData} />
+      </div>
     </div>
+
   );
 }
 

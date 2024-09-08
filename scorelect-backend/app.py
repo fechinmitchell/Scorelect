@@ -1,11 +1,13 @@
 import os
 import stripe
+import logging  # Import the logging module
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_talisman import Talisman
 import firebase_admin
 from firebase_admin import credentials, firestore
 from dotenv import load_dotenv
+
 
 load_dotenv()
 
@@ -169,34 +171,27 @@ def stripe_webhook():
     endpoint_secret = os.getenv('STRIPE_WEBHOOK_SECRET')
 
     try:
-        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, endpoint_secret
+        )
+        logging.info(f"Received event: {event['type']}")
 
-        # Log event for debugging
-        print(f"Received event: {event['type']}")
-
-        # Handle specific event types
         if event['type'] == 'invoice.payment_failed':
             subscription_id = event['data']['object']['subscription']
             handle_failed_payment(subscription_id)
-        
-        elif event['type'] == 'customer.subscription.deleted':
-            subscription_id = event['data']['object']['id']
-            handle_subscription_cancel(subscription_id)
-        
-        elif event['type'] == 'customer.subscription.updated':
-            subscription = event['data']['object']
-            handle_subscription_update(subscription)
 
+        # Additional events...
+        
         return jsonify(success=True)
-
+    
     except ValueError as e:
-        # Invalid payload
-        print(f"Webhook error: {str(e)}")
+        logging.error(f"ValueError: {str(e)}")
         return jsonify(error=str(e)), 400
     except stripe.error.SignatureVerificationError as e:
-        # Invalid signature
-        print(f"Signature error: {str(e)}")
+        logging.error(f"SignatureVerificationError: {str(e)}")
         return jsonify(error=str(e)), 400
+
+
 
 # Handle failed payment event from Stripe
 def handle_failed_payment(subscription_id):

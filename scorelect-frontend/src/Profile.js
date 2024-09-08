@@ -28,9 +28,7 @@ const Profile = ({ onLogout }) => {
       const userDoc = await getDoc(doc(firestore, 'users', uid));
       if (userDoc.exists()) {
         const userData = userDoc.data();
-        console.log('User Data:', userData);
         if (userData.subscriptionId) {
-          console.log('Fetching subscription with ID:', userData.subscriptionId);
           const response = await fetch(`${process.env.REACT_APP_API_URL}/get-subscription`, {
             method: 'POST',
             headers: {
@@ -44,14 +42,12 @@ const Profile = ({ onLogout }) => {
           }
   
           const subscriptionData = await response.json();
-          console.log('Subscription Data:', subscriptionData);
           if (subscriptionData.error) {
             console.error('Subscription error:', subscriptionData.error);
           } else {
             setSubscription(subscriptionData);
           }
         } else {
-          console.log('No subscription ID found for user');
           setSubscription(null);
         }
       } else {
@@ -79,7 +75,6 @@ const Profile = ({ onLogout }) => {
       }
 
       const result = await response.json();
-      console.log('Cancel Subscription Result:', result);
       if (result.error) {
         console.error(result.error);
       } else {
@@ -121,7 +116,7 @@ const Profile = ({ onLogout }) => {
               <button className="cancel-button" onClick={handleCancelSubscription}>Cancel Subscription</button>
             </>
           ) : (
-            <p>Please contact scorelectapp@gmail.com with any issues</p>
+            <p>You currently have no active subscription. Please contact support for any issues.</p>
           )}
         </>
       )}

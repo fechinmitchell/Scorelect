@@ -712,7 +712,7 @@ const AmericanFootballPitch = ({ userType }) => {
         <div className="instructions-container">
           <h3>Instructions</h3>
           {renderActionButtons()}
-          <p>Click on the pitch to record an action at that location. Use the buttons above to specify the type of action.</p>
+          <p>Click on an action then on the pitch to record action at that location. Use the buttons above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
           <div className="toggle-switches">
             <label>
               <input type="checkbox" checked={displayPlayerNumber} onChange={() => setDisplayPlayerNumber(!displayPlayerNumber)} />

@@ -74,11 +74,11 @@ const BasketballCourt = ({ userType }) => {
   useEffect(() => {
     // Set initial action buttons
     setActionButtons([
-      { label: 'Shot', value: 'shot', color: '#ff0000', type: 'marker' },
+      { label: 'Shot', value: 'shot', color: '#009900', type: 'marker' },
       { label: 'Miss', value: 'miss', color: '#ffa500', type: 'marker' },
-      { label: 'Pass', value: 'pass', color: '#009900', type: 'line' },
+      { label: 'Pass', value: 'pass', color: '#40bdb2', type: 'line' },
       { label: 'Assist', value: 'assist', color: '#000080', type: 'line' },
-      { label: 'Turnover', value: 'turnover', color: '#aaaaaa', type: 'marker' },
+      { label: 'Turnover', value: 'turnover', color: '#d64242', type: 'marker' },
       { label: 'Rebound', value: 'rebound', color: '#800080', type: 'marker' }
     ]);
   }, []);
@@ -806,7 +806,7 @@ const BasketballCourt = ({ userType }) => {
         <div className="instructions-container">
           <h3>Instructions</h3>
           {renderActionButtons()}
-          <p>Click on the court to record an action at that location. Use the buttons above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
+          <p>Click on an action then on the court to record action at that location. Use the buttons above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
           <div className="toggle-switches">
             <label>
               <input

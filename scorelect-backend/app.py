@@ -1,4 +1,3 @@
-# backend/app.py
 import os
 import stripe
 from flask import Flask, request, jsonify
@@ -162,6 +161,68 @@ def load_games():
         return jsonify(games)
     except Exception as e:
         return jsonify(error=str(e)), 400
+
+@app.route('/stripe-webhook', methods=['POST'])
+def stripe_webhook():
+    payload = request.get_data(as_text=True)
+    sig_header = request.headers.get('Stripe-Signature')
+    endpoint_secret = os.getenv('STRIPE_WEBHOOK_SECRET')
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, endpoint_secret
+        )
+
+        # Handle specific event types
+        if event['type'] == 'invoice.payment_failed':
+            subscription_id = event['data']['object']['subscription']
+            handle_failed_payment(subscription_id)
+        
+        elif event['type'] == 'customer.subscription.deleted':
+            subscription_id = event['data']['object']['id']
+            handle_subscription_cancel(subscription_id)
+        
+        elif event['type'] == 'customer.subscription.updated':
+            subscription = event['data']['object']
+            handle_subscription_update(subscription)
+
+        return jsonify(success=True)
+    
+    except ValueError as e:
+        # Invalid payload
+        return jsonify(error=str(e)), 400
+    except stripe.error.SignatureVerificationError as e:
+        # Invalid signature
+        return jsonify(error=str(e)), 400
+
+def handle_failed_payment(subscription_id):
+    subscription = stripe.Subscription.retrieve(subscription_id)
+    user_doc = db.collection('users').where('subscriptionId', '==', subscription_id).get()
+    if user_doc:
+        for doc in user_doc:
+            user_ref = db.collection('users').document(doc.id)
+            user_ref.set({'role': 'free'}, merge=True)
+
+def handle_subscription_cancel(subscription_id):
+    subscription = stripe.Subscription.retrieve(subscription_id)
+    user_doc = db.collection('users').where('subscriptionId', '==', subscription_id).get()
+    if user_doc:
+        for doc in user_doc:
+            user_ref = db.collection('users').document(doc.id)
+            user_ref.set({'role': 'free', 'subscriptionId': None}, merge=True)
+
+def handle_subscription_update(subscription):
+    subscription_id = subscription['id']
+    status = subscription['status']
+
+    user_doc = db.collection('users').where('subscriptionId', '==', subscription_id).get()
+    if user_doc:
+        for doc in user_doc:
+            user_ref = db.collection('users').document(doc.id)
+            if status == 'active':
+                user_ref.set({'role': 'paid'}, merge=True)
+            else:
+                user_ref.set({'role': 'free'}, merge=True)
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)

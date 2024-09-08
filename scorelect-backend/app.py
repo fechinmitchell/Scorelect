@@ -1,6 +1,6 @@
 import os
 import stripe
-import logging  # Import the logging module
+import logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_talisman import Talisman
@@ -8,8 +8,10 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from dotenv import load_dotenv
 
-
 load_dotenv()
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["http://localhost:3000", "https://scorelect.vercel.app", "https://scorelect.com", "https://www.scorelect.com"]}})
@@ -97,6 +99,7 @@ def create_checkout_session():
 
         return jsonify({'id': session.id})
     except Exception as e:
+        logging.error(f"Error creating checkout session: {str(e)}")
         return jsonify(error=str(e)), 400
 
 @app.route('/cancel-subscription', methods=['POST'])
@@ -110,8 +113,10 @@ def cancel_subscription():
         user_doc_ref = db.collection('users').document(data.get('uid'))
         user_doc_ref.set({'role': 'free', 'subscriptionId': None}, merge=True)
 
+        logging.info(f"Canceled subscription for user {data.get('uid')}")
         return jsonify({"success": True})
     except Exception as e:
+        logging.error(f"Error canceling subscription: {str(e)}")
         return jsonify(error=str(e)), 400
 
 @app.route('/get-subscription', methods=['POST'])
@@ -123,6 +128,7 @@ def get_subscription():
 
         return jsonify(subscription)
     except Exception as e:
+        logging.error(f"Error retrieving subscription: {str(e)}")
         return jsonify(error=str(e)), 400
 
 @app.route('/retrieve-session', methods=['POST'])
@@ -134,6 +140,7 @@ def retrieve_session():
 
         return jsonify(session)
     except Exception as e:
+        logging.error(f"Error retrieving session: {str(e)}")
         return jsonify(error=str(e)), 400
 
 @app.route('/save-game', methods=['POST'])
@@ -147,8 +154,10 @@ def save_game():
         game_doc_ref = db.collection('savedGames').document(user_id).collection('games').document(game_name)
         game_doc_ref.set({'gameData': game_data}, merge=True)
 
+        logging.info(f"Game {game_name} saved for user {user_id}")
         return jsonify({"success": True})
     except Exception as e:
+        logging.error(f"Error saving game: {str(e)}")
         return jsonify(error=str(e)), 400
 
 @app.route('/load-games', methods=['POST'])
@@ -162,6 +171,7 @@ def load_games():
 
         return jsonify(games)
     except Exception as e:
+        logging.error(f"Error loading games: {str(e)}")
         return jsonify(error=str(e)), 400
 
 @app.route('/stripe-webhook', methods=['POST'])
@@ -171,17 +181,21 @@ def stripe_webhook():
     endpoint_secret = os.getenv('STRIPE_WEBHOOK_SECRET')
 
     try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, endpoint_secret
-        )
+        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
         logging.info(f"Received event: {event['type']}")
 
         if event['type'] == 'invoice.payment_failed':
             subscription_id = event['data']['object']['subscription']
             handle_failed_payment(subscription_id)
 
-        # Additional events...
+        elif event['type'] == 'customer.subscription.deleted':
+            subscription_id = event['data']['object']['id']
+            handle_subscription_cancel(subscription_id)
         
+        elif event['type'] == 'customer.subscription.updated':
+            subscription = event['data']['object']
+            handle_subscription_update(subscription)
+
         return jsonify(success=True)
     
     except ValueError as e:
@@ -191,8 +205,6 @@ def stripe_webhook():
         logging.error(f"SignatureVerificationError: {str(e)}")
         return jsonify(error=str(e)), 400
 
-
-
 # Handle failed payment event from Stripe
 def handle_failed_payment(subscription_id):
     try:
@@ -200,17 +212,16 @@ def handle_failed_payment(subscription_id):
         user_doc = db.collection('users').where('subscriptionId', '==', subscription_id).get()
         
         if not user_doc:
-            print(f"No user found for subscription: {subscription_id}")
+            logging.info(f"No user found for subscription: {subscription_id}")
             return
         
         for doc in user_doc:
             user_ref = db.collection('users').document(doc.id)
-            # Set role to 'free' and remove premium access
             user_ref.set({'role': 'free'}, merge=True)
-            print(f"Updated user {doc.id} to free plan due to payment failure.")
+            logging.info(f"Updated user {doc.id} to free plan due to payment failure.")
     
     except Exception as e:
-        print(f"Error handling failed payment for subscription {subscription_id}: {str(e)}")
+        logging.error(f"Error handling failed payment for subscription {subscription_id}: {str(e)}")
 
 # Handle subscription cancellation
 def handle_subscription_cancel(subscription_id):
@@ -219,17 +230,16 @@ def handle_subscription_cancel(subscription_id):
         user_doc = db.collection('users').where('subscriptionId', '==', subscription_id).get()
         
         if not user_doc:
-            print(f"No user found for subscription: {subscription_id}")
+            logging.info(f"No user found for subscription: {subscription_id}")
             return
         
         for doc in user_doc:
             user_ref = db.collection('users').document(doc.id)
-            # Set role to 'free' and clear subscriptionId
             user_ref.set({'role': 'free', 'subscriptionId': None}, merge=True)
-            print(f"Subscription {subscription_id} canceled. Updated user {doc.id} to free plan.")
+            logging.info(f"Subscription {subscription_id} canceled. Updated user {doc.id} to free plan.")
     
     except Exception as e:
-        print(f"Error handling subscription cancel for {subscription_id}: {str(e)}")
+        logging.error(f"Error handling subscription cancel for {subscription_id}: {str(e)}")
 
 # Handle subscription update (e.g., reactivation)
 def handle_subscription_update(subscription):
@@ -239,22 +249,22 @@ def handle_subscription_update(subscription):
         user_doc = db.collection('users').where('subscriptionId', '==', subscription_id).get()
 
         if not user_doc:
-            print(f"No user found for subscription: {subscription_id}")
+            logging.info(f"No user found for subscription: {subscription_id}")
             return
 
         for doc in user_doc:
             user_ref = db.collection('users').document(doc.id)
-            # Set role based on the subscription status
             if status == 'active':
                 user_ref.set({'role': 'paid'}, merge=True)
-                print(f"Updated user {doc.id} to paid plan.")
+                logging.info(f"Updated user {doc.id} to paid plan.")
             else:
                 user_ref.set({'role': 'free'}, merge=True)
-                print(f"Updated user {doc.id} to free plan due to subscription status: {status}")
+                logging.info(f"Updated user {doc.id} to free plan due to subscription status: {status}")
     
     except Exception as e:
-        print(f"Error handling subscription update for {subscription_id}: {str(e)}")
+        logging.error(f"Error handling subscription update for {subscription_id}: {str(e)}")
 
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
+

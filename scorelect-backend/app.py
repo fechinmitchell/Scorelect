@@ -8,6 +8,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
 
 # Set up logging
@@ -184,9 +185,17 @@ def stripe_webhook():
         event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
         logging.info(f"Received event: {event['type']}")
 
+        # Log the entire event data for inspection
+        logging.info(f"Event data: {event['data']['object']}")
+
         if event['type'] == 'invoice.payment_failed':
-            subscription_id = event['data']['object']['subscription']
-            handle_failed_payment(subscription_id)
+            # Check if 'subscription' is present in the event data
+            subscription_id = event['data']['object'].get('subscription')
+            if subscription_id:
+                handle_failed_payment(subscription_id)
+            else:
+                # Log the absence of a subscription
+                logging.warning("No subscription found for invoice.payment_failed event.")
 
         elif event['type'] == 'customer.subscription.deleted':
             subscription_id = event['data']['object']['id']
@@ -205,8 +214,13 @@ def stripe_webhook():
         logging.error(f"SignatureVerificationError: {str(e)}")
         return jsonify(error=str(e)), 400
 
+
 # Handle failed payment event from Stripe
 def handle_failed_payment(subscription_id):
+    if subscription_id is None:
+        logging.error("Subscription ID is missing from the payment failed event.")
+        return
+    
     try:
         subscription = stripe.Subscription.retrieve(subscription_id)
         user_doc = db.collection('users').where('subscriptionId', '==', subscription_id).get()
@@ -222,6 +236,7 @@ def handle_failed_payment(subscription_id):
     
     except Exception as e:
         logging.error(f"Error handling failed payment for subscription {subscription_id}: {str(e)}")
+
 
 # Handle subscription cancellation
 def handle_subscription_cancel(subscription_id):
@@ -262,9 +277,8 @@ def handle_subscription_update(subscription):
                 logging.info(f"Updated user {doc.id} to free plan due to subscription status: {status}")
     
     except Exception as e:
-        logging.error(f"Error handling subscription update for {subscription_id}: {str(e)}")
+        logging.error(f"Error handling subscription update for subscription {subscription_id}: {str(e)}")
 
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
-

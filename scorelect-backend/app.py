@@ -169,9 +169,10 @@ def stripe_webhook():
     endpoint_secret = os.getenv('STRIPE_WEBHOOK_SECRET')
 
     try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, endpoint_secret
-        )
+        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
+
+        # Log event for debugging
+        print(f"Received event: {event['type']}")
 
         # Handle specific event types
         if event['type'] == 'invoice.payment_failed':
@@ -187,42 +188,78 @@ def stripe_webhook():
             handle_subscription_update(subscription)
 
         return jsonify(success=True)
-    
+
     except ValueError as e:
         # Invalid payload
+        print(f"Webhook error: {str(e)}")
         return jsonify(error=str(e)), 400
     except stripe.error.SignatureVerificationError as e:
         # Invalid signature
+        print(f"Signature error: {str(e)}")
         return jsonify(error=str(e)), 400
 
+# Handle failed payment event from Stripe
 def handle_failed_payment(subscription_id):
-    subscription = stripe.Subscription.retrieve(subscription_id)
-    user_doc = db.collection('users').where('subscriptionId', '==', subscription_id).get()
-    if user_doc:
+    try:
+        subscription = stripe.Subscription.retrieve(subscription_id)
+        user_doc = db.collection('users').where('subscriptionId', '==', subscription_id).get()
+        
+        if not user_doc:
+            print(f"No user found for subscription: {subscription_id}")
+            return
+        
         for doc in user_doc:
             user_ref = db.collection('users').document(doc.id)
+            # Set role to 'free' and remove premium access
             user_ref.set({'role': 'free'}, merge=True)
+            print(f"Updated user {doc.id} to free plan due to payment failure.")
+    
+    except Exception as e:
+        print(f"Error handling failed payment for subscription {subscription_id}: {str(e)}")
 
+# Handle subscription cancellation
 def handle_subscription_cancel(subscription_id):
-    subscription = stripe.Subscription.retrieve(subscription_id)
-    user_doc = db.collection('users').where('subscriptionId', '==', subscription_id).get()
-    if user_doc:
+    try:
+        subscription = stripe.Subscription.retrieve(subscription_id)
+        user_doc = db.collection('users').where('subscriptionId', '==', subscription_id).get()
+        
+        if not user_doc:
+            print(f"No user found for subscription: {subscription_id}")
+            return
+        
         for doc in user_doc:
             user_ref = db.collection('users').document(doc.id)
+            # Set role to 'free' and clear subscriptionId
             user_ref.set({'role': 'free', 'subscriptionId': None}, merge=True)
+            print(f"Subscription {subscription_id} canceled. Updated user {doc.id} to free plan.")
+    
+    except Exception as e:
+        print(f"Error handling subscription cancel for {subscription_id}: {str(e)}")
 
+# Handle subscription update (e.g., reactivation)
 def handle_subscription_update(subscription):
-    subscription_id = subscription['id']
-    status = subscription['status']
+    try:
+        subscription_id = subscription['id']
+        status = subscription['status']
+        user_doc = db.collection('users').where('subscriptionId', '==', subscription_id).get()
 
-    user_doc = db.collection('users').where('subscriptionId', '==', subscription_id).get()
-    if user_doc:
+        if not user_doc:
+            print(f"No user found for subscription: {subscription_id}")
+            return
+
         for doc in user_doc:
             user_ref = db.collection('users').document(doc.id)
+            # Set role based on the subscription status
             if status == 'active':
                 user_ref.set({'role': 'paid'}, merge=True)
+                print(f"Updated user {doc.id} to paid plan.")
             else:
                 user_ref.set({'role': 'free'}, merge=True)
+                print(f"Updated user {doc.id} to free plan due to subscription status: {status}")
+    
+    except Exception as e:
+        print(f"Error handling subscription update for {subscription_id}: {str(e)}")
+
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)

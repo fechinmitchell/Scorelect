@@ -1,33 +1,141 @@
+/* Main wrapper to hold pitch, instructions, and setup */
+.main-scroll-container {
+  display: flex;
+  flex-direction: row; /* Arrange children horizontally */
+  width: 100%; /* Make it take up the full width */
+  overflow-x: auto; /* Enable horizontal scrolling */
+  white-space: nowrap; /* Prevent wrapping */
+}
+
+/* Pitch and instructions container should scroll together */
+.content {
+  display: flex;
+  flex-direction: column; /* Stack pitch and data vertically */
+  width: 100%; /* Ensure full width */
+  overflow: auto; /* Allow scrolling if needed */
+}
+
 .pitch-container {
-  background-color: #2e2e2e; /* Dark background for the pitch */
+  background-color: #2e2e2e;
   padding: 20px;
   border-radius: 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  flex: 1; /* Make the pitch container take available space */
-  overflow: auto; /* Allow scrolling */
+  width: 100%; /* Ensure the pitch container takes full width */
+  overflow: hidden; /* Hide overflow to avoid scrolling issues */
   touch-action: pinch-zoom; /* Allow pinch-to-zoom */
+}
+
+.scroll-container {
+  display: flex; /* Flex to arrange children horizontally */
+  overflow-x: auto; /* Enable horizontal scrolling */
+  white-space: nowrap; /* Prevent wrapping of content */
+  width: 100%; /* Take up full width */
+}
+
+/* Team buttons container to align them in a row */
+.team-buttons-container {
+  display: flex;
+  flex-direction: row; /* Align buttons horizontally */
+  justify-content: center; /* Center the buttons */
+  gap: 10px; /* Add some space between the buttons */
+  flex-wrap: wrap; /* Allow wrapping in case the buttons exceed the available width */
+}
+
+.setup-team-container {
+  background-color: #2e2e2e;
+  padding: 20px;
+  border-radius: 10px;
+  margin: 20px 0;
+  color: white;
+  max-width: 95%; 
+  width: 100%; 
+  display: flex;
+  flex-direction: column;
+}
+
+.setup-team-container h3 {
+  text-align: center;
+  margin-bottom: 10px; 
+}
+
+.team-players {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap; 
+  justify-content: space-between; 
+  width: 100%; 
+}
+
+.team-players button {
+  flex-grow: 1;
+  padding: 10px;
+  text-align: center;
+  background-color: #007bff; 
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.team-players button:hover {
+  background-color: #0056b3;
+}
+
+.button {
+  background-color: #501387;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  margin: 5px;
+  flex: 1;
+  text-align: center;
+}
+
+.button:hover {
+  background-color: #5e2e8f;
 }
 
 .pitch-graphic {
   width: 100%;
   height: auto;
-  max-width: 1000px; /* Set a max-width for the pitch graphic */
+  max-width: 1000px;
 }
 
 .content {
   display: flex;
-  flex-direction: row-reverse; /* Ensure pitch and instructions are side by side */
-  align-items: center;
+  padding: 20px;
+  flex-direction: row-reverse;
+  align-items: flex-start;
   width: 100%;
-  overflow: auto; /* Ensure the content can scroll */
+  overflow: auto;
+}
+
+.pitch-and-data-container {
+  display: flex;
+  flex-direction: column;
+  flex: 2;
+  padding-right: 10px;
+  align-items: center;
+}
+
+.aggregated-data-container {
+  background-color: #fff;
+  padding: 20px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 5px;
+  width: 100%;
+  max-width: 1000px;
+  margin-top: 500px; /* Push it 500px lower */
 }
 
 .button-container {
   display: flex;
-  flex-direction: column; /* Stack buttons vertically */
+  flex-direction: column;
   justify-content: space-between;
   width: 100%;
 }
@@ -36,10 +144,11 @@
   background-color: #501387;
   color: white;
   border: none;
-  padding: 10px 20px; /* Adjust padding for consistent button size */
+  padding: 10px 20px;
   cursor: pointer;
-  font-size: 0.8rem; /* Smaller font size */
-  margin: 5px 0; /* Add margin between buttons */
+  font-size: 0.8rem;
+  margin: 5px 0;
+  width: 100%;
 }
 
 .button:hover {
@@ -53,98 +162,42 @@
 
 .action-button {
   background-color: #501387;
-  color: rgb(184, 184, 184); /* Change text color to white */
+  color: rgb(184, 184, 184); 
   border: 1px solid;
   padding: 5px 10px;
   cursor: pointer;
   font-size: 0.8rem;
   margin: 5px 0;
+  width: 100%;
 }
 
-.action-button.pass {
-  border-color: blue;
-}
-
-.action-button.assist {
-  border-color: green;
-}
-
-.action-button.shot {
-  border-color: red;
-}
-
-.action-button.miss {
-  border-color: yellow;
-}
-
-.action-button.turnover {
-  border-color: orange;
-}
-
-.action-button.rebound {
-  border-color: purple;
-}
-
-.action-button.run {
-  border-color: green;
-}
-
-.action-button.tackle {
-  border-color: red;
-}
-
-.action-button.touchdown {
-  border-color: yellow;
-}
-
-.action-button.fieldgoal {
-  border-color: purple;
-}
-
-.action-button.interception {
-  border-color: orange;
-}
-
-.action-button.fumble {
-  border-color: brown;
-}
-
-.action-button.badpass {
-  border-color: yellow;
-}
-
-.action-button.kickout {
-  border-color: purple;
-}
-
-.action-button.badkickout {
-  border-color: orange;
-}
-
-.action-button.action {
-  border-color: green;
-}
-
-.action-button.badaction {
-  border-color: red;
-}
+.action-button.pass { border-color: blue; }
+.action-button.assist { border-color: green; }
 
 .instructions-container {
-  background-color: #2e2e2e;
+  max-width: 280px; /* Limit the width so that the content stays inside */
+  width: 100%; /* Ensure it adjusts according to available space */
   padding: 20px;
+  background-color: #2e2e2e;
   border-radius: 10px;
-  margin-right: 20px; /* Space between pitch and instructions */
   color: white;
-  max-width: 300px; /* Adjust the max-width as needed */
-  flex-shrink: 0; /* Prevent instructions from shrinking */
+  word-wrap: break-word; /* Ensure long words wrap correctly */
+  overflow: hidden; /* Hide any overflowing content */
+  box-sizing: border-box; /* Ensure padding and width behave properly */
 }
 
 .instructions-container h3,
-.instructions-container p,
-.instructions-container ul,
-.instructions-container li {
-  color: white;
+.instructions-container p {
+  margin-bottom: 10px;
 }
+
+.instructions-container p {
+  color: white;
+  font-size: 14px;
+  line-height: 1.4; /* Improve readability */
+  white-space: normal; /* Ensure text wraps properly */
+}
+
 
 .dialog-container {
   position: fixed;
@@ -157,8 +210,8 @@
   border: 1px solid rgb(0, 0, 0);
   max-width: 400px;
   width: 100%;
-  max-height: 95vh; /* Adjust the height as needed */
-  overflow-y: auto; /* Make the dialog scrollable */ 
+  max-height: 95vh;
+  overflow-y: auto;
 }
 
 .form-group {
@@ -181,43 +234,38 @@
   color: white;
 }
 
+/* Media Queries */
 @media (max-width: 768px) {
   .main-container {
-      flex-direction: column;
-  }
-
-  .sidebar {
-      width: 100%;
-      margin-bottom: 20px;
+    flex-direction: column;
   }
 
   .content-area {
-      flex: 1;
-      overflow: visible;
+    flex: 1;
+    overflow: visible;
   }
 
   .pitch-container {
-      width: 100%;
-      padding: 10px;
-      overflow-x: auto; /* Allow horizontal scrolling */
+    width: 100%;
+    padding: 10px;
+    overflow-x: auto;
   }
 
   .instructions-container {
-      margin-right: 0;
-      margin-top: 20px; /* Space between pitch and instructions for smaller screens */
+    margin-top: 20px;
   }
 }
 
 @media (max-width: 480px) {
   .button-container {
-      flex-direction: row; /* Stack buttons horizontally */
-      flex-wrap: wrap; /* Allow buttons to wrap to the next line */
-      justify-content: space-between;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
   }
 
   .button {
-      width: 48%; /* Take nearly half the width */
-      margin: 5px 1%; /* Add margin between buttons */
+    width: 48%;
+    margin: 5px 1%;
   }
 }
 
@@ -236,14 +284,12 @@
   flex: 1;
 }
 
-/* Additional media queries for iPhone screen sizes */
-@media (max-width: 375px) { /* iPhone SE, iPhone 6/7/8 */
+@media (max-width: 375px) {
   .pitch-container {
     padding: 10px;
   }
 
   .instructions-container {
-    margin-right: 0;
     margin-top: 10px;
     max-width: 100%;
   }
@@ -259,13 +305,12 @@
   }
 }
 
-@media (max-width: 320px) { /* iPhone 5/5S/5C */
+@media (max-width: 320px) {
   .pitch-container {
     padding: 5px;
   }
 
   .instructions-container {
-    margin-right: 0;
     margin-top: 5px;
     max-width: 100%;
   }
@@ -281,8 +326,7 @@
   }
 }
 
-/* Landscape mode adjustments */
-@media (max-width: 667px) and (orientation: landscape) { /* iPhone 6/7/8 Plus in landscape */
+@media (max-width: 667px) and (orientation: landscape) {
   .pitch-container {
     flex-direction: row;
     padding: 10px;
@@ -306,18 +350,7 @@
   }
 }
 
-.radio-buttons {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 10px;
-}
-
-.radio-buttons label {
-  margin-right: 10px;
-}
-
-
-@media (max-width: 568px) and (orientation: landscape) { /* iPhone SE in landscape */
+@media (max-width: 568px) and (orientation: landscape) {
   .pitch-container {
     flex-direction: row;
     padding: 5px;

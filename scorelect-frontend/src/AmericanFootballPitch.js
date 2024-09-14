@@ -16,7 +16,7 @@ import './AggregatedData.css';
 const AmericanFootballPitch = ({ userType }) => {
   const [coords, setCoords] = useState([]);
   const [currentCoords, setCurrentCoords] = useState([]);
-  const [actionType, setActionType] = useState('');
+  const [actionType, setActionType] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [openLineDialog, setOpenLineDialog] = useState(false);
   const [formData, setFormData] = useState({
@@ -31,7 +31,7 @@ const AmericanFootballPitch = ({ userType }) => {
     from: null,
     to: null,
   });
-  const [isModalOpen, setIsModalOpen] = useState(false);
+ const [isModalOpen, setIsModalOpen] = useState(false);
   const [customInput, setCustomInput] = useState({ action: '', team: '', position: '', pressure: '', foot: '', color: '#000000', type: 'marker' });
   const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
@@ -53,17 +53,27 @@ const AmericanFootballPitch = ({ userType }) => {
   const [pitchColor, setPitchColor] = useState('#00A86B');
   const [lineColor, setLineColor] = useState('#FFFFFF');
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [displayPlayerNumber, setDisplayPlayerNumber] = useState(false);
+  const [displayPlayerName, setDisplayPlayerName] = useState(false);
+  const [teams, setTeams] = useState([{ name: '', players: [] }]);
+  const [isSetupTeamsModalOpen, setIsSetupTeamsModalOpen] = useState(false);
+  const [team1Players, setTeam1Players] = useState(Array(11).fill({ name: '' }));
+  const [team2Players, setTeam2Players] = useState(Array(11).fill({ name: '' }));
+  const [team1Color, setTeam1Color] = useState({ main: '#FF0000', secondary: '#FFFFFF' }); // Arsenal (Red and White)
+  const [team2Color, setTeam2Color] = useState({ main: '#0000FF', secondary: '#FFFFFF' }); // Brighton (Blue and White)
+  const [isSetupTeamModalOpen, setIsSetupTeamModalOpen] = useState(false); // State for Setup Team modal
+  const [team1, setTeam1] = useState('');
+  const [team2, setTeam2] = useState('');
 
   const pitchWidth = 120;
   const pitchHeight = 53.3;
-  const [canvasSize, setCanvasSize] = useState({ width: 960, height: 426.4 });
+  const [canvasSize, setCanvasSize] = useState({ width: 800, height: 355.33 });
   const [zoomLevel, setZoomLevel] = useState(1);
   const xScale = canvasSize.width / pitchWidth;
   const yScale = canvasSize.height / pitchHeight;
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [gameName, setGameName] = useState('');
-  const [displayPlayerNumber, setDisplayPlayerNumber] = useState(false);
-  const [displayPlayerName, setDisplayPlayerName] = useState(false);
+  const [showSetupTeamsContainer, setShowSetupTeamsContainer] = useState(false);
 
   useEffect(() => {
     if (location.state && location.state.loadedCoords) {
@@ -83,6 +93,12 @@ const AmericanFootballPitch = ({ userType }) => {
       { label: 'Fumble', value: 'fumble', color: '#8B4513', type: 'marker' },
     ]);
   }, []);
+
+
+  const handleSetupTeams = () => {
+    setIsSetupTeamModalOpen(false);
+    setShowSetupTeamsContainer(true);
+  };  
 
   const handleSaveGame = async () => {
     const auth = getAuth();
@@ -111,7 +127,7 @@ const AmericanFootballPitch = ({ userType }) => {
     'fumble',
   ];
 
-  const nflTeams = [
+  const initialNFLTeams = [
     'Patriots',
     'Bills',
     'Dolphins',
@@ -165,100 +181,110 @@ const AmericanFootballPitch = ({ userType }) => {
 
   const [actionCodes, setActionCodes] = useState(initialActionCodes);
   const [positions, setPositions] = useState(initialPositions);
-  const [teams, setTeams] = useState(nflTeams);
   const [recentActions, setRecentActions] = useState([]);
   const [recentTeams, setRecentTeams] = useState([]);
+  const [NFLTeams, setNFLTeams] = useState(initialNFLTeams);
 
-  useEffect(() => {
-    const handleKeyPress = (e) => {
-      if (e.key === 'p') setActionType('pass');
-      if (e.key === 'r') setActionType('run');
-      if (e.key === 't') setActionType('tackle');
-      if (e.key === 'd') setActionType('touchdown');
-      if (e.key === 'f') setActionType('field goal');
-      if (e.key === 'i') setActionType('interception');
-      if (e.key === 'm') setActionType('fumble');
-    };
-    window.addEventListener('keypress', handleKeyPress);
-    return () => {
-      window.removeEventListener('keypress', handleKeyPress);
-    };
-  }, []);
+    useEffect(() => {
+      const handleKeyPress = (e) => {
+        if (e.key === 'p') setActionType('pass');
+        if (e.key === 'r') setActionType('run');
+        if (e.key === 't') setActionType('tackle');
+        if (e.key === 'd') setActionType('touchdown');
+        if (e.key === 'f') setActionType('field goal');
+        if (e.key === 'i') setActionType('interception');
+      };
+      window.addEventListener('keypress', handleKeyPress);
+      return () => {
+        window.removeEventListener('keypress', handleKeyPress);
+      };
+    }, []);
+  
 
-  useEffect(() => {
-    const auth = getAuth();
-    onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setUser(user);
-        const docRef = doc(firestore, 'users', user.uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const userData = docSnap.data();
-          const lastDownloadDate = userData.lastDownloadDate;
-          const today = new Date().toLocaleDateString();
-          if (lastDownloadDate === today) {
-            setDownloadsRemaining(userData.downloadsRemaining);
+    useEffect(() => {
+      const auth = getAuth();
+      onAuthStateChanged(auth, async (user) => {
+        if (user) {
+          setUser(user);
+          const docRef = doc(firestore, 'users', user.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const userData = docSnap.data();
+            const lastDownloadDate = userData.lastDownloadDate;
+            const today = new Date().toLocaleDateString();
+            if (lastDownloadDate === today) {
+              setDownloadsRemaining(userData.downloadsRemaining);
+            } else {
+              await setDoc(docRef, { lastDownloadDate: today, downloadsRemaining: 1 }, { merge: true });
+              setDownloadsRemaining(1);
+            }
           } else {
-            await setDoc(docRef, { lastDownloadDate: today, downloadsRemaining: 1 }, { merge: true });
+            await setDoc(docRef, { lastDownloadDate: new Date().toLocaleDateString(), downloadsRemaining: 1 });
             setDownloadsRemaining(1);
           }
         } else {
-          await setDoc(docRef, { lastDownloadDate: new Date().toLocaleDateString(), downloadsRemaining: 1 });
-          setDownloadsRemaining(1);
+          const storedDownloadCount = localStorage.getItem('downloadCount');
+          const lastDownloadDate = localStorage.getItem('lastDownloadDate');
+          const today = new Date().toLocaleDateString();
+          if (lastDownloadDate === today) {
+            setDownloadsRemaining(parseInt(storedDownloadCount, 10) || 0);
+          } else {
+            localStorage.setItem('lastDownloadDate', today);
+            localStorage.setItem('downloadCount', '1');
+            setDownloadsRemaining(1);
+          }
         }
-      } else {
-        const storedDownloadCount = localStorage.getItem('downloadCount');
-        const lastDownloadDate = localStorage.getItem('lastDownloadDate');
-        const today = new Date().toLocaleDateString();
-        if (lastDownloadDate === today) {
-          setDownloadsRemaining(parseInt(storedDownloadCount, 10) || 0);
-        } else {
-          localStorage.setItem('lastDownloadDate', today);
-          localStorage.setItem('downloadCount', '1');
-          setDownloadsRemaining(1);
+      });
+    }, []);
+
+    const handleClick = (e) => {
+      const stage = e.target.getStage();
+      const point = stage.getPointerPosition();
+      const newCoord = { x: point.x / xScale, y: point.y / yScale };
+  
+      if (actionType && actionType.type === 'line') {
+        setCurrentCoords([...currentCoords, newCoord]);
+        if (currentCoords.length === 1) {
+          setFormData({ ...formData, from: currentCoords[0], to: newCoord, type: actionType.value });
+          setOpenLineDialog(true);
         }
+      } else if (actionType) {
+        setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType.value });
+        setOpenDialog(true);
       }
+    };
+  
+    const handleTap = (e) => {
+      handleClick(e);
+    };
+
+
+  const handlePlayerClick = (team, playerName, playerNumber) => {
+    setFormData({
+      ...formData,
+      team: team,
+      playerName: playerName,
+      player: playerNumber,
     });
-  }, []);
-
-  const handleClick = (e) => {
-    const stage = e.target.getStage();
-    const point = stage.getPointerPosition();
-    const newCoord = { x: point.x / xScale, y: point.y / yScale };
-
-    if (actionType && actionType.type === 'line') {
-      setCurrentCoords([...currentCoords, newCoord]);
-      if (currentCoords.length === 1) {
-        setFormData({ ...formData, from: currentCoords[0], to: newCoord, type: actionType.value });
-        setOpenLineDialog(true);
-      }
-    } else if (actionType) {
-      setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType.value });
-      setOpenDialog(true);
-    }
   };
-
-  const handleTap = (e) => {
-    handleClick(e);
-  };
-
-  const handleRightClick = (e) => {
-    e.evt.preventDefault();
-    const stage = e.target.getStage();
-    const point = stage.getPointerPosition();
-    setCurrentCoords({ x: point.x / xScale, y: point.y / yScale });
-    setIsContextMenuOpen(true);
-    setContextMenuPosition({ x: point.x, y: point.y });
-  };
-
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
-  };
-
-  const handleCloseLineDialog = () => {
-    setOpenLineDialog(false);
-  };
-
+  
+    const handleRightClick = (e) => {
+      e.evt.preventDefault();
+      const stage = e.target.getStage();
+      const point = stage.getPointerPosition();
+      setCurrentCoords({ x: point.x / xScale, y: point.y / yScale });
+      setIsContextMenuOpen(true);
+      setContextMenuPosition({ x: point.x, y: point.y });
+    };
+  
+    const handleCloseDialog = () => {
+      setOpenDialog(false);
+    };
+  
+    const handleCloseLineDialog = () => {
+      setOpenLineDialog(false);
+    };
+  
   const handleFormSubmit = async () => {
     if (customInput.action) {
       setActionCodes([...actionCodes, customInput.action]);
@@ -483,14 +509,6 @@ const AmericanFootballPitch = ({ userType }) => {
   const handleResize = (width, height) => {
     setCanvasSize({ width, height });
   };
-  
-  const handleAddAction = (newAction, newColor, newType) => {
-    if (!actionCodes.includes(newAction)) {
-      setActionButtons([...actionButtons, { label: newAction.charAt(0).toUpperCase() + newAction.slice(1), value: newAction, color: newColor, type: newType }]);
-      setActionCodes([...actionCodes, newAction]);
-    }
-    setIsAddActionModalOpen(false);
-  };
 
   const renderFootballField = () => (
     <Layer>
@@ -504,8 +522,8 @@ const AmericanFootballPitch = ({ userType }) => {
       <Rect x={canvasSize.width - xScale * 10} y={0} width={xScale * 10} height={canvasSize.height} fill="#FF0000" opacity={0.3} />
 
       {/* "SCORELECT" in the end zones */}
-      <Text text="SCORELECT" x={xScale * 2.5} y={canvasSize.height / 1.175} fontSize={canvasSize.width / 20} fill="#FFF" rotation={-90} align="center" />
-      <Text text="SCORELECT" x={canvasSize.width - xScale * 2.5} y={canvasSize.height / 6} fontSize={canvasSize.width / 20} fill="#FFF" rotation={90} align="center" />
+      <Text text="SCORELECT.COM" x={xScale * 2.5} y={canvasSize.height / 1.07} fontSize={canvasSize.width / 22.5} fill="#FFF" rotation={-90} align="center" />
+      <Text text="SCORELECT.COM" x={canvasSize.width - xScale * 2.5} y={canvasSize.height / 14} fontSize={canvasSize.width / 22.5} fill="#FFF" rotation={90} align="center" />
 
       {/* Yard lines */}
       {[...Array(11)].map((_, i) => (
@@ -656,6 +674,14 @@ const AmericanFootballPitch = ({ userType }) => {
       }
     });
   };
+  
+  const handleAddAction = (newAction, newColor, newType) => {
+    if (!actionCodes.includes(newAction)) {
+      setActionButtons([...actionButtons, { label: newAction.charAt(0).toUpperCase() + newAction.slice(1), value: newAction, color: newColor, type: newType }]);
+      setActionCodes([...actionCodes, newAction]);
+    }
+    setIsAddActionModalOpen(false);
+  };
 
   const renderActionButtons = () => (
     <div className="action-buttons">
@@ -676,6 +702,7 @@ const AmericanFootballPitch = ({ userType }) => {
       <button className="action-button add-action" onClick={() => setIsAddActionModalOpen(true)}>Add Action</button>
     </div>
   );
+
   
   const renderContextMenu = () => (
     <div className="context-menu" style={{ top: contextMenuPosition.y, left: contextMenuPosition.x }}>
@@ -688,6 +715,66 @@ const AmericanFootballPitch = ({ userType }) => {
       <button onClick={handleFormSubmit}>Submit</button>
     </div>
   );
+
+  const addPlayerToTeam1 = () => {
+    setTeam1Players([...team1Players, { name: '', number: '' }]);
+  };
+  
+  const addPlayerToTeam2 = () => {
+    setTeam2Players([...team2Players, { name: '', number: '' }]);
+  };
+
+  const updatePlayerInTeam1 = (index, field, value) => {
+    const updatedPlayers = team1Players.map((player, i) =>
+      i === index ? { ...player, [field]: value } : player
+    );
+    setTeam1Players(updatedPlayers);
+  };
+
+  const updatePlayerInTeam2 = (index, field, value) => {
+    const updatedPlayers = team2Players.map((player, i) =>
+      i === index ? { ...player, [field]: value } : player
+    );
+    setTeam2Players(updatedPlayers);
+  };
+  
+  const removePlayerFromTeam1 = (index) => {
+    const updatedPlayers = team1Players.filter((_, i) => i !== index);
+    setTeam1Players(updatedPlayers);
+  };
+  
+  const removePlayerFromTeam2 = (index) => {
+    const updatedPlayers = team2Players.filter((_, i) => i !== index);
+    setTeam2Players(updatedPlayers);
+  };
+
+  const renderTeamPlayers = (teamName, teamPlayers, teamColor) => (
+    <div>
+      <h4>{teamName}</h4>
+      <div className="team-players">
+        {teamPlayers.map((player, index) => (
+          <button
+            key={index}
+            onClick={() => handlePlayerClick(teamName, player.name, player.number)}
+            className="player-button"
+            style={{
+              backgroundColor: teamColor.main,
+              color: teamColor.secondary,
+              border: `2px solid ${teamColor.secondary}`,
+              padding: '10px',
+              borderRadius: '5px',
+              marginBottom: '5px',
+              cursor: 'pointer',
+              transition: 'background 0.3s',
+            }}
+          >
+            {player.name} ({player.number})
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
 
   // Aggregate data by team and action
   const aggregateData = coords.reduce((acc, curr) => {
@@ -707,59 +794,81 @@ const AmericanFootballPitch = ({ userType }) => {
   }, [coords]);
 
   return (
+    <div class="scroll-container">
     <div className="pitch-container">
+    {showSetupTeamsContainer && (
+        <div className="setup-team-container">
+          <h3>Setup Team</h3>
+          <div className="team-buttons-wrapper">
+            <div className="team-buttons-container">
+              {renderTeamPlayers(team1, team1Players, team1Color)}
+              {renderTeamPlayers(team2, team2Players, team2Color)}
+            </div>
+          </div>
+        </div>
+      )}
+
+
+
+
       <div className="content">
         <div className="instructions-container">
           <h3>Instructions</h3>
           {renderActionButtons()}
           <p>Click on an action then on the pitch to record action at that location. Use the buttons above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
           <div className="toggle-switches">
-            <label>
-              <input type="checkbox" checked={displayPlayerNumber} onChange={() => setDisplayPlayerNumber(!displayPlayerNumber)} />
-              Player Number
-            </label>
-            <label>
-              <input type="checkbox" checked={displayPlayerName} onChange={() => setDisplayPlayerName(!displayPlayerName)} />
-              Player Name
-            </label>
-          </div>
-          <div className="button-container">
+          <label>
+            <input
+              type="checkbox"
+              checked={displayPlayerNumber}
+              onChange={() => setDisplayPlayerNumber(!displayPlayerNumber)}
+            />
+            Player Number
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={displayPlayerName}
+              onChange={() => setDisplayPlayerName(!displayPlayerName)}
+            />
+            Player Name
+          </label>
+        </div>
+        <div className="button-container">
           <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
           <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
           <button className="button" onClick={handleDownloadData}>{userType === 'free' ? `Download Data (${downloadsRemaining} left)` : 'Download Data (Unlimited)'}</button>
-          <button className="button" onClick={toggleDownloadModal}>Download Filtered Data</button>
-          <button className="button" onClick={toggleScreenshotModal}>Download Screenshot</button>
+          <button className="button" onClick={toggleDownloadModal} disabled={userType === 'free'}> Download Filtered Data </button>
+          <button className="button" onClick={toggleScreenshotModal} disabled={userType === 'free'}>Download Screenshot</button>
           <button className="button" onClick={toggleModal}>View Coordinates</button>
-          <button className="button" onClick={() => setIsSaveModalOpen(true)}>Save Game</button>
+          <button className="button" onClick={() => setIsSaveModalOpen(true) } disabled={userType === 'free'}>Save Game</button>
           <button className="button" onClick={() => setIsSettingsModalOpen(true)}>Settings</button> {/* Settings button */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
-              <button className="button" onClick={() => handleResize(375, 166.4)}>
-                iPhone
-              </button>
-              <button className="button" onClick={() => handleResize(600, 266.6)}>
-                iPad
-              </button>
-              <button className="button" onClick={() => handleResize(960, 426.4)}>
-                Computer
-              </button>
-            </div>
-            <div className="custom-slider-container">
-              <label htmlFor="customZoom">Custom:</label>
-              <input
-                type="range"
-                id="customZoom"
-                min="0.5"
-                max="2"
-                step="0.1"
-                value={zoomLevel}
-                onChange={(e) => {
-                  setZoomLevel(e.target.value);
-                  handleResize(canvasSize.width * e.target.value, canvasSize.height * e.target.value);
-                }}
-              />
-            </div>
+          <button className="button" onClick={() => setIsSetupTeamModalOpen(true)}>Setup Team</button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
+            <button className="button" onClick={() => handleResize(375, 166.56)}>iPhone</button>
+            <button className="button" onClick={() => handleResize(600, 266.50)}>iPad</button>
+            <button className="button" onClick={() => handleResize(800, 355.33)}>Computer</button>
+          </div>
+          <div className="custom-slider-container">
+            <label htmlFor="customZoom">Custom:</label>
+            <input
+              type="range"
+              id="customZoom"
+              min="0.5"
+              max="2"
+              step="0.1"
+              value={zoomLevel}
+              onChange={(e) => {
+                setZoomLevel(e.target.value);
+                handleResize(canvasSize.width * e.target.value, canvasSize.height * e.target.value);
+              }}
+            />
           </div>
         </div>
+        </div>
+
+        <div className="pitch-and-data-container">
+      <div className="stage-container"></div>
         <Stage
           width={canvasSize.width}
           height={canvasSize.height}
@@ -779,55 +888,58 @@ const AmericanFootballPitch = ({ userType }) => {
                   <Line
                     key={index}
                     points={[
-                      coord.from.x ? coord.from.x * xScale : 0,
-                      coord.from.y ? coord.from.y * yScale : 0,
-                      coord.to.x ? coord.to.x * xScale : 0,
-                      coord.to.y ? coord.to.y * yScale : 0,
+                      coord.from.x * xScale,
+                      coord.from.y * yScale,
+                      coord.to.x * xScale,
+                      coord.to.y * yScale
                     ]}
                     stroke={getColor(coord.type)}
                     strokeWidth={2}
                   />
                 );
-              } else if (coord.x !== undefined && coord.y !== undefined) {
-                return (
-                  <Group key={index}>
-                    <Circle
-                      x={coord.x * xScale}
-                      y={coord.y * yScale}
-                      radius={6}
-                      fill={getColor(coord.type)}
-                    />
-                    {displayPlayerNumber && (
-                      <Text
-                        x={coord.x * xScale + 1}
-                        y={coord.y * yScale - 3.5} // Adjusted to align the text above the marker
-                        text={coord.player}
-                        fontSize={8}
-                        fill="white"
-                        align="center"
-                        width={10} // Set the width to ensure consistent alignment
-                        offsetX={coord.player.length === 1 ? 6 : coord.player.length * 3} // Center the text horizontally based on its length
-                      />
-                    )}
-                    {displayPlayerName && (
-                      <Text
-                        x={coord.x * xScale}
-                        y={coord.y * yScale - 16} // Position the name above the marker
-                        text={coord.playerName}
-                        fontSize={10}
-                        fill="black"
-                        align="center"
-                        width={coord.playerName.length * 6} // Adjust the width based on the name length
-                        offsetX={(coord.playerName.length * 6) / 2} // Center the text horizontally
-                      />
-                    )}
-                  </Group>
-                );
               }
-              return null;
-            })}
-          </Layer>
-        </Stage>
+      return (
+        <Group key={index}>
+          <Circle
+            x={coord.x * xScale}
+            y={coord.y * yScale}
+            radius={6}
+            fill={getColor(coord.type)}
+          />
+          {displayPlayerNumber && (
+            <Text
+              x={coord.x * xScale}
+              y={coord.y * yScale - 4}  // Adjusted to align the text vertically better
+              text={coord.player}
+              fontSize={8}
+              fill="white"
+              align="center"
+              width={10}  // Set the width to ensure consistent alignment
+              offsetX={coord.player.length === 1 ? 4.5 : 4.5}  // Fine-tuned offset values for better centering
+              />
+          )}
+          {displayPlayerName && (
+            <Text
+              x={coord.x * xScale}
+              y={coord.y * yScale - 16}  // Position the name above the marker
+              text={coord.playerName}
+              fontSize={10}
+              fill="black"
+              align="center"
+              width={coord.playerName.length * 6}  // Adjust the width based on the name length
+              offsetX={(coord.playerName.length * 6) / 2}  // Center the text horizontally
+            />
+          )}
+        </Group>
+      );
+    })}
+  </Layer>
+</Stage>
+<div className="aggregated-data-container">
+      <AggregatedData data={aggregateData} />
+    </div>
+  </div>
+</div>
 
       </div>
       {openDialog && (
@@ -863,18 +975,19 @@ const AmericanFootballPitch = ({ userType }) => {
           <div className="form-group">
             <label>Team:</label>
             <select name="team" value={formData.team} onChange={handleChange}>
-              <option value="custom">Add New Team</option>
-              {recentTeams.map((team) => (
-                <option key={team} value={team}>
-                  {team}
-                </option>
-              ))}
-              {teams.map((team) => (
-                <option key={team} value={team}>
-                  {team}
-                </option>
-              ))}
-            </select>
+                <option value="custom">Add New Team</option>
+                {recentTeams.map((team) => (
+                  <option key={team.name} value={team.name}>
+                    {team.name}
+                  </option>
+                ))}
+                {teams.map((team) => (
+                  <option key={team.name} value={team.name}>
+                    {team.name}
+                  </option>
+                ))}
+              </select>
+
             {formData.team === 'custom' && (
               <div className="form-group">
                 <label>New Team Name:</label>
@@ -1326,13 +1439,13 @@ const AmericanFootballPitch = ({ userType }) => {
               marginRight: '20px',
             }}
           >
-            <option value="">All Teams</option>
-            {teams.map((team) => (
-              <option key={team} value={team}>
-                {team}
-              </option>
-            ))}
-          </select>
+           <option value="">All Teams</option>
+              {teams.map((team) => (
+                <option key={team.name} value={team.name}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
         </div>
         <div className="form-group">
           <label>Player:</label>
@@ -1443,8 +1556,8 @@ const AmericanFootballPitch = ({ userType }) => {
           >
             <option value="">All Teams</option>
             {teams.map((team) => (
-              <option key={team} value={team}>
-                {team}
+              <option key={team.name} value={team.name}>
+                {team.name}
               </option>
             ))}
           </select>
@@ -1592,11 +1705,237 @@ const AmericanFootballPitch = ({ userType }) => {
         </div>
       </Modal>
 
-      <div className="aggregated-data-container">
-        <AggregatedData data={aggregateData} />
-      </div>
+      {/* Modal for setting up teams */}
+      <Modal
+        isOpen={isSetupTeamModalOpen}
+        onRequestClose={() => setIsSetupTeamModalOpen(false)}
+        contentLabel="Setup Teams"
+        style={{
+          content: {
+            top: '50%',
+            left: '50%',
+            right: 'auto',
+            bottom: 'auto',
+            marginRight: '-50%',
+            transform: 'translate(-50%, -50%)',
+            width: '60%',
+            maxHeight: '80%',
+            overflowY: 'auto',
+            background: '#2e2e2e',
+            padding: '20px',
+            borderRadius: '10px',
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+          },
+        }}
+      >
+        <h2>Setup Teams</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px' }}>
+          <div className="team-setup">
+            <h3>Team 1</h3>
+            <input
+              type="text"
+              value={team1}
+              onChange={(e) => setTeam1(e.target.value)}
+              placeholder="Team 1 Name"
+              style={{
+                width: '90%',
+                padding: '10px',
+                marginBottom: '10px',
+                borderRadius: '5px',
+                border: '1px solid #ccc',
+              }}
+            />
+            <div className="form-group">
+              <label>Main Color (Button):</label>
+              <input
+                type="color"
+                value={team1Color.main}
+                onChange={(e) => setTeam1Color({ ...team1Color, main: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label>Secondary Color (Text):</label>
+              <input
+                type="color"
+                value={team1Color.secondary}
+                onChange={(e) => setTeam1Color({ ...team1Color, secondary: e.target.value })}
+              />
+            </div>
+            <h4>Players</h4>
+            {team1Players.map((player, index) => (
+              <div key={index} style={{ marginBottom: '10px', display: 'flex', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  value={player.name}
+                  onChange={(e) => updatePlayerInTeam1(index, 'name', e.target.value)}
+                  placeholder={`Player ${index + 1} Name`}
+                  style={{
+                    width: '60%',
+                    padding: '10px',
+                    borderRadius: '5px',
+                    border: '1px solid #ccc',
+                    marginRight: '5px',
+                  }}
+                />
+                <input
+                  type="text"
+                  value={player.number}
+                  onChange={(e) => updatePlayerInTeam1(index, 'number', e.target.value)}
+                  placeholder="Number"
+                  style={{
+                    width: '20%',
+                    padding: '10px',
+                    borderRadius: '5px',
+                    border: '1px solid #ccc',
+                    marginRight: '5px',
+                  }}
+                />
+                <button
+                  onClick={() => removePlayerFromTeam1(index)}
+                  style={{
+                    background: '#cf4242',
+                    color: '#fff',
+                    padding: '10px 20px',
+                    border: 'none',
+                    borderRadius: '5px',
+                    cursor: 'pointer',
+                    transition: 'background 0.3s',
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={addPlayerToTeam1}
+              style={{
+                background: '#007bff',  // Fixed color for Add Player button
+                color: '#fff',
+                padding: '10px 20px',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                transition: 'background 0.3s',
+              }}
+            >
+              Add Player
+            </button>
+          </div>
+
+          <div className="team-setup">
+            <h3>Team 2</h3>
+            <input
+              type="text"
+              value={team2}
+              onChange={(e) => setTeam2(e.target.value)}
+              placeholder="Team 2 Name"
+              style={{
+                width: '90%',
+                padding: '10px',
+                marginBottom: '10px',
+                borderRadius: '5px',
+                border: '1px solid #ccc',
+              }}
+            />
+            {/* Team 2 Colors */}
+            <div className="form-group">
+              <label>Main Color (Button):</label>
+              <input
+                type="color"
+                value={team2Color.main}
+                onChange={(e) => setTeam2Color({ ...team2Color, main: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label>Secondary Color (Text):</label>
+              <input
+                type="color"
+                value={team2Color.secondary}
+                onChange={(e) => setTeam2Color({ ...team2Color, secondary: e.target.value })}
+              />
+            </div>
+            <h4>Players</h4>
+            {team2Players.map((player, index) => (
+              <div key={index} style={{ marginBottom: '10px', display: 'flex', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  value={player.name}
+                  onChange={(e) => updatePlayerInTeam2(index, 'name', e.target.value)}
+                  placeholder={`Player ${index + 1} Name`}
+                  style={{
+                    width: '60%',
+                    padding: '10px',
+                    borderRadius: '5px',
+                    border: '1px solid #ccc',
+                    marginRight: '5px',
+                  }}
+                />
+                <input
+                  type="text"
+                  value={player.number}
+                  onChange={(e) => updatePlayerInTeam2(index, 'number', e.target.value)}
+                  placeholder="Number"
+                  style={{
+                    width: '20%',
+                    padding: '10px',
+                    borderRadius: '5px',
+                    border: '1px solid #ccc',
+                    marginRight: '5px',
+                  }}
+                />
+                <button
+                  onClick={() => removePlayerFromTeam2(index)}
+                  style={{
+                    background: '#cf4242',
+                    color: '#fff',
+                    padding: '10px 20px',
+                    border: 'none',
+                    borderRadius: '5px',
+                    cursor: 'pointer',
+                    transition: 'background 0.3s',
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={addPlayerToTeam2}
+              style={{
+                background: '#007bff',
+                color: '#fff',
+                padding: '10px 20px',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                transition: 'background 0.3s',
+              }}
+            >
+              Add Player
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
+          <button
+            onClick={handleSetupTeams}
+            style={{
+              background: '#28a745',
+              color: '#fff',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              transition: 'background 0.3s',
+            }}
+          >
+            Setup Teams
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 };
 
 export default AmericanFootballPitch;
+

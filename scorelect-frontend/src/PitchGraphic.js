@@ -54,6 +54,16 @@ const PitchGraphic = ({ userType }) => {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [displayPlayerNumber, setDisplayPlayerNumber] = useState(false);
   const [displayPlayerName, setDisplayPlayerName] = useState(false);
+  const [teams, setTeams] = useState([{ name: '', players: [] }]);
+  const [isSetupTeamsModalOpen, setIsSetupTeamsModalOpen] = useState(false);
+  const [team1Players, setTeam1Players] = useState(Array(11).fill({ name: '' }));
+  const [team2Players, setTeam2Players] = useState(Array(11).fill({ name: '' }));
+  const [team1Color, setTeam1Color] = useState({ main: '#FF0000', secondary: '#FFFFFF' }); // Arsenal (Red and White)
+  const [team2Color, setTeam2Color] = useState({ main: '#0000FF', secondary: '#FFFFFF' }); // Brighton (Blue and White)
+  const [isSetupTeamModalOpen, setIsSetupTeamModalOpen] = useState(false); // State for Setup Team modal
+  const [team1, setTeam1] = useState('');
+  const [team2, setTeam2] = useState('');
+
 
   const pitchWidth = 145;
   const pitchHeight = 88;
@@ -63,6 +73,7 @@ const PitchGraphic = ({ userType }) => {
   const yScale = canvasSize.height / pitchHeight;
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [gameName, setGameName] = useState('');
+  const [showSetupTeamsContainer, setShowSetupTeamsContainer] = useState(false);
 
     // Aggregate data by team and action
     const aggregateData = coords.reduce((acc, curr) => {
@@ -93,6 +104,10 @@ const PitchGraphic = ({ userType }) => {
       { label: 'Pass Incomplete', value: 'unsuccessful pass', color: '#ffff00', type: 'line' }
     ]);
   }, []);
+
+  const handleSetupTeams = () => {
+    setIsSetupTeamModalOpen(false);
+  };
 
   const handleSaveGame = async () => {
     const auth = getAuth();
@@ -205,6 +220,15 @@ const PitchGraphic = ({ userType }) => {
 
   const handleTap = (e) => {
     handleClick(e);
+  };
+
+    const handlePlayerClick = (team, playerName, playerNumber) => {
+    setFormData({
+      ...formData,
+      team: team,
+      playerName: playerName,
+      player: playerNumber,
+    });
   };
 
   const handleRightClick = (e) => {
@@ -693,62 +717,141 @@ const PitchGraphic = ({ userType }) => {
     </div>
   );
 
+  const addPlayerToTeam1 = () => {
+    setTeam1Players([...team1Players, { name: '', number: '' }]);
+  };
+  
+  const addPlayerToTeam2 = () => {
+    setTeam2Players([...team2Players, { name: '', number: '' }]);
+  };
+  
+  const updatePlayerInTeam1 = (index, field, value) => {
+    const updatedPlayers = team1Players.map((player, i) =>
+      i === index ? { ...player, [field]: value } : player
+    );
+    setTeam1Players(updatedPlayers);
+  };
+  
+  const updatePlayerInTeam2 = (index, field, value) => {
+    const updatedPlayers = team2Players.map((player, i) =>
+      i === index ? { ...player, [field]: value } : player
+    );
+    setTeam2Players(updatedPlayers);
+  };
+  
+  const removePlayerFromTeam1 = (index) => {
+    const updatedPlayers = team1Players.filter((_, i) => i !== index);
+    setTeam1Players(updatedPlayers);
+  };
+  
+  const removePlayerFromTeam2 = (index) => {
+    const updatedPlayers = team2Players.filter((_, i) => i !== index);
+    setTeam2Players(updatedPlayers);
+  };
+
+  const renderTeamPlayers = (teamName, teamPlayers, teamColor) => (
+    <div>
+      <h4>{teamName}</h4>
+      <div className="team-players">
+        {teamPlayers.map((player, index) => (
+          <button
+            key={index}
+            onClick={() => handlePlayerClick(teamName, player.name, player.number)}
+            className="player-button"
+            style={{
+              backgroundColor: teamColor.main,  // Use the team's main color for the button background
+              color: teamColor.secondary,      // Use the team's secondary color for the text
+              border: `2px solid ${teamColor.secondary}`, // Add a border with the secondary color
+              padding: '10px',
+              borderRadius: '5px',
+              marginBottom: '5px',
+              cursor: 'pointer',
+              transition: 'background 0.3s',
+            }}
+          >
+            {player.name} ({player.number})
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+  
+
   return (
+  <div class="scroll-container">
     <div className="pitch-container">
+    {showSetupTeamsContainer && (
+      <div className="setup-team-container">
+        <h3>Setup Team</h3>
+        <div className="team-buttons-wrapper">
+          <div className="team-buttons-container">
+            {renderTeamPlayers(team1, team1Players, team1Color)}
+            {renderTeamPlayers(team2, team2Players, team2Color)}
+          </div>
+        </div>
+      </div>
+    )}
+
+
+
       <div className="content">
         <div className="instructions-container">
           <h3>Instructions</h3>
           {renderActionButtons()}
           <p>Click on an action then on the pitch to record action at that location. Use the buttons above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
           <div className="toggle-switches">
-            <label>
-              <input
-                type="checkbox"
-                checked={displayPlayerNumber}
-                onChange={() => setDisplayPlayerNumber(!displayPlayerNumber)}
-              />
-              Player Number
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={displayPlayerName}
-                onChange={() => setDisplayPlayerName(!displayPlayerName)}
-              />
-              Player Name
-            </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={displayPlayerNumber}
+              onChange={() => setDisplayPlayerNumber(!displayPlayerNumber)}
+            />
+            Player Number
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={displayPlayerName}
+              onChange={() => setDisplayPlayerName(!displayPlayerName)}
+            />
+            Player Name
+          </label>
+        </div>
+        <div className="button-container">
+          <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
+          <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
+          <button className="button" onClick={handleDownloadData}>{userType === 'free' ? `Download Data (${downloadsRemaining} left)` : 'Download Data (Unlimited)'}</button>
+          <button className="button" onClick={toggleDownloadModal} disabled={userType === 'free'}> Download Filtered Data </button>
+          <button className="button" onClick={toggleScreenshotModal} disabled={userType === 'free'}>Download Screenshot</button>
+          <button className="button" onClick={toggleModal}>View Coordinates</button>
+          <button className="button" onClick={() => setIsSaveModalOpen(true) } disabled={userType === 'free'}>Save Game</button>
+          <button className="button" onClick={() => setIsSettingsModalOpen(true)}>Settings</button> {/* Settings button */}
+          <button className="button" onClick={() => setIsSetupTeamModalOpen(true)}>Setup Team</button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
+            <button className="button" onClick={() => handleResize(375, 243.5)}>iPhone</button>
+            <button className="button" onClick={() => handleResize(600, 389.6)}>iPad</button>
+            <button className="button" onClick={() => handleResize(800, 600)}>Computer</button>
           </div>
-          <div className="button-container">
-            <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
-            <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
-            <button className="button" onClick={handleDownloadData}>{userType === 'free' ? `Download Data (${downloadsRemaining} left)` : 'Download Data (Unlimited)'}</button>
-            <button className="button" onClick={toggleDownloadModal}>Download Filtered Data</button>
-            <button className="button" onClick={toggleScreenshotModal}>Download Screenshot</button>
-            <button className="button" onClick={toggleModal}>View Coordinates</button>
-            <button className="button" onClick={() => setIsSaveModalOpen(true)}>Save Game</button>
-            <button className="button" onClick={() => setIsSettingsModalOpen(true)}>Settings</button>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
-              <button className="button" onClick={() => handleResize(375, 227.3)}>iPhone</button>
-              <button className="button" onClick={() => handleResize(600, 363.6)}>iPad</button>
-              <button className="button" onClick={() => handleResize(800, 484.8)}>Computer</button>
-            </div>
-            <div className="custom-slider-container">
-              <label htmlFor="customZoom">Custom:</label>
-              <input
-                type="range"
-                id="customZoom"
-                min="0.5"
-                max="2"
-                step="0.1"
-                value={zoomLevel}
-                onChange={(e) => {
-                  setZoomLevel(e.target.value);
-                  handleResize(canvasSize.width * e.target.value, canvasSize.height * e.target.value);
-                }}
-              />
-            </div>
+          <div className="custom-slider-container">
+            <label htmlFor="customZoom">Custom:</label>
+            <input
+              type="range"
+              id="customZoom"
+              min="0.5"
+              max="2"
+              step="0.1"
+              value={zoomLevel}
+              onChange={(e) => {
+                setZoomLevel(e.target.value);
+                handleResize(canvasSize.width * e.target.value, canvasSize.height * e.target.value);
+              }}
+            />
           </div>
         </div>
+        </div>
+
+    <div className="pitch-and-data-container">
+      <div className="stage-container"></div>
         <Stage
           width={canvasSize.width}
           height={canvasSize.height}
@@ -778,44 +881,50 @@ const PitchGraphic = ({ userType }) => {
                   />
                 );
               }
-              return (
-                <Group key={index}>
-                  <Circle
-                    x={coord.x * xScale}
-                    y={coord.y * yScale}
-                    radius={6}
-                    fill={getColor(coord.type)}
-                  />
-                  {displayPlayerNumber && (
-                    <Text
-                      x={coord.x * xScale}
-                      y={coord.y * yScale - 3.5} // Adjusted to align the text vertically better
-                      text={coord.player}
-                      fontSize={8}
-                      fill="white"
-                      align="center"
-                      width={10} // Set the width to ensure consistent alignment
-                      offsetX={coord.player.length === 1 ? 5 : coord.player.length * 3} // Center the text horizontally based on its length
-                    />
-                  )}
-                  {displayPlayerName && (
-                    <Text
-                      x={coord.x * xScale}
-                      y={coord.y * yScale - 16} // Position the name above the marker
-                      text={coord.playerName}
-                      fontSize={10}
-                      fill="black"
-                      align="center"
-                      width={coord.playerName.length * 6} // Adjust the width based on the name length
-                      offsetX={(coord.playerName.length * 6) / 2} // Center the text horizontally
-                    />
-                  )}
-                </Group>
-              );
-            })}
-          </Layer>
-        </Stage>
-      </div>
+      return (
+        <Group key={index}>
+          <Circle
+            x={coord.x * xScale}
+            y={coord.y * yScale}
+            radius={6}
+            fill={getColor(coord.type)}
+          />
+          {displayPlayerNumber && (
+            <Text
+              x={coord.x * xScale}
+              y={coord.y * yScale - 4}  // Adjusted to align the text vertically better
+              text={coord.player}
+              fontSize={8}
+              fill="white"
+              align="center"
+              width={10}  // Set the width to ensure consistent alignment
+              offsetX={coord.player.length === 1 ? 4.5 : 4.5}  // Fine-tuned offset values for better centering
+              />
+          )}
+          {displayPlayerName && (
+            <Text
+              x={coord.x * xScale}
+              y={coord.y * yScale - 16}  // Position the name above the marker
+              text={coord.playerName}
+              fontSize={10}
+              fill="black"
+              align="center"
+              width={coord.playerName.length * 6}  // Adjust the width based on the name length
+              offsetX={(coord.playerName.length * 6) / 2}  // Center the text horizontally
+            />
+          )}
+        </Group>
+      );
+    })}
+  </Layer>
+</Stage>
+<div className="aggregated-data-container">
+      <AggregatedData data={aggregateData} />
+    </div>
+  </div>
+</div>
+</div>
+
       {openDialog && (
         <div className="dialog-container">
           <h3>Enter Action Details</h3>
@@ -1445,7 +1554,7 @@ const PitchGraphic = ({ userType }) => {
   </div>
 </Modal>
 
-      <Modal
+<Modal
         isOpen={isSettingsModalOpen}
         onRequestClose={() => setIsSettingsModalOpen(false)}
         contentLabel="Settings"
@@ -1457,14 +1566,14 @@ const PitchGraphic = ({ userType }) => {
             bottom: 'auto',
             marginRight: '-50%',
             transform: 'translate(-50%, -50%)',
-            width: '50%',
+            width: '40%',
             maxHeight: '60%',
             overflowY: 'auto',
             background: '#2e2e2e',
             padding: '20px',
             borderRadius: '10px',
-            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)'
-          }
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+          },
         }}
       >
         <h2>Settings</h2>
@@ -1474,6 +1583,14 @@ const PitchGraphic = ({ userType }) => {
             type="color"
             value={pitchColor}
             onChange={(e) => setPitchColor(e.target.value)}
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px',
+            }}
           />
         </div>
         <div className="form-group">
@@ -1482,17 +1599,266 @@ const PitchGraphic = ({ userType }) => {
             type="color"
             value={lineColor}
             onChange={(e) => setLineColor(e.target.value)}
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px',
+            }}
           />
         </div>
-        <div className="button-container">
-          <button onClick={() => setIsSettingsModalOpen(false)}>
-            Save Settings
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <button
+            onClick={() => setIsSettingsModalOpen(false)}
+            style={{
+              background: '#007bff',
+              color: '#fff',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              transition: 'background 0.3s',
+            }}
+          >
+            Close
           </button>
         </div>
       </Modal>
-      <div className="aggregated-data-container">
-        <AggregatedData data={aggregateData} />
-      </div>
+
+      {/* Setup Teams Modal */}
+      <Modal
+        isOpen={isSetupTeamModalOpen}
+        onRequestClose={() => setIsSetupTeamModalOpen(false)}
+        contentLabel="Setup Teams"
+        style={{
+          content: {
+            top: '50%',
+            left: '50%',
+            right: 'auto',
+            bottom: 'auto',
+            marginRight: '-50%',
+            transform: 'translate(-50%, -50%)',
+            width: '60%',
+            maxHeight: '80%',
+            overflowY: 'auto',
+            background: '#2e2e2e',
+            padding: '20px',
+            borderRadius: '10px',
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+          },
+        }}
+      >
+        <h2>Setup Teams</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px' }}>
+          <div className="team-setup">
+            <h3>Team 1</h3>
+            <input
+              type="text"
+              value={team1}
+              onChange={(e) => setTeam1(e.target.value)}
+              placeholder="Team 1 Name"
+              style={{
+                width: '90%',
+                padding: '10px',
+                marginBottom: '10px',
+                borderRadius: '5px',
+                border: '1px solid #ccc',
+              }}
+            />
+            {/* Team 1 Colors */}
+            <div className="form-group">
+              <label>Main Color (Button):</label>
+              <input
+                type="color"
+                value={team1Color.main}
+                onChange={(e) => setTeam1Color({ ...team1Color, main: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label>Secondary Color (Text):</label>
+              <input
+                type="color"
+                value={team1Color.secondary}
+                onChange={(e) => setTeam1Color({ ...team1Color, secondary: e.target.value })}
+              />
+            </div>
+            <h4>Players</h4>
+            {team1Players.map((player, index) => (
+              <div key={index} style={{ marginBottom: '10px', display: 'flex', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  value={player.name}
+                  onChange={(e) => updatePlayerInTeam1(index, 'name', e.target.value)}
+                  placeholder={`Player ${index + 1} Name`}
+                  style={{
+                    width: '60%',
+                    padding: '10px',
+                    borderRadius: '5px',
+                    border: '1px solid #ccc',
+                    marginRight: '5px',
+                  }}
+                />
+                <input
+                  type="text"
+                  value={player.number}
+                  onChange={(e) => updatePlayerInTeam1(index, 'number', e.target.value)}
+                  placeholder="Number"
+                  style={{
+                    width: '20%',
+                    padding: '10px',
+                    borderRadius: '5px',
+                    border: '1px solid #ccc',
+                    marginRight: '5px',
+                  }}
+                />
+                <button
+                  onClick={() => removePlayerFromTeam1(index)}
+                  style={{
+                    background: '#cf4242',
+                    color: '#fff',
+                    padding: '10px 20px',
+                    border: 'none',
+                    borderRadius: '5px',
+                    cursor: 'pointer',
+                    transition: 'background 0.3s',
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={addPlayerToTeam1}
+              style={{
+                background: '#007bff',  // Fixed color for Add Player button
+                color: '#fff',
+                padding: '10px 20px',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                transition: 'background 0.3s',
+              }}
+            >
+              Add Player
+            </button>
+          </div>
+
+          <div className="team-setup">
+            <h3>Team 2</h3>
+            <input
+              type="text"
+              value={team2}
+              onChange={(e) => setTeam2(e.target.value)}
+              placeholder="Team 2 Name"
+              style={{
+                width: '90%',
+                padding: '10px',
+                marginBottom: '10px',
+                borderRadius: '5px',
+                border: '1px solid #ccc',
+              }}
+            />
+            {/* Team 2 Colors */}
+            <div className="form-group">
+              <label>Main Color (Button):</label>
+              <input
+                type="color"
+                value={team2Color.main}
+                onChange={(e) => setTeam2Color({ ...team2Color, main: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label>Secondary Color (Text):</label>
+              <input
+                type="color"
+                value={team2Color.secondary}
+                onChange={(e) => setTeam2Color({ ...team2Color, secondary: e.target.value })}
+              />
+            </div>
+            <h4>Players</h4>
+            {team2Players.map((player, index) => (
+              <div key={index} style={{ marginBottom: '10px', display: 'flex', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  value={player.name}
+                  onChange={(e) => updatePlayerInTeam2(index, 'name', e.target.value)}
+                  placeholder={`Player ${index + 1} Name`}
+                  style={{
+                    width: '60%',
+                    padding: '10px',
+                    borderRadius: '5px',
+                    border: '1px solid #ccc',
+                    marginRight: '5px',
+                  }}
+                />
+                <input
+                  type="text"
+                  value={player.number}
+                  onChange={(e) => updatePlayerInTeam2(index, 'number', e.target.value)}
+                  placeholder="Number"
+                  style={{
+                    width: '20%',
+                    padding: '10px',
+                    borderRadius: '5px',
+                    border: '1px solid #ccc',
+                    marginRight: '5px',
+                  }}
+                />
+                <button
+                  onClick={() => removePlayerFromTeam2(index)}
+                  style={{
+                    background: '#cf4242',
+                    color: '#fff',
+                    padding: '10px 20px',
+                    border: 'none',
+                    borderRadius: '5px',
+                    cursor: 'pointer',
+                    transition: 'background 0.3s',
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={addPlayerToTeam2}
+              style={{
+                background: '#007bff',  // Fixed color for Add Player button
+                color: '#fff',
+                padding: '10px 20px',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                transition: 'background 0.3s',
+              }}
+            >
+              Add Player
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
+          <button
+            onClick={() => {
+              setShowSetupTeamsContainer(true); // Set the state to show the container above the pitch graphic
+              setIsSetupTeamModalOpen(false); // Close the modal after pressing the button
+            }}
+            style={{
+              background: '#28a745', // Fixed color for Setup Teams button
+              color: '#fff',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              transition: 'background 0.3s',
+            }}
+          >
+            Setup Teams
+          </button>
+        </div>
+      </Modal>
 
     </div>
   );

@@ -54,6 +54,7 @@ const SoccerPitch = ({ userType }) => {
   const [team2Color, setTeam2Color] = useState({ main: '#0000FF', secondary: '#FFFFFF' }); // Brighton (Blue and White)
 
 
+
   const stageRef = useRef();
   const [downloadsRemaining, setDownloadsRemaining] = useState(1);
   const [user, setUser] = useState(null);
@@ -73,6 +74,8 @@ const SoccerPitch = ({ userType }) => {
   const [gameName, setGameName] = useState('');
   const [displayPlayerNumber, setDisplayPlayerNumber] = useState(false);
   const [displayPlayerName, setDisplayPlayerName] = useState(false);
+  const [showSetupTeamsContainer, setShowSetupTeamsContainer] = useState(false);
+
 
   useEffect(() => {
     if (location.state && location.state.loadedCoords) {
@@ -820,13 +823,23 @@ const removePlayerFromTeam2 = (index) => {
   
 
   return (
-<div className="pitch-container">
-      <div className="content">
-        {/* <div className="team-buttons-container">
-          {renderTeamPlayers(team1, team1Players, team1Color)}
-          {renderTeamPlayers(team2, team2Players, team2Color)}
-        </div> */}
+    <div class="scroll-container">
+    <div className="pitch-container">
+    {showSetupTeamsContainer && (
+      <div className="setup-team-container">
+        <h3>Setup Team</h3>
+        <div className="team-buttons-wrapper">
+          <div className="team-buttons-container">
+            {renderTeamPlayers(team1, team1Players, team1Color)}
+            {renderTeamPlayers(team2, team2Players, team2Color)}
+          </div>
+        </div>
+      </div>
+    )}
 
+
+
+      <div className="content">
         <div className="instructions-container">
           <h3>Instructions</h3>
           {renderActionButtons()}
@@ -858,7 +871,7 @@ const removePlayerFromTeam2 = (index) => {
           <button className="button" onClick={toggleModal}>View Coordinates</button>
           <button className="button" onClick={() => setIsSaveModalOpen(true) } disabled={userType === 'free'}>Save Game</button>
           <button className="button" onClick={() => setIsSettingsModalOpen(true)}>Settings</button> {/* Settings button */}
-          {/* <button className="button" onClick={() => setIsSetupTeamModalOpen(true)}>Setup Team</button> Setup Team button */}
+          <button className="button" onClick={() => setIsSetupTeamModalOpen(true)}>Setup Team</button>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
             <button className="button" onClick={() => handleResize(375, 243.5)}>iPhone</button>
             <button className="button" onClick={() => handleResize(600, 389.6)}>iPad</button>
@@ -882,6 +895,8 @@ const removePlayerFromTeam2 = (index) => {
         </div>
         </div>
 
+    <div className="pitch-and-data-container">
+      <div className="stage-container"></div>
         <Stage
           width={canvasSize.width}
           height={canvasSize.height}
@@ -948,8 +963,12 @@ const removePlayerFromTeam2 = (index) => {
     })}
   </Layer>
 </Stage>
+<div className="aggregated-data-container">
+      <AggregatedData data={aggregateData} />
+    </div>
+  </div>
+</div>
 
-      </div>
       {openDialog && (
         <div className="dialog-container">
           <h3>Enter Action Details</h3>
@@ -1822,9 +1841,12 @@ const removePlayerFromTeam2 = (index) => {
 
   <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
     <button
-      onClick={handleSetupTeams}
+      onClick={() => {
+        setShowSetupTeamsContainer(true); // Set the state to show the container above the pitch graphic
+        setIsSetupTeamModalOpen(false); // Close the modal after pressing the button
+      }}
       style={{
-        background: '#28a745',  // Fixed color for Setup Teams button
+        background: '#28a745', // Fixed color for Setup Teams button
         color: '#fff',
         padding: '10px 20px',
         border: 'none',
@@ -1838,10 +1860,9 @@ const removePlayerFromTeam2 = (index) => {
   </div>
 </Modal>
 
-      <div className="aggregated-data-container">
-        <AggregatedData data={aggregateData} />
-      </div>
     </div>
+    </div>
+
 
   );
 }

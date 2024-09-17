@@ -11,8 +11,10 @@ import Swal from 'sweetalert2';
 import './PitchGraphic.css';
 import './SavedGames.css';
 import AggregatedData from './AggregatedData';
+import { onSnapshot } from 'firebase/firestore'; // Add this import
 
-const PitchGraphic = ({ userType }) => {
+
+const PitchGraphic = () => {
   const [coords, setCoords] = useState([]);
   const [currentCoords, setCurrentCoords] = useState([]);
   const [actionType, setActionType] = useState('');
@@ -74,6 +76,34 @@ const PitchGraphic = ({ userType }) => {
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [gameName, setGameName] = useState('');
   const [showSetupTeamsContainer, setShowSetupTeamsContainer] = useState(false);
+  const [userType, setUserType] = useState('free'); // Initialize userType state
+
+
+
+    const handlePremiumFeatureAccess = (featureName) => {
+    Swal.fire({
+      title: 'Upgrade Required',
+      text: `Access to "${featureName}" is a premium feature. Please upgrade to unlock this functionality.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Upgrade Now',
+      cancelButtonText: 'Cancel',
+    }).then((result) => {
+      if (result.isConfirmed) {
+        // Redirect to the upgrade page
+        navigate('/signup');
+      }
+    });
+  };
+
+    // Create handleOpenSaveModal
+  const handleOpenSaveModal = () => {
+    if (userType === 'free') {
+      handlePremiumFeatureAccess('Save Game');
+      return;
+    }
+    setIsSaveModalOpen(true);
+  };
 
     // Aggregate data by team and action
     const aggregateData = coords.reduce((acc, curr) => {
@@ -109,22 +139,49 @@ const PitchGraphic = ({ userType }) => {
     setIsSetupTeamModalOpen(false);
   };
 
-  const handleSaveGame = async () => {
-    const auth = getAuth();
-    const user = auth.currentUser;
-    if (user && userType === 'paid') {
+// Full handleSaveGame function
+const handleSaveGame = async () => {
+  if (userType === 'free') {
+    handlePremiumFeatureAccess('Save Game');
+    return;
+  }
+  // Proceed with saving the game
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (user) {
+    try {
       const sportType = 'GAA';
       await setDoc(doc(firestore, 'savedGames', user.uid, 'games', gameName), {
         gameData: coords,
         name: gameName,
         date: new Date().toISOString(),
-        sport: sportType
+        sport: sportType,
       });
       setIsSaveModalOpen(false);
-    } else {
-      Swal.fire('Please upgrade to save games.');
+      Swal.fire({
+        title: 'Success',
+        text: 'Game has been saved successfully!',
+        icon: 'success',
+        confirmButtonText: 'OK',
+      });
+    } catch (error) {
+      console.error('Error saving game:', error);
+      Swal.fire({
+        title: 'Error',
+        text: 'An error occurred while saving the game. Please try again.',
+        icon: 'error',
+        confirmButtonText: 'OK',
+      });
     }
-  };
+  } else {
+    Swal.fire({
+      title: 'Not Logged In',
+      text: 'Please log in to save your game.',
+      icon: 'warning',
+      confirmButtonText: 'OK',
+    });
+  }
+};
 
   const initialActionCodes = [
     'point', 'wide', 'goal', 'goal miss', 'free', 'missed free', 'short', 'blocked', 'offensive mark', 'offensive mark wide', 'post',
@@ -171,22 +228,39 @@ const PitchGraphic = ({ userType }) => {
       if (user) {
         setUser(user);
         const docRef = doc(firestore, 'users', user.uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const userData = docSnap.data();
-          const lastDownloadDate = userData.lastDownloadDate;
-          const today = new Date().toLocaleDateString();
-          if (lastDownloadDate === today) {
-            setDownloadsRemaining(userData.downloadsRemaining);
+  
+        // Use onSnapshot to listen for real-time updates
+        const unsubscribe = onSnapshot(docRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const userData = docSnap.data();
+            setUserType(userData.userType || 'free'); // Update userType state
+  
+            // Handle downloadsRemaining as before
+            const lastDownloadDate = userData.lastDownloadDate;
+            const today = new Date().toLocaleDateString();
+            if (lastDownloadDate === today) {
+              setDownloadsRemaining(userData.downloadsRemaining);
+            } else {
+              setDoc(docRef, { lastDownloadDate: today, downloadsRemaining: 1 }, { merge: true });
+              setDownloadsRemaining(1);
+            }
           } else {
-            await setDoc(docRef, { lastDownloadDate: today, downloadsRemaining: 1 }, { merge: true });
+            // If user document doesn't exist, create it with default values
+            setDoc(docRef, {
+              userType: 'free',
+              lastDownloadDate: new Date().toLocaleDateString(),
+              downloadsRemaining: 1,
+            });
+            setUserType('free');
             setDownloadsRemaining(1);
           }
-        } else {
-          await setDoc(docRef, { lastDownloadDate: new Date().toLocaleDateString(), downloadsRemaining: 1 });
-          setDownloadsRemaining(1);
-        }
+        });
+  
+        // Cleanup subscription on unmount
+        return () => unsubscribe();
       } else {
+        // Handle unauthenticated users
+        setUserType('free');
         const storedDownloadCount = localStorage.getItem('downloadCount');
         const lastDownloadDate = localStorage.getItem('lastDownloadDate');
         const today = new Date().toLocaleDateString();
@@ -200,6 +274,7 @@ const PitchGraphic = ({ userType }) => {
       }
     });
   }, []);
+  
 
   const handleClick = (e) => {
     const stage = e.target.getStage();
@@ -325,7 +400,13 @@ const PitchGraphic = ({ userType }) => {
   };
 
   const handleDownloadScreenshot = async () => {
-    const filteredCoords = coords.filter(coord => {
+    if (userType === 'free') {
+      handlePremiumFeatureAccess('Download Screenshot');
+      return;
+    }
+  
+    // Proceed with downloading screenshot
+    const filteredCoords = coords.filter((coord) => {
       return (
         (screenshotTeam ? coord.team === screenshotTeam : true) &&
         (screenshotPlayer ? coord.playerName === screenshotPlayer : true) &&
@@ -338,8 +419,8 @@ const PitchGraphic = ({ userType }) => {
   
     const stage = new Konva.Stage({
       container: screenshotLayer,
-      width: pitchWidth * xScale,
-      height: pitchHeight * yScale
+      width: canvasSize.width,
+      height: canvasSize.height,
     });
   
     const layer = new Konva.Layer();
@@ -347,17 +428,17 @@ const PitchGraphic = ({ userType }) => {
   
     renderGAAPitchForScreenshot(layer);
   
-    filteredCoords.forEach(coord => {
+    filteredCoords.forEach((coord) => {
       if (coord.from && coord.to) {
         const line = new Konva.Line({
           points: [
             coord.from.x * xScale,
             coord.from.y * yScale,
             coord.to.x * xScale,
-            coord.to.y * yScale
+            coord.to.y * yScale,
           ],
           stroke: getColor(coord.type),
-          strokeWidth: 2
+          strokeWidth: 2,
         });
         layer.add(line);
       } else {
@@ -365,7 +446,7 @@ const PitchGraphic = ({ userType }) => {
           x: coord.x * xScale,
           y: coord.y * yScale,
           radius: 5,
-          fill: getColor(coord.type)
+          fill: getColor(coord.type),
         });
         layer.add(shape);
   
@@ -375,8 +456,8 @@ const PitchGraphic = ({ userType }) => {
             y: coord.y * yScale - 3,
             text: coord.player,
             fontSize: 8,
-            fill: "white",
-            align: "center"
+            fill: 'white',
+            align: 'center',
           });
           layer.add(playerNumberText);
         }
@@ -387,8 +468,8 @@ const PitchGraphic = ({ userType }) => {
             y: coord.y * yScale - 16,
             text: coord.playerName,
             fontSize: 10,
-            fill: "black",
-            align: "center"
+            fill: 'black',
+            align: 'center',
           });
           layer.add(playerNameText);
         }
@@ -398,9 +479,9 @@ const PitchGraphic = ({ userType }) => {
     layer.draw();
   
     html2canvas(screenshotLayer, {
-      width: pitchWidth * xScale,
-      height: pitchHeight * yScale,
-    }).then(canvas => {
+      width: canvasSize.width,
+      height: canvasSize.height,
+    }).then((canvas) => {
       const link = document.createElement('a');
       link.href = canvas.toDataURL('image/png');
       link.download = 'screenshot.png';
@@ -410,25 +491,28 @@ const PitchGraphic = ({ userType }) => {
   
     setIsScreenshotModalOpen(false);
   };
+  
 
   const toggleModal = () => {
     setIsModalOpen(!isModalOpen);
   };
 
+  // Update toggleDownloadModal
   const toggleDownloadModal = () => {
-    if (userType === 'paid') {
-      setIsDownloadModalOpen(!isDownloadModalOpen);
-    } else {
-      Swal.fire('This feature is only available for paid users.');
+    if (userType === 'free') {
+      handlePremiumFeatureAccess('Download Filtered Data');
+      return;
     }
+    setIsDownloadModalOpen(!isDownloadModalOpen);
   };
   
+  // Update toggleScreenshotModal
   const toggleScreenshotModal = () => {
-    if (userType === 'paid') {
-      setIsScreenshotModalOpen(!isScreenshotModalOpen);
-    } else {
-      Swal.fire('This feature is only available for paid users.');
+    if (userType === 'free') {
+      handlePremiumFeatureAccess('Download Screenshot');
+      return;
     }
+    setIsScreenshotModalOpen(!isScreenshotModalOpen);
   };
   
 
@@ -644,6 +728,26 @@ const PitchGraphic = ({ userType }) => {
   };
 
   const handleDownloadData = async () => {
+    if (userType === 'free') {
+      if (downloadsRemaining <= 0) {
+        handlePremiumFeatureAccess('Download Data');
+        return;
+      }
+      // Decrease downloadsRemaining
+      setDownloadsRemaining(downloadsRemaining - 1);
+  
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (user) {
+        const docRef = doc(firestore, 'users', user.uid);
+        await setDoc(docRef, { downloadsRemaining: downloadsRemaining - 1 }, { merge: true });
+      } else {
+        // Update localStorage for unauthenticated users
+        localStorage.setItem('downloadCount', (downloadsRemaining - 1).toString());
+      }
+    }
+  
+    // Proceed with downloading data
     const jsonData = JSON.stringify(coords, null, 2);
     const blob = new Blob([jsonData], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -654,16 +758,23 @@ const PitchGraphic = ({ userType }) => {
     a.click();
     document.body.removeChild(a);
   };
+  
 
   const handleDownloadFilteredData = async () => {
-    const filteredCoords = coords.filter(coord => {
+    if (userType === 'free') {
+      handlePremiumFeatureAccess('Download Filtered Data');
+      return;
+    }
+  
+    // Proceed with downloading filtered data
+    const filteredCoords = coords.filter((coord) => {
       return (
         (downloadTeam ? coord.team === downloadTeam : true) &&
         (downloadPlayer ? coord.playerName === downloadPlayer : true) &&
         (downloadAction ? coord.action === downloadAction : true)
       );
     });
-
+  
     const jsonData = JSON.stringify(filteredCoords, null, 2);
     const blob = new Blob([jsonData], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -673,9 +784,10 @@ const PitchGraphic = ({ userType }) => {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-
+  
     setIsDownloadModalOpen(false);
   };
+  
 
   const handleAddAction = (newAction, newColor, newType) => {
     if (!actionCodes.includes(newAction)) {
@@ -821,10 +933,10 @@ const PitchGraphic = ({ userType }) => {
           <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
           <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
           <button className="button" onClick={handleDownloadData}>{userType === 'free' ? `Download Data (${downloadsRemaining} left)` : 'Download Data (Unlimited)'}</button>
-          <button className="button" onClick={toggleDownloadModal} disabled={userType === 'free'}> Download Filtered Data </button>
-          <button className="button" onClick={toggleScreenshotModal} disabled={userType === 'free'}>Download Screenshot</button>
+          <button className="button" onClick={toggleDownloadModal}>Download Filtered Data</button>
+          <button className="button" onClick={toggleScreenshotModal}>Download Screenshot</button>
           <button className="button" onClick={toggleModal}>View Coordinates</button>
-          <button className="button" onClick={() => setIsSaveModalOpen(true) } disabled={userType === 'free'}>Save Game</button>
+          <button className="button" onClick={handleOpenSaveModal}>Save Game</button>
           <button className="button" onClick={() => setIsSettingsModalOpen(true)}>Settings</button> {/* Settings button */}
           <button className="button" onClick={() => setIsSetupTeamModalOpen(true)}>Setup Team</button>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>

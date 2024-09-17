@@ -1,8 +1,9 @@
+// src/SignIn.js
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { getDoc, doc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
+import { useNavigate } from 'react-router-dom';
 import './AuthForm.css';
 import backgroundImage from './assests/background/galwaybg.jpeg';
 import logo from './assests/logo/scorelectlogo.jpeg';
@@ -10,6 +11,7 @@ import logo from './assests/logo/scorelectlogo.jpeg';
 const SignIn = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Add any other necessary state variables
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [resetEmail, setResetEmail] = useState('');
@@ -17,21 +19,23 @@ const SignIn = () => {
   const [showResetForm, setShowResetForm] = useState(false);
   const navigate = useNavigate();
   const auth = getAuth();
- 
+
   const handleSignIn = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      setMessage('Successfully signed in!');
       const user = auth.currentUser;
       if (user) {
-        const userDoc = await getDoc(doc(firestore, 'users', user.uid));
-        if (userDoc.exists() && userDoc.data().role === 'paid') {
-          navigate('/profile');
-        } else {
-          navigate('/pitch');
+        // Check if user document exists and has email
+        const userDocRef = doc(firestore, 'users', user.uid);
+        const userDoc = await getDoc(userDocRef);
+        if (!userDoc.exists() || !userDoc.data().email) {
+          // Update Firestore user document with email
+          await setDoc(userDocRef, { email: user.email }, { merge: true });
         }
+        setMessage('Successfully signed in!');
+        navigate('/');
       }
     } catch (error) {
       console.error('Error signing in:', error);
@@ -95,7 +99,9 @@ const SignIn = () => {
           </button>
           <div className="switch-auth">
             <span>Don't have an account?</span>
-            <button type="button" onClick={() => navigate('/signup')} className="link-button">Sign Up</button>
+            <button type="button" onClick={() => navigate('/signup')} className="link-button">
+              Sign Up
+            </button>
           </div>
           <div className="switch-auth">
             <button type="button" onClick={() => setShowResetForm(true)} className="link-button">

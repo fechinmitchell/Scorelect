@@ -35,13 +35,16 @@ const App = () => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       setUser(user);
       if (user) {
-        const userDoc = await getDoc(doc(firestore, 'users', user.uid));
+        const userDocRef = doc(firestore, 'users', user.uid);
+        const userDoc = await getDoc(userDocRef);
         if (userDoc.exists()) {
           setUserRole(userDoc.data().role || 'free');
         } else {
-          await setDoc(doc(firestore, 'users', user.uid), { role: 'free' });
+          await setDoc(userDocRef, { role: 'free', email: user.email });
           setUserRole('free');
         }
+      } else {
+        setUserRole('free');
       }
     });
     return () => unsubscribe();

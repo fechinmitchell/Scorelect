@@ -18,7 +18,7 @@ const Success = ({ setUserRole }) => {
 
       if (sessionId && uid) {
         try {
-          // Fetch the session from Stripe to get the subscription ID
+          // Fetch the session from your backend to get the subscription ID
           const response = await fetch(`${process.env.REACT_APP_API_URL}/retrieve-session`, {
             method: 'POST',
             headers: {

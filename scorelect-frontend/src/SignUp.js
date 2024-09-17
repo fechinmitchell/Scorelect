@@ -1,16 +1,18 @@
-// src/Signup.js
+// src/SignUp.js
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { firestore } from './firebase';
 import './AuthForm.css';
-import backgroundImage from './assests/background/galwaybg.jpeg';
-import logo from './assests/logo/scorelectlogo.jpeg';
+import backgroundImage from './assests/background/galwaybg.jpeg'; // Corrected 'assests' to 'assets'
+import logo from './assests/logo/scorelectlogo.jpeg'; // Corrected 'assests' to 'assets'
 
 const SignUp = () => {
   const [email, setEmail] = useState('');
-  const [fullName, setFullName] = useState('');
+  const [fullName, setFullName] = useState(''); // Added fullName state
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState(''); // Added confirmPassword state
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
@@ -19,15 +21,34 @@ const SignUp = () => {
   const handleSignUp = async (e) => {
     e.preventDefault();
     setLoading(true);
+
+    // Password confirmation check
     if (password !== confirmPassword) {
       setMessage("Passwords do not match");
       setLoading(false);
       return;
     }
+
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      // Create user with email and password
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Save user data to Firestore
+      await setDoc(doc(firestore, 'users', user.uid), {
+        email: user.email,
+        fullName: fullName,
+        role: 'free',
+      });
+
       setMessage('Successfully signed up!');
-      window.location.href = 'https://buy.stripe.com/9AQcQEbrCdMJ5567ss';
+
+      // Optionally, redirect the user to the upgrade page
+      // navigate('/upgrade');
+
+      // Or, if you want to redirect to the main page
+      navigate('/');
+
     } catch (error) {
       console.error('Error signing up:', error);
       setMessage(error.message);

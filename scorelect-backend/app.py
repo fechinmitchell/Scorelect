@@ -110,7 +110,7 @@ def cancel_subscription():
         subscription_id = data.get('subscriptionId')
         stripe.Subscription.delete(subscription_id)
 
-        # Optionally update the user role in Firestore
+        # Update the user role in Firestore
         user_doc_ref = db.collection('users').document(data.get('uid'))
         user_doc_ref.set({'role': 'free', 'subscriptionId': None}, merge=True)
 
@@ -189,12 +189,10 @@ def stripe_webhook():
         logging.info(f"Event data: {event['data']['object']}")
 
         if event['type'] == 'invoice.payment_failed':
-            # Check if 'subscription' is present in the event data
             subscription_id = event['data']['object'].get('subscription')
             if subscription_id:
                 handle_failed_payment(subscription_id)
             else:
-                # Log the absence of a subscription
                 logging.warning("No subscription found for invoice.payment_failed event.")
 
         elif event['type'] == 'customer.subscription.deleted':
@@ -205,6 +203,11 @@ def stripe_webhook():
             subscription = event['data']['object']
             handle_subscription_update(subscription)
 
+        # New handler for checkout.session.completed
+        elif event['type'] == 'checkout.session.completed':
+            session = event['data']['object']
+            handle_checkout_session_completed(session)
+
         return jsonify(success=True)
     
     except ValueError as e:
@@ -214,7 +217,6 @@ def stripe_webhook():
         logging.error(f"SignatureVerificationError: {str(e)}")
         return jsonify(error=str(e)), 400
 
-
 # Handle failed payment event from Stripe
 def handle_failed_payment(subscription_id):
     if subscription_id is None:
@@ -223,13 +225,13 @@ def handle_failed_payment(subscription_id):
     
     try:
         subscription = stripe.Subscription.retrieve(subscription_id)
-        user_doc = db.collection('users').where('subscriptionId', '==', subscription_id).get()
+        user_docs = db.collection('users').where('subscriptionId', '==', subscription_id).get()
         
-        if not user_doc:
+        if not user_docs:
             logging.info(f"No user found for subscription: {subscription_id}")
             return
         
-        for doc in user_doc:
+        for doc in user_docs:
             user_ref = db.collection('users').document(doc.id)
             user_ref.set({'role': 'free'}, merge=True)
             logging.info(f"Updated user {doc.id} to free plan due to payment failure.")
@@ -237,18 +239,17 @@ def handle_failed_payment(subscription_id):
     except Exception as e:
         logging.error(f"Error handling failed payment for subscription {subscription_id}: {str(e)}")
 
-
 # Handle subscription cancellation
 def handle_subscription_cancel(subscription_id):
     try:
         subscription = stripe.Subscription.retrieve(subscription_id)
-        user_doc = db.collection('users').where('subscriptionId', '==', subscription_id).get()
+        user_docs = db.collection('users').where('subscriptionId', '==', subscription_id).get()
         
-        if not user_doc:
+        if not user_docs:
             logging.info(f"No user found for subscription: {subscription_id}")
             return
         
-        for doc in user_doc:
+        for doc in user_docs:
             user_ref = db.collection('users').document(doc.id)
             user_ref.set({'role': 'free', 'subscriptionId': None}, merge=True)
             logging.info(f"Subscription {subscription_id} canceled. Updated user {doc.id} to free plan.")
@@ -261,15 +262,15 @@ def handle_subscription_update(subscription):
     try:
         subscription_id = subscription['id']
         status = subscription['status']
-        user_doc = db.collection('users').where('subscriptionId', '==', subscription_id).get()
+        user_docs = db.collection('users').where('subscriptionId', '==', subscription_id).get()
 
-        if not user_doc:
+        if not user_docs:
             logging.info(f"No user found for subscription: {subscription_id}")
             return
 
-        for doc in user_doc:
+        for doc in user_docs:
             user_ref = db.collection('users').document(doc.id)
-            if status == 'active':
+            if status in ['active', 'trialing']:
                 user_ref.set({'role': 'paid'}, merge=True)
                 logging.info(f"Updated user {doc.id} to paid plan.")
             else:
@@ -279,6 +280,33 @@ def handle_subscription_update(subscription):
     except Exception as e:
         logging.error(f"Error handling subscription update for subscription {subscription_id}: {str(e)}")
 
+# New function to handle checkout.session.completed event
+def handle_checkout_session_completed(session):
+    try:
+        subscription_id = session.get('subscription')
+        customer_email = session.get('customer_email')
+
+        if not subscription_id or not customer_email:
+            logging.error("Missing subscription ID or customer email in session.")
+            return
+
+        # Retrieve the user by email
+        user_docs = db.collection('users').where('email', '==', customer_email).get()
+
+        if not user_docs:
+            logging.error(f"No user found with email: {customer_email}")
+            return
+
+        for doc in user_docs:
+            user_ref = db.collection('users').document(doc.id)
+            user_ref.set({
+                'role': 'paid',
+                'subscriptionId': subscription_id
+            }, merge=True)
+            logging.info(f"Updated user {doc.id} with subscription ID and set role to paid.")
+
+    except Exception as e:
+        logging.error(f"Error handling checkout.session.completed: {str(e)}")
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)

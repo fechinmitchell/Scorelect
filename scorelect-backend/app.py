@@ -79,30 +79,40 @@ cred = credentials.Certificate(firebase_config)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
+# Endpoint to create a Stripe checkout session
 @app.route('/create-checkout-session', methods=['POST'])
 def create_checkout_session():
     try:
         data = request.json
         email = data.get('email')
         uid = data.get('uid')
+        coupon = data.get('coupon')  # Get coupon code if provided
 
-        session = stripe.checkout.Session.create(
-            payment_method_types=['card'],
-            customer_email=email,
-            line_items=[{
+        # Create Stripe Checkout session
+        session_data = {
+            'payment_method_types': ['card'],
+            'customer_email': email,
+            'line_items': [{
                 'price': 'price_1PSb9kRsFqpmi3sgRjiYWmAp',  # Replace with your actual price ID
                 'quantity': 1,
             }],
-            mode='subscription',
-            success_url='https://scorelect.com/success?session_id={CHECKOUT_SESSION_ID}',
-            cancel_url='https://scorelect.com/cancel',
-        )
+            'mode': 'subscription',
+            'success_url': 'https://scorelect.com/success?session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url': 'https://scorelect.com/cancel',
+        }
+
+        # Include coupon code if available
+        if coupon:
+            session_data['discounts'] = [{'coupon': coupon}]
+
+        session = stripe.checkout.Session.create(**session_data)
 
         return jsonify({'id': session.id})
     except Exception as e:
         logging.error(f"Error creating checkout session: {str(e)}")
         return jsonify(error=str(e)), 400
 
+# Endpoint to renew subscription
 @app.route('/renew-subscription', methods=['POST'])
 def renew_subscription():
     try:
@@ -111,11 +121,14 @@ def renew_subscription():
 
         # Fetch user document
         user_doc = db.collection('users').document(uid).get()
-        if not user_doc.exists:
+        if not user_doc.exists():
+            logging.error(f"User not found for UID: {uid}")
             return jsonify({'error': 'User not found'}), 404
 
         user_data = user_doc.to_dict()
         customer_email = user_data.get('email')
+
+        logging.info(f"Creating renewal session for user {uid}")
 
         # Create a new Checkout Session for subscription renewal
         session = stripe.checkout.Session.create(
@@ -136,6 +149,7 @@ def renew_subscription():
         logging.error(f"Error renewing subscription: {str(e)}")
         return jsonify(error=str(e)), 400
 
+# Endpoint to cancel subscription
 @app.route('/cancel-subscription', methods=['POST'])
 def cancel_subscription():
     try:

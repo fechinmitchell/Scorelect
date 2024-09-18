@@ -10,9 +10,9 @@ import logo from './assests/logo/scorelectlogo.jpeg'; // Corrected 'assests' to 
 
 const SignUp = () => {
   const [email, setEmail] = useState('');
-  const [fullName, setFullName] = useState(''); // Added fullName state
+  const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState(''); // Added confirmPassword state
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
@@ -30,24 +30,21 @@ const SignUp = () => {
     }
 
     try {
-      // Create user with email and password
+      // Create user with email and password in Firebase Authentication
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Save user data to Firestore
+      // Save user data to Firestore, initial role as 'free'
       await setDoc(doc(firestore, 'users', user.uid), {
         email: user.email,
         fullName: fullName,
-        role: 'free',
+        role: 'free',  // Initially 'free', change after successful payment
       });
 
       setMessage('Successfully signed up!');
 
-      // Optionally, redirect the user to the upgrade page
-      // navigate('/upgrade');
-
-      // Or, if you want to redirect to the main page
-      navigate('/');
+      // Redirect to Stripe payment link
+      window.location.href = 'https://buy.stripe.com/9AQcQEbrCdMJ5567ss';
 
     } catch (error) {
       console.error('Error signing up:', error);

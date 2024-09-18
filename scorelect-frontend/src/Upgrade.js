@@ -1,57 +1,79 @@
 // src/Upgrade.js
 import React, { useState } from 'react';
-import { getAuth } from 'firebase/auth';
 import { loadStripe } from '@stripe/stripe-js';
+import { Elements, useStripe, useElements, CardElement } from '@stripe/react-stripe-js';
+import { getAuth } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { firestore } from './firebase';
+import { useNavigate } from 'react-router-dom';
 import './Upgrade.css';
-import './AuthForm.css';
 
-const stripePromise = loadStripe('your-publishable-key'); // Replace with your Stripe publishable key
+const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLIC_KEY);
 
-const Upgrade = ({ setUserRole }) => {
+const CheckoutForm = ({ setUserRole }) => {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
   const auth = getAuth();
 
-  const handleUpgrade = async () => {
-    setLoading(true);
-    try {
-      const user = auth.currentUser;
-      if (user) {
-        // Send email and uid to backend to create checkout session
-        const response = await fetch(`${process.env.REACT_APP_API_URL}/create-checkout-session`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email: user.email,
-            uid: user.uid,
-          }),
-        });
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
-        const session = await response.json();
-        if (session.error) {
-          console.error(session.error);
-          setLoading(false);
-          return;
-        }
-
-        // Redirect to Stripe Checkout
-        const stripe = await stripePromise;
-        await stripe.redirectToCheckout({ sessionId: session.id });
-      }
-    } catch (error) {
-      console.error('Error upgrading:', error);
-    } finally {
-      setLoading(false);
+    if (!stripe || !elements) {
+      return;
     }
+
+    setLoading(true);
+
+    const { error, paymentMethod } = await stripe.createPaymentMethod({
+      type: 'card',
+      card: elements.getElement(CardElement),
+      billing_details: {
+        email: email,
+      },
+    });
+
+    if (error) {
+      console.error(error);
+      setLoading(false);
+      return;
+    }
+
+    const response = await fetch(`${process.env.REACT_APP_API_URL}/create-subscription`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: email,
+        payment_method: paymentMethod.id,
+        uid: auth.currentUser.uid,
+      }),
+    });
+
+    const subscription = await response.json();
+
+    if (subscription.error) {
+      console.error(subscription.error);
+      setLoading(false);
+      return;
+    }
+
+    // Update user role in Firestore to 'paid'
+    await setDoc(doc(firestore, 'users', auth.currentUser.uid), { role: 'paid' }, { merge: true });
+
+    // Navigate to a success page or redirect after payment
+    navigate('/pitchgraphic');
   };
 
   return (
     <div className="upgrade-container">
       <h2>Upgrade to Scorelect Pro for €5/$5.50 a month</h2>
       <p>Unlock premium features and enhance your experience.</p>
-      <div className="pro-features">
-        <h3>Benefits of Scorelect Pro</h3>
+      <div className="upgrade-benefits">
+        <h3>Benefits:</h3>
         <ul>
           <li>Unlimited data collection downloads</li>
           <li>Unlimited access to saved games</li>
@@ -59,11 +81,28 @@ const Upgrade = ({ setUserRole }) => {
           <li>Ad-free experience</li>
         </ul>
       </div>
-      <button onClick={handleUpgrade} className="upgrade-button" disabled={loading}>
-        {loading ? 'Processing...' : 'Upgrade Now'}
-      </button>
+      <form onSubmit={handleSubmit}>
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          className="input-field"
+        />
+        <CardElement className="card-element" />
+        <button type="submit" className="upgrade-button" disabled={!stripe || loading}>
+          {loading ? 'Processing...' : 'Subscribe'}
+        </button>
+      </form>
     </div>
   );
 };
+
+const Upgrade = ({ setUserRole }) => (
+  <Elements stripe={stripePromise}>
+    <CheckoutForm setUserRole={setUserRole} />
+  </Elements>
+);
 
 export default Upgrade;

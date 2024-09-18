@@ -56,6 +56,7 @@ const Profile = ({ onLogout }) => {
           if (subscriptionData.error) {
             console.error('Subscription error:', subscriptionData.error);
           } else {
+            console.log('Fetched subscription data:', subscriptionData);
             setSubscription(subscriptionData);
           }
         } else {
@@ -100,32 +101,9 @@ const Profile = ({ onLogout }) => {
     }
   };
 
-  const handleRenewSubscription = async () => {
-    try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/renew-subscription`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ uid: user.uid }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      if (result.error) {
-        console.error('Error renewing subscription:', result.error);
-        alert('Error renewing subscription: ' + result.error);
-      } else {
-        // Redirect user to the payment page
-        window.location.href = result.checkoutUrl; // Assuming your API returns a checkout URL
-      }
-    } catch (error) {
-      console.error('Error renewing subscription:', error);
-      alert('Error renewing subscription: ' + error.message);
-    }
+  const handleRenewSubscription = () => {
+    // Redirect the user to the Stripe payment link
+    window.location.href = 'https://buy.stripe.com/9AQcQEbrCdMJ5567ss';
   };
 
   const handleLogout = async () => {
@@ -156,6 +134,7 @@ const Profile = ({ onLogout }) => {
               <h3>Subscription Details</h3>
               <p>Status: {subscription.status}</p>
               <p>Next Billing Date: {new Date(subscription.current_period_end * 1000).toLocaleDateString()}</p>
+              {console.log('Subscription status:', subscription.status)}
               {subscription.status === 'active' && (
                 <button className="cancel-button" onClick={handleCancelSubscription}>Cancel Subscription</button>
               )}

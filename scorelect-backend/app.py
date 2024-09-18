@@ -103,6 +103,39 @@ def create_checkout_session():
         logging.error(f"Error creating checkout session: {str(e)}")
         return jsonify(error=str(e)), 400
 
+@app.route('/renew-subscription', methods=['POST'])
+def renew_subscription():
+    try:
+        data = request.json
+        uid = data.get('uid')
+
+        # Fetch user document
+        user_doc = db.collection('users').document(uid).get()
+        if not user_doc.exists:
+            return jsonify({'error': 'User not found'}), 404
+
+        user_data = user_doc.to_dict()
+        customer_email = user_data.get('email')
+
+        # Create a new Checkout Session for subscription renewal
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            mode='subscription',
+            customer_email=customer_email,
+            line_items=[{
+                'price': 'price_1PSb9kRsFqpmi3sgRjiYWmAp',  # Replace with your actual price ID
+                'quantity': 1,
+            }],
+            success_url='https://scorelect.com/profile?session_id={CHECKOUT_SESSION_ID}',
+            cancel_url='https://scorelect.com/profile',
+        )
+
+        logging.info(f"Created renewal checkout session for user {uid}")
+        return jsonify({'checkoutUrl': session.url})
+    except Exception as e:
+        logging.error(f"Error renewing subscription: {str(e)}")
+        return jsonify(error=str(e)), 400
+
 @app.route('/cancel-subscription', methods=['POST'])
 def cancel_subscription():
     try:
@@ -163,12 +196,16 @@ def save_game():
 
 @app.route('/load-games', methods=['POST'])
 def load_games():
-    try: 
+    try:
         data = request.json
         user_id = data.get('uid')
 
         games_ref = db.collection('savedGames').document(user_id).collection('games')
-        games = [doc.to_dict() for doc in games_ref.stream()]
+        games = []
+        for doc in games_ref.stream():
+            game_data = doc.to_dict()
+            game_data['gameName'] = doc.id
+            games.append(game_data)
 
         return jsonify(games)
     except Exception as e:
@@ -198,18 +235,17 @@ def stripe_webhook():
         elif event['type'] == 'customer.subscription.deleted':
             subscription_id = event['data']['object']['id']
             handle_subscription_cancel(subscription_id)
-        
+
         elif event['type'] == 'customer.subscription.updated':
             subscription = event['data']['object']
             handle_subscription_update(subscription)
 
-        # New handler for checkout.session.completed
         elif event['type'] == 'checkout.session.completed':
             session = event['data']['object']
             handle_checkout_session_completed(session)
 
         return jsonify(success=True)
-    
+
     except ValueError as e:
         logging.error(f"ValueError: {str(e)}")
         return jsonify(error=str(e)), 400
@@ -222,38 +258,36 @@ def handle_failed_payment(subscription_id):
     if subscription_id is None:
         logging.error("Subscription ID is missing from the payment failed event.")
         return
-    
+
     try:
-        subscription = stripe.Subscription.retrieve(subscription_id)
         user_docs = db.collection('users').where('subscriptionId', '==', subscription_id).get()
-        
+
         if not user_docs:
             logging.info(f"No user found for subscription: {subscription_id}")
             return
-        
+
         for doc in user_docs:
             user_ref = db.collection('users').document(doc.id)
             user_ref.set({'role': 'free'}, merge=True)
             logging.info(f"Updated user {doc.id} to free plan due to payment failure.")
-    
+
     except Exception as e:
         logging.error(f"Error handling failed payment for subscription {subscription_id}: {str(e)}")
 
 # Handle subscription cancellation
 def handle_subscription_cancel(subscription_id):
     try:
-        subscription = stripe.Subscription.retrieve(subscription_id)
         user_docs = db.collection('users').where('subscriptionId', '==', subscription_id).get()
-        
+
         if not user_docs:
             logging.info(f"No user found for subscription: {subscription_id}")
             return
-        
+
         for doc in user_docs:
             user_ref = db.collection('users').document(doc.id)
             user_ref.set({'role': 'free', 'subscriptionId': None}, merge=True)
             logging.info(f"Subscription {subscription_id} canceled. Updated user {doc.id} to free plan.")
-    
+
     except Exception as e:
         logging.error(f"Error handling subscription cancel for {subscription_id}: {str(e)}")
 
@@ -276,11 +310,11 @@ def handle_subscription_update(subscription):
             else:
                 user_ref.set({'role': 'free'}, merge=True)
                 logging.info(f"Updated user {doc.id} to free plan due to subscription status: {status}")
-    
+
     except Exception as e:
         logging.error(f"Error handling subscription update for subscription {subscription_id}: {str(e)}")
 
-# New function to handle checkout.session.completed event
+# Handle checkout.session.completed event
 def handle_checkout_session_completed(session):
     try:
         subscription_id = session.get('subscription')

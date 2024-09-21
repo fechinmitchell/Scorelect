@@ -15,7 +15,12 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": ["http://localhost:3000", "https://scorelect.vercel.app", "https://scorelect.com", "https://www.scorelect.com"]}})
+CORS(app, resources={r"/*": {"origins": [
+    "http://localhost:3000",
+    "https://scorelect.vercel.app",
+    "https://scorelect.com",
+    "https://www.scorelect.com"
+]}})
 
 # Initialize Talisman for CSP
 csp = {
@@ -88,7 +93,14 @@ def create_checkout_session():
         uid = data.get('uid')
         coupon = data.get('coupon')  # Get coupon code if provided
 
+        if not email or not uid:
+            logging.error("Email or UID not provided.")
+            return jsonify({'error': 'Email and UID are required.'}), 400
+
         # Create Stripe Checkout session
+        success_url = f'https://scorelect.com/success?session_id={{CHECKOUT_SESSION_ID}}&uid={uid}'
+        cancel_url = 'https://scorelect.com/cancel'
+
         session_data = {
             'payment_method_types': ['card'],
             'customer_email': email,
@@ -97,8 +109,8 @@ def create_checkout_session():
                 'quantity': 1,
             }],
             'mode': 'subscription',
-            'success_url': 'https://scorelect.com/success?session_id={CHECKOUT_SESSION_ID}',
-            'cancel_url': 'https://scorelect.com/cancel',
+            'success_url': success_url,
+            'cancel_url': cancel_url,
         }
 
         # Include coupon code if available
@@ -107,6 +119,7 @@ def create_checkout_session():
 
         session = stripe.checkout.Session.create(**session_data)
 
+        logging.info(f"Created checkout session for UID: {uid}")
         return jsonify({'url': session.url})  # Changed from {'id': session.id} to {'url': session.url}
     except Exception as e:
         logging.error(f"Error creating checkout session: {str(e)}")
@@ -119,6 +132,10 @@ def renew_subscription():
         data = request.json
         uid = data.get('uid')
 
+        if not uid:
+            logging.error("UID not provided for renewal.")
+            return jsonify({'error': 'UID is required.'}), 400
+
         # Fetch user document
         user_doc = db.collection('users').document(uid).get()
         if not user_doc.exists():
@@ -128,9 +145,16 @@ def renew_subscription():
         user_data = user_doc.to_dict()
         customer_email = user_data.get('email')
 
+        if not customer_email:
+            logging.error(f"Email not found for UID: {uid}")
+            return jsonify({'error': 'User email not found'}), 400
+
         logging.info(f"Creating renewal session for user {uid}")
 
         # Create a new Checkout Session for subscription renewal
+        success_url = f'https://scorelect.com/profile?session_id={{CHECKOUT_SESSION_ID}}&uid={uid}'
+        cancel_url = 'https://scorelect.com/profile'
+
         session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             mode='subscription',
@@ -139,8 +163,8 @@ def renew_subscription():
                 'price': 'price_1PSb9kRsFqpmi3sgRjiYWmAp',  # Replace with your actual price ID
                 'quantity': 1,
             }],
-            success_url='https://scorelect.com/profile?session_id={CHECKOUT_SESSION_ID}',
-            cancel_url='https://scorelect.com/profile',
+            success_url=success_url,
+            cancel_url=cancel_url,
         )
 
         logging.info(f"Created renewal checkout session for user {uid}")
@@ -155,23 +179,36 @@ def cancel_subscription():
     try:
         data = request.json
         subscription_id = data.get('subscriptionId')
-        stripe.Subscription.delete(subscription_id)
+        uid = data.get('uid')
 
-        # Update the user role in Firestore
-        user_doc_ref = db.collection('users').document(data.get('uid'))
-        user_doc_ref.set({'role': 'free', 'subscriptionId': None}, merge=True)
+        if not subscription_id or not uid:
+            logging.error("Subscription ID or UID not provided for cancellation.")
+            return jsonify({'error': 'Subscription ID and UID are required.'}), 400
 
-        logging.info(f"Canceled subscription for user {data.get('uid')}")
-        return jsonify({"success": True})
+        # Set the subscription to cancel at period end
+        subscription = stripe.Subscription.modify(
+            subscription_id,
+            cancel_at_period_end=True
+        )
+
+        logging.info(f"Set subscription {subscription_id} to cancel at period end for user {uid}")
+        return jsonify({"success": True, "subscription": subscription})
     except Exception as e:
         logging.error(f"Error canceling subscription: {str(e)}")
         return jsonify(error=str(e)), 400
 
+# Endpoint to get subscription details
 @app.route('/get-subscription', methods=['POST'])
 def get_subscription():
     try:
         data = request.json
         subscription_id = data.get('subscriptionId')
+        session_id = data.get('session_id')  # Optional: Handle session-specific logic if needed
+
+        if not subscription_id:
+            logging.error("Subscription ID not provided.")
+            return jsonify({'error': 'Subscription ID is required.'}), 400
+
         subscription = stripe.Subscription.retrieve(subscription_id)
 
         return jsonify(subscription)
@@ -179,11 +216,17 @@ def get_subscription():
         logging.error(f"Error retrieving subscription: {str(e)}")
         return jsonify(error=str(e)), 400
 
+# Endpoint to retrieve Stripe session details
 @app.route('/retrieve-session', methods=['POST'])
 def retrieve_session():
     try:
         data = request.json
         session_id = data.get('session_id')
+
+        if not session_id:
+            logging.error("Session ID not provided.")
+            return jsonify({'error': 'Session ID is required.'}), 400
+
         session = stripe.checkout.Session.retrieve(session_id)
 
         return jsonify(session)
@@ -191,6 +234,7 @@ def retrieve_session():
         logging.error(f"Error retrieving session: {str(e)}")
         return jsonify(error=str(e)), 400
 
+# Endpoint to save a game
 @app.route('/save-game', methods=['POST'])
 def save_game():
     try:
@@ -199,20 +243,29 @@ def save_game():
         game_name = data.get('gameName')
         game_data = data.get('gameData')
 
+        if not user_id or not game_name or not game_data:
+            logging.error("Incomplete game data provided.")
+            return jsonify({'error': 'UID, gameName, and gameData are required.'}), 400
+
         game_doc_ref = db.collection('savedGames').document(user_id).collection('games').document(game_name)
         game_doc_ref.set({'gameData': game_data}, merge=True)
 
-        logging.info(f"Game {game_name} saved for user {user_id}")
+        logging.info(f"Game '{game_name}' saved for user {user_id}")
         return jsonify({"success": True})
     except Exception as e:
         logging.error(f"Error saving game: {str(e)}")
         return jsonify(error=str(e)), 400
 
+# Endpoint to load games
 @app.route('/load-games', methods=['POST'])
 def load_games():
     try:
         data = request.json
         user_id = data.get('uid')
+
+        if not user_id:
+            logging.error("UID not provided for loading games.")
+            return jsonify({'error': 'UID is required.'}), 400
 
         games_ref = db.collection('savedGames').document(user_id).collection('games')
         games = []
@@ -221,11 +274,13 @@ def load_games():
             game_data['gameName'] = doc.id
             games.append(game_data)
 
+        logging.info(f"Loaded {len(games)} games for user {user_id}")
         return jsonify(games)
     except Exception as e:
         logging.error(f"Error loading games: {str(e)}")
         return jsonify(error=str(e)), 400
 
+# Stripe webhook endpoint
 @app.route('/stripe-webhook', methods=['POST'])
 def stripe_webhook():
     payload = request.get_data(as_text=True)

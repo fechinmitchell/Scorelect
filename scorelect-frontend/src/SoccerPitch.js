@@ -77,6 +77,9 @@ const SoccerPitch =() => {
   const [displayPlayerName, setDisplayPlayerName] = useState(false);
   const [showSetupTeamsContainer, setShowSetupTeamsContainer] = useState(false);
   const [userType, setUserType] = useState('free'); // Initialize userType state
+  // Define stripe colors
+  const lightStripeColor = '#A8D5BA'; // Light green
+  const darkStripeColor = '#8FBF9C';  // Slightly darker green
 
 
   useEffect(() => {
@@ -494,52 +497,69 @@ const handleSaveGame = async () => {
   };
 
   // JSX-based renderSoccerPitch function for React rendering
-  const renderSoccerPitch = () => (
-    <Layer>
-      <Rect x={0} y={0} width={canvasSize.width} height={canvasSize.height} fill={pitchColor} />
-  
-      {/* Side and goal lines */}
-      <Line points={[0, 0, canvasSize.width, 0, canvasSize.width, canvasSize.height, 0, canvasSize.height, 0, 0]} stroke={lineColor} strokeWidth={2} />
-  
-      {/* Goals */}
-      <Line points={[canvasSize.width, yScale * 30.34, xScale * 105, yScale * 30.34, xScale * 105, yScale * 37.66, canvasSize.width, yScale * 37.66]} stroke={lineColor} strokeWidth={2} />
-      <Line points={[0, yScale * 30.34, xScale * 0, yScale * 30.34, xScale * 0, yScale * 37.66, 0, yScale * 37.66]} stroke={lineColor} strokeWidth={2} />
-  
-      {/* 6-yard boxes */}
-      <Line points={[0, yScale * 23.1, xScale * 5.5, yScale * 23.1, xScale * 5.5, yScale * 44.9, 0, yScale * 44.9]} stroke={lineColor} strokeWidth={2} />
-      <Line points={[canvasSize.width, yScale * 23.1, xScale * 99.5, yScale * 23.1, xScale * 99.5, yScale * 44.9, canvasSize.width, yScale * 44.9]} stroke={lineColor} strokeWidth={2} />
-  
-      {/* Penalty areas */}
-      <Line points={[0, yScale * 14, xScale * 16.5, yScale * 14, xScale * 16.5, yScale * 54, 0, yScale * 54]} stroke={lineColor} strokeWidth={2} />
-      <Line points={[canvasSize.width, yScale * 14, xScale * 88.5, yScale * 14, xScale * 88.5, yScale * 54, canvasSize.width, yScale * 54]} stroke={lineColor} strokeWidth={2} />
-  
-      {/* Penalty spots */}
-      <Circle x={xScale * 11} y={yScale * 34} radius={xScale * 0.4} fill={lineColor} />
-      <Circle x={xScale * 94} y={yScale * 34} radius={xScale * 0.4} fill={lineColor} />
-  
-      {/* Halfway line */}
-      <Line points={[xScale * 52.5, 0, xScale * 52.5, canvasSize.height]} stroke={lineColor} strokeWidth={2} />
-  
-      {/* Center circle */}
-      <Circle x={xScale * 52.5} y={yScale * 34} radius={xScale * 9.15} stroke={lineColor} strokeWidth={2} />
-  
-      {/* Corner arcs */}
-      <Arc x={xScale * 0} y={yScale * 0} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={0} stroke={lineColor} strokeWidth={2} />
-      <Arc x={xScale * 0} y={yScale * 68} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={270} stroke={lineColor} strokeWidth={2} />
-      <Arc x={xScale * 105} y={yScale * 0} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={90} stroke={lineColor} strokeWidth={2} />
-      <Arc x={xScale * 105} y={yScale * 68} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={180} stroke={lineColor} strokeWidth={2} />
-  
-      {/* Penalty arc */}
-      <Arc x={xScale * 94} y={yScale * 34} innerRadius={xScale * 9.15} outerRadius={xScale * 9.15} angle={105} rotation={127.5} stroke={lineColor} strokeWidth={2} />
-      <Arc x={xScale * 11} y={yScale * 34} innerRadius={xScale * 9.15} outerRadius={xScale * 9.15} angle={105} rotation={307.5} stroke={lineColor} strokeWidth={2} />
+  const renderSoccerPitch = () => {
+    const numStripes = 10;
+    const stripeWidth = canvasSize.width / numStripes;
 
-      {/* "SCORELECT" in the end zones */}
-      <Text text="SCORELECT.COM" x={xScale * 22.5} y={canvasSize.height / 40.25} fontSize={canvasSize.width / 50} fill="#D3D3D3" opacity={0.7} rotation={0} align="center" />
-      <Text text="SCORELECT.COM" x={canvasSize.width - xScale * 22.5} y={canvasSize.height / 1.02} fontSize={canvasSize.width / 50} fill="#D3D3D3" opacity={0.7} rotation={180} align="center" />
+    return (
+      <Layer>
+        {/* Pitch Background */}
+        <Rect x={0} y={0} width={canvasSize.width} height={canvasSize.height} fill={pitchColor} />
 
-    </Layer>
-  );
-  
+        {/* Stripes */}
+        {Array.from({ length: numStripes }, (_, i) => (
+          <Rect
+            key={i}
+            x={i * stripeWidth}
+            y={0}
+            width={stripeWidth}
+            height={canvasSize.height}
+            fill={i % 2 === 0 ? lightStripeColor : darkStripeColor}
+            opacity={0.3} // Adjust opacity for subtlety
+          />
+        ))}
+
+        {/* Side and Goal Lines */}
+        <Line points={[0, 0, canvasSize.width, 0, canvasSize.width, canvasSize.height, 0, canvasSize.height, 0, 0]} stroke={lineColor} strokeWidth={2} />
+
+        {/* Goals */}
+        <Line points={[canvasSize.width, yScale * 30.34, xScale * 105, yScale * 30.34, xScale * 105, yScale * 37.66, canvasSize.width, yScale * 37.66]} stroke={lineColor} strokeWidth={2} />
+        <Line points={[0, yScale * 30.34, xScale * 0, yScale * 30.34, xScale * 0, yScale * 37.66, 0, yScale * 37.66]} stroke={lineColor} strokeWidth={2} />
+
+        {/* 6-yard Boxes */}
+        <Line points={[0, yScale * 23.1, xScale * 5.5, yScale * 23.1, xScale * 5.5, yScale * 44.9, 0, yScale * 44.9]} stroke={lineColor} strokeWidth={2} />
+        <Line points={[canvasSize.width, yScale * 23.1, xScale * 99.5, yScale * 23.1, xScale * 99.5, yScale * 44.9, canvasSize.width, yScale * 44.9]} stroke={lineColor} strokeWidth={2} />
+
+        {/* Penalty Areas */}
+        <Line points={[0, yScale * 14, xScale * 16.5, yScale * 14, xScale * 16.5, yScale * 54, 0, yScale * 54]} stroke={lineColor} strokeWidth={2} />
+        <Line points={[canvasSize.width, yScale * 14, xScale * 88.5, yScale * 14, xScale * 88.5, yScale * 54, canvasSize.width, yScale * 54]} stroke={lineColor} strokeWidth={2} />
+
+        {/* Penalty Spots */}
+        <Circle x={xScale * 11} y={yScale * 34} radius={xScale * 0.4} fill={lineColor} />
+        <Circle x={xScale * 94} y={yScale * 34} radius={xScale * 0.4} fill={lineColor} />
+
+        {/* Halfway Line */}
+        <Line points={[xScale * 52.5, 0, xScale * 52.5, canvasSize.height]} stroke={lineColor} strokeWidth={2} />
+
+        {/* Center Circle */}
+        <Circle x={xScale * 52.5} y={yScale * 34} radius={xScale * 9.15} stroke={lineColor} strokeWidth={2} />
+
+        {/* Corner Arcs */}
+        <Arc x={xScale * 0} y={yScale * 0} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={0} stroke={lineColor} strokeWidth={2} />
+        <Arc x={xScale * 0} y={yScale * 68} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={270} stroke={lineColor} strokeWidth={2} />
+        <Arc x={xScale * 105} y={yScale * 0} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={90} stroke={lineColor} strokeWidth={2} />
+        <Arc x={xScale * 105} y={yScale * 68} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={180} stroke={lineColor} strokeWidth={2} />
+
+        {/* Penalty Arcs */}
+        <Arc x={xScale * 94} y={yScale * 34} innerRadius={xScale * 9.15} outerRadius={xScale * 9.15} angle={105} rotation={127.5} stroke={lineColor} strokeWidth={2} />
+        <Arc x={xScale * 11} y={yScale * 34} innerRadius={xScale * 9.15} outerRadius={xScale * 9.15} angle={105} rotation={307.5} stroke={lineColor} strokeWidth={2} />
+
+        {/* "SCORELECT" in the End Zones */}
+        <Text text="SCORELECT.COM" x={xScale * 22.5} y={canvasSize.height / 40.25} fontSize={canvasSize.width / 50} fill="#D3D3D3" opacity={0.7} align="center" />
+        <Text text="SCORELECT.COM" x={canvasSize.width - xScale * 22.5} y={canvasSize.height / 1.02} fontSize={canvasSize.width / 50} fill="#D3D3D3" opacity={0.7} rotation={180} align="center" />
+      </Layer>
+    );
+  }; 
 
   // Function-based renderSoccerPitchForScreenshot for Konva-based rendering
   const renderSoccerPitchForScreenshot = (layer) => {

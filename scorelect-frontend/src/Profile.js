@@ -1,51 +1,70 @@
+// src/Profile.js
 import React, { useEffect, useState } from 'react';
 import { getAuth, signOut } from 'firebase/auth';
 import { firestore } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import './Profile.css';
+import { FaUserCircle } from 'react-icons/fa'; // Import a user avatar icon
 
 const Profile = ({ onLogout }) => {
   const [user, setUser] = useState(null);
   const [subscription, setSubscription] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     const auth = getAuth();
     const currentUser = auth.currentUser;
 
+    // Extract 'session_id' and 'uid' from URL query parameters
+    const query = new URLSearchParams(window.location.search);
+    const sessionId = query.get('session_id');
+    const urlUid = query.get('uid'); // 'uid' passed as query param in success_url
+
     if (currentUser) {
       setUser(currentUser);
-      fetchUserSubscription(currentUser.uid);
 
-      // Check if redirected from Checkout
-      const query = new URLSearchParams(window.location.search);
-      const sessionId = query.get('session_id');
-      if (sessionId) {
-        // Handle successful subscription
-        fetchUserSubscription(currentUser.uid);
-        // Optionally remove session_id from URL
+      // Determine which UID to use: from URL or from auth
+      const uidToUse = urlUid || currentUser.uid;
+
+      if (sessionId && urlUid) {
+        // If redirected from Stripe Checkout with session_id and uid in URL
+        // Fetch and update subscription
+        fetchUserSubscription(uidToUse, sessionId);
+        // Optionally remove query params from URL
         navigate('/profile', { replace: true });
+      } else {
+        // Regular profile access
+        fetchUserSubscription(uidToUse);
       }
     } else {
+      // If user is not authenticated, redirect to sign-in page
       navigate('/signin');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
-  const fetchUserSubscription = async (uid) => {
+  const fetchUserSubscription = async (uid, sessionId = null) => {
     setLoading(true);
+    setError(null);
     try {
       const userDoc = await getDoc(doc(firestore, 'users', uid));
       if (userDoc.exists()) {
         const userData = userDoc.data();
         if (userData.subscriptionId) {
+          const payload = { subscriptionId: userData.subscriptionId };
+          if (sessionId) {
+            payload.session_id = sessionId;
+          }
+
           const response = await fetch(`${process.env.REACT_APP_API_URL}/get-subscription`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ subscriptionId: userData.subscriptionId }),
+            body: JSON.stringify(payload),
           });
 
           if (!response.ok) {
@@ -53,8 +72,10 @@ const Profile = ({ onLogout }) => {
           }
 
           const subscriptionData = await response.json();
+
           if (subscriptionData.error) {
             console.error('Subscription error:', subscriptionData.error);
+            setError(subscriptionData.error);
           } else {
             console.log('Fetched subscription data:', subscriptionData);
             setSubscription(subscriptionData);
@@ -64,15 +85,22 @@ const Profile = ({ onLogout }) => {
         }
       } else {
         console.log('User document not found');
+        setError('User data not found.');
       }
     } catch (error) {
       console.error('Error fetching user subscription:', error);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleCancelSubscription = async () => {
+    if (!subscription || !subscription.id) {
+      alert('No active subscription to cancel.');
+      return;
+    }
+
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL}/cancel-subscription`, {
         method: 'POST',
@@ -91,7 +119,7 @@ const Profile = ({ onLogout }) => {
         console.error(result.error);
         alert('Error canceling subscription: ' + result.error);
       } else {
-        alert('Subscription canceled');
+        alert('Subscription canceled successfully.');
         // Fetch updated subscription data
         await fetchUserSubscription(user.uid);
       }
@@ -103,7 +131,7 @@ const Profile = ({ onLogout }) => {
 
   const handleRenewSubscription = () => {
     // Redirect the user to the Stripe payment link
-    window.location.href = 'https://buy.stripe.com/9AQcQEbrCdMJ5567ss';
+    window.location.href = 'https://buy.stripe.com/9AQcQEbrCdMJ5567ss'; // Replace with your actual link
   };
 
   const handleLogout = async () => {
@@ -119,26 +147,32 @@ const Profile = ({ onLogout }) => {
   };
 
   if (loading) {
-    return <p>Loading...</p>;
+    return (
+      <div className="profile-container">
+        <p>Loading...</p>
+      </div>
+    );
   }
 
   return (
     <div className="profile-container">
       <h2>Profile</h2>
+      {error && <div className="error-message">{error}</div>}
       {user && (
         <>
-          <p>Email: {user.email}</p>
+          <div className="user-info">
+            <FaUserCircle className="avatar-icon" />
+            <p><strong>Email:</strong> {user.email}</p>
+          </div>
           <button onClick={handleLogout} className="logout-button">Logout</button>
           {subscription ? (
             <>
               <h3>Subscription Details</h3>
-              <p>Status: {subscription.status}</p>
-              <p>Next Billing Date: {new Date(subscription.current_period_end * 1000).toLocaleDateString()}</p>
-              {console.log('Subscription status:', subscription.status)}
-              {subscription.status === 'active' && (
+              <p><strong>Status:</strong> {subscription.status}</p>
+              <p><strong>Next Billing Date:</strong> {new Date(subscription.current_period_end * 1000).toLocaleDateString()}</p>
+              {subscription.status === 'active' ? (
                 <button className="cancel-button" onClick={handleCancelSubscription}>Cancel Subscription</button>
-              )}
-              {(subscription.status === 'canceled' || subscription.status !== 'active') && (
+              ) : (
                 <button className="renew-button" onClick={handleRenewSubscription}>Renew Subscription</button>
               )}
             </>

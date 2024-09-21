@@ -263,13 +263,13 @@ const handleSaveGame = async () => {
         if (user) {
           setUser(user);
           const docRef = doc(firestore, 'users', user.uid);
-    
+  
           // Use onSnapshot to listen for real-time updates
           const unsubscribe = onSnapshot(docRef, (docSnap) => {
             if (docSnap.exists()) {
               const userData = docSnap.data();
-              setUserType(userData.userType || 'free'); // Update userType state
-    
+              setUserType(userData.role || 'free'); // Changed from userData.userType to userData.role
+  
               // Handle downloadsRemaining as before
               const lastDownloadDate = userData.lastDownloadDate;
               const today = new Date().toLocaleDateString();
@@ -282,7 +282,7 @@ const handleSaveGame = async () => {
             } else {
               // If user document doesn't exist, create it with default values
               setDoc(docRef, {
-                userType: 'free',
+                role: 'free', // Changed from userType to role
                 lastDownloadDate: new Date().toLocaleDateString(),
                 downloadsRemaining: 1,
               });
@@ -290,7 +290,7 @@ const handleSaveGame = async () => {
               setDownloadsRemaining(1);
             }
           });
-    
+  
           // Cleanup subscription on unmount
           return () => unsubscribe();
         } else {

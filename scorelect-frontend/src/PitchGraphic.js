@@ -129,7 +129,7 @@ const PitchGraphic = () => {
 
   useEffect(() => {
     setActionButtons([
-      { label: 'Point', value: 'point', color: '#00ff00', type: 'marker' },
+      { label: 'Point', value: 'point', color: '#048522', type: 'marker' },
       { label: 'Wide', value: 'wide', color: '#ff0000', type: 'marker' },
       { label: 'Goal', value: 'goal', color: '#0000ff', type: 'marker' },
       { label: 'Miss', value: 'miss', color: '#ff00ff', type: 'marker' },

@@ -418,12 +418,13 @@ const handleSaveGame = async () => {
   
         if (displayPlayerNumber && coord.player) {
           const playerNumberText = new Konva.Text({
-            x: coord.x * xScale - 5,
-            y: coord.y * yScale - 3,
+            x: coord.x * xScale - 5, // Adjusted x position for better centering
+            y: coord.y * yScale - 4, // Slightly adjusted y position
             text: coord.player,
             fontSize: 8,
             fill: 'white',
             align: 'center',
+            width: 10, // Fixed width to center the text
           });
           layer.add(playerNumberText);
         }

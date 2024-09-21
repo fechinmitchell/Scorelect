@@ -77,6 +77,9 @@ const PitchGraphic = () => {
   const [gameName, setGameName] = useState('');
   const [showSetupTeamsContainer, setShowSetupTeamsContainer] = useState(false);
   const [userType, setUserType] = useState('free'); // Initialize userType state
+  const lightStripeColor = '#A8D5BA'; // Light green
+  const darkStripeColor = '#8FBF9C';  // Slightly darker green
+
 
 
 
@@ -520,9 +523,33 @@ const handleSaveGame = async () => {
     setCanvasSize({ width, height });
   };
 
-  const renderGAAPitch = () => (
-    <Layer>
-      <Rect x={0} y={0} width={canvasSize.width} height={canvasSize.height} fill={pitchColor} />
+  const renderGAAPitch = () => {
+    const numStripes = 10;
+    const stripeWidth = canvasSize.width / numStripes;
+
+    return (
+      <Layer>
+        {/* Pitch Background */}
+        <Rect
+          x={0}
+          y={0}
+          width={canvasSize.width}
+          height={canvasSize.height}
+          fill={pitchColor}
+        />
+
+        {/* Stripes */}
+        {Array.from({ length: numStripes }, (_, i) => (
+          <Rect
+            key={i}
+            x={i * stripeWidth}
+            y={0}
+            width={stripeWidth}
+            height={canvasSize.height}
+            fill={i % 2 === 0 ? lightStripeColor : darkStripeColor}
+            opacity={0.3} // Adjust opacity for subtlety
+          />
+        ))}
       <Line points={[0, 0, canvasSize.width, 0, canvasSize.width, canvasSize.height, 0, canvasSize.height, 0, 0]} stroke={lineColor} strokeWidth={2} />
       <Line points={[canvasSize.width, yScale * 40.75, xScale * 145.2, yScale * 40.75, xScale * 145.2, yScale * 47.25, canvasSize.width, yScale * 47.25]} stroke={lineColor} strokeWidth={2} />
       <Line points={[0, yScale * 40.75, xScale * -0.2, yScale * 40.75, xScale * -0.2, yScale * 47.25, 0, yScale * 47.25]} stroke={lineColor} strokeWidth={2} />
@@ -548,8 +575,10 @@ const handleSaveGame = async () => {
       <Text text="SCORELECT.COM" x={xScale * 22.5} y={canvasSize.height / 40.25} fontSize={canvasSize.width / 60} f  fill="#D3D3D3" opacity={0.7} rotation={0} align="center" />
       <Text text="SCORELECT.COM" x={canvasSize.width - xScale * 22.5} y={canvasSize.height / 1.02} fontSize={canvasSize.width / 60} fill="#D3D3D3" opacity={0.7} rotation={180} align="center" />
 
-    </Layer>
-  );
+      </Layer>
+    );
+  };
+
 
   const renderGAAPitchForScreenshot = (layer) => {
     const fieldRect = new Konva.Rect({

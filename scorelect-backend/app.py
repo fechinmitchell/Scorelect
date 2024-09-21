@@ -107,7 +107,7 @@ def create_checkout_session():
 
         session = stripe.checkout.Session.create(**session_data)
 
-        return jsonify({'id': session.id})
+        return jsonify({'url': session.url})  # Changed from {'id': session.id} to {'url': session.url}
     except Exception as e:
         logging.error(f"Error creating checkout session: {str(e)}")
         return jsonify(error=str(e)), 400

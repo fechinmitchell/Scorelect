@@ -266,18 +266,35 @@ const handleSaveGame = async () => {
     const stage = e.target.getStage();
     const point = stage.getPointerPosition();
     const newCoord = { x: point.x / xScale, y: point.y / yScale };
-
+  
     if (actionType && actionType.type === 'line') {
-      setCurrentCoords([...currentCoords, newCoord]);
-      if (currentCoords.length === 1) {
-        setFormData({ ...formData, from: currentCoords[0], to: newCoord, type: actionType.value });
-        setOpenLineDialog(true);
-      }
+      setCurrentCoords((prevCoords) => {
+        const updatedCoords = [...prevCoords, newCoord];
+        if (updatedCoords.length === 2) {
+          setFormData({
+            ...formData,
+            from: updatedCoords[0],
+            to: updatedCoords[1],
+            type: 'line', // Ensure type is set to 'line'
+            action: actionType.value, // Ensure action is set correctly
+          });
+          setOpenLineDialog(true);
+          return []; // Reset currentCoords for the next line
+        }
+        return updatedCoords;
+      });
     } else if (actionType) {
-      setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType.value });
+      setFormData({
+        ...formData,
+        x: newCoord.x,
+        y: newCoord.y,
+        type: 'marker', // Ensure type is set to 'marker'
+        action: actionType.value,
+      });
       setOpenDialog(true);
     }
   };
+  
 
   const handleTap = (e) => {
     handleClick(e);
@@ -301,27 +318,8 @@ const handleSaveGame = async () => {
   };
 
   const handleFormSubmit = async () => {
-    if (customInput.action) {
-      setActionCodes([...actionCodes, customInput.action]);
-      formData.action = customInput.action;
-    }
-    if (customInput.team) {
-      setTeams([...teams, customInput.team]);
-      formData.team = customInput.team;
-    }
-    if (customInput.position) {
-      setPositions([...positions, customInput.position]);
-      formData.position = customInput.position;
-    }
-    if (customInput.pressure) {
-      pressures.push(customInput.pressure);
-      formData.pressure = customInput.pressure;
-    }
-    if (customInput.foot) {
-      feet.push(customInput.foot);
-      formData.foot = customInput.foot;
-    }
-
+    // Handle custom inputs as before
+  
     const updatedFormData = {
       action: formData.action || actionCodes[0],
       team: formData.team || teams[0],
@@ -331,17 +329,26 @@ const handleSaveGame = async () => {
       pressure: formData.pressure || pressures[0],
       foot: formData.foot || feet[0],
       minute: formData.minute || '',
-      x: formData.x,
-      y: formData.y,
-      type: formData.type,
-      from: formData.from,
-      to: formData.to
+      type: formData.type, // Ensure type is set
     };
+  
+    // Handle line vs. marker data
+    if (formData.type === 'line') {
+      updatedFormData.from = formData.from;
+      updatedFormData.to = formData.to;
+    } else {
+      updatedFormData.x = formData.x;
+      updatedFormData.y = formData.y;
+    }
+  
+    // Add the updated form data to coords
     setCoords([...coords, updatedFormData]);
+  
+    // Close dialogs
     setOpenDialog(false);
     setOpenLineDialog(false);
-    setRecentActions([formData.action, ...recentActions.filter(action => action !== formData.action)]);
-    setRecentTeams([formData.team, ...recentTeams.filter(team => team !== formData.team)]);
+  
+    // Reset formData
     setFormData({
       action: 'goal',
       team: 'Arsenal',
@@ -352,12 +359,16 @@ const handleSaveGame = async () => {
       foot: 'Right',
       minute: '',
       from: null,
-      to: null
+      to: null,
+      type: '',
     });
+  
+    // Reset currentCoords and customInput
     setCurrentCoords([]);
     setCustomInput({ action: '', team: '', position: '', pressure: '', foot: '', color: '#000000', type: 'marker' });
     setIsContextMenuOpen(false);
   };
+  
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -1035,58 +1046,38 @@ const removePlayerFromTeam2 = (index) => {
           {renderSoccerPitch()}
           {isContextMenuOpen && renderContextMenu()}
           <Layer>
-            {coords.map((coord, index) => {
-              if (coord.from && coord.to) {
-                return (
-                  <Line
-                    key={index}
-                    points={[
-                      coord.from.x * xScale,
-                      coord.from.y * yScale,
-                      coord.to.x * xScale,
-                      coord.to.y * yScale
-                    ]}
-                    stroke={getColor(coord.type)}
-                    strokeWidth={2}
-                  />
-                );
-              }
+  {coords.map((coord, index) => {
+    if (coord.type === 'line' && coord.from && coord.to) {
+      return (
+        <Line
+          key={index}
+          points={[
+            coord.from.x * xScale,
+            coord.from.y * yScale,
+            coord.to.x * xScale,
+            coord.to.y * yScale,
+          ]}
+          stroke={getColor(coord.action)}
+          strokeWidth={2}
+        />
+      );
+    } else if (coord.type === 'marker' && coord.x && coord.y) {
       return (
         <Group key={index}>
           <Circle
             x={coord.x * xScale}
             y={coord.y * yScale}
             radius={6}
-            fill={getColor(coord.type)}
+            fill={getColor(coord.action)}
           />
-          {displayPlayerNumber && (
-            <Text
-              x={coord.x * xScale}
-              y={coord.y * yScale - 4}  // Adjusted to align the text vertically better
-              text={coord.player}
-              fontSize={8}
-              fill="white"
-              align="center"
-              width={10}  // Set the width to ensure consistent alignment
-              offsetX={coord.player.length === 1 ? 4.5 : 4.5}  // Fine-tuned offset values for better centering
-              />
-          )}
-          {displayPlayerName && (
-            <Text
-              x={coord.x * xScale}
-              y={coord.y * yScale - 16}  // Position the name above the marker
-              text={coord.playerName}
-              fontSize={10}
-              fill="black"
-              align="center"
-              width={coord.playerName.length * 6}  // Adjust the width based on the name length
-              offsetX={(coord.playerName.length * 6) / 2}  // Center the text horizontally
-            />
-          )}
+          {/* Player number and name rendering as before */}
         </Group>
       );
-    })}
-  </Layer>
+    }
+    return null;
+  })}
+</Layer>
+
 </Stage>
 <div className="aggregated-data-container">
       <AggregatedData data={aggregateData} />

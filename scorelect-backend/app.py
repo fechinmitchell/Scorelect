@@ -98,7 +98,7 @@ def create_checkout_session():
             return jsonify({'error': 'Email and UID are required.'}), 400
 
         # Create Stripe Checkout session
-        success_url = f'https://scorelect.com/success?session_id={{CHECKOUT_SESSION_ID}}&uid={uid}'
+        success_url = f'https://scorelect.com/profile?session_id={{CHECKOUT_SESSION_ID}}&uid={uid}'
         cancel_url = 'https://scorelect.com/cancel'
 
         session_data = {
@@ -203,18 +203,37 @@ def get_subscription():
     try:
         data = request.json
         subscription_id = data.get('subscriptionId')
-        session_id = data.get('session_id')  # Optional: Handle session-specific logic if needed
+        session_id = data.get('session_id')
+        uid = data.get('uid')
 
-        if not subscription_id:
-            logging.error("Subscription ID not provided.")
-            return jsonify({'error': 'Subscription ID is required.'}), 400
+        if subscription_id:
+            # Fetch subscription using subscription_id
+            subscription = stripe.Subscription.retrieve(subscription_id)
+        elif session_id and uid:
+            # Fetch session using session_id
+            session = stripe.checkout.Session.retrieve(session_id)
+            subscription_id = session.get('subscription')
+            if not subscription_id:
+                logging.error("Subscription ID not found in session.")
+                return jsonify({'error': 'Subscription ID not found in session.'}), 400
 
-        subscription = stripe.Subscription.retrieve(subscription_id)
+            # Fetch subscription using subscription_id
+            subscription = stripe.Subscription.retrieve(subscription_id)
+
+            # Save subscription_id and role to Firestore
+            user_ref = db.collection('users').document(uid)
+            user_ref.set({'subscriptionId': subscription_id, 'role': 'paid'}, merge=True)
+            logging.info(f"Updated user {uid} with subscription ID and set role to paid.")
+
+        else:
+            logging.error("Subscription ID or Session ID with UID not provided.")
+            return jsonify({'error': 'Subscription ID or Session ID with UID is required.'}), 400
 
         return jsonify(subscription)
     except Exception as e:
         logging.error(f"Error retrieving subscription: {str(e)}")
         return jsonify(error=str(e)), 400
+
 
 # Endpoint to retrieve Stripe session details
 @app.route('/retrieve-session', methods=['POST'])

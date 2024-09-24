@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { getAuth, signOut } from 'firebase/auth';
 import { firestore } from './firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore'; // Imported setDoc here
 import { useNavigate } from 'react-router-dom';
 import './Profile.css';
 import { FaUserCircle } from 'react-icons/fa'; // Import a user avatar icon
@@ -12,6 +12,7 @@ const Profile = ({ onLogout }) => {
   const [subscription, setSubscription] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -29,7 +30,7 @@ const Profile = ({ onLogout }) => {
       // Determine which UID to use: from URL or from auth
       const uidToUse = urlUid || currentUser.uid;
 
-      if (sessionId && urlUid) {
+      if (sessionId && uidToUse) {
         // If redirected from Stripe Checkout with session_id and uid in URL
         // Fetch and update subscription
         fetchUserSubscription(uidToUse, sessionId);
@@ -50,42 +51,73 @@ const Profile = ({ onLogout }) => {
     setLoading(true);
     setError(null);
     try {
-      const userDoc = await getDoc(doc(firestore, 'users', uid));
+      const userDocRef = doc(firestore, 'users', uid);
+      const userDoc = await getDoc(userDocRef);
+      let userData = null;
       if (userDoc.exists()) {
-        const userData = userDoc.data();
-        if (userData.subscriptionId) {
-          const payload = { subscriptionId: userData.subscriptionId };
-          if (sessionId) {
-            payload.session_id = sessionId;
-          }
-
-          const response = await fetch(`${process.env.REACT_APP_API_URL}/get-subscription`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload),
-          });
-
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-
-          const subscriptionData = await response.json();
-
-          if (subscriptionData.error) {
-            console.error('Subscription error:', subscriptionData.error);
-            setError(subscriptionData.error);
-          } else {
-            console.log('Fetched subscription data:', subscriptionData);
-            setSubscription(subscriptionData);
-          }
-        } else {
-          setSubscription(null);
-        }
+        userData = userDoc.data();
       } else {
         console.log('User document not found');
         setError('User data not found.');
+        setLoading(false);
+        return;
+      }
+
+      let subscriptionId = userData.subscriptionId;
+
+      if (!subscriptionId && sessionId) {
+        // Call backend to get subscriptionId using sessionId
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/get-subscription`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ session_id: sessionId, uid }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const subscriptionData = await response.json();
+
+        if (subscriptionData.error) {
+          console.error('Subscription error:', subscriptionData.error);
+          setError(subscriptionData.error);
+        } else {
+          console.log('Fetched subscription data:', subscriptionData);
+          subscriptionId = subscriptionData.id;
+          // Save subscriptionId and role to Firestore
+          await setDoc(userDocRef, { subscriptionId, role: 'paid' }, { merge: true });
+          // Set subscription data
+          setSubscription(subscriptionData);
+        }
+      } else if (subscriptionId) {
+        // If subscriptionId exists in userData, fetch subscription data
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/get-subscription`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ subscriptionId }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const subscriptionData = await response.json();
+
+        if (subscriptionData.error) {
+          console.error('Subscription error:', subscriptionData.error);
+          setError(subscriptionData.error);
+        } else {
+          console.log('Fetched subscription data:', subscriptionData);
+          setSubscription(subscriptionData);
+        }
+      } else {
+        // No subscriptionId and no sessionId
+        setSubscription(null);
       }
     } catch (error) {
       console.error('Error fetching user subscription:', error);
@@ -130,15 +162,15 @@ const Profile = ({ onLogout }) => {
   };
 
   const handleRenewSubscription = () => {
-    // Redirect the user to the Stripe payment link
-    window.location.href = 'https://buy.stripe.com/9AQcQEbrCdMJ5567ss'; // Replace with your actual link
+    // Redirect the user to the Stripe payment link with uid as query param
+    window.location.href = `https://buy.stripe.com/9AQcQEbrCdMJ5567ss`;
   };
 
   const handleLogout = async () => {
     const auth = getAuth();
     try {
       await signOut(auth);
-      onLogout();
+      if (onLogout) onLogout();
       navigate('/signin');
     } catch (error) {
       console.error('Error signing out:', error);
@@ -170,7 +202,7 @@ const Profile = ({ onLogout }) => {
               <h3>Subscription Details</h3>
               <p><strong>Status:</strong> {subscription.status}</p>
               <p><strong>Next Billing Date:</strong> {new Date(subscription.current_period_end * 1000).toLocaleDateString()}</p>
-              {subscription.status === 'active' ? (
+              {subscription.status === 'active' || subscription.status === 'trialing' ? (
                 <button className="cancel-button" onClick={handleCancelSubscription}>Cancel Subscription</button>
               ) : (
                 <button className="renew-button" onClick={handleRenewSubscription}>Renew Subscription</button>

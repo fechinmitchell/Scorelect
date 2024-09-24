@@ -61,7 +61,7 @@ csp = {
     ]
 }
 
-Talisman(app, content_security_policy=csp, skipped_endpoints=['stripe-webhook'])
+Talisman(app, content_security_policy=csp)
 
 # Initialize Stripe
 stripe.api_key = os.getenv('STRIPE_SECRET_KEY')

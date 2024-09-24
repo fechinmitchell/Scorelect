@@ -56,7 +56,6 @@ const PitchGraphic = () => {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [displayPlayerNumber, setDisplayPlayerNumber] = useState(false);
   const [displayPlayerName, setDisplayPlayerName] = useState(false);
-  const [teams, setTeams] = useState([{ name: '', players: [] }]);
   const [isSetupTeamsModalOpen, setIsSetupTeamsModalOpen] = useState(false);
   const [team1Players, setTeam1Players] = useState(Array(11).fill({ name: '' }));
   const [team2Players, setTeam2Players] = useState(Array(11).fill({ name: '' }));
@@ -209,6 +208,8 @@ const handleSaveGame = async () => {
   const [counties, setCounties] = useState(initialCounties);
   const [recentActions, setRecentActions] = useState([]);
   const [recentTeams, setRecentTeams] = useState([]);
+  const [teams, setTeams] = useState(initialCounties);
+
 
   useEffect(() => {
     const handleKeyPress = (e) => {
@@ -1089,12 +1090,17 @@ const handleSaveGame = async () => {
             <select name="team" value={formData.team} onChange={handleChange}>
               <option value="custom">Add New Team</option>
               {recentTeams.map(team => <option key={team} value={team}>{team}</option>)}
-              {counties.map(county => <option key={county} value={county}>{county}</option>)}
+              {teams.map(team => <option key={team} value={team}>{team}</option>)}
             </select>
             {formData.team === 'custom' && (
               <div className="form-group">
                 <label>New Team Name:</label>
-                <input type="text" name="customTeam" value={customInput.team} onChange={(e) => setCustomInput({ ...customInput, team: e.target.value })} />
+                <input
+                  type="text"
+                  name="customTeam"
+                  value={customInput.team}
+                  onChange={(e) => setCustomInput({ ...customInput, team: e.target.value })}
+                />
               </div>
             )}
           </div>
@@ -1982,23 +1988,33 @@ const handleSaveGame = async () => {
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
-          <button
-            onClick={() => {
-              setShowSetupTeamsContainer(true); // Set the state to show the container above the pitch graphic
-              setIsSetupTeamModalOpen(false); // Close the modal after pressing the button
-            }}
-            style={{
-              background: '#28a745', // Fixed color for Setup Teams button
-              color: '#fff',
-              padding: '10px 20px',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer',
-              transition: 'background 0.3s',
-            }}
-          >
-            Setup Teams
-          </button>
+        <button
+          onClick={() => {
+            setShowSetupTeamsContainer(true); // Set the state to show the container above the pitch graphic
+            setIsSetupTeamModalOpen(false); // Close the modal after pressing the button
+            setTeams((prevTeams) => {
+              const newTeams = [...prevTeams];
+              if (team1 && !newTeams.includes(team1)) {
+                newTeams.push(team1);
+              }
+              if (team2 && !newTeams.includes(team2)) {
+                newTeams.push(team2);
+              }
+              return newTeams;
+            });
+          }}
+          style={{
+            background: '#28a745', // Fixed color for Setup Teams button
+            color: '#fff',
+            padding: '10px 20px',
+            border: 'none',
+            borderRadius: '5px',
+            cursor: 'pointer',
+            transition: 'background 0.3s',
+          }}
+        >
+          Setup Teams
+        </button>
         </div>
       </Modal>
 

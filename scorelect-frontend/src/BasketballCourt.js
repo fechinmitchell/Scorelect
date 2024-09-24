@@ -174,14 +174,14 @@ const handleSaveGame = async () => {
     'Lakers', 'Warriors', 'Nets', 'Bucks', 'Clippers', 'Suns', '76ers', 'Jazz', 'Heat', 'Mavericks'
   ];
 
-  const pressures = ['Yes', 'No'];
-  const feet = ['Right', 'Left', 'Hand'];
-
   const [actionCodes, setActionCodes] = useState(initialActionCodes);
   const [positions, setPositions] = useState(initialPositions);
   const [teams, setTeams] = useState(nbaTeams);
   const [recentActions, setRecentActions] = useState([]);
   const [recentTeams, setRecentTeams] = useState([]);
+  const [pressures, setPressures] = useState(['Yes', 'No']);
+  const [feet, setFeet] = useState(['Right', 'Left']);
+
 
   useEffect(() => {
     const handleKeyPress = (e) => {
@@ -197,6 +197,10 @@ const handleSaveGame = async () => {
       window.removeEventListener('keypress', handleKeyPress);
     };
   }, []);
+
+  const handleSetupTeams = () => {
+    setIsSetupTeamModalOpen(false);
+  };
 
   useEffect(() => {
     const auth = getAuth();
@@ -290,24 +294,43 @@ const handleSaveGame = async () => {
   };
 
   const handleFormSubmit = async () => {
+    // Handle custom inputs
     if (customInput.action) {
-      setActionCodes([...actionCodes, customInput.action]);
+      if (!actionCodes.includes(customInput.action)) {
+        setActionCodes([...actionCodes, customInput.action]);
+      }
       formData.action = customInput.action;
     }
+  
+    // Handle custom team input
     if (customInput.team) {
-      setTeams([...teams, customInput.team]);
+      if (!teams.includes(customInput.team)) {
+        setTeams([...teams, customInput.team]);
+      }
       formData.team = customInput.team;
     }
+  
+    // Handle custom position input
     if (customInput.position) {
-      setPositions([...positions, customInput.position]);
+      if (!positions.includes(customInput.position)) {
+        setPositions([...positions, customInput.position]);
+      }
       formData.position = customInput.position;
     }
+  
+    // Handle custom pressure input
     if (customInput.pressure) {
-      pressures.push(customInput.pressure);
+      if (!pressures.includes(customInput.pressure)) {
+        setPressures([...pressures, customInput.pressure]);
+      }
       formData.pressure = customInput.pressure;
     }
+  
+    // Handle custom foot input
     if (customInput.foot) {
-      feet.push(customInput.foot);
+      if (!feet.includes(customInput.foot)) {
+        setFeet([...feet, customInput.foot]);
+      }
       formData.foot = customInput.foot;
     }
 

@@ -314,36 +314,18 @@ const handleSaveGame = async () => {
       const stage = e.target.getStage();
       const point = stage.getPointerPosition();
       const newCoord = { x: point.x / xScale, y: point.y / yScale };
-    
+  
       if (actionType && actionType.type === 'line') {
-        setCurrentCoords((prevCoords) => {
-          const updatedCoords = [...prevCoords, newCoord];
-          if (updatedCoords.length === 2) {
-            setFormData({
-              ...formData,
-              from: updatedCoords[0],
-              to: updatedCoords[1],
-              type: 'line', // Ensure type is 'line'
-              action: actionType.value,
-            });
-            setOpenLineDialog(true);
-            return []; // Reset currentCoords after capturing two points
-          }
-          return updatedCoords;
-        });
+        setCurrentCoords([...currentCoords, newCoord]);
+        if (currentCoords.length === 1) {
+          setFormData({ ...formData, from: currentCoords[0], to: newCoord, type: actionType.value });
+          setOpenLineDialog(true);
+        }
       } else if (actionType) {
-        setFormData({
-          ...formData,
-          x: newCoord.x,
-          y: newCoord.y,
-          type: 'marker', // Ensure type is 'marker'
-          action: actionType.value,
-        });
+        setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType.value });
         setOpenDialog(true);
       }
     };
-    
-    
   
     const handleTap = (e) => {
       handleClick(e);
@@ -416,8 +398,7 @@ const handleSaveGame = async () => {
         }
         formData.foot = customInput.foot;
       }
-    
-      // Prepare the updated form data
+  
       const updatedFormData = {
         action: formData.action || actionCodes[0],
         team: formData.team || teams[0],
@@ -427,30 +408,17 @@ const handleSaveGame = async () => {
         pressure: formData.pressure || pressures[0],
         foot: formData.foot || feet[0],
         minute: formData.minute || '',
-        type: formData.type, // Ensure type is set
+        x: formData.x,
+        y: formData.y,
+        type: formData.type,
+        from: formData.from,
+        to: formData.to
       };
-    
-      // Handle line vs. marker data
-      if (formData.type === 'line') {
-        updatedFormData.from = formData.from;
-        updatedFormData.to = formData.to;
-      } else {
-        updatedFormData.x = formData.x;
-        updatedFormData.y = formData.y;
-      }
-    
-      // Add the updated form data to coords
       setCoords([...coords, updatedFormData]);
-    
-      // Close dialogs
       setOpenDialog(false);
       setOpenLineDialog(false);
-    
-      // Update recent actions and teams
       setRecentActions([formData.action, ...recentActions.filter(action => action !== formData.action)]);
       setRecentTeams([formData.team, ...recentTeams.filter(team => team !== formData.team)]);
-    
-      // Reset formData
       setFormData({
         action: 'pass',
         team: 'Patriots',
@@ -1047,60 +1015,58 @@ const handleSaveGame = async () => {
   {renderFootballField()}
   {isContextMenuOpen && renderContextMenu()}
   <Layer>
-  {coords.map((coord, index) => {
-    if (coord.type === 'line' && coord.from && coord.to) {
-      return (
-        <Line
-          key={index}
-          points={[
-            coord.from.x * xScale,
-            coord.from.y * yScale,
-            coord.to.x * xScale,
-            coord.to.y * yScale,
-          ]}
-          stroke={getColor(coord.action)}
-          strokeWidth={2}
-        />
-      );
-    } else if (coord.type === 'marker' && coord.x && coord.y) {
+            {coords.map((coord, index) => {
+              if (coord.from && coord.to) {
+                return (
+                  <Line
+                    key={index}
+                    points={[
+                      coord.from.x * xScale,
+                      coord.from.y * yScale,
+                      coord.to.x * xScale,
+                      coord.to.y * yScale
+                    ]}
+                    stroke={getColor(coord.type)}
+                    strokeWidth={2}
+                  />
+                );
+              }
       return (
         <Group key={index}>
           <Circle
             x={coord.x * xScale}
             y={coord.y * yScale}
             radius={6}
-            fill={getColor(coord.action)}
+            fill={getColor(coord.type)}
           />
-          {displayPlayerNumber && coord.player && (
+          {displayPlayerNumber && (
             <Text
               x={coord.x * xScale}
-              y={coord.y * yScale - 4}
+              y={coord.y * yScale - 4}  // Adjusted to align the text vertically better
               text={coord.player}
               fontSize={8}
               fill="white"
               align="center"
-              width={10}
-              offsetX={4.5}
-            />
+              width={10}  // Set the width to ensure consistent alignment
+              offsetX={coord.player.length === 1 ? 4.5 : 4.5}  // Fine-tuned offset values for better centering
+              />
           )}
-          {displayPlayerName && coord.playerName && (
+          {displayPlayerName && (
             <Text
               x={coord.x * xScale}
-              y={coord.y * yScale - 16}
+              y={coord.y * yScale - 16}  // Position the name above the marker
               text={coord.playerName}
               fontSize={10}
               fill="black"
               align="center"
-              width={coord.playerName.length * 6}
-              offsetX={(coord.playerName.length * 6) / 2}
+              width={coord.playerName.length * 6}  // Adjust the width based on the name length
+              offsetX={(coord.playerName.length * 6) / 2}  // Center the text horizontally
             />
           )}
         </Group>
       );
-    }
-    return null;
-  })}
-</Layer>
+    })}
+  </Layer>
 
 </Stage>
 
@@ -1144,18 +1110,10 @@ const handleSaveGame = async () => {
           <div className="form-group">
             <label>Team:</label>
             <select name="team" value={formData.team} onChange={handleChange}>
-                <option value="custom">Add New Team</option>
-                {recentTeams.map((team) => (
-                  <option key={team.name} value={team.name}>
-                    {team.name}
-                  </option>
-                ))}
-                {teams.map((team) => (
-                  <option key={team.name} value={team.name}>
-                    {team.name}
-                  </option>
-                ))}
-              </select>
+              <option value="custom">Add New Team</option>
+              {recentTeams.map(team => <option key={team} value={team}>{team}</option>)}
+              {teams.map(team => <option key={team} value={team}>{team}</option>)}
+            </select>
 
             {formData.team === 'custom' && (
               <div className="form-group">

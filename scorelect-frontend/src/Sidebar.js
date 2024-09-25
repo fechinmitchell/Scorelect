@@ -28,35 +28,36 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, userType }) => {
   return (
     <div className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       <button className="toggle-button" onClick={toggleSidebar}>
-        {collapsed ? '=' : '='}
+        {collapsed ? '☰' : '×'} {/* Changed symbols for better UX */}
       </button>
       {!collapsed && (
         <>
           <div className="user-info">
             <img src={logo} alt="Scorelect Logo" className="logo" />
+            {userType !== 'free' && <p>Pro User</p>} {/* Display user type */}
           </div>
           <nav>
             <ul>
               <li>
                 <label>
                   Select Sport:
-                  <select onChange={(e) => onSportChange(e.target.value)}>
+                  <select onChange={(e) => onSportChange(e.target.value)} defaultValue="Soccer">
                     <option value="Soccer">Soccer</option>
                     <option value="GAA">GAA</option>
                     <option value="Basketball">Basketball</option>
-                    <option value="AmericanFootball">American Football</option> {/* Add American Football */}
+                    <option value="AmericanFootball">American Football</option>
                   </select>
                 </label>
               </li>
               <li><button onClick={() => onNavigate('/')}>Home</button></li>
               <li><button onClick={() => onNavigate('/saved-games')}>Saved Games</button></li>
-              {/* <li><button onClick={() => onNavigate('/analysis')}>Analysis</button></li> */}
+              <li><button onClick={() => onNavigate('/analysis')}>Analysis</button></li>
               <li><button onClick={() => onNavigate('/profile')}>Scorelect Pro</button></li>
-              {/* <li><button onClick={() => onNavigate('/howto')}>How to Use</button></li> */}
+              {/* Add more navigation buttons as needed */}
               <li><button onClick={onLogout}>{userType === 'free' ? 'Sign In' : 'Logout'}</button></li>
             </ul>
           </nav>
-        </> 
+        </>
       )}
     </div>
   );

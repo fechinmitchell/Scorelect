@@ -16,6 +16,9 @@ import Profile from './Profile';
 import SavedGames from './SavedGames';
 import Success from './Success'; // Import Success component
 import Cancel from './Cancel'; // Import Cancel component
+import Analysis from './Analysis'; // Ensure Analysis is correctly imported
+import FilterPage from './pages/FilterPage';
+import HeatmapPage from './pages/HeatmapPage';
 import { ToastContainer, toast } from 'react-toastify';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -27,7 +30,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 const App = () => {
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState('free');
-  const [selectedSport, setSelectedSport] = useState('Soccer');
+  const [selectedSport, setSelectedSport] = useState('Soccer'); // Default sport
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -52,6 +55,7 @@ const App = () => {
 
   const handleSportChange = (sport) => {
     setSelectedSport(sport);
+    navigate('/'); // Navigate to root path to display selected sport
   };
 
   const handleLogout = async () => {
@@ -72,6 +76,22 @@ const App = () => {
     navigate(path);
   };
 
+  // Function to render the selected sport's component
+  const renderSelectedSport = () => {
+    switch (selectedSport) {
+      case 'GAA':
+        return <PitchGraphic userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />;
+      case 'Soccer':
+        return <SoccerPitch userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />;
+      case 'Basketball':
+        return <BasketballCourt userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />;
+      case 'AmericanFootball':
+        return <AmericanFootballPitch userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />;
+      default:
+        return <Navigate replace to="/" />; // Fallback to root if sport is unrecognized
+    }
+  };
+
   return (
     <div className="app">
       <ToastContainer />
@@ -85,25 +105,21 @@ const App = () => {
         />
         <div className="content-area">
           <Routes>
-            <Route path="/" element={
-              selectedSport === 'GAA' ? <PitchGraphic userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} /> :
-              selectedSport === 'Soccer' ? <SoccerPitch userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} /> :
-              selectedSport === 'Basketball' ? <BasketballCourt userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} /> :
-              selectedSport === 'AmericanFootball' ? <AmericanFootballPitch userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} /> :
-              <Navigate replace to="/" />
-            } />
+            <Route path="/" element={renderSelectedSport()} />
             <Route path="/upgrade" element={<Upgrade setUserRole={setUserRole} />} />
             <Route path="/saved-games" element={<SavedGames userType={userRole} apiUrl={API_BASE_URL} />} />
-            <Route path="/profile" element={user ? <Profile onLogout={handleLogout} apiUrl={API_BASE_URL} /> : <Navigate replace to="/signin" />} />
+            <Route 
+              path="/profile" 
+              element={user ? <Profile onLogout={handleLogout} apiUrl={API_BASE_URL} /> : <Navigate replace to="/signin" />} 
+            />
             <Route path="/signin" element={<SignIn apiUrl={API_BASE_URL} />} />
             <Route path="/signup" element={<SignUp apiUrl={API_BASE_URL} />} />
-            <Route path="/gaa" element={<PitchGraphic userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />} />
-            <Route path="/soccer" element={<SoccerPitch userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />} />
-            <Route path="/basketball" element={<BasketballCourt userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />} />
-            <Route path="/americanfootball" element={<AmericanFootballPitch userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />} />
             <Route path="/success" element={<Success setUserRole={setUserRole} />} />
             <Route path="/cancel" element={<Cancel />} />
-            <Route path="*" element={<Navigate replace to="/" />} />
+            <Route path="/analysis" element={<Analysis onSportSelect={(sport) => setSelectedSport(sport)} />} />
+            <Route path="/analysis/filter" element={<FilterPage />} /> {/* New Route */}
+            <Route path="/analysis/heatmap" element={<HeatmapPage />} />
+            <Route path="*" element={<Navigate replace to="/" />} /> {/* Redirect unknown paths to root */}
           </Routes>
           <Analytics /> {/* Add the Analytics component here */}
           <SpeedInsights /> {/* Add the SpeedInsights component here */}

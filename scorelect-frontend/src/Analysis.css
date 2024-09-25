@@ -1,0 +1,38 @@
+/* src/components/Analysis.css */
+
+.analysis-page {
+    padding: 20px;
+    background-color: #f0f2f5;
+    min-height: 100vh;
+  }
+  
+  .heatmap-container, .barchart-container {
+    margin-bottom: 40px;
+  }
+  
+  .export-button {
+    margin-top: 20px;
+  }
+  
+  .filters-container {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  
+  .filter-select {
+    width: 200px;
+  }
+  
+  @media (max-width: 850px) {
+    .filters-container {
+      flex-direction: column;
+      align-items: center;
+    }
+  
+    .filter-select {
+      width: 100%;
+    }
+  }
+  

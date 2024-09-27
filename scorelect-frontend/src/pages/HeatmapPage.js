@@ -9,11 +9,19 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   Legend,
   ResponsiveContainer
 } from 'recharts';
 import Swal from 'sweetalert2';
+
+// Optional: Remove unused imports if not needed
+// import AggregatedDataChart from '../components/AggregatedDataChart'; // Default export
+// import { ShotsTable } from '../components/ShotsTable'; // Named export
+
+// Log imported components for debugging
+console.log(Stage, Layer, Rect, Line, Circle, Arc, Text, Group);
+console.log(BarChart, Bar, XAxis, YAxis, CartesianGrid, RechartsTooltip, Legend, ResponsiveContainer);
 
 // Styled Components
 const Container = styled.div`
@@ -83,7 +91,7 @@ const HeatmapPage = () => {
   // Dimensions
   const pitchWidthMeters = 105;
   const pitchHeightMeters = 68;
-  const stageWidth = 932; // pixels (10 pixels per meter)
+  const stageWidth = 932.5; // pixels (10 pixels per meter)
   const stageHeight = 550; // pixels (10 pixels per meter)
   const xScale = stageWidth / pitchWidthMeters;
   const yScale = stageHeight / pitchHeightMeters;
@@ -172,6 +180,7 @@ const HeatmapPage = () => {
 
   // Function to render the soccer pitch
   const renderSoccerPitch = () => {
+    console.log('Rendering Soccer Pitch'); // Debugging log
     const numStripes = 10;
     const stripeWidth = stageWidth / numStripes;
 
@@ -199,7 +208,6 @@ const HeatmapPage = () => {
           stroke="#000000"
           strokeWidth={2}
         />
-
 
 
         {/* 6-yard Boxes */}
@@ -245,10 +253,46 @@ const HeatmapPage = () => {
         <Circle x={xScale * 52.5} y={yScale * 34} radius={xScale * 9.15} stroke="#000000" strokeWidth={2} />
 
         {/* Corner Arcs */}
-        <Arc x={0} y={0} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={0} stroke="#000000" strokeWidth={2} />
-        <Arc x={0} y={stageHeight} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={270} stroke="#000000" strokeWidth={2} />
-        <Arc x={stageWidth} y={0} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={90} stroke="#000000" strokeWidth={2} />
-        <Arc x={stageWidth} y={stageHeight} innerRadius={0} outerRadius={xScale * 1} angle={90} rotation={180} stroke="#000000" strokeWidth={2} />
+        <Arc
+          x={0}
+          y={0}
+          innerRadius={0}
+          outerRadius={xScale * 1}
+          angle={90}
+          rotation={0}
+          stroke="#000000"
+          strokeWidth={2}
+        />
+        <Arc
+          x={0}
+          y={stageHeight}
+          innerRadius={0}
+          outerRadius={xScale * 1}
+          angle={90}
+          rotation={270}
+          stroke="#000000"
+          strokeWidth={2}
+        />
+        <Arc
+          x={stageWidth}
+          y={0}
+          innerRadius={0}
+          outerRadius={xScale * 1}
+          angle={90}
+          rotation={90}
+          stroke="#000000"
+          strokeWidth={2}
+        />
+        <Arc
+          x={stageWidth}
+          y={stageHeight}
+          innerRadius={0}
+          outerRadius={xScale * 1}
+          angle={90}
+          rotation={180}
+          stroke="#000000"
+          strokeWidth={2}
+        />
 
         {/* Penalty Arcs */}
         <Arc
@@ -294,119 +338,123 @@ const HeatmapPage = () => {
         />
       </>
     );
-}; 
-  // Function to render the heatmap
-  const renderHeatmap = () => {
-    if (!heatmapData || heatmapData.length === 0 || !heatmapData[0]) {
-      console.warn('Heatmap data is empty or undefined.');
-      return null; // Do not render anything if heatmapData is not ready
-    }
-
-    const gridSizeX = heatmapData[0].length;
-    const gridSizeY = heatmapData.length;
-    const cellWidth = stageWidth / gridSizeX;
-    const cellHeight = stageHeight / gridSizeY;
-
-    const heatmapShapes = [];
-
-    // Define a color scale, e.g., from blue (low density) to red (high density)
-    const getColor = (count) => {
-      const ratio = count / maxCount;
-      // Interpolate between blue (low density) and red (high density)
-      const r = Math.floor(255 * ratio);
-      const g = 0;
-      const b = Math.floor(255 * (1 - ratio));
-      return `rgba(${r},${g},${b},${ratio * 0.6})`; // Adjust alpha as needed
     };
 
-    for (let y = 0; y < gridSizeY; y++) {
-      for (let x = 0; x < gridSizeX; x++) {
-        const count = heatmapData[y][x];
-        if (count > 0) {
-          const color = getColor(count);
-          heatmapShapes.push(
-            <Rect
-              key={`heatmap-${x}-${y}`}
-              x={x * cellWidth}
-              y={y * cellHeight}
-              width={cellWidth}
-              height={cellHeight}
-              fill={color} // Gradient color based on count
-            />
-          );
+    // Function to render the heatmap
+    const renderHeatmap = () => {
+      console.log('Rendering Heatmap'); // Debugging log
+      if (!heatmapData || heatmapData.length === 0 || !heatmapData[0]) {
+        console.warn('Heatmap data is empty or undefined.');
+        return null; // Do not render anything if heatmapData is not ready
+      }
+
+      const gridSizeX = heatmapData[0].length;
+      const gridSizeY = heatmapData.length;
+      const cellWidth = stageWidth / gridSizeX;
+      const cellHeight = stageHeight / gridSizeY;
+
+      const heatmapShapes = [];
+
+      // Define a color scale, e.g., from blue (low density) to red (high density)
+      const getColor = (count) => {
+        const ratio = count / maxCount;
+        // Interpolate between blue (low density) and red (high density)
+        const r = Math.floor(255 * ratio);
+        const g = 0;
+        const b = Math.floor(255 * (1 - ratio));
+        return `rgba(${r},${g},${b},${ratio * 0.6})`; // Adjust alpha as needed
+      };
+
+      for (let y = 0; y < gridSizeY; y++) {
+        for (let x = 0; x < gridSizeX; x++) {
+          const count = heatmapData[y][x];
+          if (count > 0) {
+            const color = getColor(count);
+            heatmapShapes.push(
+              <Rect
+                key={`heatmap-${x}-${y}`}
+                x={x * cellWidth}
+                y={y * cellHeight}
+                width={cellWidth}
+                height={cellHeight}
+                fill={color} // Gradient color based on count
+              />
+            );
+          }
         }
       }
-    }
 
-    return heatmapShapes;
-  };
+      return heatmapShapes;
+    };
 
-  // Function to aggregate data for BarChart
-  const aggregateDataForBarChart = () => {
-    if (!heatmapData || heatmapData.length === 0) return [];
+    // Function to aggregate data for BarChart
+    const aggregateDataForBarChart = () => {
+      console.log('Aggregating Data for BarChart'); // Debugging log
+      if (!heatmapData || heatmapData.length === 0) return [];
 
-    const aggregated = [];
+      const aggregated = [];
 
-    for (let y = 0; y < heatmapData.length; y++) {
-      let rowTotal = 0;
-      for (let x = 0; x < heatmapData[y].length; x++) {
-        rowTotal += heatmapData[y][x];
+      for (let y = 0; y < heatmapData.length; y++) {
+        let rowTotal = 0;
+        for (let x = 0; x < heatmapData[y].length; x++) {
+          rowTotal += heatmapData[y][x];
+        }
+        aggregated.push({
+          position: `Row ${y + 1}`,
+          actions: rowTotal,
+        });
       }
-      aggregated.push({
-        position: `Row ${y + 1}`,
-        actions: rowTotal,
-      });
-    }
 
-    return aggregated;
-  };
+      console.log('Aggregated Data:', aggregated); // Debugging log
+      return aggregated;
+    };
 
-  return (
-    <Container>
-      <AnalysisTitle>{sport} Heatmap Analysis</AnalysisTitle>
-      <HeatmapContainer>
-        <Stage
-          width={stageWidth}
-          height={stageHeight}
-          ref={stageRef}
-          style={{ border: '1px solid #ccc', borderRadius: '10px' }}
-        >
-          {/* Soccer Pitch Layer */}
-          <Layer>
-            {renderSoccerPitch()}
-          </Layer>
-
-          {/* Heatmap Overlay Layer */}
-          {isHeatmapReady && (
-            <Layer>
-              {renderHeatmap()}
-            </Layer>
-          )}
-        </Stage>
-        <GenerateButton onClick={handleExport}>Export Heatmap</GenerateButton>
-      </HeatmapContainer>
-
-      {/* Additional Visualizations */}
-      <ActionsDistributionContainer>
-        <h3>Actions Distribution</h3>
-        <ResponsiveContainer width="100%" height={400}>
-          <BarChart
-            data={aggregateDataForBarChart()}
-            margin={{
-              top: 20, right: 30, left: 20, bottom: 5,
-            }}
+    return (
+      <Container>
+        <AnalysisTitle>{sport} Heatmap Analysis</AnalysisTitle>
+        <HeatmapContainer>
+          <Stage
+            width={stageWidth}
+            height={stageHeight}
+            ref={stageRef}
+            style={{ border: '1px solid #ccc', borderRadius: '10px' }}
           >
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="position" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Bar dataKey="actions" fill="#8884d8" />
-          </BarChart>
-        </ResponsiveContainer>
-      </ActionsDistributionContainer>
-    </Container>
-  );
-};
+            {/* Soccer Pitch Layer */}
+            <Layer>
+              {renderSoccerPitch()}
+            </Layer>
+
+            {/* Heatmap Overlay Layer */}
+            {isHeatmapReady && (
+              <Layer>
+                {renderHeatmap()}
+              </Layer>
+            )}
+          </Stage>
+          <GenerateButton onClick={handleExport}>Export Heatmap</GenerateButton>
+        </HeatmapContainer>
+
+        {/* Additional Visualizations */}
+        <ActionsDistributionContainer>
+          <h3>Actions Distribution</h3>
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart
+              data={aggregateDataForBarChart()}
+              margin={{
+                top: 20, right: 30, left: 20, bottom: 5,
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="position" />
+              <YAxis />
+              <RechartsTooltip />
+              <Legend />
+              <Bar dataKey="actions" fill="#8884d8" />
+            </BarChart>
+          </ResponsiveContainer>
+        </ActionsDistributionContainer>
+      </Container>
+    );
+  };
 
 export default HeatmapPage;

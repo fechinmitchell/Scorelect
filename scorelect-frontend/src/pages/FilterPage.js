@@ -10,6 +10,7 @@ const Container = styled.div`
   flex-direction: column;
   align-items: center;
   padding: 40px;
+  color: #000000;
 
   @media (max-width: 850px) {
     padding: 20px;
@@ -46,6 +47,16 @@ const Select = styled.select`
   border: 1px solid #ccc;
 `;
 
+const CheckboxGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+`;
+
+const CheckboxLabel = styled.label`
+  margin-bottom: 8px;
+  font-weight: normal;
+`;
+
 const ContinueButton = styled.button`
   background-color: #007bff;
   color: white;
@@ -72,6 +83,10 @@ const FilterPage = () => {
   const [selectedTeam, setSelectedTeam] = useState('');
   const [selectedAction, setSelectedAction] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState(''); // Added Selected Player
+  const [selectedCharts, setSelectedCharts] = useState({
+    heatmap: true,
+    xgChart: false,
+  }); // Added Chart Type Selection
 
   useEffect(() => {
     if (!file || !sport) {
@@ -186,6 +201,14 @@ const FilterPage = () => {
     setPlayerOptions([...players]); // Set Player Options
   };
 
+  const handleChartSelection = (e) => {
+    const { name, checked } = e.target;
+    setSelectedCharts((prev) => ({
+      ...prev,
+      [name]: checked,
+    }));
+  };
+
   const handleContinue = () => {
     // Validate filters or proceed with all data
     const filters = {
@@ -194,18 +217,29 @@ const FilterPage = () => {
       player: selectedPlayer || null, // Include Player in Filters
     };
 
+    const charts = {
+      heatmap: selectedCharts.heatmap,
+      xgChart: selectedCharts.xgChart,
+    };
+
     // Debugging log
     console.log('Selected Filters:', filters);
-    console.log('Filtered Data:', data); // Assuming data is already filtered
+    console.log('Selected Charts:', charts);
+    console.log('Data:', data); // Assuming data is already filtered
 
-    // Navigate to the heatmap generation page with filters
-    navigate('/analysis/heatmap', { state: { data, filters, sport } });
+    // Navigate to the heatmap generation page with filters and chart selections
+    navigate('/analysis/heatmap', { state: { data, filters, charts, sport } });
   };
 
   return (
     <Container>
       <FilterContainer>
         <h2>Filter Your Data</h2>
+
+        {/* Headings for Filters */}
+        <h3>Choose Filters</h3>
+
+        {/* Team Filter */}
         <FilterGroup>
           <Label htmlFor="team">Team:</Label>
           <Select
@@ -221,6 +255,8 @@ const FilterPage = () => {
             ))}
           </Select>
         </FilterGroup>
+
+        {/* Action Filter */}
         <FilterGroup>
           <Label htmlFor="action">Action:</Label>
           <Select
@@ -236,6 +272,8 @@ const FilterPage = () => {
             ))}
           </Select>
         </FilterGroup>
+
+        {/* Player Filter */}
         <FilterGroup>
           <Label htmlFor="player">Player:</Label>
           <Select
@@ -251,6 +289,34 @@ const FilterPage = () => {
             ))}
           </Select>
         </FilterGroup>
+
+        {/* Headings for Chart Selection */}
+        <h3>Select Charts to Generate</h3>
+
+        {/* Chart Type Selection */}
+        <FilterGroup>
+          <CheckboxGroup>
+            <CheckboxLabel>
+              <input
+                type="checkbox"
+                name="heatmap"
+                checked={selectedCharts.heatmap}
+                onChange={handleChartSelection}
+              />
+              {' '}Heatmap
+            </CheckboxLabel>
+            <CheckboxLabel>
+              <input
+                type="checkbox"
+                name="xgChart"
+                checked={selectedCharts.xgChart}
+                onChange={handleChartSelection}
+              />
+              {' '}Expected Goals (XG) Chart
+            </CheckboxLabel>
+          </CheckboxGroup>
+        </FilterGroup>
+
         <ContinueButton onClick={handleContinue}>Continue</ContinueButton>
       </FilterContainer>
     </Container>

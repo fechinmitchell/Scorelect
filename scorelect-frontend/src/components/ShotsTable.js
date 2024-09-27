@@ -1,0 +1,49 @@
+// src/components/ShotsTable.js
+import React from 'react';
+import { DataGrid } from '@mui/x-data-grid';
+import { Box, Typography } from '@mui/material';
+import PropTypes from 'prop-types';
+
+const ShotsTable = ({ data }) => {
+  const columns = [
+    { field: 'id', headerName: '#', width: 70 },
+    { field: 'team', headerName: 'Team', width: 130 },
+    { field: 'playerName', headerName: 'Player', width: 130 },
+    { field: 'action', headerName: 'Action', width: 130 },
+    { field: 'x', headerName: 'X Position (m)', type: 'number', width: 150 },
+    { field: 'y', headerName: 'Y Position (m)', type: 'number', width: 150 },
+    { field: 'xp', headerName: 'XG', type: 'number', width: 100 }, // Renamed to 'XG' for clarity
+    // Add more columns as needed (e.g., minute, foot, etc.)
+  ];
+
+  const rows = data.map((entry, index) => ({
+    id: index + 1,
+    team: entry.team || 'N/A',
+    playerName: entry.playerName || 'N/A',
+    action: entry.action || 'N/A',
+    x: parseFloat(entry.x) || 0,
+    y: parseFloat(entry.y) || 0,
+    xp: parseFloat(entry.xp) || 0, // Ensure 'xp' exists in your dataset
+  }));
+
+  return (
+    <Box sx={{ height: 500, width: '90%', marginTop: '40px' }}>
+      <Typography variant="h5" gutterBottom>
+        Detailed Shot Statistics
+      </Typography>
+      <DataGrid
+        rows={rows}
+        columns={columns}
+        pageSize={10}
+        rowsPerPageOptions={[10, 20, 50]}
+        disableSelectionOnClick
+      />
+    </Box>
+  );
+};
+
+ShotsTable.propTypes = {
+  data: PropTypes.arrayOf(PropTypes.object).isRequired,
+};
+
+export default ShotsTable;

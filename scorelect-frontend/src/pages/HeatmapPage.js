@@ -14,6 +14,8 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import Swal from 'sweetalert2';
+import { Box } from '@mui/material'; // Import Box from Material-UI
+
 
 // Optional: Remove unused imports if not needed
 // import AggregatedDataChart from '../components/AggregatedDataChart'; // Default export
@@ -66,6 +68,13 @@ const AnalysisTitle = styled.h2`
   margin-bottom: 20px;
 `;
 
+const ChartsContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+`;
+
 const ActionsDistributionContainer = styled.div`
   background-color: #ffffff;
   padding: 30px;
@@ -79,33 +88,46 @@ const ActionsDistributionContainer = styled.div`
   }
 `;
 
+const TooltipDiv = styled.div`
+  position: absolute;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #ffffff;
+  border-radius: 4px;
+  pointer-events: none;
+  font-size: 12px;
+  z-index: 10;
+  display: none;
+`;
+
 const HeatmapPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { data, sport } = location.state || {};
+  const { data, filters, charts, sport } = location.state || {};
   const [heatmapData, setHeatmapData] = useState([]);
   const [maxCount, setMaxCount] = useState(0); // To normalize heatmap opacity
   const stageRef = useRef(null);
   const [isHeatmapReady, setIsHeatmapReady] = useState(false); // To control rendering
+  const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, content: '' }); // Tooltip state
 
   // Dimensions
   const pitchWidthMeters = 105;
   const pitchHeightMeters = 68;
   const stageWidth = 932.5; // pixels (10 pixels per meter)
-  const stageHeight = 550; // pixels (10 pixels per meter)
+  const stageHeight = 500; // pixels (10 pixels per meter)
   const xScale = stageWidth / pitchWidthMeters;
   const yScale = stageHeight / pitchHeightMeters;
 
-  // Process data to generate heatmap
+  // Process data to generate heatmap and XG data
   useEffect(() => {
     if (!data || !sport) {
       Swal.fire({
         title: 'Missing Data',
-        text: 'No dataset found. Please upload a dataset first.',
+        text: 'No dataset found. Please upload and filter data first.',
         icon: 'error',
         confirmButtonText: 'OK',
       });
-      navigate('/analysis');
+      navigate('/filter');
       return;
     }
 
@@ -209,6 +231,19 @@ const HeatmapPage = () => {
           strokeWidth={2}
         />
 
+        {/* Goals */}
+        {/* Left Goal */}
+        {/* <Line
+          points={[0, yScale * 30.34, xScale * 105, yScale * 30.34, xScale * 105, yScale * 37.66, 0, yScale * 37.66]}
+          stroke="#000000"
+          strokeWidth={2}
+        /> */}
+        {/* Right Goal */}
+        {/* <Line
+          points={[stageWidth, yScale * 30.34, xScale * 0, yScale * 30.34, xScale * 0, yScale * 37.66, stageWidth, yScale * 37.66]}
+          stroke="#000000"
+          strokeWidth={2}
+        /> */}
 
         {/* 6-yard Boxes */}
         {/* Left 6-yard Box */}
@@ -337,8 +372,10 @@ const HeatmapPage = () => {
           align="center"
         />
       </>
-    );
-    };
+); // Make sure this closes the return properly, with no semicolon error.
+
+// End of function for renderSoccerPitch, close it correctly.
+};
 
     // Function to render the heatmap
     const renderHeatmap = () => {
@@ -409,6 +446,111 @@ const HeatmapPage = () => {
       return aggregated;
     };
 
+    // Function to render XG Chart
+    const renderXGChart = () => {
+      console.log('Rendering XG Chart'); // Debugging log
+      // Aggregate XG per player or team as needed
+      // For simplicity, let's aggregate XG per team
+
+      const xgAggregation = {};
+
+      data.forEach((entry) => {
+        const team = entry.team || 'Unknown';
+        const xg = parseFloat(entry.xp) || 0;
+
+        if (!xgAggregation[team]) {
+          xgAggregation[team] = 0;
+        }
+
+        xgAggregation[team] += xg;
+      });
+
+      const chartData = Object.keys(xgAggregation).map((team) => ({
+        team,
+        xg: xgAggregation[team],
+      }));
+
+      return (
+        <Box sx={{ width: '90%', maxWidth: 1000, height: 400, marginTop: '40px' }}>
+          <h3>Expected Goals (XG) by Team</h3>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={chartData}
+              margin={{
+                top: 20,
+                right: 30,
+                left: 20,
+                bottom: 5,
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="team" />
+              <YAxis />
+              <RechartsTooltip />
+              <Legend />
+              <Bar dataKey="xg" fill="#82ca9d" name="Total XG" />
+            </BarChart>
+          </ResponsiveContainer>
+        </Box>
+      );
+    };
+
+    // Function to render Shots with XG Tooltip
+    const renderShotsWithXG = () => {
+      // Ensure that 'xp' exists in your dataset
+      if (!data || data.length === 0) {
+        console.warn('No data available for rendering XG.');
+        return null;
+      }
+
+      return data.map((entry, index) => {
+        const { x, y, xp } = entry;
+        if (typeof x !== 'number' || typeof y !== 'number' || typeof xp !== 'number') {
+          return null; // Skip invalid entries
+        }
+
+        const shotX = x * xScale;
+        const shotY = y * yScale;
+
+        return (
+          <Group key={`shot-${index}`}>
+            <Circle
+              x={shotX}
+              y={shotY}
+              radius={5}
+              fill="#FFA500" // Orange color for shots
+              opacity={0.7}
+              onMouseEnter={(e) => {
+                const stage = e.target.getStage();
+                stage.container().style.cursor = 'pointer';
+                setTooltip({
+                  visible: true,
+                  x: e.evt.layerX,
+                  y: e.evt.layerY,
+                  content: `XG: ${xp}`,
+                });
+              }}
+              onMouseLeave={() => {
+                const stage = stageRef.current;
+                if (stage) {
+                  stage.container().style.cursor = 'default';
+                }
+                setTooltip({ ...tooltip, visible: false });
+              }}
+            />
+            {/* Optionally, display XG as text near the shot */}
+            {/* <Text
+              text={xp}
+              x={shotX + 6}
+              y={shotY - 6}
+              fontSize={12}
+              fill="#000000"
+            /> */}
+          </Group>
+        );
+      });
+    };
+
     return (
       <Container>
         <AnalysisTitle>{sport} Heatmap Analysis</AnalysisTitle>
@@ -425,34 +567,58 @@ const HeatmapPage = () => {
             </Layer>
 
             {/* Heatmap Overlay Layer */}
-            {isHeatmapReady && (
+            {charts.heatmap && isHeatmapReady && (
               <Layer>
                 {renderHeatmap()}
               </Layer>
             )}
+
+            {/* Shots with XG Tooltip Layer */}
+            {charts.xgChart && isHeatmapReady && (
+              <Layer>
+                {renderShotsWithXG()}
+              </Layer>
+            )}
           </Stage>
           <GenerateButton onClick={handleExport}>Export Heatmap</GenerateButton>
+          {/* Tooltip for XG */}
+          {tooltip.visible && (
+            <TooltipDiv
+              style={{
+                top: tooltip.y,
+                left: tooltip.x,
+                display: tooltip.visible ? 'block' : 'none',
+              }}
+            >
+              {tooltip.content}
+            </TooltipDiv>
+          )}
         </HeatmapContainer>
 
         {/* Additional Visualizations */}
-        <ActionsDistributionContainer>
-          <h3>Actions Distribution</h3>
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart
-              data={aggregateDataForBarChart()}
-              margin={{
-                top: 20, right: 30, left: 20, bottom: 5,
-              }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="position" />
-              <YAxis />
-              <RechartsTooltip />
-              <Legend />
-              <Bar dataKey="actions" fill="#8884d8" />
-            </BarChart>
-          </ResponsiveContainer>
-        </ActionsDistributionContainer>
+        <ChartsContainer>
+          {charts.xgChart && renderXGChart()}
+          {charts.heatmap && (
+            <ActionsDistributionContainer>
+              <h3>Actions Distribution</h3>
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart
+                  data={aggregateDataForBarChart()}
+                  margin={{
+                    top: 20, right: 30, left: 20, bottom: 5,
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="position" />
+                  <YAxis />
+                  <RechartsTooltip />
+                  <Legend />
+                  <Bar dataKey="actions" fill="#8884d8" name="Total Actions" />
+                </BarChart>
+              </ResponsiveContainer>
+            </ActionsDistributionContainer>
+          )}
+        </ChartsContainer>
       </Container>
     );
   };

@@ -12,7 +12,6 @@ import {
   FaFootballBall,
   FaBasketballBall,
   FaVolleyballBall,
-  FaRunning,
   FaFutbol,
 } from 'react-icons/fa'; // Updated imports
 
@@ -162,7 +161,15 @@ const Analysis = ({ onSportSelect }) => {
       return;
     }
 
-    // Optionally, validate the dataset here
+    if (!selectedSport) {
+      Swal.fire({
+        title: 'No Sport Selected',
+        text: 'Please select a sport before continuing.',
+        icon: 'warning',
+        confirmButtonText: 'OK',
+      });
+      return;
+    }
 
     // Navigate to the filter page with the uploaded file and selected sport
     navigate('/analysis/filter', {

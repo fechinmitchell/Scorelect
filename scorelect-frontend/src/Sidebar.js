@@ -28,7 +28,7 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, userType }) => {
   return (
     <div className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       <button className="toggle-button" onClick={toggleSidebar}>
-        {collapsed ? '☰' : '×'} {/* Changed symbols for better UX */}
+        {collapsed ? '☰' : '☰'} {/* Changed symbols for better UX */}
       </button>
       {!collapsed && (
         <>

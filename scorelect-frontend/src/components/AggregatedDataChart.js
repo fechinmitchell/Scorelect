@@ -15,33 +15,31 @@ import {
 } from 'recharts';
 
 const AggregatedDataChart = ({ data }) => {
-  // Aggregate average shot positions by team
+  // Aggregate data for American football
   const teamAggregation = {};
 
   data.forEach((entry) => {
     const team = entry.team || 'Unknown';
-    const x = parseFloat(entry.x) || 0;
-    const y = parseFloat(entry.y) || 0;
+    const yardsGained = parseFloat(entry.yardsGained) || 0;
 
     if (!teamAggregation[team]) {
-      teamAggregation[team] = { totalX: 0, totalY: 0, count: 0 };
+      teamAggregation[team] = { totalYards: 0, totalPlays: 0 };
     }
 
-    teamAggregation[team].totalX += x;
-    teamAggregation[team].totalY += y;
-    teamAggregation[team].count += 1;
+    teamAggregation[team].totalYards += yardsGained;
+    teamAggregation[team].totalPlays += 1;
   });
 
   const chartData = Object.keys(teamAggregation).map((team) => ({
     team,
-    avgX: teamAggregation[team].totalX / teamAggregation[team].count,
-    avgY: teamAggregation[team].totalY / teamAggregation[team].count,
+    averageYards: teamAggregation[team].totalYards / teamAggregation[team].totalPlays,
+    totalPlays: teamAggregation[team].totalPlays,
   }));
 
   return (
     <Box sx={{ width: '90%', maxWidth: 1000, height: 400, marginTop: '40px' }}>
       <Typography variant="h5" gutterBottom>
-        Average Shot Positions by Team
+        Team Performance Metrics
       </Typography>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
@@ -58,8 +56,8 @@ const AggregatedDataChart = ({ data }) => {
           <YAxis />
           <RechartsTooltip />
           <Legend />
-          <Bar dataKey="avgX" fill="#8884d8" name="Average X Position" />
-          <Bar dataKey="avgY" fill="#82ca9d" name="Average Y Position" />
+          <Bar dataKey="averageYards" fill="#8884d8" name="Avg Yards per Play" />
+          <Bar dataKey="totalPlays" fill="#82ca9d" name="Total Plays" />
         </BarChart>
       </ResponsiveContainer>
     </Box>

@@ -1,19 +1,19 @@
-// src/components/ShotsTable.js
+// src/components/PlaysTable.js
 
 import React from 'react';
 import { DataGrid } from '@mui/x-data-grid';
 import { Box, Typography } from '@mui/material';
 import PropTypes from 'prop-types';
 
-const ShotsTable = ({ data }) => {
+const PlaysTable = ({ data }) => {
   const columns = [
     { field: 'id', headerName: '#', width: 70 },
     { field: 'team', headerName: 'Team', width: 130 },
     { field: 'playerName', headerName: 'Player', width: 130 },
-    { field: 'action', headerName: 'Action', width: 130 },
-    { field: 'x', headerName: 'X Position (m)', type: 'number', width: 150 },
-    { field: 'y', headerName: 'Y Position (m)', type: 'number', width: 150 },
-    { field: 'xg', headerName: 'XG', type: 'number', width: 100 },
+    { field: 'playType', headerName: 'Play Type', width: 130 },
+    { field: 'yardLine', headerName: 'Yard Line', type: 'number', width: 130 },
+    { field: 'down', headerName: 'Down', type: 'number', width: 90 },
+    { field: 'distance', headerName: 'Distance', type: 'number', width: 100 },
     // Add more columns as needed
   ];
 
@@ -21,16 +21,16 @@ const ShotsTable = ({ data }) => {
     id: index + 1,
     team: entry.team || 'N/A',
     playerName: entry.playerName || 'N/A',
-    action: entry.action || 'N/A',
-    x: parseFloat(entry.x) || 0,
-    y: parseFloat(entry.y) || 0,
-    xg: entry.xg ? entry.xg.toFixed(2) : '0.00',
+    playType: entry.playType || 'N/A',
+    yardLine: parseInt(entry.yardLine, 10) || 0,
+    down: parseInt(entry.down, 10) || 0,
+    distance: parseInt(entry.distance, 10) || 0,
   }));
 
   return (
     <Box sx={{ height: 500, width: '90%', marginTop: '40px' }}>
       <Typography variant="h5" gutterBottom>
-        Detailed Shot Statistics
+        Detailed Play Statistics
       </Typography>
       <DataGrid
         rows={rows}
@@ -43,8 +43,8 @@ const ShotsTable = ({ data }) => {
   );
 };
 
-ShotsTable.propTypes = {
+PlaysTable.propTypes = {
   data: PropTypes.arrayOf(PropTypes.object).isRequired,
 };
 
-export default ShotsTable;
+export default PlaysTable;

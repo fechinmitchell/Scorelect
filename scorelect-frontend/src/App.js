@@ -19,7 +19,8 @@ import Cancel from './Cancel';
 import Analysis from './Analysis';
 import FilterPage from './pages/FilterPage';
 import HeatmapPage from './pages/HeatmapPage';
-import HeatmapGAA from './pages/HeatmapGAA'; // <-- Import HeatmapGAA component
+import HeatmapGAA from './pages/HeatmapGAA'; // Existing import
+import HeatmapAF from './pages/HeatMapAF'; // <-- Added import for HeatmapAF
 import { ToastContainer, toast } from 'react-toastify';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -87,7 +88,13 @@ const App = () => {
       case 'Basketball':
         return <BasketballCourt userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />;
       case 'AmericanFootball':
-        return <AmericanFootballPitch userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />;
+        return (
+          <AmericanFootballPitch
+            userType={userRole}
+            userId={user?.uid}
+            apiUrl={API_BASE_URL}
+          />
+        );
       default:
         return <Navigate replace to="/" />; // Fallback to root if sport is unrecognized
     }
@@ -132,7 +139,8 @@ const App = () => {
             />
             <Route path="/analysis/filter" element={<FilterPage />} />
             <Route path="/analysis/heatmap" element={<HeatmapPage />} />
-            <Route path="/analysis/heatmap-gaa" element={<HeatmapGAA />} /> {/* <-- New Route */}
+            <Route path="/analysis/heatmap-gaa" element={<HeatmapGAA />} />
+            <Route path="/analysis/heatmap-af" element={<HeatmapAF />} /> {/* <-- Added Route */}
             <Route path="*" element={<Navigate replace to="/" />} />
           </Routes>
           <Analytics />

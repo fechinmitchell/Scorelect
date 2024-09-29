@@ -86,6 +86,8 @@ const FilterPage = () => {
   const [selectedCharts, setSelectedCharts] = useState({
     heatmap: true,
     xgChart: false,
+    teamPerformance: true,
+    playsDistribution: true,
   });
 
   useEffect(() => {
@@ -183,7 +185,7 @@ const FilterPage = () => {
 
       // Extract Action
       const actionKey = keys.find(
-        (key) => key === 'action' || key === 'actiontype'
+        (key) => key === 'action' || key === 'actiontype' || key === 'playtype'
       );
       if (actionKey && entry[actionKey]) {
         actions.add(entry[actionKey]);
@@ -192,7 +194,10 @@ const FilterPage = () => {
       // Extract Player Name
       const playerKey = keys.find(
         (key) =>
-          key === 'player' || key === 'playername' || key === 'player_name'
+          key === 'player' ||
+          key === 'playername' ||
+          key === 'player_name' ||
+          key === 'playername'
       );
       if (playerKey && entry[playerKey]) {
         players.add(entry[playerKey]);
@@ -223,6 +228,8 @@ const FilterPage = () => {
     const charts = {
       heatmap: selectedCharts.heatmap,
       xgChart: selectedCharts.xgChart,
+      teamPerformance: selectedCharts.teamPerformance,
+      playsDistribution: selectedCharts.playsDistribution,
     };
 
     // Filter data based on selected filters
@@ -231,18 +238,21 @@ const FilterPage = () => {
         ? entry.team === filters.team
         : true;
       const actionMatch = filters.action
-        ? entry.action === filters.action
+        ? entry.action === filters.action || entry.playType === filters.action
         : true;
       const playerMatch = filters.player
-        ? entry.player === filters.player
+        ? entry.player === filters.player || entry.playerName === filters.player
         : true;
       return teamMatch && actionMatch && playerMatch;
     });
 
     // Determine the heatmap page to navigate to based on the selected sport
     let heatmapPage = '/analysis/heatmap';
+
     if (sport === 'GAA') {
       heatmapPage = '/analysis/heatmap-gaa';
+    } else if (sport === 'AmericanFootball') {
+      heatmapPage = '/analysis/heatmap-af';
     }
 
     // Navigate to the appropriate heatmap page with the filtered data
@@ -325,15 +335,41 @@ const FilterPage = () => {
               />{' '}
               Heatmap
             </CheckboxLabel>
-            <CheckboxLabel>
-              <input
-                type="checkbox"
-                name="xgChart"
-                checked={selectedCharts.xgChart}
-                onChange={handleChartSelection}
-              />{' '}
-              Expected Goals (XG) Chart
-            </CheckboxLabel>
+            {/* Only show XG Chart option for Soccer */}
+            {sport === 'Soccer' && (
+              <CheckboxLabel>
+                <input
+                  type="checkbox"
+                  name="xgChart"
+                  checked={selectedCharts.xgChart}
+                  onChange={handleChartSelection}
+                />{' '}
+                Expected Goals (XG) Chart
+              </CheckboxLabel>
+            )}
+            {/* Additional charts for American Football */}
+            {sport === 'AmericanFootball' && (
+              <>
+                <CheckboxLabel>
+                  <input
+                    type="checkbox"
+                    name="teamPerformance"
+                    checked={selectedCharts.teamPerformance}
+                    onChange={handleChartSelection}
+                  />{' '}
+                  Team Performance Chart
+                </CheckboxLabel>
+                <CheckboxLabel>
+                  <input
+                    type="checkbox"
+                    name="playsDistribution"
+                    checked={selectedCharts.playsDistribution}
+                    onChange={handleChartSelection}
+                  />{' '}
+                  Plays Distribution Chart
+                </CheckboxLabel>
+              </>
+            )}
           </CheckboxGroup>
         </FilterGroup>
 

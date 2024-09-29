@@ -34,7 +34,7 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, userType }) => {
         <>
           <div className="user-info">
             <img src={logo} alt="Scorelect Logo" className="logo" />
-            {userType !== 'free' && <p>Pro User</p>} {/* Display user type */}
+            {/* {userType !== 'free' && <p>Pro User</p>} Display user type */}
           </div>
           <nav>
             <ul>

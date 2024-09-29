@@ -1,6 +1,7 @@
 // src/components/ShotsTable.js
+
 import React from 'react';
-import { DataGrid } from '@mui/x-data-grid';
+import { DataGrid } from '@mui/x-data-grid'; // Ensure this import is correct
 import { Box, Typography } from '@mui/material';
 import PropTypes from 'prop-types';
 
@@ -12,8 +13,8 @@ const ShotsTable = ({ data }) => {
     { field: 'action', headerName: 'Action', width: 130 },
     { field: 'x', headerName: 'X Position (m)', type: 'number', width: 150 },
     { field: 'y', headerName: 'Y Position (m)', type: 'number', width: 150 },
-    { field: 'xp', headerName: 'XG', type: 'number', width: 100 }, // Renamed to 'XG' for clarity
-    // Add more columns as needed (e.g., minute, foot, etc.)
+    { field: 'xg', headerName: 'XG', type: 'number', width: 100 },
+    // Add more columns as needed
   ];
 
   const rows = data.map((entry, index) => ({
@@ -23,7 +24,7 @@ const ShotsTable = ({ data }) => {
     action: entry.action || 'N/A',
     x: parseFloat(entry.x) || 0,
     y: parseFloat(entry.y) || 0,
-    xp: parseFloat(entry.xp) || 0, // Ensure 'xp' exists in your dataset
+    xg: entry.xg ? entry.xg.toFixed(2) : '0.00',
   }));
 
   return (

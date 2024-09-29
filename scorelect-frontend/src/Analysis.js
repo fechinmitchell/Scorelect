@@ -1,14 +1,20 @@
 // src/components/Analysis.js
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import PropTypes from 'prop-types'; // <-- Added import
+import PropTypes from 'prop-types';
 import SportButton from './SportButton';
 import SoccerPitchGrid from './SoccerPitchGrid';
 import { useSpring, animated } from 'react-spring';
 import { useDropzone } from 'react-dropzone';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import { FaFootballBall, FaBasketballBall, FaVolleyballBall, FaRunning, FaFutbol } from 'react-icons/fa'; // Updated imports
+import {
+  FaFootballBall,
+  FaBasketballBall,
+  FaVolleyballBall,
+  FaRunning,
+  FaFutbol,
+} from 'react-icons/fa'; // Updated imports
 
 const Container = styled.div`
   display: flex;
@@ -16,7 +22,7 @@ const Container = styled.div`
   align-items: center;
   padding: 20px;
 
-  @media(max-width: 850px){
+  @media (max-width: 850px) {
     width: 100%;
     padding: 10px;
   }
@@ -39,6 +45,7 @@ const DropzoneContainer = styled.div`
   border: 2px dashed #501387;
   border-radius: 10px;
   display: flex;
+  flex-direction: column; /* Changed to column to accommodate icon */
   align-items: center;
   justify-content: center;
   color: #501387;
@@ -46,7 +53,7 @@ const DropzoneContainer = styled.div`
   cursor: pointer;
   background-color: #f9f9f9;
 
-  @media(max-width: 850px){
+  @media (max-width: 850px) {
     width: 100%;
     height: 300px;
   }
@@ -85,7 +92,7 @@ const ResetButton = styled.button`
 `;
 
 const IconWrapper = styled.div`
-  margin-top: 150px;
+  margin-top: 20px;
   display: flex;
   justify-content: center;
 `;
@@ -157,8 +164,10 @@ const Analysis = ({ onSportSelect }) => {
 
     // Optionally, validate the dataset here
 
-    // Navigate to the filter page with the uploaded file
-    navigate('/analysis/filter', { state: { file: uploadedFile, sport: selectedSport } });
+    // Navigate to the filter page with the uploaded file and selected sport
+    navigate('/analysis/filter', {
+      state: { file: uploadedFile, sport: selectedSport },
+    });
   };
 
   const handleReset = () => {
@@ -176,7 +185,7 @@ const Analysis = ({ onSportSelect }) => {
       case 'Basketball':
         return <FaBasketballBall size={50} color="#501387" />;
       case 'AmericanFootball':
-        return <FaFootballBall size={50} color="#501387" />; // Using FaFootballBall as a placeholder
+        return <FaFootballBall size={50} color="#501387" />;
       default:
         return null;
     }
@@ -186,25 +195,25 @@ const Analysis = ({ onSportSelect }) => {
     <Container>
       {/* Always display the Sport Buttons */}
       <ButtonRow>
-        <SportButton 
-          sport="Soccer" 
-          onClick={handleSportClick} 
-          active={selectedSport === 'Soccer'} 
+        <SportButton
+          sport="Soccer"
+          onClick={handleSportClick}
+          active={selectedSport === 'Soccer'}
         />
-        <SportButton 
-          sport="GAA" 
-          onClick={handleSportClick} 
-          active={selectedSport === 'GAA'} 
+        <SportButton
+          sport="GAA"
+          onClick={handleSportClick}
+          active={selectedSport === 'GAA'}
         />
-        <SportButton 
-          sport="AmericanFootball" 
-          onClick={handleSportClick} 
-          active={selectedSport === 'AmericanFootball'} 
+        <SportButton
+          sport="AmericanFootball"
+          onClick={handleSportClick}
+          active={selectedSport === 'AmericanFootball'}
         />
-        <SportButton 
-          sport="Basketball" 
-          onClick={handleSportClick} 
-          active={selectedSport === 'Basketball'} 
+        <SportButton
+          sport="Basketball"
+          onClick={handleSportClick}
+          active={selectedSport === 'Basketball'}
         />
       </ButtonRow>
 
@@ -223,13 +232,11 @@ const Analysis = ({ onSportSelect }) => {
               <p>Drop your dataset here or click to select a file</p>
             )}
             {/* IconWrapper is placed inside DropzoneContainer, below the text */}
-            <IconWrapper>
-              {getSportIcon(selectedSport)} {/* Added sport-specific icon */}
-            </IconWrapper>
+            <IconWrapper>{getSportIcon(selectedSport)}</IconWrapper>
           </DropzoneContainer>
           {uploadedFile && <p>Uploaded File: {uploadedFile.name}</p>}
           <ContinueButton onClick={handleContinue}>Continue</ContinueButton>
-          <ResetButton onClick={handleReset}>Reset Selection</ResetButton> {/* Optional Reset Button */}
+          <ResetButton onClick={handleReset}>Reset Selection</ResetButton>
         </>
       )}
     </Container>

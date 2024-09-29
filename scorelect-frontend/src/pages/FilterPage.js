@@ -79,14 +79,14 @@ const FilterPage = () => {
   const [data, setData] = useState([]);
   const [teamOptions, setTeamOptions] = useState([]);
   const [actionOptions, setActionOptions] = useState([]);
-  const [playerOptions, setPlayerOptions] = useState([]); // Added Player Options
+  const [playerOptions, setPlayerOptions] = useState([]);
   const [selectedTeam, setSelectedTeam] = useState('');
   const [selectedAction, setSelectedAction] = useState('');
-  const [selectedPlayer, setSelectedPlayer] = useState(''); // Added Selected Player
+  const [selectedPlayer, setSelectedPlayer] = useState('');
   const [selectedCharts, setSelectedCharts] = useState({
     heatmap: true,
     xgChart: false,
-  }); // Added Chart Type Selection
+  });
 
   useEffect(() => {
     if (!file || !sport) {
@@ -120,7 +120,7 @@ const FilterPage = () => {
               });
               return;
             }
-            console.log('Parsed CSV Data:', results.data); // Debugging log
+            console.log('Parsed CSV Data:', results.data);
             setData(results.data);
             extractFilterOptions(results.data);
           },
@@ -131,7 +131,7 @@ const FilterPage = () => {
           if (!Array.isArray(jsonData)) {
             throw new Error('JSON data is not an array.');
           }
-          console.log('Parsed JSON Data:', jsonData); // Debugging log
+          console.log('Parsed JSON Data:', jsonData);
           setData(jsonData);
           extractFilterOptions(jsonData);
         } catch (error) {
@@ -169,7 +169,7 @@ const FilterPage = () => {
   const extractFilterOptions = (dataset) => {
     const teams = new Set();
     const actions = new Set();
-    const players = new Set(); // Added Players Set
+    const players = new Set();
 
     dataset.forEach((entry) => {
       // Handle case-insensitive keys
@@ -182,14 +182,17 @@ const FilterPage = () => {
       }
 
       // Extract Action
-      const actionKey = keys.find((key) => key === 'action' || key === 'actiontype');
+      const actionKey = keys.find(
+        (key) => key === 'action' || key === 'actiontype'
+      );
       if (actionKey && entry[actionKey]) {
         actions.add(entry[actionKey]);
       }
 
       // Extract Player Name
       const playerKey = keys.find(
-        (key) => key === 'player' || key === 'playername' || key === 'player_name'
+        (key) =>
+          key === 'player' || key === 'playername' || key === 'player_name'
       );
       if (playerKey && entry[playerKey]) {
         players.add(entry[playerKey]);
@@ -198,7 +201,7 @@ const FilterPage = () => {
 
     setTeamOptions([...teams]);
     setActionOptions([...actions]);
-    setPlayerOptions([...players]); // Set Player Options
+    setPlayerOptions([...players]);
   };
 
   const handleChartSelection = (e) => {
@@ -214,7 +217,7 @@ const FilterPage = () => {
     const filters = {
       team: selectedTeam || null,
       action: selectedAction || null,
-      player: selectedPlayer || null, // Include Player in Filters
+      player: selectedPlayer || null,
     };
 
     const charts = {
@@ -222,13 +225,30 @@ const FilterPage = () => {
       xgChart: selectedCharts.xgChart,
     };
 
-    // Debugging log
-    console.log('Selected Filters:', filters);
-    console.log('Selected Charts:', charts);
-    console.log('Data:', data); // Assuming data is already filtered
+    // Filter data based on selected filters
+    const filteredData = data.filter((entry) => {
+      const teamMatch = filters.team
+        ? entry.team === filters.team
+        : true;
+      const actionMatch = filters.action
+        ? entry.action === filters.action
+        : true;
+      const playerMatch = filters.player
+        ? entry.player === filters.player
+        : true;
+      return teamMatch && actionMatch && playerMatch;
+    });
 
-    // Navigate to the heatmap generation page with filters and chart selections
-    navigate('/analysis/heatmap', { state: { data, filters, charts, sport } });
+    // Determine the heatmap page to navigate to based on the selected sport
+    let heatmapPage = '/analysis/heatmap';
+    if (sport === 'GAA') {
+      heatmapPage = '/analysis/heatmap-gaa';
+    }
+
+    // Navigate to the appropriate heatmap page with the filtered data
+    navigate(heatmapPage, {
+      state: { data: filteredData, filters, charts, sport },
+    });
   };
 
   return (
@@ -302,8 +322,8 @@ const FilterPage = () => {
                 name="heatmap"
                 checked={selectedCharts.heatmap}
                 onChange={handleChartSelection}
-              />
-              {' '}Heatmap
+              />{' '}
+              Heatmap
             </CheckboxLabel>
             <CheckboxLabel>
               <input
@@ -311,8 +331,8 @@ const FilterPage = () => {
                 name="xgChart"
                 checked={selectedCharts.xgChart}
                 onChange={handleChartSelection}
-              />
-              {' '}Expected Goals (XG) Chart
+              />{' '}
+              Expected Goals (XG) Chart
             </CheckboxLabel>
           </CheckboxGroup>
         </FilterGroup>

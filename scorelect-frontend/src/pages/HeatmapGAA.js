@@ -1,4 +1,4 @@
-// src/pages/HeatmapPage.js
+// src/pages/HeatmapGAA.js
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -96,7 +96,7 @@ const TooltipDiv = styled.div`
   display: none;
 `;
 
-const HeatmapPage = () => {
+const HeatmapGAA = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { data, filters, charts, sport } = location.state || {};
@@ -108,18 +108,24 @@ const HeatmapPage = () => {
   const [processedData, setProcessedData] = useState([]);
 
   // Dimensions
-  const pitchWidthMeters = 105;
-  const pitchHeightMeters = 68;
-  const stageWidth = 932.5;
-  const stageHeight = 500;
+  const pitchWidthMeters = 145; // GAA pitch width
+  const pitchHeightMeters = 88; // GAA pitch height
+  const stageWidth = 930; // Adjust as needed
+  const stageHeight = (stageWidth * pitchHeightMeters) / pitchWidthMeters;
   const xScale = stageWidth / pitchWidthMeters;
   const yScale = stageHeight / pitchHeightMeters;
 
-  // Function to calculate distance and angle to the goal
+  // Colors
+  const pitchColor = '#00A86B'; // Green color
+  const lineColor = '#FFFFFF'; // White color
+  const lightStripeColor = '#A8D5BA';
+  const darkStripeColor = '#8FBF9C';
+
+  // Function to calculate distance and angle to the goal (adjusted for GAA pitch)
   const calculateShotFeatures = (x, y) => {
-    // Assuming the goal is centered at (105, 34) for shots towards the right goal
-    const goalX = 105;
-    const goalY = 34;
+    // Assuming the goal is centered at (145, 44) for shots towards the right goal
+    const goalX = 145;
+    const goalY = 44;
 
     const deltaX = goalX - x;
     const deltaY = goalY - y;
@@ -129,12 +135,12 @@ const HeatmapPage = () => {
     return { distance, angle };
   };
 
-  // Function to calculate XG using logistic regression approximation
+  // Function to calculate XG using logistic regression approximation (adjusted for GAA)
   const calculateXG = (distance, angle) => {
-    // Coefficients from a hypothetical logistic regression model
-    const intercept = -1.2;
-    const coefDistance = -0.1; // Negative coefficient as farther shots have less chance
-    const coefAngle = -0.05; // Negative coefficient as tighter angles have less chance
+    // Coefficients from a hypothetical logistic regression model for GAA
+    const intercept = -1.0;
+    const coefDistance = -0.08; // Adjusted coefficients
+    const coefAngle = -0.04;
 
     const linearPredictor = intercept + coefDistance * distance + coefAngle * angle;
     const xg = 1 / (1 + Math.exp(-linearPredictor)); // Sigmoid function
@@ -156,8 +162,8 @@ const HeatmapPage = () => {
     }
 
     const processHeatmapAndXG = () => {
-      const gridSizeX = 42;
-      const gridSizeY = 26;
+      const gridSizeX = 50;
+      const gridSizeY = 30;
       const grid = Array.from({ length: gridSizeY }, () => Array(gridSizeX).fill(0));
 
       const updatedData = data
@@ -228,16 +234,21 @@ const HeatmapPage = () => {
     }
   };
 
-  // Function to render the soccer pitch
-  const renderSoccerPitch = () => {
-    console.log('Rendering Soccer Pitch'); // Debugging log
+  // Function to render the GAA pitch with detailed markings
+  const renderGAAPitch = () => {
     const numStripes = 10;
     const stripeWidth = stageWidth / numStripes;
 
     return (
-      <>
+      <Layer>
         {/* Pitch Background */}
-        <Rect x={0} y={0} width={stageWidth} height={stageHeight} fill="#00A86B" />
+        <Rect
+          x={0}
+          y={0}
+          width={stageWidth}
+          height={stageHeight}
+          fill={pitchColor}
+        />
 
         {/* Stripes */}
         {Array.from({ length: numStripes }, (_, i) => (
@@ -247,161 +258,230 @@ const HeatmapPage = () => {
             y={0}
             width={stripeWidth}
             height={stageHeight}
-            fill={i % 2 === 0 ? '#A8D5BA' : '#8FBF9C'}
+            fill={i % 2 === 0 ? lightStripeColor : darkStripeColor}
             opacity={0.3} // Adjust opacity for subtlety
           />
         ))}
 
         {/* Outer Lines */}
         <Line
-          points={[0, 0, stageWidth, 0, stageWidth, stageHeight, 0, stageHeight, 0, 0]}
-          stroke="#000000"
+          points={[
+            0, 0,
+            stageWidth, 0,
+            stageWidth, stageHeight,
+            0, stageHeight,
+            0, 0
+          ]}
+          stroke={lineColor}
           strokeWidth={2}
         />
 
-        {/* Goals */}
-        {/* Left Goal */}
-        {/* <Line
-          points={[0, yScale * 30.34, xScale * 105, yScale * 30.34, xScale * 105, yScale * 37.66, 0, yScale * 37.66]}
-          stroke="#000000"
-          strokeWidth={2}
-        /> */}
-        {/* Right Goal */}
-        {/* <Line
-          points={[stageWidth, yScale * 30.34, xScale * 0, yScale * 30.34, xScale * 0, yScale * 37.66, stageWidth, yScale * 37.66]}
-          stroke="#000000"
-          strokeWidth={2}
-        /> */}
-
-        {/* 6-yard Boxes */}
-        {/* Left 6-yard Box */}
+        {/* Goal Lines */}
         <Line
-          points={[0, yScale * 23.1, xScale * 5.5, yScale * 23.1, xScale * 5.5, yScale * 44.9, 0, yScale * 44.9]}
-          stroke="#000000"
+          points={[
+            stageWidth, yScale * 40.75,
+            xScale * 145.2, yScale * 40.75,
+            xScale * 145.2, yScale * 47.25,
+            stageWidth, yScale * 47.25
+          ]}
+          stroke={lineColor}
           strokeWidth={2}
         />
-        {/* Right 6-yard Box */}
         <Line
-          points={[stageWidth, yScale * 23.1, xScale * 99.5, yScale * 23.1, xScale * 99.5, yScale * 44.9, stageWidth, yScale * 44.9]}
-          stroke="#000000"
+          points={[
+            0, yScale * 40.75,
+            xScale * -0.2, yScale * 40.75,
+            xScale * -0.2, yScale * 47.25,
+            0, yScale * 47.25
+          ]}
+          stroke={lineColor}
           strokeWidth={2}
         />
 
-        {/* Penalty Areas */}
-        {/* Left Penalty Area */}
+        {/* Small Rectangle (6m Box) */}
         <Line
-          points={[0, yScale * 14, xScale * 16.5, yScale * 14, xScale * 16.5, yScale * 54, 0, yScale * 54]}
-          stroke="#000000"
+          points={[
+            stageWidth, yScale * 37,
+            xScale * 139, yScale * 37,
+            xScale * 139, yScale * 51,
+            stageWidth, yScale * 51
+          ]}
+          stroke={lineColor}
           strokeWidth={2}
         />
-        {/* Right Penalty Area */}
         <Line
-          points={[stageWidth, yScale * 14, xScale * 88.5, yScale * 14, xScale * 88.5, yScale * 54, stageWidth, yScale * 54]}
-          stroke="#000000"
+          points={[
+            0, yScale * 37,
+            xScale * 6, yScale * 37,
+            xScale * 6, yScale * 51,
+            0, yScale * 51
+          ]}
+          stroke={lineColor}
           strokeWidth={2}
         />
 
-        {/* Penalty Spots */}
-        <Circle x={xScale * 11} y={yScale * 34} radius={xScale * 0.4} fill="#000000" />
-        <Circle x={xScale * 94} y={yScale * 34} radius={xScale * 0.4} fill="#000000" />
+        {/* Large Rectangle (13m Box) */}
+        <Line
+          points={[
+            0, yScale * 34.5,
+            xScale * 14, yScale * 34.5,
+            xScale * 14, yScale * 53.5,
+            0, yScale * 53.5
+          ]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+        <Line
+          points={[
+            stageWidth, yScale * 34.5,
+            xScale * 131, yScale * 34.5,
+            xScale * 131, yScale * 53.5,
+            stageWidth, yScale * 53.5
+          ]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
 
         {/* Halfway Line */}
         <Line
-          points={[xScale * 52.5, 0, xScale * 52.5, stageHeight]}
-          stroke="#000000"
+          points={[
+            xScale * 72.5, yScale * 39,
+            xScale * 72.5, yScale * 49
+          ]}
+          stroke={lineColor}
           strokeWidth={2}
         />
 
-        {/* Center Circle */}
-        <Circle x={xScale * 52.5} y={yScale * 34} radius={xScale * 9.15} stroke="#000000" strokeWidth={2} />
+        {/* Penalty Marks */}
+        <Line
+          points={[
+            xScale * 11, yScale * 43.5,
+            xScale * 11, yScale * 44.5
+          ]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+        <Line
+          points={[
+            xScale * 134, yScale * 43.5,
+            xScale * 134, yScale * 44.5
+          ]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
 
-        {/* Corner Arcs */}
+        {/* Arcs at 65m Lines */}
         <Arc
-          x={0}
-          y={0}
+          x={xScale * 124}
+          y={yScale * 44}
           innerRadius={0}
-          outerRadius={xScale * 1}
-          angle={90}
-          rotation={0}
-          stroke="#000000"
-          strokeWidth={2}
-        />
-        <Arc
-          x={0}
-          y={stageHeight}
-          innerRadius={0}
-          outerRadius={xScale * 1}
-          angle={90}
-          rotation={270}
-          stroke="#000000"
-          strokeWidth={2}
-        />
-        <Arc
-          x={stageWidth}
-          y={0}
-          innerRadius={0}
-          outerRadius={xScale * 1}
-          angle={90}
+          outerRadius={xScale * 12}
+          angle={180}
           rotation={90}
-          stroke="#000000"
+          stroke={lineColor}
           strokeWidth={2}
         />
         <Arc
-          x={stageWidth}
-          y={stageHeight}
+          x={xScale * 21}
+          y={yScale * 44}
           innerRadius={0}
-          outerRadius={xScale * 1}
-          angle={90}
-          rotation={180}
-          stroke="#000000"
+          outerRadius={xScale * 12}
+          angle={180}
+          rotation={270}
+          stroke={lineColor}
           strokeWidth={2}
         />
 
-        {/* Penalty Arcs */}
-        <Arc
-          x={xScale * 94}
-          y={yScale * 34}
-          innerRadius={xScale * 9.15}
-          outerRadius={xScale * 9.15}
-          angle={105}
-          rotation={127.5}
-          stroke="#000000"
+        {/* Yard Lines */}
+        <Line
+          points={[
+            xScale * 14, 0,
+            xScale * 14, stageHeight
+          ]}
+          stroke={lineColor}
           strokeWidth={2}
         />
-        <Arc
-          x={xScale * 11}
-          y={yScale * 34}
-          innerRadius={xScale * 9.15}
-          outerRadius={xScale * 9.15}
-          angle={105}
-          rotation={307.5}
-          stroke="#000000"
+        <Line
+          points={[
+            xScale * 131, 0,
+            xScale * 131, stageHeight
+          ]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+        <Line
+          points={[
+            xScale * 21, 0,
+            xScale * 21, stageHeight
+          ]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+        <Line
+          points={[
+            xScale * 124, 0,
+            xScale * 124, stageHeight
+          ]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+        <Line
+          points={[
+            xScale * 45, 0,
+            xScale * 45, stageHeight
+          ]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+        <Line
+          points={[
+            xScale * 100, 0,
+            xScale * 100, stageHeight
+          ]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+        <Line
+          points={[
+            xScale * 65, 0,
+            xScale * 65, stageHeight
+          ]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+        <Line
+          points={[
+            xScale * 80, 0,
+            xScale * 80, stageHeight
+          ]}
+          stroke={lineColor}
           strokeWidth={2}
         />
 
-        {/* "SCORELECT.COM" Text */}
+        {/* "SCORELECT.COM" in the end zones */}
         <Text
           text="SCORELECT.COM"
           x={xScale * 22.5}
           y={stageHeight / 40.25}
-          fontSize={stageWidth / 50}
+          fontSize={stageWidth / 60}
           fill="#D3D3D3"
           opacity={0.7}
+          rotation={0}
           align="center"
         />
         <Text
           text="SCORELECT.COM"
           x={stageWidth - xScale * 22.5}
           y={stageHeight / 1.02}
-          fontSize={stageWidth / 50}
+          fontSize={stageWidth / 60}
           fill="#D3D3D3"
           opacity={0.7}
           rotation={180}
           align="center"
         />
-      </>
-); // Make sure this closes the return properly, with no semicolon error.
-};
+      </Layer>
+    );
+  };
 
   // Function to render the smooth heatmap
   const renderSmoothHeatmap = () => {
@@ -582,7 +662,7 @@ const HeatmapPage = () => {
 
     return (
       <Box sx={{ width: '90%', maxWidth: 1000, height: 400, marginTop: '40px', marginBottom: '40px' }}>
-        <h3>Expected Goals (XG) by Team</h3>
+        <h3>Expected Points (XP) by Team</h3>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={chartData}
@@ -598,7 +678,7 @@ const HeatmapPage = () => {
             <YAxis />
             <RechartsTooltip />
             <Legend />
-            <Bar dataKey="xg" fill="#82ca9d" name="Total XG" />
+            <Bar dataKey="xg" fill="#82ca9d" name="Total XP" />
           </BarChart>
         </ResponsiveContainer>
       </Box>
@@ -614,8 +694,8 @@ const HeatmapPage = () => {
           height={stageHeight}
           ref={stageRef}
         >
-          {/* Soccer Pitch Layer */}
-          <Layer>{renderSoccerPitch()}</Layer>
+          {/* GAA Pitch Layer */}
+          {renderGAAPitch()}
 
           {/* Smooth Heatmap Layer */}
           {charts.heatmap && isHeatmapReady && renderSmoothHeatmap()}
@@ -649,4 +729,4 @@ const HeatmapPage = () => {
   );
 };
 
-export default HeatmapPage;
+export default HeatmapGAA;

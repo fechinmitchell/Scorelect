@@ -9,16 +9,17 @@ import SignUp from './SignUp';
 import PitchGraphic from './PitchGraphic';
 import SoccerPitch from './SoccerPitch';
 import BasketballCourt from './BasketballCourt';
-import AmericanFootballPitch from './AmericanFootballPitch'; // Import AmericanFootballPitch
+import AmericanFootballPitch from './AmericanFootballPitch';
 import Sidebar from './Sidebar';
 import Upgrade from './Upgrade';
 import Profile from './Profile';
 import SavedGames from './SavedGames';
-import Success from './Success'; // Import Success component
-import Cancel from './Cancel'; // Import Cancel component
-import Analysis from './Analysis'; // Ensure Analysis is correctly imported
+import Success from './Success';
+import Cancel from './Cancel';
+import Analysis from './Analysis';
 import FilterPage from './pages/FilterPage';
 import HeatmapPage from './pages/HeatmapPage';
+import HeatmapGAA from './pages/HeatmapGAA'; // <-- Import HeatmapGAA component
 import { ToastContainer, toast } from 'react-toastify';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -96,9 +97,9 @@ const App = () => {
     <div className="app">
       <ToastContainer />
       <div className="main-container">
-        <Sidebar 
-          onLogout={handleLogout} 
-          onSportChange={handleSportChange} 
+        <Sidebar
+          onLogout={handleLogout}
+          onSportChange={handleSportChange}
           onNavigate={handleNavigate}
           userType={userRole}
           user={user}
@@ -107,22 +108,35 @@ const App = () => {
           <Routes>
             <Route path="/" element={renderSelectedSport()} />
             <Route path="/upgrade" element={<Upgrade setUserRole={setUserRole} />} />
-            <Route path="/saved-games" element={<SavedGames userType={userRole} apiUrl={API_BASE_URL} />} />
-            <Route 
-              path="/profile" 
-              element={user ? <Profile onLogout={handleLogout} apiUrl={API_BASE_URL} /> : <Navigate replace to="/signin" />} 
+            <Route
+              path="/saved-games"
+              element={<SavedGames userType={userRole} apiUrl={API_BASE_URL} />}
+            />
+            <Route
+              path="/profile"
+              element={
+                user ? (
+                  <Profile onLogout={handleLogout} apiUrl={API_BASE_URL} />
+                ) : (
+                  <Navigate replace to="/signin" />
+                )
+              }
             />
             <Route path="/signin" element={<SignIn apiUrl={API_BASE_URL} />} />
             <Route path="/signup" element={<SignUp apiUrl={API_BASE_URL} />} />
             <Route path="/success" element={<Success setUserRole={setUserRole} />} />
             <Route path="/cancel" element={<Cancel />} />
-            <Route path="/analysis" element={<Analysis onSportSelect={(sport) => setSelectedSport(sport)} />} />
-            <Route path="/analysis/filter" element={<FilterPage />} /> {/* New Route */}
+            <Route
+              path="/analysis"
+              element={<Analysis onSportSelect={(sport) => setSelectedSport(sport)} />}
+            />
+            <Route path="/analysis/filter" element={<FilterPage />} />
             <Route path="/analysis/heatmap" element={<HeatmapPage />} />
-            <Route path="*" element={<Navigate replace to="/" />} /> {/* Redirect unknown paths to root */}
+            <Route path="/analysis/heatmap-gaa" element={<HeatmapGAA />} /> {/* <-- New Route */}
+            <Route path="*" element={<Navigate replace to="/" />} />
           </Routes>
-          <Analytics /> {/* Add the Analytics component here */}
-          <SpeedInsights /> {/* Add the SpeedInsights component here */}
+          <Analytics />
+          <SpeedInsights />
         </div>
       </div>
     </div>

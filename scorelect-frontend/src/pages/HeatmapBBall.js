@@ -92,7 +92,6 @@ const TooltipDiv = styled.div`
   pointer-events: none;
   font-size: 12px;
   z-index: 10;
-  display: none;
 `;
 
 const HeatmapBBall = () => {
@@ -106,9 +105,9 @@ const HeatmapBBall = () => {
   const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, content: '' });
   const [processedData, setProcessedData] = useState([]);
 
-  // Court dimensions in meters
-  const courtLength = 28.65; // meters
-  const courtWidth = 15.24;  // meters
+  // Court dimensions in feet
+  const courtLength = 94; // feet
+  const courtWidth = 50; // feet
   const stageWidth = 930;
   const stageHeight = (stageWidth * courtWidth) / courtLength;
   const xScale = stageWidth / courtLength;
@@ -119,12 +118,12 @@ const HeatmapBBall = () => {
   const threePointColor = '#FF0000';
 
   const calculateShotFeatures = (x, y) => {
-    const basketX = courtLength;
+    const basketX = 5.25; // Hoop is 5.25 feet from the baseline
     const basketY = courtWidth / 2;
-    const deltaX = basketX - x;
-    const deltaY = basketY - y;
+    const deltaX = x - basketX; // x position relative to the hoop
+    const deltaY = y - basketY;
     const distance = Math.sqrt(deltaX ** 2 + deltaY ** 2);
-    const angle = Math.atan2(Math.abs(deltaY), deltaX) * (180 / Math.PI);
+    const angle = Math.atan2(Math.abs(deltaY), Math.abs(deltaX)) * (180 / Math.PI);
     return { distance, angle };
   };
 
@@ -176,10 +175,7 @@ const HeatmapBBall = () => {
             return null;
           }
 
-          // Convert x and y from feet to meters
-          x = x * 0.3048;
-          y = y * 0.3048;
-
+          // Ensure x and y are within court bounds
           if (x < 0 || x > courtLength || y < 0 || y > courtWidth) {
             return null;
           }
@@ -229,114 +225,166 @@ const HeatmapBBall = () => {
 
   const renderBasketballCourt = () => (
     <>
+      {/* Court background */}
       <Rect x={0} y={0} width={stageWidth} height={stageHeight} fill={courtColor} />
+
+      {/* Playing surface outline */}
       <Line
         points={[
           0, 0,
           stageWidth, 0,
           stageWidth, stageHeight,
           0, stageHeight,
-          0, 0
+          0, 0,
         ]}
         stroke={lineColor}
         strokeWidth={2}
       />
-      {/* Center Circle */}
+
+      {/* Center circle */}
       <Circle
         x={stageWidth / 2}
         y={stageHeight / 2}
-        radius={xScale * 1.8} // Center circle radius in meters
+        radius={xScale * 6}
         stroke={lineColor}
         strokeWidth={2}
       />
-      {/* Half-Court Line */}
+
+      {/* Center line */}
       <Line
         points={[
           stageWidth / 2, 0,
-          stageWidth / 2, stageHeight
+          stageWidth / 2, stageHeight,
         ]}
         stroke={lineColor}
         strokeWidth={2}
       />
-      {/* Three-Point Arcs */}
+
+      {/* Three-point arcs */}
       <Arc
-        x={xScale * 5.25}
+        x={xScale * 4.92}
         y={stageHeight / 2}
-        innerRadius={xScale * 6.75}
-        outerRadius={xScale * 6.75}
-        angle={180}
-        rotation={270}
-        stroke={threePointColor}
+        innerRadius={xScale * 23.75}
+        outerRadius={xScale * 23.75}
+        angle={135}
+        rotation={292.5}
+        stroke={lineColor}
         strokeWidth={2}
       />
       <Arc
-        x={stageWidth - (xScale * 5.25)}
+        x={stageWidth - xScale * 4.92}
         y={stageHeight / 2}
-        innerRadius={xScale * 6.75}
-        outerRadius={xScale * 6.75}
-        angle={180}
-        rotation={90}
-        stroke={threePointColor}
+        innerRadius={xScale * 23.75}
+        outerRadius={xScale * 23.75}
+        angle={135}
+        rotation={112.5}
+        stroke={lineColor}
         strokeWidth={2}
       />
-      {/* Free Throw Circles */}
+
+      {/* Free throw circles */}
       <Circle
-        x={xScale * 5.8}
+        x={xScale * 19}
         y={stageHeight / 2}
-        radius={xScale * 1.8}
+        radius={xScale * 6}
         stroke={lineColor}
         strokeWidth={2}
       />
       <Circle
-        x={stageWidth - (xScale * 5.8)}
+        x={stageWidth - xScale * 19}
         y={stageHeight / 2}
-        radius={xScale * 1.8}
+        radius={xScale * 6}
         stroke={lineColor}
         strokeWidth={2}
       />
-      {/* Key Areas */}
-      <Rect
-        x={0}
-        y={stageHeight / 2 - yScale * 2.45}
-        width={xScale * 5.8}
-        height={yScale * 4.9}
+
+      {/* Free throw lanes */}
+      <Line
+        points={[
+          0, yScale * 19,
+          xScale * 19, yScale * 19,
+          xScale * 19, stageHeight - yScale * 19,
+          0, stageHeight - yScale * 19,
+          0, yScale * 19,
+        ]}
         stroke={lineColor}
         strokeWidth={2}
       />
-      <Rect
-        x={stageWidth - xScale * 5.8}
-        y={stageHeight / 2 - yScale * 2.45}
-        width={xScale * 5.8}
-        height={yScale * 4.9}
+      <Line
+        points={[
+          stageWidth, yScale * 19,
+          stageWidth - xScale * 19, yScale * 19,
+          stageWidth - xScale * 19, stageHeight - yScale * 19,
+          stageWidth, stageHeight - yScale * 19,
+          stageWidth, yScale * 19,
+        ]}
         stroke={lineColor}
         strokeWidth={2}
       />
-      {/* Baseline Arcs */}
-      <Arc
-        x={xScale * 1.575}
-        y={stageHeight / 2}
-        innerRadius={xScale * 1.25}
-        outerRadius={xScale * 1.25}
-        angle={180}
-        rotation={90}
+
+      {/* Outside Free throw lanes */}
+      <Line
+        points={[
+          0, yScale * 17,
+          xScale * 19, yScale * 17,
+          xScale * 19, stageHeight - yScale * 17,
+          0, stageHeight - yScale * 17,
+          0, yScale * 17,
+        ]}
         stroke={lineColor}
         strokeWidth={2}
       />
-      <Arc
-        x={stageWidth - xScale * 1.575}
-        y={stageHeight / 2}
-        innerRadius={xScale * 1.25}
-        outerRadius={xScale * 1.25}
-        angle={180}
-        rotation={270}
+      <Line
+        points={[
+          stageWidth, yScale * 17,
+          stageWidth - xScale * 19, yScale * 17,
+          stageWidth - xScale * 19, stageHeight - yScale * 17,
+          stageWidth, stageHeight - yScale * 17,
+          stageWidth, yScale * 17,
+        ]}
         stroke={lineColor}
         strokeWidth={2}
       />
+
+      {/* Baselines */}
+      <Line
+        points={[
+          xScale * 14, yScale * 3,
+          0, yScale * 3,
+        ]}
+        stroke={lineColor}
+        strokeWidth={2}
+      />
+      <Line
+        points={[
+          xScale * 14, stageHeight - yScale * 3,
+          0, stageHeight - yScale * 3,
+        ]}
+        stroke={lineColor}
+        strokeWidth={2}
+      />
+      <Line
+        points={[
+          stageWidth - xScale * 14, yScale * 3,
+          stageWidth, yScale * 3,
+        ]}
+        stroke={lineColor}
+        strokeWidth={2}
+      />
+      <Line
+        points={[
+          stageWidth - xScale * 14, stageHeight - yScale * 3,
+          stageWidth, stageHeight - yScale * 3,
+        ]}
+        stroke={lineColor}
+        strokeWidth={2}
+      />
+
       {/* Decorations */}
       <Text
         text="SCORELECT.COM"
-        x={xScale * 20}
-        y={stageHeight / 50}
+        x={xScale * 22.5}
+        y={stageHeight / 40.25}
         fontSize={stageWidth / 50}
         fill="#D3D3D3"
         opacity={0.7}
@@ -345,8 +393,8 @@ const HeatmapBBall = () => {
       />
       <Text
         text="SCORELECT.COM"
-        x={stageWidth - xScale * 20}
-        y={stageHeight - stageHeight / 30}
+        x={stageWidth - xScale * 22.5}
+        y={stageHeight / 1.02}
         fontSize={stageWidth / 50}
         fill="#D3D3D3"
         opacity={0.7}
@@ -532,8 +580,6 @@ const HeatmapBBall = () => {
   );
 
   return (
-   
-
     <Container>
       <AnalysisTitle>{sport} Heatmap Analysis</AnalysisTitle>
       <HeatmapContainer>

@@ -5,7 +5,7 @@ import { DataGrid } from '@mui/x-data-grid';
 import { Box, Typography } from '@mui/material';
 import PropTypes from 'prop-types';
 
-const ShotsTable = ({ data }) => {
+const ShotsTable = ({ data, sport }) => {
   const columns = [
     { field: 'id', headerName: '#', width: 70 },
     { field: 'team', headerName: 'Team', width: 130 },
@@ -13,7 +13,12 @@ const ShotsTable = ({ data }) => {
     { field: 'action', headerName: 'Action', width: 130 },
     { field: 'x', headerName: 'X Position (m)', type: 'number', width: 150 },
     { field: 'y', headerName: 'Y Position (m)', type: 'number', width: 150 },
-    { field: 'xg', headerName: 'XG', type: 'number', width: 100 },
+    {
+      field: 'xg',
+      headerName: sport === 'Basketball' ? 'xP' : 'XG',
+      type: 'number',
+      width: 100,
+    },
     // Add more columns as needed
   ];
 
@@ -45,6 +50,7 @@ const ShotsTable = ({ data }) => {
 
 ShotsTable.propTypes = {
   data: PropTypes.arrayOf(PropTypes.object).isRequired,
+  sport: PropTypes.string.isRequired,
 };
 
 export default ShotsTable;

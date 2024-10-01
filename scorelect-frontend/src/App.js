@@ -1,4 +1,5 @@
 // src/App.js
+
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { getAuth, signOut } from 'firebase/auth';
@@ -19,8 +20,9 @@ import Cancel from './Cancel';
 import Analysis from './Analysis';
 import FilterPage from './pages/FilterPage';
 import HeatmapPage from './pages/HeatmapPage';
-import HeatmapGAA from './pages/HeatmapGAA'; // Existing import
-import HeatmapAF from './pages/HeatMapAF'; // <-- Added import for HeatmapAF
+import HeatmapGAA from './pages/HeatmapGAA';
+import HeatmapAF from './pages/HeatMapAF';
+import HeatmapBBall from './pages/HeatmapBBall'; // <-- Added import for HeatmapBBall
 import { ToastContainer, toast } from 'react-toastify';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -37,15 +39,15 @@ const App = () => {
 
   useEffect(() => {
     const auth = getAuth();
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      setUser(user);
-      if (user) {
-        const userDocRef = doc(firestore, 'users', user.uid);
+    const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        const userDocRef = doc(firestore, 'users', currentUser.uid);
         const userDoc = await getDoc(userDocRef);
         if (userDoc.exists()) {
           setUserRole(userDoc.data().role || 'free');
         } else {
-          await setDoc(userDocRef, { role: 'free', email: user.email });
+          await setDoc(userDocRef, { role: 'free', email: currentUser.email });
           setUserRole('free');
         }
       } else {
@@ -140,7 +142,8 @@ const App = () => {
             <Route path="/analysis/filter" element={<FilterPage />} />
             <Route path="/analysis/heatmap" element={<HeatmapPage />} />
             <Route path="/analysis/heatmap-gaa" element={<HeatmapGAA />} />
-            <Route path="/analysis/heatmap-af" element={<HeatmapAF />} /> {/* <-- Added Route */}
+            <Route path="/analysis/heatmap-af" element={<HeatmapAF />} />
+            <Route path="/analysis/heatmap-bball" element={<HeatmapBBall />} /> {/* <-- Added Route */}
             <Route path="*" element={<Navigate replace to="/" />} />
           </Routes>
           <Analytics />

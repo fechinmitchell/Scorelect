@@ -1,4 +1,5 @@
 // src/pages/FilterPage.js
+
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
@@ -185,7 +186,11 @@ const FilterPage = () => {
 
       // Extract Action
       const actionKey = keys.find(
-        (key) => key === 'action' || key === 'actiontype' || key === 'playtype'
+        (key) =>
+          key === 'action' ||
+          key === 'actiontype' ||
+          key === 'playtype' ||
+          key === 'shottype' // Added for basketball
       );
       if (actionKey && entry[actionKey]) {
         actions.add(entry[actionKey]);
@@ -234,9 +239,7 @@ const FilterPage = () => {
 
     // Filter data based on selected filters
     const filteredData = data.filter((entry) => {
-      const teamMatch = filters.team
-        ? entry.team === filters.team
-        : true;
+      const teamMatch = filters.team ? entry.team === filters.team : true;
       const actionMatch = filters.action
         ? entry.action === filters.action || entry.playType === filters.action
         : true;
@@ -253,6 +256,8 @@ const FilterPage = () => {
       heatmapPage = '/analysis/heatmap-gaa';
     } else if (sport === 'AmericanFootball') {
       heatmapPage = '/analysis/heatmap-af';
+    } else if (sport === 'Basketball') {
+      heatmapPage = '/analysis/heatmap-bball'; // Added for basketball
     }
 
     // Navigate to the appropriate heatmap page with the filtered data
@@ -335,8 +340,8 @@ const FilterPage = () => {
               />{' '}
               Heatmap
             </CheckboxLabel>
-            {/* Only show XG Chart option for Soccer */}
-            {sport === 'Soccer' && (
+            {/* Show XG/xP Chart option for Soccer and Basketball */}
+            {(sport === 'Soccer' || sport === 'Basketball') && (
               <CheckboxLabel>
                 <input
                   type="checkbox"
@@ -344,7 +349,7 @@ const FilterPage = () => {
                   checked={selectedCharts.xgChart}
                   onChange={handleChartSelection}
                 />{' '}
-                Expected Goals (XG) Chart
+                {sport === 'Soccer' ? 'Expected Goals (XG) Chart' : 'Expected Points (xP) Chart'}
               </CheckboxLabel>
             )}
             {/* Additional charts for American Football */}

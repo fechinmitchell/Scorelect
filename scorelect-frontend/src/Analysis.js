@@ -1,4 +1,5 @@
 // src/components/Analysis.js
+
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import PropTypes from 'prop-types';
@@ -13,7 +14,7 @@ import {
   FaBasketballBall,
   FaVolleyballBall,
   FaFutbol,
-} from 'react-icons/fa'; // Updated imports
+} from 'react-icons/fa';
 
 const Container = styled.div`
   display: flex;
@@ -123,7 +124,7 @@ const Analysis = ({ onSportSelect }) => {
     return () => clearInterval(interval);
   }, [selectedSport]);
 
-  const props = useSpring({
+  const animationProps = useSpring({
     opacity: selectedSport ? 0 : 1,
     transform: selectedSport ? 'scale(0.8)' : 'scale(1)',
     config: { duration: 500 },
@@ -226,7 +227,7 @@ const Analysis = ({ onSportSelect }) => {
 
       {/* Conditionally render the grid or the dropzone */}
       {!selectedSport ? (
-        <PitchAnimation style={props}>
+        <PitchAnimation style={animationProps}>
           <SoccerPitchGrid animateHeatmaps={animateHeatmaps} />
         </PitchAnimation>
       ) : (
@@ -238,7 +239,6 @@ const Analysis = ({ onSportSelect }) => {
             ) : (
               <p>Drop your dataset here or click to select a file</p>
             )}
-            {/* IconWrapper is placed inside DropzoneContainer, below the text */}
             <IconWrapper>{getSportIcon(selectedSport)}</IconWrapper>
           </DropzoneContainer>
           {uploadedFile && <p>Uploaded File: {uploadedFile.name}</p>}

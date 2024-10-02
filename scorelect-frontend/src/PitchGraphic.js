@@ -59,8 +59,8 @@ const PitchGraphic = () => {
   const [isSetupTeamsModalOpen, setIsSetupTeamsModalOpen] = useState(false);
   const [team1Players, setTeam1Players] = useState(Array(11).fill({ name: '' }));
   const [team2Players, setTeam2Players] = useState(Array(11).fill({ name: '' }));
-  const [team1Color, setTeam1Color] = useState({ main: '#FF0000', secondary: '#FFFFFF' }); // Arsenal (Red and White)
-  const [team2Color, setTeam2Color] = useState({ main: '#0000FF', secondary: '#FFFFFF' }); // Brighton (Blue and White)
+  const [team1Color, setTeam1Color] = useState({ main: '#581830', secondary: '#FFFFFF' }); // Galway 
+  const [team2Color, setTeam2Color] = useState({ main: '#008000', secondary: '#FF0000' }); // Mayo 
   const [isSetupTeamModalOpen, setIsSetupTeamModalOpen] = useState(false); // State for Setup Team modal
   const [team1, setTeam1] = useState('');
   const [team2, setTeam2] = useState('');

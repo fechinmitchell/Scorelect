@@ -113,8 +113,8 @@ const HeatmapBBall = () => {
   const xScale = stageWidth / courtLength;
   const yScale = stageHeight / courtWidth;
 
-  const courtColor = '#F0F0F0';
-  const lineColor = '#000000';
+  const courtColor = '#D2B48C';
+  const lineColor = '#F0F0F0';
   const threePointColor = '#FF0000';
 
   const calculateShotFeatures = (x, y) => {

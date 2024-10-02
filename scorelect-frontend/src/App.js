@@ -13,7 +13,8 @@ import BasketballCourt from './BasketballCourt';
 import AmericanFootballPitch from './AmericanFootballPitch';
 import Sidebar from './Sidebar';
 import Upgrade from './Upgrade';
-import Profile from './Profile';
+import Profile from './Profile'
+import HowTo from './HowTo';
 import SavedGames from './SavedGames';
 import Success from './Success';
 import Cancel from './Cancel';
@@ -135,6 +136,7 @@ const App = () => {
             <Route path="/signup" element={<SignUp apiUrl={API_BASE_URL} />} />
             <Route path="/success" element={<Success setUserRole={setUserRole} />} />
             <Route path="/cancel" element={<Cancel />} />
+            <Route path="/howto" element={<HowTo />} />
             <Route
               path="/analysis"
               element={<Analysis onSportSelect={(sport) => setSelectedSport(sport)} />}

@@ -51,8 +51,10 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, userType }) => {
               </li>
               <li><button onClick={() => onNavigate('/')}>Home</button></li>
               <li><button onClick={() => onNavigate('/saved-games')}>Saved Games</button></li>
+              <li><button onClick={() => onNavigate('/howto')}>How To</button></li>
               <li><button onClick={() => onNavigate('/analysis')}>Analysis</button></li>
               <li><button onClick={() => onNavigate('/profile')}>Scorelect Pro</button></li>
+
               {/* Add more navigation buttons as needed */}
               <li><button onClick={onLogout}>{userType === 'free' ? 'Sign In' : 'Logout'}</button></li>
             </ul>

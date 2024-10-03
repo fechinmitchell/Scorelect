@@ -129,7 +129,7 @@ const HowTo = () => {
           InputProps={{
             endAdornment: (
               <InputAdornment position="end">
-                <IconButton onClick={filterTutorials}>
+                <IconButton onClick={filterTutorials} aria-label="search">
                   <SearchIcon />
                 </IconButton>
               </InputAdornment>
@@ -162,6 +162,7 @@ const HowTo = () => {
                     color="primary"
                     href={tutorial.link}
                     target="_blank"
+                    rel="noopener noreferrer"
                     startIcon={
                       tutorial.type === 'video' ? (
                         <PlayCircleOutlineIcon />
@@ -187,4 +188,3 @@ const HowTo = () => {
 };
 
 export default HowTo;
-

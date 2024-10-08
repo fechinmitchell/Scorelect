@@ -2,11 +2,13 @@ import os
 import stripe
 import logging
 from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 from flask_talisman import Talisman
 import firebase_admin
 from firebase_admin import credentials, firestore
 from dotenv import load_dotenv
+from openai import OpenAI, OpenAIError
+
 
 # Load environment variables
 load_dotenv()
@@ -17,6 +19,7 @@ logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": [
     "http://localhost:3000",
+    "http://localhost:3001",  # Added this line
     "https://scorelect.vercel.app",
     "https://scorelect.com",
     "https://www.scorelect.com"
@@ -57,7 +60,8 @@ csp = {
         'https://securetoken.googleapis.com',
         'https://firebase.googleapis.com',
         'https://*.firebaseio.com',
-        'https://*.firebase.com'
+        'https://*.firebase.com',
+        'https://api.openai.com'  # Added OpenAI API endpoint
     ]
 }
 
@@ -83,6 +87,10 @@ firebase_config = {
 cred = credentials.Certificate(firebase_config)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
+
+# Set up OpenAI API key
+client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+
 
 # Endpoint to create a Stripe checkout session
 @app.route('/create-checkout-session', methods=['POST'])
@@ -234,7 +242,6 @@ def get_subscription():
         logging.error(f"Error retrieving subscription: {str(e)}")
         return jsonify(error=str(e)), 400
 
-
 # Endpoint to retrieve Stripe session details
 @app.route('/retrieve-session', methods=['POST'])
 def retrieve_session():
@@ -299,6 +306,77 @@ def load_games():
         logging.error(f"Error loading games: {str(e)}")
         return jsonify(error=str(e)), 400
 
+# Endpoint to generate AI insights
+@app.route('/generate-insights', methods=['POST'])
+@cross_origin()
+def generate_insights():
+    try:
+        data = request.json
+        logging.info(f"Received data from frontend: {data}")
+
+        summary = data.get('summary')
+
+        if not summary:
+            logging.error("Summary not provided for AI insights generation.")
+            return jsonify({'error': 'Summary is required.'}), 400
+
+        # Prepare the messages for the OpenAI Chat Completion
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a football analyst. Provide tactical and positional advice based on the data provided."
+            },
+            {
+                "role": "user",
+                "content": summary
+            }
+        ]
+
+        logging.info(f"Sending messages to OpenAI API: {messages}")
+
+        # Use the new API method
+        completion = client.chat.completions.create(
+            model="gpt-4o",  # Make sure this is an available model in your API key
+            messages=messages,
+            max_tokens=500,
+            n=1,
+            temperature=0.7,
+            stream=True
+        )
+
+        insights = ""
+        for chunk in completion:
+            content = getattr(chunk.choices[0].delta, 'content', None)
+            if content:
+                insights += content
+
+        logging.info("AI insights generated successfully.")
+        return jsonify({'insights': insights})
+
+    except OpenAIError as e:
+        logging.error(f"OpenAI API Error: {str(e)}", exc_info=True)
+        return jsonify({'error': f'OpenAI API Error: {str(e)}'}), 500
+    except Exception as e:
+        logging.error(f"Error generating AI insights: {str(e)}", exc_info=True)
+        return jsonify({'error': f'Failed to generate AI insights: {str(e)}'}), 500
+
+# Endpoint to refresh subscription status (manual trigger)
+@app.route('/refresh-subscription-status', methods=['POST'])
+def refresh_subscription_status():
+    try:
+        data = request.json
+        uid = data.get('uid')
+        stripe_customer_id = data.get('stripeCustomerId')
+
+        if not uid or not stripe_customer_id:
+            return jsonify({'error': 'UID and Stripe Customer ID are required.'}), 400
+
+        retrieve_and_update_subscription(uid, stripe_customer_id)
+        return jsonify({'message': 'Subscription status updated successfully.'})
+    except Exception as e:
+        logging.error(f"Error refreshing subscription status: {str(e)}")
+        return jsonify({'error': 'Failed to refresh subscription status.'}), 500
+
 # Stripe webhook endpoint
 @app.route('/stripe-webhook', methods=['POST'])
 def stripe_webhook():
@@ -310,36 +388,22 @@ def stripe_webhook():
         event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
         logging.info(f"Received event: {event['type']}")
 
-        # Log the entire event data for inspection
-        logging.info(f"Event data: {event['data']['object']}")
-
-        if event['type'] == 'invoice.payment_failed':
-            subscription_id = event['data']['object'].get('subscription')
-            if subscription_id:
-                handle_failed_payment(subscription_id)
-            else:
-                logging.warning("No subscription found for invoice.payment_failed event.")
-
-        elif event['type'] == 'customer.subscription.deleted':
-            subscription_id = event['data']['object']['id']
-            handle_subscription_cancel(subscription_id)
-
-        elif event['type'] == 'customer.subscription.updated':
-            subscription = event['data']['object']
-            handle_subscription_update(subscription)
-
-        elif event['type'] == 'checkout.session.completed':
+        if event['type'] == 'checkout.session.completed':
             session = event['data']['object']
-            handle_checkout_session_completed(session)
+            customer_id = session['customer']
+
+            user_docs = db.collection('users').where('stripeCustomerId', '==', customer_id).get()
+            for doc in user_docs:
+                uid = doc.id
+                retrieve_and_update_subscription(uid, customer_id)
 
         return jsonify(success=True)
-
-    except ValueError as e:
-        logging.error(f"ValueError: {str(e)}")
-        return jsonify(error=str(e)), 400
     except stripe.error.SignatureVerificationError as e:
-        logging.error(f"SignatureVerificationError: {str(e)}")
+        logging.error(f"Signature verification error: {str(e)}")
         return jsonify(error=str(e)), 400
+    except Exception as e:
+        logging.error(f"Webhook error: {str(e)}")
+        return jsonify(error=str(e)), 500
 
 # Handle failed payment event from Stripe
 def handle_failed_payment(subscription_id):
@@ -361,6 +425,32 @@ def handle_failed_payment(subscription_id):
 
     except Exception as e:
         logging.error(f"Error handling failed payment for subscription {subscription_id}: {str(e)}")
+
+# Function to retrieve subscription status and update Firestore
+def retrieve_and_update_subscription(uid, customer_id):
+    try:
+        # Retrieve the customer's subscription from Stripe
+        subscriptions = stripe.Subscription.list(customer=customer_id)
+
+        if subscriptions and subscriptions['data']:
+            subscription = subscriptions['data'][0]
+            status = subscription['status']  # Can be 'active', 'canceled', 'incomplete', etc.
+
+            # Update the Firestore role based on subscription status
+            user_ref = db.collection('users').document(uid)
+            if status in ['active', 'trialing']:
+                user_ref.set({'role': 'paid'}, merge=True)
+                logging.info(f"Updated user {uid} to paid plan.")
+            else:
+                user_ref.set({'role': 'free'}, merge=True)
+                logging.info(f"Updated user {uid} to free plan due to subscription status: {status}")
+        else:
+            logging.warning(f"No active subscription found for customer {customer_id}.")
+            user_ref.set({'role': 'free'}, merge=True)
+
+    except Exception as e:
+        logging.error(f"Error retrieving subscription for customer {customer_id}: {str(e)}")
+
 
 # Handle subscription cancellation
 def handle_subscription_cancel(subscription_id):

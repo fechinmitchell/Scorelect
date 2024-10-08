@@ -16,9 +16,21 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import Swal from 'sweetalert2';
-import { Box } from '@mui/material';
+import {
+  Box,
+  Tabs,
+  Tab,
+  Typography,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Checkbox,
+  FormControlLabel,
+} from '@mui/material'; // Added Select, MenuItem, FormControl, InputLabel, Checkbox, FormControlLabel
 import AggregatedDataChart from '../components/AggregatedDataChart';
 import ShotsTable from '../components/ShotsTable';
+import axios from 'axios'; // For making API calls to the backend
 
 // Styled Components
 const Container = styled.div`
@@ -96,16 +108,39 @@ const TooltipDiv = styled.div`
   display: none;
 `;
 
+// Styled Tab Component to customize the tabs
+const StyledTabs = styled(Tabs)`
+  .MuiTabs-flexContainer {
+    border-radius: 25px;
+    overflow: hidden;
+    background-color: #f0f0f0;
+  }
+  .MuiTab-root {
+    text-transform: none;
+    min-width: 50%;
+    transition: background-color 0.3s ease-in-out;
+    color: #000000;
+    background-color: #D3D3D3;
+  }
+  .MuiTab-root.Mui-selected {
+    background-color: #5E2E8F;
+    color: #D3D3D3;
+  }
+`;
+
 const HeatmapPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { data, filters, charts, sport } = location.state || {};
-  const [heatmapData, setHeatmapData] = useState([]);
-  const [maxCount, setMaxCount] = useState(0);
+  const { data, charts, sport } = location.state || {};
+  const [processedData, setProcessedData] = useState([]);
   const stageRef = useRef(null);
   const [isHeatmapReady, setIsHeatmapReady] = useState(false);
   const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, content: '' });
-  const [processedData, setProcessedData] = useState([]);
+
+  // Additional states for Tabs and AI Insights
+  const [tabValue, setTabValue] = useState('analysis');
+  const [aiInsights, setAIInsights] = useState('');
+  const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
 
   // Dimensions
   const pitchWidthMeters = 105;
@@ -115,7 +150,13 @@ const HeatmapPage = () => {
   const xScale = stageWidth / pitchWidthMeters;
   const yScale = stageHeight / pitchHeightMeters;
 
-  // Function to calculate distance and angle to the goal
+  // New state variables for dropdown and checkbox
+  const [selectedStat, setSelectedStat] = useState('Goals');
+  const [showXG, setShowXG] = useState(true);
+  const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5001';
+
+
+  // Function to calculate XG using logistic regression approximation
   const calculateShotFeatures = (x, y) => {
     // Assuming the goal is centered at (105, 34) for shots towards the right goal
     const goalX = 105;
@@ -156,14 +197,39 @@ const HeatmapPage = () => {
     }
 
     const processHeatmapAndXG = () => {
-      const gridSizeX = 42;
-      const gridSizeY = 26;
-      const grid = Array.from({ length: gridSizeY }, () => Array(gridSizeX).fill(0));
+      const filteredData = data.filter((entry) => {
+        // Normalize keys to lowercase
+        const normalizedEntry = {};
+        Object.keys(entry).forEach((key) => {
+          normalizedEntry[key.toLowerCase()] = entry[key];
+        });
 
-      const updatedData = data
+        // Filter based on selectedStat
+        if (selectedStat === 'All') {
+          return true; // Include all data
+        } else if (selectedStat === 'Goals') {
+          return normalizedEntry.action?.toLowerCase() === 'goal';
+        } else if (selectedStat === 'Assists') {
+          return normalizedEntry.action?.toLowerCase() === 'assist';
+        } else if (selectedStat === 'Shots on Target') {
+          return normalizedEntry.action?.toLowerCase() === 'shot on target';
+        } else if (selectedStat === 'Shots off Target') {
+          return normalizedEntry.action?.toLowerCase() === 'shot off target';
+        } else {
+          return true;
+        }
+      });
+
+      const updatedData = filteredData
         .map((entry, index) => {
-          let x = parseFloat(entry.x);
-          let y = parseFloat(entry.y);
+          // Normalize keys to lowercase
+          const normalizedEntry = {};
+          Object.keys(entry).forEach((key) => {
+            normalizedEntry[key.toLowerCase()] = entry[key];
+          });
+
+          let x = parseFloat(normalizedEntry.x);
+          let y = parseFloat(normalizedEntry.y);
 
           if (isNaN(x) || isNaN(y)) {
             console.warn(`Invalid entry at index ${index}:`, entry);
@@ -175,35 +241,47 @@ const HeatmapPage = () => {
             return null;
           }
 
-          // Calculate distance and angle
-          const { distance, angle } = calculateShotFeatures(x, y);
-          // Calculate XG
-          const xg = calculateXG(distance, angle);
+          // Extract team information
+          const team = normalizedEntry.team || 'Unknown';
+          const action = normalizedEntry.action || 'Unknown';
+          const playerName = normalizedEntry.playername || 'Unknown';
 
-          // Append XG to entry
-          const updatedEntry = { ...entry, xg };
+          let xg = null;
+          // Calculate XG if showXG is true and the action is a shot
+          if (
+            showXG &&
+            ['goal', 'shot on target', 'shot off target'].includes(action.toLowerCase())
+          ) {
+            // Calculate distance and angle
+            const { distance, angle } = calculateShotFeatures(x, y);
+            // Calculate XG
+            xg = calculateXG(distance, angle);
+          }
 
-          // Update heatmap grid
-          const gridX = Math.min(Math.floor((x / pitchWidthMeters) * gridSizeX), gridSizeX - 1);
-          const gridY = Math.min(Math.floor((y / pitchHeightMeters) * gridSizeY), gridSizeY - 1);
-          grid[gridY][gridX] += 1;
+          // Append XG and team to entry
+          const updatedEntry = {
+            ...normalizedEntry,
+            x,
+            y,
+            xg,
+            team,
+            action,
+            playerName,
+          };
 
           return updatedEntry;
         })
-        .filter((entry) => entry !== null); // Remove invalid entries
+        .filter((entry) => entry !== null);
 
-      const flattened = grid.flat();
-      const currentMax = Math.max(...flattened);
-      setMaxCount(currentMax);
-      setHeatmapData(grid);
+      setProcessedData(updatedData);
       setIsHeatmapReady(true);
 
-      // Update data with XG
-      setProcessedData(updatedData);
+      // Log the processed data for debugging
+      console.log('Processed Data:', updatedData);
     };
 
     processHeatmapAndXG();
-  }, [data, navigate, sport]);
+  }, [data, navigate, sport, selectedStat, showXG]);
 
   // Handle Export Functionality
   const handleExport = () => {
@@ -228,193 +306,202 @@ const HeatmapPage = () => {
     }
   };
 
-  // Function to render the soccer pitch
-  const renderSoccerPitch = () => {
-    console.log('Rendering Soccer Pitch'); // Debugging log
-    const numStripes = 10;
-    const stripeWidth = stageWidth / numStripes;
+// Function to render the soccer pitch
+const renderSoccerPitch = () => {
+  console.log('Rendering Soccer Pitch'); // Debugging log
+  const numStripes = 10;
+  const stripeWidth = stageWidth / numStripes;
 
-    return (
-      <>
-        {/* Pitch Background */}
-        <Rect x={0} y={0} width={stageWidth} height={stageHeight} fill="#00A86B" />
+  return (
+    <>
+      {/* Pitch Background */}
+      <Rect x={0} y={0} width={stageWidth} height={stageHeight} fill="#00A86B" />
 
-        {/* Stripes */}
-        {Array.from({ length: numStripes }, (_, i) => (
-          <Rect
-            key={i}
-            x={i * stripeWidth}
-            y={0}
-            width={stripeWidth}
-            height={stageHeight}
-            fill={i % 2 === 0 ? '#A8D5BA' : '#8FBF9C'}
-            opacity={0.3} // Adjust opacity for subtlety
-          />
-        ))}
-
-        {/* Outer Lines */}
-        <Line
-          points={[0, 0, stageWidth, 0, stageWidth, stageHeight, 0, stageHeight, 0, 0]}
-          stroke="#000000"
-          strokeWidth={2}
-        />
-
-        {/* Goals */}
-        {/* Left Goal */}
-        {/* <Line
-          points={[0, yScale * 30.34, xScale * 105, yScale * 30.34, xScale * 105, yScale * 37.66, 0, yScale * 37.66]}
-          stroke="#000000"
-          strokeWidth={2}
-        /> */}
-        {/* Right Goal */}
-        {/* <Line
-          points={[stageWidth, yScale * 30.34, xScale * 0, yScale * 30.34, xScale * 0, yScale * 37.66, stageWidth, yScale * 37.66]}
-          stroke="#000000"
-          strokeWidth={2}
-        /> */}
-
-        {/* 6-yard Boxes */}
-        {/* Left 6-yard Box */}
-        <Line
-          points={[0, yScale * 23.1, xScale * 5.5, yScale * 23.1, xScale * 5.5, yScale * 44.9, 0, yScale * 44.9]}
-          stroke="#000000"
-          strokeWidth={2}
-        />
-        {/* Right 6-yard Box */}
-        <Line
-          points={[stageWidth, yScale * 23.1, xScale * 99.5, yScale * 23.1, xScale * 99.5, yScale * 44.9, stageWidth, yScale * 44.9]}
-          stroke="#000000"
-          strokeWidth={2}
-        />
-
-        {/* Penalty Areas */}
-        {/* Left Penalty Area */}
-        <Line
-          points={[0, yScale * 14, xScale * 16.5, yScale * 14, xScale * 16.5, yScale * 54, 0, yScale * 54]}
-          stroke="#000000"
-          strokeWidth={2}
-        />
-        {/* Right Penalty Area */}
-        <Line
-          points={[stageWidth, yScale * 14, xScale * 88.5, yScale * 14, xScale * 88.5, yScale * 54, stageWidth, yScale * 54]}
-          stroke="#000000"
-          strokeWidth={2}
-        />
-
-        {/* Penalty Spots */}
-        <Circle x={xScale * 11} y={yScale * 34} radius={xScale * 0.4} fill="#000000" />
-        <Circle x={xScale * 94} y={yScale * 34} radius={xScale * 0.4} fill="#000000" />
-
-        {/* Halfway Line */}
-        <Line
-          points={[xScale * 52.5, 0, xScale * 52.5, stageHeight]}
-          stroke="#000000"
-          strokeWidth={2}
-        />
-
-        {/* Center Circle */}
-        <Circle x={xScale * 52.5} y={yScale * 34} radius={xScale * 9.15} stroke="#000000" strokeWidth={2} />
-
-        {/* Corner Arcs */}
-        <Arc
-          x={0}
+      {/* Stripes */}
+      {Array.from({ length: numStripes }, (_, i) => (
+        <Rect
+          key={i}
+          x={i * stripeWidth}
           y={0}
-          innerRadius={0}
-          outerRadius={xScale * 1}
-          angle={90}
-          rotation={0}
-          stroke="#000000"
-          strokeWidth={2}
+          width={stripeWidth}
+          height={stageHeight}
+          fill={i % 2 === 0 ? '#A8D5BA' : '#8FBF9C'}
+          opacity={0.3} // Adjust opacity for subtlety
         />
-        <Arc
-          x={0}
-          y={stageHeight}
-          innerRadius={0}
-          outerRadius={xScale * 1}
-          angle={90}
-          rotation={270}
-          stroke="#000000"
-          strokeWidth={2}
-        />
-        <Arc
-          x={stageWidth}
-          y={0}
-          innerRadius={0}
-          outerRadius={xScale * 1}
-          angle={90}
-          rotation={90}
-          stroke="#000000"
-          strokeWidth={2}
-        />
-        <Arc
-          x={stageWidth}
-          y={stageHeight}
-          innerRadius={0}
-          outerRadius={xScale * 1}
-          angle={90}
-          rotation={180}
-          stroke="#000000"
-          strokeWidth={2}
-        />
+      ))}
 
-        {/* Penalty Arcs */}
-        <Arc
-          x={xScale * 94}
-          y={yScale * 34}
-          innerRadius={xScale * 9.15}
-          outerRadius={xScale * 9.15}
-          angle={105}
-          rotation={127.5}
-          stroke="#000000"
-          strokeWidth={2}
-        />
-        <Arc
-          x={xScale * 11}
-          y={yScale * 34}
-          innerRadius={xScale * 9.15}
-          outerRadius={xScale * 9.15}
-          angle={105}
-          rotation={307.5}
-          stroke="#000000"
-          strokeWidth={2}
-        />
+      {/* Outer Lines */}
+      <Line
+        points={[0, 0, stageWidth, 0, stageWidth, stageHeight, 0, stageHeight, 0, 0]}
+        stroke="#000000"
+        strokeWidth={2}
+      />
 
-        {/* "SCORELECT.COM" Text */}
-        <Text
-          text="SCORELECT.COM"
-          x={xScale * 22.5}
-          y={stageHeight / 40.25}
-          fontSize={stageWidth / 50}
-          fill="#D3D3D3"
-          opacity={0.7}
-          align="center"
-        />
-        <Text
-          text="SCORELECT.COM"
-          x={stageWidth - xScale * 22.5}
-          y={stageHeight / 1.02}
-          fontSize={stageWidth / 50}
-          fill="#D3D3D3"
-          opacity={0.7}
-          rotation={180}
-          align="center"
-        />
-      </>
-); // Make sure this closes the return properly, with no semicolon error.
+      {/* 6-yard Boxes */}
+      {/* Left 6-yard Box */}
+      <Line
+        points={[0, yScale * 23.1, xScale * 5.5, yScale * 23.1, xScale * 5.5, yScale * 44.9, 0, yScale * 44.9]}
+        stroke="#000000"
+        strokeWidth={2}
+      />
+      {/* Right 6-yard Box */}
+      <Line
+        points={[
+          stageWidth,
+          yScale * 23.1,
+          xScale * 99.5,
+          yScale * 23.1,
+          xScale * 99.5,
+          yScale * 44.9,
+          stageWidth,
+          yScale * 44.9,
+        ]}
+        stroke="#000000"
+        strokeWidth={2}
+      />
+
+      {/* Penalty Areas */}
+      {/* Left Penalty Area */}
+      <Line
+        points={[0, yScale * 14, xScale * 16.5, yScale * 14, xScale * 16.5, yScale * 54, 0, yScale * 54]}
+        stroke="#000000"
+        strokeWidth={2}
+      />
+      {/* Right Penalty Area */}
+      <Line
+        points={[
+          stageWidth,
+          yScale * 14,
+          xScale * 88.5,
+          yScale * 14,
+          xScale * 88.5,
+          yScale * 54,
+          stageWidth,
+          yScale * 54,
+        ]}
+        stroke="#000000"
+        strokeWidth={2}
+      />
+
+      {/* Penalty Spots */}
+      <Circle x={xScale * 11} y={yScale * 34} radius={xScale * 0.4} fill="#000000" />
+      <Circle x={xScale * 94} y={yScale * 34} radius={xScale * 0.4} fill="#000000" />
+
+      {/* Halfway Line */}
+      <Line points={[xScale * 52.5, 0, xScale * 52.5, stageHeight]} stroke="#000000" strokeWidth={2} />
+
+      {/* Center Circle */}
+      <Circle
+        x={xScale * 52.5}
+        y={yScale * 34}
+        radius={xScale * 9.15}
+        stroke="#000000"
+        strokeWidth={2}
+      />
+
+      {/* Corner Arcs */}
+      {/* Top Left */}
+      <Arc
+        x={0}
+        y={0}
+        innerRadius={0}
+        outerRadius={xScale * 1}
+        angle={90}
+        rotation={0}
+        stroke="#000000"
+        strokeWidth={2}
+      />
+      {/* Bottom Left */}
+      <Arc
+        x={0}
+        y={stageHeight}
+        innerRadius={0}
+        outerRadius={xScale * 1}
+        angle={90}
+        rotation={270}
+        stroke="#000000"
+        strokeWidth={2}
+      />
+      {/* Top Right */}
+      <Arc
+        x={stageWidth}
+        y={0}
+        innerRadius={0}
+        outerRadius={xScale * 1}
+        angle={90}
+        rotation={90}
+        stroke="#000000"
+        strokeWidth={2}
+      />
+      {/* Bottom Right */}
+      <Arc
+        x={stageWidth}
+        y={stageHeight}
+        innerRadius={0}
+        outerRadius={xScale * 1}
+        angle={90}
+        rotation={180}
+        stroke="#000000"
+        strokeWidth={2}
+      />
+
+      {/* Penalty Arcs */}
+      {/* Right Penalty Arc */}
+      <Arc
+        x={xScale * 94}
+        y={yScale * 34}
+        innerRadius={xScale * 9.15}
+        outerRadius={xScale * 9.15}
+        angle={105}
+        rotation={127.5}
+        stroke="#000000"
+        strokeWidth={2}
+      />
+      {/* Left Penalty Arc */}
+      <Arc
+        x={xScale * 11}
+        y={yScale * 34}
+        innerRadius={xScale * 9.15}
+        outerRadius={xScale * 9.15}
+        angle={105}
+        rotation={307.5}
+        stroke="#000000"
+        strokeWidth={2}
+      />
+
+      {/* "SCORELECT.COM" Text */}
+      <Text
+        text="SCORELECT.COM"
+        x={xScale * 22.5}
+        y={stageHeight / 40.25}
+        fontSize={stageWidth / 50}
+        fill="#D3D3D3"
+        opacity={0.7}
+        align="center"
+      />
+      <Text
+        text="SCORELECT.COM"
+        x={stageWidth - xScale * 22.5}
+        y={stageHeight / 1.02}
+        fontSize={stageWidth / 50}
+        fill="#D3D3D3"
+        opacity={0.7}
+        rotation={180}
+        align="center"
+      />
+    </>
+  );
 };
 
   // Function to render the smooth heatmap
   const renderSmoothHeatmap = () => {
     if (!processedData || processedData.length === 0) {
-      console.warn('No data available for rendering the heatmap.');
+      console.warn('No data available for rendering heatmap.');
       return null;
     }
 
-    // Create an array of circles representing each data point
     const circles = processedData.map((entry, index) => {
       let { x, y } = entry;
-      x = parseFloat(x);
-      y = parseFloat(y);
 
       if (isNaN(x) || isNaN(y)) {
         return null;
@@ -446,10 +533,7 @@ const HeatmapPage = () => {
 
     // Return a Layer with a blur filter applied
     return (
-      <Layer
-        filters={[Konva.Filters.Blur]}
-        blurRadius={50} // Adjust blur radius for smoothness
-      >
+      <Layer filters={[Konva.Filters.Blur]} blurRadius={50}>
         {circles}
       </Layer>
     );
@@ -462,12 +546,12 @@ const HeatmapPage = () => {
       return null;
     }
 
-    return processedData.map((entry, index) => {
-      let { x, y, xg } = entry;
-      x = parseFloat(x);
-      y = parseFloat(y);
+    if (!showXG) return null;
 
-      if (isNaN(x) || isNaN(y) || isNaN(xg)) {
+    const shotGroups = processedData.map((entry, index) => {
+      let { x, y, xg } = entry;
+
+      if (isNaN(x) || isNaN(y) || xg === null || isNaN(xg)) {
         return null;
       }
 
@@ -511,6 +595,9 @@ const HeatmapPage = () => {
         </Group>
       );
     });
+
+    // Wrap the shotGroups in a Layer
+    return <Layer>{shotGroups}</Layer>;
   };
 
   // Function to aggregate data for Actions Distribution Chart
@@ -562,11 +649,13 @@ const HeatmapPage = () => {
 
   // Function to render XG Chart
   const renderXGChart = () => {
+    if (!showXG) return null;
+
     const xgAggregation = {};
 
     processedData.forEach((entry) => {
       const team = entry.team || 'Unknown';
-      const xg = entry.xg || 0;
+      const xg = parseFloat(entry.xg) || 0;
 
       if (!xgAggregation[team]) {
         xgAggregation[team] = 0;
@@ -581,7 +670,15 @@ const HeatmapPage = () => {
     }));
 
     return (
-      <Box sx={{ width: '90%', maxWidth: 1000, height: 400, marginTop: '40px', marginBottom: '40px' }}>
+      <Box
+        sx={{
+          width: '90%',
+          maxWidth: 1000,
+          height: 400,
+          marginTop: '40px',
+          marginBottom: '40px',
+        }}
+      >
         <h3>Expected Goals (XG) by Team</h3>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
@@ -605,48 +702,165 @@ const HeatmapPage = () => {
     );
   };
 
-  return (
-    <Container>
-      <AnalysisTitle>{sport} Heatmap Analysis</AnalysisTitle>
-      <HeatmapContainer>
-        <Stage
-          width={stageWidth}
-          height={stageHeight}
-          ref={stageRef}
-        >
-          {/* Soccer Pitch Layer */}
-          <Layer>{renderSoccerPitch()}</Layer>
+  // Handle Tab Change
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
+  };
 
-          {/* Smooth Heatmap Layer */}
-          {charts.heatmap && isHeatmapReady && renderSmoothHeatmap()}
+// Function to Generate AI Insights
+const generateAIInsights = async () => {
+  setIsGeneratingInsights(true);
 
-          {/* Shots with XG Tooltip Layer */}
-          {isHeatmapReady && <Layer>{renderShotsWithXG()}</Layer>}
-        </Stage>
-        <GenerateButton onClick={handleExport}>Export Heatmap</GenerateButton>
-        {/* Tooltip for XG */}
-        {tooltip.visible && (
-          <TooltipDiv
-            style={{
-              top: tooltip.y,
-              left: tooltip.x,
-              display: tooltip.visible ? 'block' : 'none',
-            }}
-          >
-            {tooltip.content}
-          </TooltipDiv>
-        )}
-      </HeatmapContainer>
+  try {
+    // Prepare the enhanced summary
+    const summary = `We have analyzed a soccer match with the following data:
+- Total Actions: ${processedData.length}
+- Selected Stat: ${selectedStat}
+- Actions Distribution:
+${aggregateDataForBarChart()
+  .map((item) => `  - ${item.action}: ${item.count}`)
+  .join('\n')}
+${showXG ? `- Expected Goals (XG) by Team:\n${Object.entries(
+      processedData.reduce((acc, curr) => {
+        const team = curr.team || 'Unknown';
+        if (!acc[team]) acc[team] = 0;
+        acc[team] += curr.xg || 0;
+        return acc;
+      }, {})
+    )
+      .map(([team, xg]) => `  - ${team}: ${xg.toFixed(2)}`)
+      .join('\n')}` : ''}
+`;
 
-      {/* Additional Visualizations */}
-      <ChartsContainer>
-        {charts.xgChart && renderXGChart()}
-        {charts.heatmap && renderActionsDistributionChart()}
-        <AggregatedDataChart data={processedData} />
-        <ShotsTable data={processedData} />
-      </ChartsContainer>
-    </Container>
-  );
+  console.log('Summary being sent to backend:', summary);
+
+  // Use the full backend URL
+  const response = await axios.post(`${backendUrl}/generate-insights`, { summary });
+
+  console.log('Response from backend:', response.data);
+
+  if (response.data.error) {
+    throw new Error(response.data.error);
+  }
+
+  setAIInsights(response.data.insights);
+  } catch (error) {
+  console.error('Error generating AI insights:', error);
+
+  Swal.fire({
+    title: 'Error',
+    text: `Failed to generate AI insights: ${error.response?.data?.error || error.message}`,
+    icon: 'error',
+    confirmButtonText: 'OK',
+  });
+  } finally {
+  setIsGeneratingInsights(false);
+  }
 };
+
+  // Use useEffect to call generateAIInsights when switching to AI tab
+  useEffect(() => {
+    if (tabValue === 'ai' && !aiInsights && !isGeneratingInsights) {
+      generateAIInsights();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabValue]);
+
+    return (
+      <Container>
+        {/* Tabs at the top */}
+        <Box sx={{ width: '25%', marginBottom: '20px' }}>
+          <StyledTabs
+            value={tabValue}
+            onChange={handleTabChange}
+            centered
+            TabIndicatorProps={{ style: { display: 'none' } }}
+          >
+            <Tab label="Analysis" value="analysis" />
+            <Tab label="AI Insight" value="ai" />
+          </StyledTabs>
+        </Box>
+  
+        {/* Analysis Tab Content */}
+        {tabValue === 'analysis' && (
+          <>
+            <AnalysisTitle>{sport} Heatmap Analysis</AnalysisTitle>
+            {/* Dropdown and Checkbox */}
+            <Box sx={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
+              <FormControl variant="outlined" sx={{ minWidth: 200, marginRight: '20px' }}>
+                <InputLabel id="stat-select-label">Select Stat</InputLabel>
+                <Select
+                  labelId="stat-select-label"
+                  id="stat-select"
+                  value={selectedStat}
+                  onChange={(e) => setSelectedStat(e.target.value)}
+                  label="Select Stat"
+                >
+                  <MenuItem value="All">All</MenuItem>
+                  <MenuItem value="Goals">Goals</MenuItem>
+                  <MenuItem value="Assists">Assists</MenuItem>
+                  <MenuItem value="Shots on Target">Shots on Target</MenuItem>
+                  <MenuItem value="Shots off Target">Shots off Target</MenuItem>
+                </Select>
+              </FormControl>
+              <FormControlLabel
+                control={<Checkbox checked={showXG} onChange={(e) => setShowXG(e.target.checked)} />}
+                label="Show XG"
+              />
+            </Box>
+            <HeatmapContainer>
+              <Stage width={stageWidth} height={stageHeight} ref={stageRef}>
+                {/* Soccer Pitch Layer */}
+                <Layer>{renderSoccerPitch()}</Layer>
+  
+                {/* Smooth Heatmap Layer */}
+                {charts.heatmap && isHeatmapReady && renderSmoothHeatmap()}
+  
+                {/* Shots with XG Tooltip Layer */}
+                {isHeatmapReady && renderShotsWithXG()}
+              </Stage>
+              <GenerateButton onClick={handleExport}>Export Heatmap</GenerateButton>
+              {/* Tooltip for XG */}
+              {tooltip.visible && (
+                <TooltipDiv
+                  style={{
+                    top: tooltip.y,
+                    left: tooltip.x,
+                    display: tooltip.visible ? 'block' : 'none',
+                  }}
+                >
+                  {tooltip.content}
+                </TooltipDiv>
+              )}
+            </HeatmapContainer>
+  
+            {/* Additional Visualizations */}
+            <ChartsContainer>
+              {charts.xgChart && renderXGChart()}
+              {charts.heatmap && renderActionsDistributionChart()}
+              <AggregatedDataChart data={processedData} sport={sport} />
+              <ShotsTable data={processedData} />
+            </ChartsContainer>
+          </>
+        )}
+  
+        {/* AI Insight Tab Content */}
+        {tabValue === 'ai' && (
+          <Box sx={{ width: '90%', maxWidth: 1000, marginTop: '40px' }}>
+            <Typography variant="h4" gutterBottom>
+              AI Insights
+            </Typography>
+            {isGeneratingInsights ? (
+              <Typography variant="body1">Generating insights, please wait...</Typography>
+            ) : (
+              <Typography variant="body1" style={{ whiteSpace: 'pre-wrap' }}>
+                {aiInsights}
+              </Typography>
+            )}
+          </Box>
+        )}
+      </Container>
+    );
+  };
 
 export default HeatmapPage;

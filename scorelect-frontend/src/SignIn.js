@@ -1,4 +1,3 @@
-// src/SignIn.js
 import React, { useState } from 'react';
 import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -11,7 +10,6 @@ import logo from './assests/logo/scorelectlogo.jpeg';
 const SignIn = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  // Add any other necessary state variables
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [resetEmail, setResetEmail] = useState('');
@@ -19,6 +17,28 @@ const SignIn = () => {
   const [showResetForm, setShowResetForm] = useState(false);
   const navigate = useNavigate();
   const auth = getAuth();
+
+  // Function to refresh subscription status
+  const refreshSubscriptionStatus = async (uid, stripeCustomerId) => {
+    try {
+      const response = await fetch('https://your-backend-url.com/refresh-subscription-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ uid, stripeCustomerId }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        console.log('Subscription status updated successfully:', data);
+      } else {
+        console.error('Error updating subscription status:', data.error);
+      }
+    } catch (error) {
+      console.error('Error calling refresh subscription status API:', error);
+    }
+  };
 
   const handleSignIn = async (e) => {
     e.preventDefault();
@@ -34,6 +54,13 @@ const SignIn = () => {
           // Update Firestore user document with email
           await setDoc(userDocRef, { email: user.email }, { merge: true });
         }
+
+        // Check if user has a Stripe customer ID and refresh subscription status
+        const userData = userDoc.data();
+        if (userData && userData.stripeCustomerId) {
+          await refreshSubscriptionStatus(user.uid, userData.stripeCustomerId);
+        }
+
         setMessage('Successfully signed in!');
         navigate('/');
       }

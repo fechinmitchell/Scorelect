@@ -7,8 +7,8 @@ from flask_talisman import Talisman
 import firebase_admin
 from firebase_admin import credentials, firestore
 from dotenv import load_dotenv
-import openai
-from openai import OpenAI, OpenAIError
+from openai import OpenAI
+
 
 
 # Load environment variables

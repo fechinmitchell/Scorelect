@@ -30,6 +30,8 @@ import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
+import { UserProvider } from './UserContext';
+
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
@@ -105,6 +107,8 @@ const App = () => {
   };
 
   return (
+    <UserProvider>
+
     <div className="app">
       <ToastContainer />
       <div className="main-container">
@@ -155,6 +159,8 @@ const App = () => {
         </div>
       </div>
     </div>
+    </UserProvider>
+
   );
 };
 

@@ -4,9 +4,14 @@ import PropTypes from 'prop-types';
 import './Sidebar.css';
 import logo from './assests/logo/scorelectlogo-grey.jpeg';
 import Swal from 'sweetalert2';
+import { useUser } from './UserContext';
+import { auth } from './firebase';  // Import Firebase auth
 
-const Sidebar = ({ onNavigate, onLogout, onSportChange, userType }) => {
+const API_URL = process.env.REACT_APP_API_URL;
+
+const Sidebar = ({ onNavigate, onLogout, onSportChange }) => {
   const [collapsed, setCollapsed] = useState(window.innerWidth <= 768);
+  const { userRole, setUserRole } = useUser();
 
   const toggleSidebar = () => {
     setCollapsed(!collapsed);
@@ -26,8 +31,46 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, userType }) => {
     };
   }, []);
 
+  // Function to fetch user data and navigate to profile
+  const fetchUserData = async () => {
+    const user = auth.currentUser;  // Get the current authenticated user from Firebase Auth
+    
+    // Log the current user to see if it's returning the correct user
+    console.log("Current authenticated user:", user);
+    
+    if (user) {
+      const uid = user.uid;  // Get the user ID (UID)
+      console.log("User UID:", uid);
+
+      try {
+        const response = await fetch(`${API_URL}/get-user-data`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ uid })  // Send the UID in the request body
+        });
+
+        const data = await response.json();
+        
+        // Log the fetched user data
+        console.log('User data fetched from Firestore:', data);
+
+        // Set the user role in the context
+        setUserRole(data.role);
+
+        // Navigate to the profile page after fetching the data
+        onNavigate('/profile');
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    } else {
+      console.error('No user is logged in.');
+    }
+  };
+
   const handleAnalysisAccess = () => {
-    if (userType === 'free') {
+    if (userRole === 'free') {
       Swal.fire({
         title: 'Upgrade Required',
         text: 'Access to "Analysis" is a premium feature. Please upgrade to unlock this functionality.',
@@ -48,14 +91,13 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, userType }) => {
   return (
     <div className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       <button className="toggle-button" onClick={toggleSidebar}>
-        {collapsed ? '☰' : '☰'} {/* Changed symbols for better UX */}
+        {collapsed ? '☰' : '☰'}
       </button>
       {!collapsed && (
         <>
           <div className="user-info">
             <img src={logo} alt="Scorelect Logo" className="logo" />
-            {/* Display user type */}
-            {userType !== 'free' && <p>Pro User</p>}
+            {userRole !== 'free' && <p>Pro User</p>}
           </div>
           <nav>
             <ul>
@@ -73,13 +115,10 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, userType }) => {
               <li><button onClick={() => onNavigate('/')}>Home</button></li>
               <li><button onClick={() => onNavigate('/saved-games')}>Saved Games</button></li>
               <li><button onClick={() => onNavigate('/howto')}>How To</button></li>
-              {/* Render Analysis button based on user type */}
-              <li>
-                <button onClick={handleAnalysisAccess}>Analysis</button>
-              </li>
-              <li><button onClick={() => onNavigate('/profile')}>Scorelect Pro</button></li>
-              {/* Add more navigation buttons as needed */}
-              <li><button onClick={onLogout}>{userType === 'free' ? 'Sign In' : 'Logout'}</button></li>
+              <li><button onClick={handleAnalysisAccess}>Analysis</button></li>
+              {/* Fetch user data when "Profile" is clicked */}
+              <li><button onClick={fetchUserData}>Scorelect Pro</button></li>
+              <li><button onClick={onLogout}>{userRole === 'free' ? 'Sign In' : 'Logout'}</button></li>
             </ul>
           </nav>
         </>
@@ -92,7 +131,6 @@ Sidebar.propTypes = {
   onNavigate: PropTypes.func.isRequired,
   onLogout: PropTypes.func.isRequired,
   onSportChange: PropTypes.func.isRequired,
-  userType: PropTypes.string.isRequired,
 };
 
 export default Sidebar;

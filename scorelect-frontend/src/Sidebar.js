@@ -1,4 +1,3 @@
-// src/Sidebar.js
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import './Sidebar.css';
@@ -12,6 +11,7 @@ const API_URL = process.env.REACT_APP_API_URL;
 const Sidebar = ({ onNavigate, onLogout, onSportChange }) => {
   const [collapsed, setCollapsed] = useState(window.innerWidth <= 768);
   const { userRole, setUserRole } = useUser();
+  const [loading, setLoading] = useState(false);  // Add loading state
 
   const toggleSidebar = () => {
     setCollapsed(!collapsed);
@@ -34,11 +34,8 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange }) => {
   // Function to fetch user data and navigate to profile
   const fetchUserData = async () => {
     const user = auth.currentUser;  // Get the current authenticated user from Firebase Auth
-    
-    // Log the current user to see if it's returning the correct user
-    console.log("Current authenticated user:", user);
-    
     if (user) {
+      setLoading(true);  // Set loading to true when fetching starts
       const uid = user.uid;  // Get the user ID (UID)
       console.log("User UID:", uid);
 
@@ -52,17 +49,21 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange }) => {
         });
 
         const data = await response.json();
-        
-        // Log the fetched user data
         console.log('User data fetched from Firestore:', data);
 
         // Set the user role in the context
         setUserRole(data.role);
 
-        // Navigate to the profile page after fetching the data
-        onNavigate('/profile');
+        // Check user role and navigate accordingly
+        if (data.role === 'free') {
+          onNavigate('/signup');  // Navigate to the signup page
+        } else {
+          onNavigate('/profile');  // Navigate to the profile page
+        }
       } catch (error) {
         console.error('Error fetching user data:', error);
+      } finally {
+        setLoading(false);  // Set loading to false after data fetching is done
       }
     } else {
       console.error('No user is logged in.');
@@ -93,36 +94,38 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange }) => {
       <button className="toggle-button" onClick={toggleSidebar}>
         {collapsed ? '☰' : '☰'}
       </button>
-      {!collapsed && (
-        <>
-          <div className="user-info">
-            <img src={logo} alt="Scorelect Logo" className="logo" />
-            {userRole !== 'free' && <p>Pro User</p>}
-          </div>
-          <nav>
-            <ul>
-              <li>
-                <label>
-                  Select Sport:
-                  <select onChange={(e) => onSportChange(e.target.value)} defaultValue="Soccer">
-                    <option value="Soccer">Soccer</option>
-                    <option value="GAA">GAA</option>
-                    <option value="Basketball">Basketball</option>
-                    <option value="AmericanFootball">American Football</option>
-                  </select>
-                </label>
-              </li>
-              <li><button onClick={() => onNavigate('/')}>Home</button></li>
-              <li><button onClick={() => onNavigate('/saved-games')}>Saved Games</button></li>
-              <li><button onClick={() => onNavigate('/howto')}>How To</button></li>
-              <li><button onClick={handleAnalysisAccess}>Analysis</button></li>
-              {/* Fetch user data when "Profile" is clicked */}
-              <li><button onClick={fetchUserData}>Scorelect Pro</button></li>
-              <li><button onClick={onLogout}>{userRole === 'free' ? 'Sign In' : 'Logout'}</button></li>
-            </ul>
-          </nav>
-        </>
-      )}
+      <>
+        <div className="user-info">
+          <img src={logo} alt="Scorelect Logo" className="logo" />
+          {userRole !== 'free' && <p></p>}
+        </div>
+        <nav>
+          <ul>
+            <li>
+              <label>
+                Select Sport:
+                <select onChange={(e) => onSportChange(e.target.value)} defaultValue="Soccer">
+                  <option value="Soccer">Soccer</option>
+                  <option value="GAA">GAA</option>
+                  <option value="Basketball">Basketball</option>
+                  <option value="AmericanFootball">American Football</option>
+                </select>
+              </label>
+            </li>
+            <li><button onClick={() => onNavigate('/')}>Home</button></li>
+            <li><button onClick={() => onNavigate('/saved-games')}>Saved Games</button></li>
+            <li><button onClick={() => onNavigate('/howto')}>How To</button></li>
+            <li><button onClick={handleAnalysisAccess}>Analysis</button></li>
+            {/* Fetch user data when "Profile" is clicked */}
+            <li>
+              <button onClick={fetchUserData} className={`scorelect-pro-button ${loading ? 'loading' : ''}`}>
+                {loading ? 'Loading...' : 'Scorelect Pro'}
+              </button>
+            </li>
+            <li><button onClick={onLogout}>{userRole === 'free' ? 'Sign In' : 'Logout'}</button></li>
+          </ul>
+        </nav>
+      </>
     </div>
   );
 };

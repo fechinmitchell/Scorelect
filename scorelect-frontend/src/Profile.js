@@ -1,15 +1,14 @@
-// src/Profile.js
 import React, { useEffect, useState } from 'react';
 import { getAuth, signOut } from 'firebase/auth';
 import { firestore } from './firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore'; // Imported setDoc here
+import { doc, getDoc } from 'firebase/firestore'; // Removed setDoc
 import { useNavigate } from 'react-router-dom';
 import './Profile.css';
 import { FaUserCircle } from 'react-icons/fa'; // Import a user avatar icon
 
 const Profile = ({ onLogout }) => {
   const [user, setUser] = useState(null);
-  const [subscription, setSubscription] = useState(null);
+  const [userRole, setUserRole] = useState(null); // State for user role
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -19,146 +18,50 @@ const Profile = ({ onLogout }) => {
     const auth = getAuth();
     const currentUser = auth.currentUser;
 
-    // Extract 'session_id' and 'uid' from URL query parameters
-    const query = new URLSearchParams(window.location.search);
-    const sessionId = query.get('session_id');
-    const urlUid = query.get('uid'); // 'uid' passed as query param in success_url
-
     if (currentUser) {
       setUser(currentUser);
-
-      // Determine which UID to use: from URL or from auth
-      const uidToUse = urlUid || currentUser.uid;
-
-      if (sessionId && uidToUse) {
-        // If redirected from Stripe Checkout with session_id and uid in URL
-        // Fetch and update subscription
-        fetchUserSubscription(uidToUse, sessionId);
-        // Optionally remove query params from URL
-        navigate('/profile', { replace: true });
-      } else {
-        // Regular profile access
-        fetchUserSubscription(uidToUse);
-      }
+      // Fetch user role from Firestore
+      fetchUserRole(currentUser.uid);
     } else {
+      console.log('User not authenticated, redirecting to sign-in page');
       // If user is not authenticated, redirect to sign-in page
       navigate('/signin');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
-  const fetchUserSubscription = async (uid, sessionId = null) => {
+  const fetchUserRole = async (uid) => {
     setLoading(true);
     setError(null);
+    console.log('Fetching user role for UID:', uid);
     try {
       const userDocRef = doc(firestore, 'users', uid);
       const userDoc = await getDoc(userDocRef);
-      let userData = null;
       if (userDoc.exists()) {
-        userData = userDoc.data();
+        const userData = userDoc.data();
+        console.log('User data retrieved from Firestore:', userData);
+        setUserRole(userData.role); // Set the user role (paid/free)
       } else {
         console.log('User document not found');
         setError('User data not found.');
-        setLoading(false);
-        return;
-      }
-
-      let subscriptionId = userData.subscriptionId;
-
-      if (!subscriptionId && sessionId) {
-        // Call backend to get subscriptionId using sessionId
-        const response = await fetch(`${process.env.REACT_APP_API_URL}/get-subscription`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ session_id: sessionId, uid }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const subscriptionData = await response.json();
-
-        if (subscriptionData.error) {
-          console.error('Subscription error:', subscriptionData.error);
-          setError(subscriptionData.error);
-        } else {
-          console.log('Fetched subscription data:', subscriptionData);
-          subscriptionId = subscriptionData.id;
-          // Save subscriptionId and role to Firestore
-          await setDoc(userDocRef, { subscriptionId, role: 'paid' }, { merge: true });
-          // Set subscription data
-          setSubscription(subscriptionData);
-        }
-      } else if (subscriptionId) {
-        // If subscriptionId exists in userData, fetch subscription data
-        const response = await fetch(`${process.env.REACT_APP_API_URL}/get-subscription`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ subscriptionId }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const subscriptionData = await response.json();
-
-        if (subscriptionData.error) {
-          console.error('Subscription error:', subscriptionData.error);
-          setError(subscriptionData.error);
-        } else {
-          console.log('Fetched subscription data:', subscriptionData);
-          setSubscription(subscriptionData);
-        }
-      } else {
-        // No subscriptionId and no sessionId
-        setSubscription(null);
+        setUserRole(null);
       }
     } catch (error) {
-      console.error('Error fetching user subscription:', error);
+      console.error('Error fetching user role:', error);
       setError(error.message);
+      setUserRole(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCancelSubscription = async () => {
-    if (!subscription || !subscription.id) {
-      alert('No active subscription to cancel.');
-      return;
-    }
+  const handleCancelSubscription = () => {
+    const subject = encodeURIComponent("Cancel Subscription Request");
+    const body = encodeURIComponent(`Hello,\n\nI would like to cancel my subscription. My email is ${user.email}.\n\nThank you.`);
+    const recipient = "scorelectapp@gmail.com";
 
-    try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/cancel-subscription`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ subscriptionId: subscription.id, uid: user.uid }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      if (result.error) {
-        console.error(result.error);
-        alert('Error canceling subscription: ' + result.error);
-      } else {
-        alert('Subscription canceled successfully.');
-        // Fetch updated subscription data
-        await fetchUserSubscription(user.uid);
-      }
-    } catch (error) {
-      console.error('Error canceling subscription:', error);
-      alert('Error canceling subscription: ' + error.message);
-    }
+    // Open the user's default email client with pre-filled subject and body
+    window.location.href = `mailto:${recipient}?subject=${subject}&body=${body}`;
   };
 
   const handleRenewSubscription = () => {
@@ -197,16 +100,12 @@ const Profile = ({ onLogout }) => {
             <p><strong>Email:</strong> {user.email}</p>
           </div>
           <button onClick={handleLogout} className="logout-button">Logout</button>
-          {subscription ? (
+
+          {userRole === 'paid' ? (
             <>
               <h3>Subscription Details</h3>
-              <p><strong>Status:</strong> {subscription.status}</p>
-              <p><strong>Next Billing Date:</strong> {new Date(subscription.current_period_end * 1000).toLocaleDateString()}</p>
-              {subscription.status === 'active' || subscription.status === 'trialing' ? (
-                <button className="cancel-button" onClick={handleCancelSubscription}>Cancel Subscription</button>
-              ) : (
-                <button className="renew-button" onClick={handleRenewSubscription}>Renew Subscription</button>
-              )}
+              <p>You are currently subscribed. Thank you for your support.</p>
+              <button className="cancel-button" onClick={handleCancelSubscription}>Cancel Subscription</button>
             </>
           ) : (
             <>

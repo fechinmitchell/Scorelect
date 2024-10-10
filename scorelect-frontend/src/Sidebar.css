@@ -1,5 +1,6 @@
+/* Sidebar Styles */
 .sidebar {
-  width: 250px;
+  width: 230px;
   background-color: #5E2E8F;
   color: white;
   display: flex;
@@ -12,16 +13,16 @@
 
 .sidebar.collapsed {
   width: 60px;
-  align-items: flex-start; /* Align button to the left */
+  align-items: flex-start;
 }
 
 .sidebar .user-info {
-  margin-bottom: 20px; /* Adjusted to create space below the logo */
+  margin-bottom: 20px;
 }
 
 .logo {
-  width: 100%; /* Adjust the width as needed */
-  margin-bottom: 20px; /* Adjusted to create space below the logo */
+  width: 100%;
+  margin-bottom: 20px;
 }
 
 .sidebar.collapsed .logo {
@@ -50,8 +51,60 @@ nav ul li select {
   text-align: left;
 }
 
+.sidebar.collapsed nav ul {
+  display: none; /* Hide the nav items when sidebar is collapsed */
+}
+
+/* Loading button styles */
+.scorelect-pro-button {
+  position: relative;
+  overflow: hidden;
+  background-color: #501387;
+  color: white;
+  padding: 10px;
+  font-size: 16px;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.scorelect-pro-button.loading {
+  pointer-events: none;
+  color: #FFF;
+}
+
+.scorelect-pro-button.loading::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 100%;
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.scorelect-pro-button.loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background-color: #FFD700;
+  width: 0;
+  animation: fillButton 2s forwards;
+}
+
+@keyframes fillButton {
+  0% {
+    width: 0;
+  }
+  100% {
+    width: 100%;
+  }
+}
+
 nav ul li select {
-  margin-top: 5px; /* Adjusted to move the select up */
+  margin-top: 5px;
 }
 
 nav ul li button:hover,
@@ -85,5 +138,5 @@ nav ul li select:hover {
 
   .toggle-button {
     display: block;
-  } 
+  }
 }

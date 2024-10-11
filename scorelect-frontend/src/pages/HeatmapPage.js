@@ -153,7 +153,7 @@ const HeatmapPage = () => {
   // New state variables for dropdown and checkbox
   const [selectedStat, setSelectedStat] = useState('Goals');
   const [showXG, setShowXG] = useState(true);
-  const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5001';
+  const backendUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 
   // Function to calculate XG using logistic regression approximation

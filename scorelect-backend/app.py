@@ -56,15 +56,15 @@ csp = {
         'https://js.stripe.com'  # Allow Stripe's JS for payment flows
     ],
     'connect-src': [
-        "'self'",  # Allow connections (e.g., fetch, xhr) to the same origin
-        'https://api.stripe.com',  # Allow connections to Stripe API
-        'https://www.googleapis.com',  # Allow Google APIs (used by Firebase)
-        'https://firestore.googleapis.com',  # Allow Firestore API
-        'https://securetoken.googleapis.com',  # Firebase authentication API
-        'https://firebase.googleapis.com',  # Allow Firebase API
-        'https://*.firebaseio.com',  # Allow Firebase Realtime Database URLs
-        'https://*.firebase.com',  # Allow older Firebase URLs
-        'https://api.openai.com'  # Allow connections to OpenAI API
+        "'self'",  
+        'https://api.stripe.com',  
+        'https://www.googleapis.com',  
+        'https://firestore.googleapis.com',  
+        'https://securetoken.googleapis.com',  
+        'https://firebase.googleapis.com',  
+        'https://*.firebaseio.com',  
+        'https://*.firebase.com',  
+        'https://api.openai.com'  # Ensure OpenAI is included
     ]
 }
 

@@ -24,6 +24,7 @@ import HeatmapPage from './pages/HeatmapPage';
 import HeatmapGAA from './pages/HeatmapGAA';
 import HeatmapAF from './pages/HeatMapAF';
 import BballCollect from './blogs/BballCollect';
+import SoccerCollect from './blogs/SoccerCollect';
 import HeatmapBBall from './pages/HeatmapBBall'; // <-- Added import for HeatmapBBall
 import { ToastContainer, toast } from 'react-toastify';
 import { Analytics } from '@vercel/analytics/react';
@@ -152,6 +153,7 @@ const App = () => {
             <Route path="/analysis/heatmap-af" element={<HeatmapAF />} />
             <Route path="/analysis/heatmap-bball" element={<HeatmapBBall />} /> {/* <-- Added Route */}
             <Route path="/blog/basketball-statistics" element={<BballCollect />} />
+            <Route path="/blog/soccercollect" element={<SoccerCollect />} />
             <Route path="*" element={<Navigate replace to="/" />} />
           </Routes>
           <Analytics />

@@ -66,6 +66,15 @@ const tutorialsData = [
     thumbnail: '/images/basketball_stats.jpg',
     link: '/blog/basketball-statistics',
   },
+  {
+    id: 3,
+    title: 'Collecting Basketball Statistics on Amateur Games',
+    description: 'A guide to collecting and analyzing basketball stats for non-professional games.',
+    category: 'basketball',
+    type: 'blog',
+    thumbnail: '/images/soccercollect.jpg',
+    link: '/blog/SoccerCollect',
+  },
   // Add more tutorial objects here
 ];
 

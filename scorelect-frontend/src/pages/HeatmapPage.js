@@ -151,7 +151,7 @@ const HeatmapPage = () => {
   const yScale = stageHeight / pitchHeightMeters;
 
   // New state variables for dropdown and checkbox
-  const [selectedStat, setSelectedStat] = useState('Goals');
+  const [selectedStat, setSelectedStat] = useState('All');
   const [showXG, setShowXG] = useState(true);
   const backendUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 

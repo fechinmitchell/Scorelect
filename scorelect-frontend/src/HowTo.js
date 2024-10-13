@@ -20,6 +20,8 @@ import {
 import SearchIcon from '@mui/icons-material/Search';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import DescriptionIcon from '@mui/icons-material/Description';
+import SoccerCollectMain from './images/soccer_collect_main.png';
+
 
 // Styled Components
 const Container = styled.div`
@@ -68,11 +70,11 @@ const tutorialsData = [
   },
   {
     id: 3,
-    title: 'Collecting Basketball Statistics on Amateur Games',
-    description: 'A guide to collecting and analyzing basketball stats for non-professional games.',
-    category: 'basketball',
+    title: 'How to Collect Soccer Statistics on Amateur Games',
+    description: 'A guide to collecting and analyzing Soccer stats for non-professional and professional games.',
+    category: 'soccer',
     type: 'blog',
-    thumbnail: '/images/soccercollect.jpg',
+    thumbnail: SoccerCollectMain,
     link: '/blog/SoccerCollect',
   },
   // Add more tutorial objects here

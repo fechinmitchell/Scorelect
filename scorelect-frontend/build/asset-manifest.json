@@ -1,18 +1,24 @@
 {
   "files": {
-    "main.css": "/static/css/main.d71831df.css",
-    "main.js": "/static/js/main.f23dfda9.js",
+    "main.css": "/static/css/main.6eece118.css",
+    "main.js": "/static/js/main.13454f9a.js",
     "static/js/453.93f25938.chunk.js": "/static/js/453.93f25938.chunk.js",
     "static/media/galwaybg.jpeg": "/static/media/galwaybg.b676ae3833de27839fbf.jpeg",
+    "static/media/step3_soccer_collect.png": "/static/media/step3_soccer_collect.4b7c11bd0a2412795037.png",
+    "static/media/step1_soccer_collect.png": "/static/media/step1_soccer_collect.407918ea53055a6ce7fa.png",
+    "static/media/step4_soccer_collect.png": "/static/media/step4_soccer_collect.1d10c07127a4d03acb78.png",
+    "static/media/soccer_collect_main.png": "/static/media/soccer_collect_main.32677ac9c6f69ded68c5.png",
+    "static/media/step2_soccer_collect.png": "/static/media/step2_soccer_collect.452e0a97395f0e947c9b.png",
+    "static/media/step5_soccer_collect.png": "/static/media/step5_soccer_collect.99048318971978a072af.png",
     "static/media/scorelectlogo.jpeg": "/static/media/scorelectlogo.d500f3d76a8b783757f3.jpeg",
     "static/media/scorelectlogo-grey.jpeg": "/static/media/scorelectlogo-grey.e1d6f8f6ab17beb8c111.jpeg",
     "index.html": "/index.html",
-    "main.d71831df.css.map": "/static/css/main.d71831df.css.map",
-    "main.f23dfda9.js.map": "/static/js/main.f23dfda9.js.map",
+    "main.6eece118.css.map": "/static/css/main.6eece118.css.map",
+    "main.13454f9a.js.map": "/static/js/main.13454f9a.js.map",
     "453.93f25938.chunk.js.map": "/static/js/453.93f25938.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.d71831df.css",
-    "static/js/main.f23dfda9.js"
+    "static/css/main.6eece118.css",
+    "static/js/main.13454f9a.js"
   ]
 }

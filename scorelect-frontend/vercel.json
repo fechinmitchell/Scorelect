@@ -1,0 +1,24 @@
+{
+    "headers": [
+      {
+        "source": "/sitemap.xml",
+        "headers": [
+          {
+            "key": "User-Agent",
+            "value": "*"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=0, must-revalidate"
+          }
+        ]
+      }
+    ],
+    "routes": [
+      {
+        "src": "/sitemap.xml",
+        "dest": "/public/sitemap.xml"
+      }
+    ]
+  }
+  

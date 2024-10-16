@@ -14,37 +14,70 @@ const SavedGames = ({ userType }) => {
     const fetchSavedGames = async () => {
       const user = auth.currentUser;
       if (user) {
-        const gamesRef = collection(firestore, 'savedGames', user.uid, 'games');
-        const gamesSnapshot = await getDocs(gamesRef);
-        const gamesList = gamesSnapshot.docs.map(doc => ({
-          id: doc.id,
-          name: doc.data().name,
-          date: doc.data().date,
-          sport: doc.data().sport, // Ensure the sport is being fetched
-        }));
-        setSavedGames(gamesList);
+        try {
+          console.log('Fetching saved games for user:', user.uid);
+          const gamesRef = collection(firestore, 'savedGames', user.uid, 'games');
+          const gamesSnapshot = await getDocs(gamesRef);
+          const gamesList = gamesSnapshot.docs.map(doc => ({
+            id: doc.id,
+            name: doc.data().name,
+            date: doc.data().date,
+            sport: doc.data().sport,
+          }));
+          console.log('Fetched games:', gamesList);
+          setSavedGames(gamesList);
+        } catch (error) {
+          console.error('Error fetching saved games:', error);
+        }
+      } else {
+        console.warn('User not authenticated, cannot fetch saved games.');
       }
-    }; 
+    };
 
     fetchSavedGames();
   }, [auth]);
 
-  const handleLoadGame = async (gameId, sport) => {
-    const user = auth.currentUser;
-    if (user) {
+  // SavedGames.js
+
+const handleLoadGame = async (gameId, sport) => {
+  const user = auth.currentUser;
+  if (user) {
+    try {
+      console.log('Loading game:', gameId);
       const gameDoc = await getDoc(doc(firestore, 'savedGames', user.uid, 'games', gameId));
       if (gameDoc.exists()) {
-        const gameData = gameDoc.data().gameData; // Fetch the saved game data
-        navigate(`/${sport.toLowerCase()}`, { state: { loadedCoords: gameData } }); // Pass the game data to the specific component
+        const gameData = gameDoc.data().gameData;
+        console.log('Loaded game data:', gameData);
+        if (gameData && gameData.length > 0) {
+          // Navigate to the correct route where SoccerPitch.js is mounted
+          navigate(`/soccerpitch`, { state: { loadedCoords: gameData } });
+        } else {
+          console.warn('Loaded game data is empty:', gameData);
+        }
+      } else {
+        console.warn('Game document does not exist:', gameId);
       }
+    } catch (error) {
+      console.error('Error loading game:', error);
     }
-  };
+  } else {
+    console.warn('User not authenticated, cannot load game.');
+  }
+};
 
   const handleDeleteGame = async (gameId) => {
     const user = auth.currentUser;
     if (user) {
-      await deleteDoc(doc(firestore, 'savedGames', user.uid, 'games', gameId));
-      setSavedGames(savedGames.filter(game => game.id !== gameId));
+      try {
+        console.log('Deleting game:', gameId);
+        await deleteDoc(doc(firestore, 'savedGames', user.uid, 'games', gameId));
+        setSavedGames(savedGames.filter(game => game.id !== gameId));
+        console.log('Game deleted:', gameId);
+      } catch (error) {
+        console.error('Error deleting game:', error);
+      }
+    } else {
+      console.warn('User not authenticated, cannot delete game.');
     }
   };
 

@@ -84,9 +84,12 @@ const SoccerPitch =() => {
 
   useEffect(() => {
     if (location.state && location.state.loadedCoords) {
+      console.log('Loaded coords:', location.state.loadedCoords); // Debug log
       setCoords(location.state.loadedCoords);
+    } else {
+      console.log('No loadedCoords found in location.state');
     }
-  }, [location.state]);
+  }, [location.state]);  
 
   useEffect(() => {
     // Set initial action buttons
@@ -101,49 +104,94 @@ const SoccerPitch =() => {
   }, []);
 
   // Full handleSaveGame function
-const handleSaveGame = async () => {
-  if (userType === 'free') {
-    handlePremiumFeatureAccess('Save Game');
-    return;
-  }
-  // Proceed with saving the game
-  const auth = getAuth();
-  const user = auth.currentUser;
-  if (user) {
-    try {
-      const sportType = 'Soccer';
-      await setDoc(doc(firestore, 'savedGames', user.uid, 'games', gameName), {
-        gameData: coords,
-        name: gameName,
-        date: new Date().toISOString(),
-        sport: sportType,
-      });
-      setIsSaveModalOpen(false);
+  const handleSaveGame = async () => {
+    console.log('handleSaveGame called'); // Log when the function is invoked
+  
+    if (userType === 'free') {
+      console.log('User is free. Accessing premium feature.');
+      handlePremiumFeatureAccess('Save Game');
+      return;
+    }
+  
+    if (!gameName.trim()) {
+      console.log('Invalid game name entered.');
       Swal.fire({
-        title: 'Success',
-        text: 'Game has been saved successfully!',
-        icon: 'success',
+        title: 'Invalid Game Name',
+        text: 'Please enter a valid game name.',
+        icon: 'warning',
         confirmButtonText: 'OK',
       });
-    } catch (error) {
-      console.error('Error saving game:', error);
+      return;
+    }
+  
+    const auth = getAuth();
+    const user = auth.currentUser;
+  
+    console.log('Authenticated user:', user); // Log the authenticated user
+  
+    if (user) {
+      console.log('User UID:', user.uid); // Log the user's UID
+  
+      try {
+        const sanitizedGameName = gameName.replace(/[^a-zA-Z0-9_-]/g, '_');
+        console.log('Sanitized Game Name:', sanitizedGameName);
+  
+        const existingGameDoc = await getDoc(doc(firestore, 'savedGames', user.uid, 'games', sanitizedGameName));
+        console.log('Existing Game Document:', existingGameDoc.exists());
+  
+        if (existingGameDoc.exists()) {
+          const result = await Swal.fire({
+            title: 'Overwrite Game?',
+            text: 'A game with this name already exists. Do you want to overwrite it?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, overwrite it',
+            cancelButtonText: 'No, cancel',
+          });
+          console.log('User decision to overwrite:', result.isConfirmed);
+          if (!result.isConfirmed) {
+            return;
+          }
+        }
+  
+        console.log('Saving game:', gameName, coords);
+  
+        const sportType = 'Soccer';
+        await setDoc(doc(firestore, 'savedGames', user.uid, 'games', sanitizedGameName), {
+          gameData: coords,
+          name: gameName,
+          date: new Date().toISOString(),
+          sport: sportType,
+        });
+  
+        console.log('Game saved successfully.');
+  
+        setIsSaveModalOpen(false);
+        Swal.fire({
+          title: 'Success',
+          text: 'Game has been saved successfully!',
+          icon: 'success',
+          confirmButtonText: 'OK',
+        });
+      } catch (error) {
+        console.error('Error saving game:', error);
+        Swal.fire({
+          title: 'Error',
+          text: 'An error occurred while saving the game. Please try again.',
+          icon: 'error',
+          confirmButtonText: 'OK',
+        });
+      }
+    } else {
+      console.log('User not authenticated.');
       Swal.fire({
-        title: 'Error',
-        text: 'An error occurred while saving the game. Please try again.',
-        icon: 'error',
+        title: 'Not Logged In',
+        text: 'Please log in to save your game.',
+        icon: 'warning',
         confirmButtonText: 'OK',
       });
     }
-  } else {
-    Swal.fire({
-      title: 'Not Logged In',
-      text: 'Please log in to save your game.',
-      icon: 'warning',
-      confirmButtonText: 'OK',
-    });
-  }
-};
-  
+  };
 
   const initialActionCodes = [
     'goal', 'assist', 'shot on target', 'shot off target', 'pass completed', 'pass incomplete'

@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "/static/css/main.6eece118.css",
-    "main.js": "/static/js/main.13454f9a.js",
+    "main.js": "/static/js/main.57ef3ac3.js",
     "static/js/453.93f25938.chunk.js": "/static/js/453.93f25938.chunk.js",
     "static/media/galwaybg.jpeg": "/static/media/galwaybg.b676ae3833de27839fbf.jpeg",
     "static/media/step3_soccer_collect.png": "/static/media/step3_soccer_collect.4b7c11bd0a2412795037.png",
@@ -14,11 +14,11 @@
     "static/media/scorelectlogo-grey.jpeg": "/static/media/scorelectlogo-grey.e1d6f8f6ab17beb8c111.jpeg",
     "index.html": "/index.html",
     "main.6eece118.css.map": "/static/css/main.6eece118.css.map",
-    "main.13454f9a.js.map": "/static/js/main.13454f9a.js.map",
+    "main.57ef3ac3.js.map": "/static/js/main.57ef3ac3.js.map",
     "453.93f25938.chunk.js.map": "/static/js/453.93f25938.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.6eece118.css",
-    "static/js/main.13454f9a.js"
+    "static/js/main.57ef3ac3.js"
   ]
 }

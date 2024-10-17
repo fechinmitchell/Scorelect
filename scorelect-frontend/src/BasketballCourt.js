@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useContext } from 'react';
 import { Stage, Layer, Rect, Line, Circle, Arc, Group, Text } from 'react-konva';
 import Modal from 'react-modal';
 import Konva from 'konva';
@@ -13,6 +13,7 @@ import './PitchGraphic.css';
 import './SavedGames.css';
 import './AggregatedData.css';
 import { onSnapshot } from 'firebase/firestore'; // Add this import
+import { GameContext } from './GameContext'; // Import GameContext
 
 const BasketballCourt = () => {
   const [coords, setCoords] = useState([]);
@@ -74,6 +75,7 @@ const BasketballCourt = () => {
   const [isSetupTeamModalOpen, setIsSetupTeamModalOpen] = useState(false);
   const [showSetupTeamsContainer, setShowSetupTeamsContainer] = useState(false);
   const [userType, setUserType] = useState('free'); // Initialize userType state
+  const { loadedCoords } = useContext(GameContext); // Access loadedCoords from context
 
   const handlePremiumFeatureAccess = (featureName) => {
     Swal.fire({
@@ -101,10 +103,14 @@ const BasketballCourt = () => {
   };
 
   useEffect(() => {
-    if (location.state && location.state.loadedCoords) {
-      setCoords(location.state.loadedCoords);
+    console.log('SoccerPitch mounted. LoadedCoords from context:', loadedCoords);
+    if (loadedCoords) {
+      setCoords(loadedCoords);
+      console.log('Coords updated:', loadedCoords);
+    } else {
+      console.log('No loadedCoords found in context');
     }
-  }, [location.state]);
+  }, [loadedCoords]);
 
   useEffect(() => {
     // Set initial action buttons

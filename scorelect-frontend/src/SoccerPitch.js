@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useContext } from 'react';
 import { Stage, Layer, Rect, Line, Circle, Arc, Group, Text } from 'react-konva';
 import Modal from 'react-modal';
 import Konva from 'konva';
@@ -13,6 +13,7 @@ import './PitchGraphic.css';
 import './SavedGames.css';
 import './AggregatedData.css';
 import { onSnapshot } from 'firebase/firestore'; // Add this import
+import { GameContext } from './GameContext'; // Import GameContext
 
 
 const SoccerPitch =() => {
@@ -55,6 +56,7 @@ const SoccerPitch =() => {
   const [team1Color, setTeam1Color] = useState({ main: '#FF0000', secondary: '#FFFFFF' }); // Arsenal (Red and White)
   const [team2Color, setTeam2Color] = useState({ main: '#0000FF', secondary: '#FFFFFF' }); // Brighton (Blue and White)
   const navigate = useNavigate();
+  const { loadedCoords } = useContext(GameContext); // Access loadedCoords from context
 
   const stageRef = useRef();
   const [downloadsRemaining, setDownloadsRemaining] = useState(1);
@@ -81,15 +83,15 @@ const SoccerPitch =() => {
   const lightStripeColor = '#A8D5BA'; // Light green
   const darkStripeColor = '#8FBF9C';  // Slightly darker green
 
-
   useEffect(() => {
-    if (location.state && location.state.loadedCoords) {
-      console.log('Loaded coords:', location.state.loadedCoords); // Debug log
-      setCoords(location.state.loadedCoords);
+    console.log('SoccerPitch mounted. LoadedCoords from context:', loadedCoords);
+    if (loadedCoords) {
+      setCoords(loadedCoords);
+      console.log('Coords updated:', loadedCoords);
     } else {
-      console.log('No loadedCoords found in location.state');
+      console.log('No loadedCoords found in context');
     }
-  }, [location.state]);  
+  }, [loadedCoords]);
 
   useEffect(() => {
     // Set initial action buttons
@@ -105,16 +107,12 @@ const SoccerPitch =() => {
 
   // Full handleSaveGame function
   const handleSaveGame = async () => {
-    console.log('handleSaveGame called'); // Log when the function is invoked
-  
     if (userType === 'free') {
-      console.log('User is free. Accessing premium feature.');
       handlePremiumFeatureAccess('Save Game');
       return;
     }
   
     if (!gameName.trim()) {
-      console.log('Invalid game name entered.');
       Swal.fire({
         title: 'Invalid Game Name',
         text: 'Please enter a valid game name.',
@@ -127,18 +125,10 @@ const SoccerPitch =() => {
     const auth = getAuth();
     const user = auth.currentUser;
   
-    console.log('Authenticated user:', user); // Log the authenticated user
-  
     if (user) {
-      console.log('User UID:', user.uid); // Log the user's UID
-  
       try {
         const sanitizedGameName = gameName.replace(/[^a-zA-Z0-9_-]/g, '_');
-        console.log('Sanitized Game Name:', sanitizedGameName);
-  
         const existingGameDoc = await getDoc(doc(firestore, 'savedGames', user.uid, 'games', sanitizedGameName));
-        console.log('Existing Game Document:', existingGameDoc.exists());
-  
         if (existingGameDoc.exists()) {
           const result = await Swal.fire({
             title: 'Overwrite Game?',
@@ -148,7 +138,6 @@ const SoccerPitch =() => {
             confirmButtonText: 'Yes, overwrite it',
             cancelButtonText: 'No, cancel',
           });
-          console.log('User decision to overwrite:', result.isConfirmed);
           if (!result.isConfirmed) {
             return;
           }
@@ -163,9 +152,7 @@ const SoccerPitch =() => {
           date: new Date().toISOString(),
           sport: sportType,
         });
-  
-        console.log('Game saved successfully.');
-  
+        
         setIsSaveModalOpen(false);
         Swal.fire({
           title: 'Success',
@@ -183,7 +170,6 @@ const SoccerPitch =() => {
         });
       }
     } else {
-      console.log('User not authenticated.');
       Swal.fire({
         title: 'Not Logged In',
         text: 'Please log in to save your game.',
@@ -191,7 +177,8 @@ const SoccerPitch =() => {
         confirmButtonText: 'OK',
       });
     }
-  };
+  };  
+  
 
   const initialActionCodes = [
     'goal', 'assist', 'shot on target', 'shot off target', 'pass completed', 'pass incomplete'

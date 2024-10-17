@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useContext } from 'react';
 import { Stage, Layer, Rect, Line, Circle, Arc, Group, Text } from 'react-konva';
 import Modal from 'react-modal';
 import Konva from 'konva';
@@ -12,6 +12,7 @@ import './PitchGraphic.css';
 import './SavedGames.css';
 import AggregatedData from './AggregatedData';
 import { onSnapshot } from 'firebase/firestore'; // Add this import
+import { GameContext } from './GameContext'; // Import GameContext
 
 
 const PitchGraphic = () => {
@@ -64,6 +65,7 @@ const PitchGraphic = () => {
   const [isSetupTeamModalOpen, setIsSetupTeamModalOpen] = useState(false); // State for Setup Team modal
   const [team1, setTeam1] = useState('');
   const [team2, setTeam2] = useState('');
+  const { loadedCoords } = useContext(GameContext); // Access loadedCoords from context
 
 
   const pitchWidth = 145;
@@ -120,11 +122,15 @@ const PitchGraphic = () => {
       return acc;
     }, {});
 
-  useEffect(() => {
-    if (location.state && location.state.loadedCoords) {
-      setCoords(location.state.loadedCoords);
-    }
-  }, [location.state]);
+    useEffect(() => {
+      console.log('SoccerPitch mounted. LoadedCoords from context:', loadedCoords);
+      if (loadedCoords) {
+        setCoords(loadedCoords);
+        console.log('Coords updated:', loadedCoords);
+      } else {
+        console.log('No loadedCoords found in context');
+      }
+    }, [loadedCoords]);
 
   useEffect(() => {
     setActionButtons([

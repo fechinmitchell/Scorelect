@@ -1,6 +1,6 @@
 // src/App.js
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { getAuth, signOut } from 'firebase/auth';
 import { firestore } from './firebase';
@@ -13,7 +13,7 @@ import BasketballCourt from './BasketballCourt';
 import AmericanFootballPitch from './AmericanFootballPitch';
 import Sidebar from './Sidebar';
 import Upgrade from './Upgrade';
-import Profile from './Profile'
+import Profile from './Profile';
 import HowTo from './HowTo';
 import SavedGames from './SavedGames';
 import Success from './Success';
@@ -31,8 +31,7 @@ import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
-import { UserProvider } from './UserContext';
-
+import { GameContext } from './GameContext'; // Import GameContext
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
@@ -41,6 +40,7 @@ const App = () => {
   const [userRole, setUserRole] = useState('free');
   const [selectedSport, setSelectedSport] = useState('Soccer'); // Default sport
   const navigate = useNavigate();
+  const { loadedCoords, setLoadedCoords } = useContext(GameContext); // Access loadedCoords and its setter
 
   useEffect(() => {
     const auth = getAuth();
@@ -62,9 +62,24 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
+  // Loader function to set sport and game data
+  const loadGame = (sport, gameData) => {
+    setSelectedSport(sport);
+    setLoadedCoords(gameData);
+    navigate('/'); // Navigate to root to render the selected sport's pitch
+  };
+
   const handleSportChange = (sport) => {
     setSelectedSport(sport);
+    setLoadedCoords([]); // Reset loadedCoords to clear markers
     navigate('/'); // Navigate to root path to display selected sport
+  };
+
+  const handleNavigate = (path) => {
+    if (path === '/') {
+      setLoadedCoords([]); // Reset loadedCoords when navigating Home
+    }
+    navigate(path);
   };
 
   const handleLogout = async () => {
@@ -74,15 +89,12 @@ const App = () => {
       setUser(null);
       setUserRole('free');
       toast.success('Successfully logged out');
+      setLoadedCoords([]); // Reset loadedCoords on logout
       navigate('/signin');
     } else {
       toast.error('You are not logged in. Please sign in.');
       navigate('/signin');
     }
-  };
-
-  const handleNavigate = (path) => {
-    navigate(path);
   };
 
   // Function to render the selected sport's component
@@ -108,8 +120,6 @@ const App = () => {
   };
 
   return (
-    <UserProvider>
-
     <div className="app">
       <ToastContainer />
       <div className="main-container">
@@ -126,7 +136,7 @@ const App = () => {
             <Route path="/upgrade" element={<Upgrade setUserRole={setUserRole} />} />
             <Route
               path="/saved-games"
-              element={<SavedGames userType={userRole} apiUrl={API_BASE_URL} />}
+              element={<SavedGames userType={userRole} apiUrl={API_BASE_URL} onLoadGame={loadGame} />} // Pass loadGame as prop
             />
             <Route
               path="/profile"
@@ -161,8 +171,6 @@ const App = () => {
         </div>
       </div>
     </div>
-    </UserProvider>
-
   );
 };
 

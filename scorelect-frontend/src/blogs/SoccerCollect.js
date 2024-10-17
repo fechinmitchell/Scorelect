@@ -1,4 +1,4 @@
- // src/blogs/SoccerCollect.js
+// src/blogs/SoccerCollect.js
 
 import React from 'react';
 import styled from 'styled-components';
@@ -24,8 +24,6 @@ import step3SoccerCollect from '../images/step3_soccer_collect.png';
 import step4SoccerCollect from '../images/step4_soccer_collect.png';
 import step5SoccerCollect from '../images/step5_soccer_collect.png';
 
-
-
 // Styled Components
 const BlogContainer = styled(Container)`
   padding: 40px 0;
@@ -48,7 +46,7 @@ const Image = styled.img`
 `;
 
 const TipsBox = styled(Box)`
-  background-color: #5E2E8F;
+  background-color: #5e2e8f;
   padding: 20px;
   border-left: 5px solid #17a2b8;
   margin: 20px 0;
@@ -60,12 +58,12 @@ const SoccerCollect = () => {
       label: '1. Select the Sport',
       description:
         'Go to the sidebar and select the sport in the drop down.',
-        image: step1SoccerCollect, 
+      image: step1SoccerCollect,
     },
     {
       label: '2. Click on Action Button then on the Pitch to Record Event',
       description:
-        'Navigate to the side of the page where its says instrucitons and click a button below like goal or assist. Then click on the location on the pitch where the event happened.',
+        'Navigate to the side of the page where its says instructions and click a button below like goal or assist. Then click on the location on the pitch where the event happened.',
       image: step2SoccerCollect,
     },
     {
@@ -103,7 +101,6 @@ const SoccerCollect = () => {
         A comprehensive guide to collecting and analyzing soccer stats for non-professional & professional games using Scorelect.
       </Typography>
 
-
       <Typography variant="h5" gutterBottom>
         Why Collect Soccer Statistics?
       </Typography>
@@ -116,7 +113,9 @@ const SoccerCollect = () => {
           {steps.map((step, index) => (
             <Step key={index}>
               <StepLabel>
-                <Typography variant="h6">{step.label}</Typography>
+                <Typography variant="h6" sx={{ color: '#FFFFFF' }}>
+                  {step.label}
+                </Typography>
               </StepLabel>
               <StepContent>
                 <Typography variant="body1">{step.description}</Typography>
@@ -134,7 +133,7 @@ const SoccerCollect = () => {
         To ensure the effectiveness of your data collection process, consider the following best practices:
       </Typography>
       <TipsBox>
-        <Typography variant="body1" component="ul">
+        <Typography variant="body1" component="ul" sx={{ color: '#FFFFFF' }}>
           {tips.map((tip, index) => (
             <li key={index}>{tip}</li>
           ))}

@@ -223,7 +223,7 @@ const handleSaveGame = async () => {
       gameName,
       matchDate, // Include match date
       gameData: coords, // Ensure 'coords' contains the game data
-      sport: 'American Football',
+      sport: 'AmericanFootball',
     };
 
     // Include datasetName if saving to a dataset
@@ -342,7 +342,7 @@ const handleSaveToDataset = async () => {
       uid: user.uid,
       gameName,
       gameData: coords,
-      sport: 'American Football',
+      sport: 'AmericanFootball',
       datasetName: selectedDataset === 'new' ? newDatasetName : selectedDataset
     };
 

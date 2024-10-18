@@ -64,7 +64,11 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  // Loader function to set sport and game data
+  /**
+   * Loader function to set sport and game data
+   * @param {string} sport - The sport associated with the loaded game
+   * @param {Array} gameData - The coordinates/data of the loaded game
+   */
   const loadGame = (sport, gameData) => {
     setSelectedSport(sport);
     setLoadedCoords(gameData);
@@ -131,6 +135,7 @@ const App = () => {
           onNavigate={handleNavigate}
           userType={userRole}
           user={user}
+          selectedSport={selectedSport} // Pass selectedSport as a prop
         />
         <div className="content-area">
           <Routes>

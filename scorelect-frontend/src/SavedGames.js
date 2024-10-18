@@ -2,23 +2,34 @@
 
 import React, { useEffect, useState, useContext } from 'react';
 import { getAuth } from 'firebase/auth';
-import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import './SavedGames.css';
-import { GameContext } from './GameContext'; // Import GameContext
-import PropTypes from 'prop-types'; // Import PropTypes
+import { GameContext } from './GameContext'; // Import GameContext for managing game data
+import PropTypes from 'prop-types'; // Import PropTypes for type checking
 
-const SavedGames = ({ userType, onLoadGame }) => { // Removed apiUrl prop
-  const [datasets, setDatasets] = useState({});
-  const navigate = useNavigate();
-  const auth = getAuth();
-  const { setLoadedCoords } = useContext(GameContext); // Use Context to set loadedCoords
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState(null);
+/**
+ * SavedGames Component
+ * 
+ * This component fetches and displays the user's saved games, allowing them to load, delete, or download datasets.
+ * When a game is loaded, it communicates with the parent component to update the selected sport and game data.
+ * 
+ * Props:
+ * - userType (string): The type of user (e.g., 'free', 'premium').
+ * - onLoadGame (function): Function to handle loading a game, provided by the parent component.
+ */
+const SavedGames = ({ userType, onLoadGame }) => {
+  const [datasets, setDatasets] = useState({}); // State to hold grouped datasets
+  const auth = getAuth(); // Firebase Authentication instance
+  const { setLoadedCoords } = useContext(GameContext); // Function to set loaded game data
+  const [loading, setLoading] = useState(true); // State to manage loading status
+  const [fetchError, setFetchError] = useState(null); // State to manage fetch errors
 
   // Get the API URL from environment variables
   const apiUrl = process.env.REACT_APP_API_URL;
 
+  /**
+   * Fetches the saved games for the authenticated user and groups them by dataset.
+   */
   useEffect(() => {
     const fetchSavedGames = async () => {
       const user = auth.currentUser;
@@ -44,7 +55,7 @@ const SavedGames = ({ userType, onLoadGame }) => { // Removed apiUrl prop
         }
 
         const gamesList = await response.json();
-        console.log('Fetched games list:', gamesList); // Log the fetched data
+        console.log('Fetched games list:', gamesList); // Debug: Log fetched games
 
         // Group games by datasetName
         const groupedDatasets = gamesList.reduce((acc, game) => {
@@ -56,7 +67,7 @@ const SavedGames = ({ userType, onLoadGame }) => { // Removed apiUrl prop
           return acc;
         }, {});
 
-        console.log('Grouped Datasets:', groupedDatasets); // Log grouped datasets
+        console.log('Grouped Datasets:', groupedDatasets); // Debug: Log grouped datasets
 
         setDatasets(groupedDatasets);
         setLoading(false);
@@ -71,14 +82,19 @@ const SavedGames = ({ userType, onLoadGame }) => { // Removed apiUrl prop
     fetchSavedGames();
   }, [auth, apiUrl]);
 
-  // Function to load a game
+  /**
+   * Handles loading a selected game.
+   * 
+   * @param {Object} game - The game object to load.
+   */
   const handleLoadGame = async (game) => {
     console.log('Attempting to load game:', game.gameName, 'for user:', auth.currentUser.uid);
     if (game.gameData && game.gameData.length > 0) {
       try {
-        setLoadedCoords(game.gameData);
+        // Communicate with the parent component to set the selected sport and game data
+        onLoadGame(game.sport, game.gameData);
         Swal.fire('Success', `Game "${game.gameName}" loaded successfully!`, 'success');
-        navigate('/'); // Navigate to the main pitch page or desired route
+        // Navigation is handled within the parent component's loadGame function
       } catch (error) {
         console.error('Error loading game data:', error);
         Swal.fire('Error', 'Failed to load game data.', 'error');
@@ -88,7 +104,12 @@ const SavedGames = ({ userType, onLoadGame }) => { // Removed apiUrl prop
     }
   };
 
-  // Function to delete a single game
+  /**
+   * Handles deleting a single game.
+   * 
+   * @param {string} gameId - The unique identifier of the game to delete.
+   * @param {string} gameName - The name of the game to delete (for display purposes).
+   */
   const handleDeleteGame = async (gameId, gameName) => {
     const user = auth.currentUser;
     if (!user) {
@@ -117,15 +138,15 @@ const SavedGames = ({ userType, onLoadGame }) => { // Removed apiUrl prop
           });
 
           const resultData = await response.json();
-          console.log('Delete game response:', resultData); // Log response
+          console.log('Delete game response:', resultData); // Debug: Log delete response
 
           if (response.ok) {
             Swal.fire('Deleted!', `Game "${gameName}" has been deleted.`, 'success');
-            // Optionally, refresh the saved games list
+            // Update the datasets state by removing the deleted game
             setDatasets((prevDatasets) => {
               const updatedDatasets = { ...prevDatasets };
               for (const dataset in updatedDatasets) {
-                updatedDatasets[dataset] = updatedDatasets[dataset].filter((game) => game.gameName !== gameName);
+                updatedDatasets[dataset] = updatedDatasets[dataset].filter((game) => game.gameId !== gameId);
                 if (updatedDatasets[dataset].length === 0) {
                   delete updatedDatasets[dataset];
                 }
@@ -143,7 +164,12 @@ const SavedGames = ({ userType, onLoadGame }) => { // Removed apiUrl prop
     });
   };
 
-  // Function to download a dataset
+  /**
+   * Handles downloading a dataset as a JSON file.
+   * 
+   * @param {string} datasetName - The name of the dataset to download.
+   * @param {Array} games - The list of games within the dataset.
+   */
   const handleDownloadDataset = async (datasetName, games) => {
     try {
       const user = auth.currentUser;
@@ -183,7 +209,11 @@ const SavedGames = ({ userType, onLoadGame }) => { // Removed apiUrl prop
     }
   };
 
-  // Function to delete an entire dataset
+  /**
+   * Handles deleting an entire dataset along with all its games.
+   * 
+   * @param {string} datasetName - The name of the dataset to delete.
+   */
   const handleDeleteDataset = async (datasetName) => {
     const user = auth.currentUser;
     if (!user) {
@@ -212,11 +242,11 @@ const SavedGames = ({ userType, onLoadGame }) => { // Removed apiUrl prop
           });
 
           const resultData = await response.json();
-          console.log('Delete dataset response:', resultData); // Log response
+          console.log('Delete dataset response:', resultData); // Debug: Log delete dataset response
 
           if (response.ok) {
             Swal.fire('Deleted!', `Dataset "${datasetName}" and all its games have been deleted.`, 'success');
-            // Remove the deleted dataset from the state
+            // Update the datasets state by removing the deleted dataset
             setDatasets((prevDatasets) => {
               const updatedDatasets = { ...prevDatasets };
               delete updatedDatasets[datasetName];
@@ -233,12 +263,26 @@ const SavedGames = ({ userType, onLoadGame }) => { // Removed apiUrl prop
     });
   };
 
+  /**
+   * Renders the component based on the current state:
+   * - Loading state
+   * - Error state
+   * - Displaying grouped datasets and their games
+   */
   if (loading) {
-    return <div className="saved-games-container"><p>Loading saved games...</p></div>;
+    return (
+      <div className="saved-games-container">
+        <p>Loading saved games...</p>
+      </div>
+    );
   }
 
   if (fetchError) {
-    return <div className="saved-games-container"><p className="error">{fetchError}</p></div>;
+    return (
+      <div className="saved-games-container">
+        <p className="error">{fetchError}</p>
+      </div>
+    );
   }
 
   return (
@@ -275,7 +319,7 @@ const SavedGames = ({ userType, onLoadGame }) => { // Removed apiUrl prop
                 ) : (
                   <ul className="saved-games-list">
                     {games.map((game) => {
-                      console.log('Rendering game:', game); // Log each game being rendered
+                      console.log('Rendering game:', game); // Debug: Log each game being rendered
                       return (
                         <li key={game.gameId || game.gameName} className="saved-game-item">
                           <div className="game-info">
@@ -287,7 +331,12 @@ const SavedGames = ({ userType, onLoadGame }) => { // Removed apiUrl prop
                           </div>
                           <div className="game-actions">
                             <button className="load-button" onClick={() => handleLoadGame(game)}>Load</button>
-                            <button className="delete-button" onClick={() => handleDeleteGame(game.gameId || game.gameName, game.gameName)}>Delete</button>
+                            <button
+                              className="delete-button"
+                              onClick={() => handleDeleteGame(game.gameId || game.gameName, game.gameName)}
+                            >
+                              Delete
+                            </button>
                           </div>
                         </li>
                       );
@@ -303,10 +352,10 @@ const SavedGames = ({ userType, onLoadGame }) => { // Removed apiUrl prop
   );
 };
 
-// Define PropTypes for better type checking
+// Define PropTypes for better type checking and to ensure required props are passed
 SavedGames.propTypes = {
-  userType: PropTypes.string.isRequired,
-  onLoadGame: PropTypes.func.isRequired, // Ensure onLoadGame is passed
+  userType: PropTypes.string.isRequired, // e.g., 'free', 'premium'
+  onLoadGame: PropTypes.func.isRequired, // Function to handle loading a game
 };
 
 export default SavedGames;

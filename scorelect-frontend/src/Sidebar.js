@@ -10,7 +10,7 @@ import { auth } from './firebase';  // Import Firebase auth
 
 const API_URL = process.env.REACT_APP_API_URL;
 
-const Sidebar = ({ onNavigate, onLogout, onSportChange }) => {
+const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => { // Receive selectedSport as a prop
   const [collapsed, setCollapsed] = useState(window.innerWidth <= 768);
   const { userRole, setUserRole } = useUser();
   const [loading, setLoading] = useState(false);  // Add loading state
@@ -106,7 +106,10 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange }) => {
             <li>
               <label>
                 Select Sport:
-                <select onChange={(e) => onSportChange(e.target.value)} defaultValue="Soccer">
+                <select 
+                  value={selectedSport} // Make the select a controlled component
+                  onChange={(e) => onSportChange(e.target.value)}
+                >
                   <option value="Soccer">Soccer</option>
                   <option value="GAA">GAA</option>
                   <option value="Basketball">Basketball</option>
@@ -136,6 +139,7 @@ Sidebar.propTypes = {
   onNavigate: PropTypes.func.isRequired,
   onLogout: PropTypes.func.isRequired,
   onSportChange: PropTypes.func.isRequired,
+  selectedSport: PropTypes.string.isRequired, // Ensure selectedSport is passed as a string
 };
 
 export default Sidebar;

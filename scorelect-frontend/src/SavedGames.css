@@ -9,18 +9,73 @@
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
-  
+
 .saved-games-container h2 {
     text-align: center;
     color: #333;
     margin-bottom: 20px;
 }
-   
+
+/* Styling for each dataset section */
+.dataset-section {
+    margin-bottom: 30px;
+    padding: 15px;
+    background: #ffffff;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.dataset-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.dataset-header h3 {
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 8px;
+    margin: 0;
+    color: #555;
+}
+
+.dataset-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.download-dataset-button, .delete-dataset-button {
+    padding: 8px 12px;
+    font-size: 14px;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.download-dataset-button {
+    background: #28a745; /* Green */
+}
+
+.download-dataset-button:hover {
+    background: #218838;
+}
+
+.delete-dataset-button {
+    background: #dc3545; /* Red */
+}
+
+.delete-dataset-button:hover {
+    background: #c82333;
+}
+
+/* Styling for the list of saved games within each dataset */
 .saved-games-list {
     list-style: none;
     padding: 0;
 }
-  
+
 .saved-game-item {
     display: flex;
     justify-content: space-between;
@@ -31,26 +86,32 @@
     border-radius: 5px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
-  
-.game-name {
+
+.game-info {
     flex: 2;
+    display: flex;
+    flex-direction: column;
+}
+
+.game-name {
     font-size: 16px;
     color: #333;
+    font-weight: bold;
 }
-  
+
 .game-date {
-    flex: 1;
     font-size: 14px;
-    color: #666;
+    color: #2e2e2e;
     text-align: right;
-    margin-right: 20px; /* Add margin to the right of the date */
+    margin-top: -15px;
+    padding-right: 15px;
 }
-  
+
 .game-actions {
     display: flex;
     gap: 10px;
 }
-  
+
 .load-button, .delete-button {
     padding: 8px 12px;
     font-size: 14px;
@@ -60,24 +121,34 @@
     cursor: pointer;
     transition: background 0.3s ease;
 }
-  
+
 .load-button {
     background: #007bff;
 }
-  
+
 .load-button:hover {
     background: #0056b3;
 }
-  
+
 .delete-button {
     background: #dc3545;
 }
-  
+
 .delete-button:hover {
     background: #c82333;
 }
-  
-/* General styling for the saved games modal */
+
+/* Styling for error messages */
+.error {
+    color: #dc3545;
+    background-color: #f8d7da;
+    padding: 10px 15px;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+/* General styling for the saved games modal (if used elsewhere) */
 .modal {
     position: fixed;
     top: 50%;
@@ -92,7 +163,7 @@
     z-index: 1000;
     border-radius: 8px;
 }
-  
+
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -102,7 +173,7 @@
     background: rgba(0, 0, 0, 0.5);
     z-index: 999;
 }
-  
+
 .modal-header {
     display: flex;
     justify-content: space-between;
@@ -111,19 +182,21 @@
     padding-bottom: 10px;
     margin-bottom: 20px;
 }
-  
+
 .modal-header h2 {
     margin: 0;
     font-size: 24px;
+    color: #333;
 }
-  
+
 .modal-header button {
     background: none;
     border: none;
     font-size: 24px;
     cursor: pointer;
+    color: #666;
 }
-  
+
 .modal input[type="text"] {
     width: 100%;
     padding: 10px;
@@ -133,7 +206,7 @@
     border-radius: 4px;
     box-sizing: border-box;
 }
-  
+
 .modal button {
     background-color: #4CAF50;
     color: white;
@@ -143,22 +216,37 @@
     border-radius: 4px;
     cursor: pointer;
 }
-  
+
 .modal button.cancel {
     background-color: #f44336;
 }
-  
+
 .modal button:hover {
     opacity: 0.8;
 }
-  
+
 @media (max-width: 600px) {
     .modal {
-      width: 90%;
-      padding: 10px;
+        width: 90%;
+        padding: 10px;
     }
-  
+
     .modal-header h2 {
-      font-size: 20px;
+        font-size: 20px;
+    }
+
+    .dataset-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .game-date {
+        text-align: left;
+        margin-top: 5px;
+    }
+
+    .game-actions {
+        margin-top: 10px;
     }
 }

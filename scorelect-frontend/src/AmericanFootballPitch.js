@@ -79,9 +79,60 @@ const AmericanFootballPitch = () => {
   const [showSetupTeamsContainer, setShowSetupTeamsContainer] = useState(false);
   const [userType, setUserType] = useState('free'); // Initialize userType state
 
+  // New state variables for dataset functionality
+  const [saveToDataset, setSaveToDataset] = useState(false);
+  const [selectedDataset, setSelectedDataset] = useState('');
+  const [newDatasetName, setNewDatasetName] = useState('');
+  const [availableDatasets, setAvailableDatasets] = useState([]);
+  const [saveButtonStatus, setSaveButtonStatus] = useState('idle'); // idle, loading, success, error
+  const [saveDatasetButtonStatus, setSaveDatasetButtonStatus] = useState('idle'); // idle, loading, success, error  
+  const [datasetsFetchError, setDatasetsFetchError] = useState(false);
+  const [matchDate, setMatchDate] = useState('');
+  const [duplicateDatasetError, setDuplicateDatasetError] = useState(false); // For duplicate dataset handling
+
+
+  // Fetch datasets when the modal opens
+ useEffect(() => {
+  const fetchDatasets = async () => {
+    if (user) {
+      try {
+        const token = await user.getIdToken();
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/list-datasets`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ uid: user.uid }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Failed to fetch datasets:', errorData.error || response.statusText);
+          setAvailableDatasets([]);
+          setDatasetsFetchError(true);
+          return;
+        }
+
+        const data = await response.json();
+        setAvailableDatasets(data.datasets);
+        setDatasetsFetchError(false);
+        console.log('Fetched datasets successfully:', data.datasets);
+      } catch (error) {
+        console.error('Error fetching datasets:', error);
+        setAvailableDatasets([]);
+        setDatasetsFetchError(true);
+      }
+    }
+  };
+
+  if (isSaveModalOpen) {
+    fetchDatasets();
+  }
+}, [isSaveModalOpen, user]);
 
   useEffect(() => {
-    console.log('SoccerPitch mounted. LoadedCoords from context:', loadedCoords);
+    console.log('American Football Pitch mounted. LoadedCoords from context:', loadedCoords);
     if (loadedCoords) {
       setCoords(loadedCoords);
       console.log('Coords updated:', loadedCoords);
@@ -136,45 +187,224 @@ const AmericanFootballPitch = () => {
 
 // Full handleSaveGame function
 const handleSaveGame = async () => {
+  console.log('handleSaveGame called'); // Debugging statement
+
   if (userType === 'free') {
+    console.log('User is free. Prompting for upgrade.'); // Debugging statement
     handlePremiumFeatureAccess('Save Game');
     return;
   }
-  // Proceed with saving the game
-  const auth = getAuth();
-  const user = auth.currentUser;
-  if (user) {
-    try {
-      const sportType = 'AmericanFootball';
-      await setDoc(doc(firestore, 'savedGames', user.uid, 'games', gameName), {
-        gameData: coords,
-        name: gameName,
-        date: new Date().toISOString(),
-        sport: sportType,
-      });
-      setIsSaveModalOpen(false);
-      Swal.fire({
-        title: 'Success',
-        text: 'Game has been saved successfully!',
-        icon: 'success',
-        confirmButtonText: 'OK',
-      });
-    } catch (error) {
-      console.error('Error saving game:', error);
-      Swal.fire({
-        title: 'Error',
-        text: 'An error occurred while saving the game. Please try again.',
-        icon: 'error',
-        confirmButtonText: 'OK',
-      });
+
+  if (!gameName.trim()) {
+    Swal.fire('Invalid Game Name', 'Please enter a valid game name.', 'warning');
+    return;
+  }
+
+  if (saveToDataset && selectedDataset === 'new' && !newDatasetName.trim()) {
+    Swal.fire('Invalid Dataset Name', 'Please enter a valid dataset name.', 'warning');
+    return;
+  }
+
+  setSaveButtonStatus('loading');
+  setDuplicateDatasetError(false); // Reset duplicate error before saving
+  console.log('Saving game...', { gameName, saveToDataset, selectedDataset, newDatasetName, matchDate }); // Debugging
+
+  try {
+    if (!user) {
+      console.error('No user authenticated'); // Debugging
+      Swal.fire('Error', 'User not authenticated.', 'error');
+      setSaveButtonStatus('error');
+      return;
     }
-  } else {
-    Swal.fire({
-      title: 'Not Logged In',
-      text: 'Please log in to save your game.',
-      icon: 'warning',
-      confirmButtonText: 'OK',
+
+    const token = await user.getIdToken();
+    const payload = {
+      uid: user.uid,
+      gameName,
+      matchDate, // Include match date
+      gameData: coords, // Ensure 'coords' contains the game data
+      sport: 'American Football',
+    };
+
+    // Include datasetName if saving to a dataset
+    if (saveToDataset) {
+      payload.datasetName = selectedDataset === 'new' ? newDatasetName : selectedDataset;
+    }
+
+    // If creating a new dataset, create it first
+    if (saveToDataset && selectedDataset === 'new') {
+      // Check for duplicate dataset name
+      if (availableDatasets.includes(newDatasetName)) {
+        setDuplicateDatasetError(true);
+        Swal.fire('Error Creating Dataset', 'Dataset name already exists. Please choose a different name.', 'error');
+        setSaveButtonStatus('error');
+        return;
+      }
+
+      console.log('Creating new dataset...');
+      const createResponse = await fetch(`${process.env.REACT_APP_API_URL}/create-dataset`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          uid: user.uid,
+          datasetName: newDatasetName
+        }),
+      });
+
+      const createData = await createResponse.json();
+      console.log('Create dataset response status:', createResponse.status); // Debugging
+      console.log('Create dataset response data:', createData); // Debugging
+
+      if (!createResponse.ok) {
+        setSaveButtonStatus('error');
+        Swal.fire('Error Creating Dataset', createData.error || 'Failed to create dataset.', 'error');
+        return;
+      } else {
+        Swal.fire('Dataset Created', `New dataset "${newDatasetName}" has been created.`, 'success');
+      }
+    }
+
+    // Now, save the game
+    console.log('Saving game to dataset...');
+    const saveResponse = await fetch(`${process.env.REACT_APP_API_URL}/save-game`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(payload),
     });
+
+    console.log('Save response status:', saveResponse.status); // Debugging
+
+    const saveData = await saveResponse.json();
+    console.log('Save response data:', saveData); // Debugging
+
+    if (saveResponse.ok) {
+      if (saveToDataset) {
+        if (selectedDataset === 'new') {
+          // Already created the dataset, so just confirm the save
+          setSaveButtonStatus('success');
+          Swal.fire('Success', `Game has been saved successfully to the new dataset "${newDatasetName}".`, 'success');
+        } else {
+          // Append to existing dataset
+          setSaveButtonStatus('success');
+          Swal.fire('Success', 'Game has been saved successfully to the dataset!', 'success');
+        }
+      } else {
+        setSaveButtonStatus('success');
+        Swal.fire('Success', 'Game has been saved successfully!', 'success');
+      }
+      // Reset modal state
+      setIsSaveModalOpen(false);
+      setGameName('');
+      setMatchDate(''); // Reset match date
+      setSaveToDataset(false);
+      setSelectedDataset('');
+      setNewDatasetName('');
+    } else {
+      setSaveButtonStatus('error');
+      Swal.fire('Error Saving Game', saveData.error || 'Failed to save game.', 'error');
+    }
+  } catch (error) {
+    console.error('Error in handleSaveGame:', error); // Debugging
+    setSaveButtonStatus('error');
+    Swal.fire('Error', 'Network error while saving game.', 'error');
+  } finally {
+    // Reset button status after a short delay to show the success/error state
+    setTimeout(() => {
+      setSaveButtonStatus('idle');
+      setSaveDatasetButtonStatus('idle');
+    }, 2000);
+  }
+};
+
+// Function to handle saving to dataset separately (if needed)
+const handleSaveToDataset = async () => {
+  if (!gameName.trim()) {
+    Swal.fire('Invalid Game Name', 'Please enter a valid game name.', 'warning');
+    return;
+  }
+
+  if (!selectedDataset && selectedDataset !== 'new') {
+    Swal.fire('Select Dataset', 'Please select or create a dataset to save the game.', 'warning');
+    return;
+  }
+
+  setSaveDatasetButtonStatus('loading');
+
+  try {
+    const token = await user.getIdToken();
+    const payload = {
+      uid: user.uid,
+      gameName,
+      gameData: coords,
+      sport: 'American Football',
+      datasetName: selectedDataset === 'new' ? newDatasetName : selectedDataset
+    };
+
+    // Save the game (reuse the save-game endpoint)
+    const saveResponse = await fetch(`${process.env.REACT_APP_API_URL}/save-game`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const saveData = await saveResponse.json();
+
+    if (saveResponse.ok) {
+      if (selectedDataset === 'new') {
+        // Create a new dataset
+        const createResponse = await fetch(`${process.env.REACT_APP_API_URL}/create-dataset`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            uid: user.uid,
+            datasetName: newDatasetName
+          }),
+        });
+
+        const createData = await createResponse.json();
+
+        if (createResponse.ok) {
+          setSaveDatasetButtonStatus('success');
+          Swal.fire('Dataset Created', `New dataset "${newDatasetName}" has been created and the game has been added.`, 'success');
+        } else {
+          setSaveDatasetButtonStatus('error');
+          Swal.fire('Error Creating Dataset', createData.error || 'Failed to create dataset.', 'error');
+        }
+      } else {
+        // Append to existing dataset
+        setSaveDatasetButtonStatus('success');
+        Swal.fire('Success', 'Game has been saved successfully to the dataset!', 'success');
+      }
+      // Reset modal state
+      setIsSaveModalOpen(false);
+      setGameName('');
+      setSaveToDataset(false);
+      setSelectedDataset('');
+      setNewDatasetName('');
+    } else {
+      setSaveDatasetButtonStatus('error');
+      Swal.fire('Error Saving Game', saveData.error || 'Failed to save game.', 'error');
+    }
+  } catch (error) {
+    setSaveDatasetButtonStatus('error');
+    Swal.fire('Error', 'Network error while saving to dataset.', 'error');
+  } finally {
+    // Reset button status after a short delay to show the success/error state
+    setTimeout(() => {
+      setSaveDatasetButtonStatus('idle');
+    }, 2000);
   }
 };
 
@@ -1366,6 +1596,7 @@ const handleSaveGame = async () => {
           </ul>
         </div>
       </Modal>
+      {/* Save Game Modal */}
       <Modal
         isOpen={isSaveModalOpen}
         onRequestClose={() => setIsSaveModalOpen(false)}
@@ -1378,61 +1609,274 @@ const handleSaveGame = async () => {
             bottom: 'auto',
             marginRight: '-50%',
             transform: 'translate(-50%, -50%)',
-            width: '50%',
-            maxHeight: '60%',
+            width: '80%',
+            maxHeight: '80%',
             overflowY: 'auto',
             background: '#2e2e2e',
-            padding: '20px',
+            padding: '30px',
             borderRadius: '10px',
-            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
+          },
+          overlay: {
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 1000, // Ensure it appears above other elements
           },
         }}
       >
-        <h2>Save Game</h2>
-        <input
-          type="text"
-          value={gameName}
-          onChange={(e) => setGameName(e.target.value)}
-          placeholder="Enter game name"
-          style={{
-            width: '97%',
-            padding: '10px',
-            margin: '5px',
-            borderRadius: '5px',
-            border: '1px solid #ccc',
-            marginRight: '20px',
-          }}
-        />
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <button
-            onClick={handleSaveGame}
+        <h2 style={{ marginBottom: '20px', color: '#fff' }}>Save Game</h2>
+
+        {/* Warning Message if Datasets Failed to Fetch */}
+        {datasetsFetchError && (
+          <div
             style={{
-              background: '#007bff',
-              color: '#fff',
-              padding: '10px 20px',
-              border: 'none',
+              color: '#dc3545',
+              marginBottom: '15px',
+              padding: '10px',
+              border: '1px solid #dc3545',
               borderRadius: '5px',
-              cursor: 'pointer',
-              transition: 'background 0.3s',
+              backgroundColor: '#f8d7da',
             }}
           >
-            Save
+            <strong>Warning:</strong> Failed to fetch datasets. You can still save your game, but saving to a dataset won't be available.
+          </div>
+        )}
+
+        {/* Game Name Input */}
+        <div style={{ marginBottom: '20px' }}>
+          <label
+            htmlFor="gameName"
+            style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#fff' }}
+          >
+            Game Name:
+          </label>
+          <input
+            type="text"
+            id="gameName"
+            value={gameName}
+            onChange={(e) => setGameName(e.target.value)}
+            placeholder="Enter game name"
+            style={{
+              width: '100%',
+              padding: '10px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+            }}
+          />
+        </div>
+
+        {/* Match Date Input */}
+        <div style={{ marginBottom: '20px' }}>
+          <label
+            htmlFor="matchDate"
+            style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#fff' }}
+          >
+            Match Date:
+          </label>
+          <input
+            type="date"
+            id="matchDate"
+            value={matchDate}
+            onChange={(e) => setMatchDate(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+            }}
+          />
+        </div>
+
+        {/* Save to Dataset Section */}
+        <div style={{ marginBottom: '20px' }}>
+          <label
+            htmlFor="saveToDataset"
+            style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#fff' }}
+          >
+            Save to Dataset:
+          </label>
+          <select
+            id="saveToDataset"
+            value={saveToDataset ? selectedDataset : ''}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value === '') {
+                setSaveToDataset(false);
+                setSelectedDataset('');
+                setNewDatasetName('');
+              } else {
+                setSaveToDataset(true);
+                setSelectedDataset(value);
+              }
+            }}
+            style={{
+              width: '100%',
+              padding: '10px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+            }}
+          >
+            <option value="">-- Select a Dataset --</option>
+            {availableDatasets.map((dataset, index) => (
+              <option key={index} value={dataset}>
+                {dataset}
+              </option>
+            ))}
+            <option value="new">Create New Dataset</option>
+          </select>
+
+          {/* New Dataset Name Input */}
+          {saveToDataset && selectedDataset === 'new' && (
+            <div style={{ marginTop: '15px' }}>
+              <label
+                htmlFor="newDatasetName"
+                style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#fff' }}
+              >
+                New Dataset Name:
+              </label>
+              <input
+                type="text"
+                id="newDatasetName"
+                value={newDatasetName}
+                onChange={(e) => setNewDatasetName(e.target.value)}
+                placeholder="Enter new dataset name"
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  borderRadius: '5px',
+                  border: '1px solid #ccc',
+                }}
+              />
+              {/* Duplicate Dataset Warning */}
+              {duplicateDatasetError && (
+                <div
+                  style={{
+                    color: '#dc3545',
+                    marginTop: '5px',
+                    padding: '5px',
+                    border: '1px solid #dc3545',
+                    borderRadius: '5px',
+                    backgroundColor: '#f8d7da',
+                  }}
+                >
+                  <strong>Error:</strong> Dataset name already exists. Please choose a different name.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Modal Buttons */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: '10px',
+            marginTop: '30px',
+          }}
+        >
+          {/* Save Game Button */}
+          <button
+            onClick={handleSaveGame}
+            disabled={saveButtonStatus === 'loading'}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#28a745',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: saveButtonStatus === 'loading' ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+            }}
+          >
+            {saveButtonStatus === 'loading' && (
+              <span
+                className="spinner"
+                style={{
+                  width: '16px',
+                  height: '16px',
+                  border: '2px solid #f3f3f3',
+                  borderTop: '2px solid #fff',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite',
+                }}
+              ></span>
+            )}
+            {saveButtonStatus === 'success' ? (
+              <span>&#10004; Saved!</span>
+            ) : saveButtonStatus === 'error' ? (
+              <span>&#10008; Error</span>
+            ) : (
+              'Save Game'
+            )}
           </button>
+
+          {/* Save to Dataset Button */}
+          {/* {saveToDataset && (
+            <button
+              onClick={handleSaveToDataset}
+              disabled={saveDatasetButtonStatus === 'loading'}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#17a2b8',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: saveDatasetButtonStatus === 'loading' ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}
+            >
+              {saveDatasetButtonStatus === 'loading' && (
+                <span
+                  className="spinner"
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    border: '2px solid #f3f3f3',
+                    borderTop: '2px solid #fff',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite',
+                  }}
+                ></span>
+              )}
+              {saveDatasetButtonStatus === 'success' ? (
+                <span>&#10004; Saved!</span>
+              ) : saveDatasetButtonStatus === 'error' ? (
+                <span>&#10008; Error</span>
+              ) : (
+                'Save to Dataset'
+              )}
+            </button>
+          )} */}
+
+          {/* Exit Button */}
           <button
             onClick={() => setIsSaveModalOpen(false)}
             style={{
-              background: '#6c757d',
-              color: '#fff',
               padding: '10px 20px',
+              backgroundColor: '#dc3545',
+              color: '#fff',
               border: 'none',
               borderRadius: '5px',
               cursor: 'pointer',
-              transition: 'background 0.3s',
             }}
           >
-            Cancel
+            Exit
           </button>
         </div>
+
+        {/* Spinner Animation */}
+        <style>
+          {`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}
+        </style>
       </Modal>
       <Modal
         isOpen={isAddActionModalOpen}

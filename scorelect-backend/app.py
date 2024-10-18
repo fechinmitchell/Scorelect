@@ -1,7 +1,7 @@
 import os  # Standard library for interacting with the operating system, e.g., for environment variables
 import stripe  # Stripe's Python library for payments and subscriptions
 import logging  # Standard Python library for logging events, useful for debugging and monitoring
-from flask import Flask, request, jsonify  # Flask framework for building web apps and APIs
+from flask import Flask, request, jsonify, send_file, make_response # Flask framework for building web apps and APIs
 from flask_cors import CORS, cross_origin  # Flask extension for enabling Cross-Origin Resource Sharing (CORS)
 from flask_talisman import Talisman  # Flask extension for security by adding Content Security Policy (CSP)
 import firebase_admin  # Firebase Admin SDK for interacting with Firebase services
@@ -9,6 +9,7 @@ from firebase_admin import credentials, firestore  # For Firebase authentication
 from dotenv import load_dotenv  # Library for loading environment variables from a .env file
 import openai  # OpenAI API for interacting with GPT models
 from openai import OpenAI, OpenAIError  # Classes and error handling for OpenAI API
+import json  # Standard library for JSON operations
 
 # Load environment variables from the .env file into the application
 load_dotenv()
@@ -273,7 +274,7 @@ def retrieve_session():
         return jsonify(error=str(e)), 400  # Respond with error in JSON
 
 
-# Endpoint to save a game to Firestore
+# Endpoint to save a game to Firestore with dataset association
 @app.route('/save-game', methods=['POST'])
 def save_game():
     try:
@@ -281,51 +282,250 @@ def save_game():
         user_id = data.get('uid')  # Extract the user ID
         game_name = data.get('gameName')  # Extract the game name
         game_data = data.get('gameData')  # Extract the game data
-
+        dataset_name = data.get('datasetName')  # Extract the dataset name
+        match_date = data.get('matchDate')  # Extract match date
+        sport = data.get('sport')  # Extract sport
+        
         # Validate if required fields are provided
-        if not user_id or not game_name or not game_data:
-            logging.error("Incomplete game data provided.")  # Log the error
-            return jsonify({'error': 'UID, gameName, and gameData are required.'}), 400  # Respond with error
-
+        if not user_id or not game_name or not game_data or not match_date or not sport:
+            logging.error("Incomplete game data provided.")
+            return jsonify({'error': 'UID, gameName, gameData, matchDate, and sport are required.'}), 400
+    
+        # Validate dataset_name (optional)
+        if not dataset_name:
+            dataset_name = 'Default'  # Assign to 'Default' if not provided
+    
         # Save the game data in Firestore under the user's document
         game_doc_ref = db.collection('savedGames').document(user_id).collection('games').document(game_name)
-        game_doc_ref.set({'gameData': game_data}, merge=True)  # Merge to avoid overwriting existing data
-
-        logging.info(f"Game '{game_name}' saved for user {user_id}")  # Log the save action
-        return jsonify({"success": True})  # Respond with success
+        game_doc_ref.set({
+            'gameData': game_data,
+            'datasetName': dataset_name,  # Store the dataset name
+            'matchDate': match_date,      # Store match date
+            'sport': sport                # Store sport
+        }, merge=True)  # Merge to avoid overwriting existing data
+    
+        logging.info(f"Game '{game_name}' saved for user {user_id} under dataset '{dataset_name}' with matchDate '{match_date}' and sport '{sport}'.")
+        return jsonify({"success": True}), 201  # Respond with success and Created status
     except Exception as e:
-        logging.error(f"Error saving game: {str(e)}")  # Log any errors
-        return jsonify(error=str(e)), 400  # Respond with error in JSON
+        logging.error(f"Error saving game: {str(e)}")
+        return jsonify(error=str(e)), 400
 
-
-# Endpoint to load saved games from Firestore
+# Endpoint to load saved games from Firestore, optionally filtered by datasetName
 @app.route('/load-games', methods=['POST'])
 def load_games():
     try:
         data = request.json  # Get the JSON data from the request
         user_id = data.get('uid')  # Extract the user ID
-
+        dataset_name = data.get('datasetName')  # Extract the dataset name (optional)
+    
         # Validate if user ID is provided
         if not user_id:
-            logging.error("UID not provided for loading games.")  # Log the error
-            return jsonify({'error': 'UID is required.'}), 400  # Respond with error
-
+            logging.error("UID not provided for loading games.")
+            return jsonify({'error': 'UID is required.'}), 400
+    
         # Reference the saved games collection in Firestore for the user
         games_ref = db.collection('savedGames').document(user_id).collection('games')
+    
+        # Initialize query based on whether datasetName is provided
+        if dataset_name:
+            query = games_ref.where('datasetName', '==', dataset_name)
+        else:
+            query = games_ref  # Fetch all games if no datasetName is specified
+    
+        games_snapshot = query.stream()
         games = []  # Initialize an empty list to hold the games
-
+    
         # Iterate over the documents in the games collection
-        for doc in games_ref.stream():
+        for doc in games_snapshot:
             game_data = doc.to_dict()  # Convert each document to a dictionary
             game_data['gameName'] = doc.id  # Add the document ID as the game name
             games.append(game_data)  # Add the game data to the list
-
-        logging.info(f"Loaded {len(games)} games for user {user_id}")  # Log the number of games loaded
-        return jsonify(games)  # Return the list of games in JSON
+    
+        logging.info(f"Loaded {len(games)} games for user {user_id} with dataset '{dataset_name}'.")
+        return jsonify(games), 200  # Return the list of games in JSON
     except Exception as e:
-        logging.error(f"Error loading games: {str(e)}")  # Log any errors
-        return jsonify(error=str(e)), 400  # Respond with error in JSON
+        logging.error(f"Error loading games: {str(e)}")
+        return jsonify({'error': str(e)}), 400
 
+# Endpoint to delete a single game for a user
+@app.route('/delete-game', methods=['POST'])
+def delete_game():
+    try:
+        data = request.json  # Get the JSON data from the request
+        user_id = data.get('uid')  # Extract the user ID
+        game_id = data.get('gameId')  # Extract the game ID
+
+        # Validate if required fields are provided
+        if not user_id or not game_id:
+            logging.error("UID or gameId not provided for game deletion.")
+            return jsonify({'error': 'UID and gameId are required.'}), 400
+
+        # Reference to the specific game document
+        game_doc_ref = db.collection('savedGames').document(user_id).collection('games').document(game_id)
+
+        # Check if the game exists
+        game_doc = game_doc_ref.get()
+        if not game_doc.exists:
+            logging.warning(f"Game '{game_id}' not found for user '{user_id}'.")
+            return jsonify({'error': f"Game '{game_id}' not found."}), 404
+
+        # Delete the game
+        game_doc_ref.delete()
+
+        logging.info(f"Deleted game '{game_id}' for user '{user_id}'.")
+        return jsonify({'success': True, 'message': f"Game '{game_id}' deleted successfully."}), 200
+    except Exception as e:
+        logging.error(f"Error deleting game: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# Endpoint to delete an entire dataset (all games within a dataset) for a user
+@app.route('/delete-dataset', methods=['POST'])
+def delete_dataset():
+    try:
+        data = request.json  # Get the JSON data from the request
+        user_id = data.get('uid')  # Extract the user ID
+        dataset_name = data.get('datasetName')  # Extract the dataset name
+    
+        # Validate if required fields are provided
+        if not user_id or not dataset_name:
+            logging.error("UID or datasetName not provided for dataset deletion.")
+            return jsonify({'error': 'UID and datasetName are required.'}), 400
+    
+        # Reference to the user's games collection
+        games_ref = db.collection('savedGames').document(user_id).collection('games')
+    
+        # Query for games with the specified datasetName
+        query = games_ref.where('datasetName', '==', dataset_name)
+        games_snapshot = query.stream()
+    
+        # Initialize a batch for bulk deletion
+        batch = firestore.batch()
+        games_found = False
+    
+        for game_doc in games_snapshot:
+            batch.delete(game_doc.reference)
+            games_found = True
+    
+        if not games_found:
+            logging.warning(f"No games found under dataset '{dataset_name}' for user {user_id}.")
+            return jsonify({'message': f'No games found under dataset "{dataset_name}".'}), 404
+    
+        # Commit the batch deletion
+        batch.commit()
+    
+        logging.info(f"Deleted all games under dataset '{dataset_name}' for user {user_id}.")
+        return jsonify({'success': True, 'message': f'Dataset "{dataset_name}" deleted successfully.'}), 200
+    except Exception as e:
+        logging.error(f"Error deleting dataset: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+    
+# Endpoint to download all games within a specific dataset as a JSON file
+@app.route('/download-dataset', methods=['POST'])
+def download_dataset():
+    try:
+        data = request.json  # Get the JSON data from the request
+        user_id = data.get('uid')  # Extract the user ID
+        dataset_name = data.get('datasetName')  # Extract the dataset name
+    
+        # Validate if required fields are provided
+        if not user_id or not dataset_name:
+            logging.error("UID or datasetName not provided for dataset download.")
+            return jsonify({'error': 'UID and datasetName are required.'}), 400
+    
+        # Reference to the user's games collection
+        games_ref = db.collection('savedGames').document(user_id).collection('games')
+    
+        # Query for games with the specified datasetName
+        query = games_ref.where('datasetName', '==', dataset_name)
+        games_snapshot = query.stream()
+    
+        games_list = []
+    
+        for game_doc in games_snapshot:
+            game_data = game_doc.to_dict()
+            game_data['gameName'] = game_doc.id  # Include the game name
+            games_list.append(game_data)
+    
+        if not games_list:
+            logging.warning(f"No games found under dataset '{dataset_name}' for user {user_id}.")
+            return jsonify({'message': f'No games found under dataset "{dataset_name}".'}), 404
+    
+        # Serialize the games to JSON
+        json_data = json.dumps(games_list, indent=2)
+    
+        # Create a Flask response with the JSON data as a file
+        response = make_response(json_data)
+        response.headers['Content-Disposition'] = f'attachment; filename={dataset_name}_games.json'
+        response.mimetype = 'application/json'
+    
+        logging.info(f"Dataset '{dataset_name}' for user {user_id} downloaded successfully.")
+        return response
+    except Exception as e:
+        logging.error(f"Error downloading dataset: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+    
+# Endpoint to list all datasets for a user
+@app.route('/list-datasets', methods=['POST'])
+def list_datasets():
+    try:
+        data = request.json
+        uid = data.get('uid')
+        
+        if not uid:
+            logging.error("UID not provided for listing datasets.")
+            return jsonify({'error': 'UID is required.'}), 400
+
+        # Reference to the user's games collection
+        games_ref = db.collection('savedGames').document(uid).collection('games')
+        games_snapshot = games_ref.stream()
+
+        # Extract unique dataset names
+        datasets = set()
+        for game_doc in games_snapshot:
+            game_data = game_doc.to_dict()
+            dataset_name = game_data.get('datasetName', 'Default')  # Default dataset if not specified
+            datasets.add(dataset_name)
+        
+        datasets = list(datasets)
+        logging.info(f"Listed datasets for user {uid}: {datasets}")
+        return jsonify({'datasets': datasets}), 200
+    except Exception as e:
+        logging.error(f"Error listing datasets: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# Endpoint to create a new dataset for a user
+@app.route('/create-dataset', methods=['POST'])
+def create_dataset():
+    try:
+        data = request.json
+        uid = data.get('uid')
+        dataset_name = data.get('datasetName')
+
+        if not uid or not dataset_name:
+            logging.error("UID or datasetName not provided for creating dataset.")
+            return jsonify({'error': 'UID and datasetName are required.'}), 400
+
+        # Reference to the user's games collection
+        games_ref = db.collection('savedGames').document(uid).collection('games')
+
+        # Check if the dataset already exists
+        existing_datasets = set()
+        games_snapshot = games_ref.stream()
+        for game_doc in games_snapshot:
+            game_data = game_doc.to_dict()
+            existing_datasets.add(game_data.get('datasetName', 'Default'))
+
+        if dataset_name in existing_datasets:
+            logging.warning(f"Dataset '{dataset_name}' already exists for user {uid}.")
+            return jsonify({'error': 'Dataset already exists.'}), 400
+
+        # Since datasets are implied by datasetName, no need to create a separate document
+        # Just return success to allow the game to be saved under this new dataset
+        logging.info(f"Dataset '{dataset_name}' created for user {uid}.")
+        return jsonify({'success': True, 'datasetName': dataset_name}), 201
+    except Exception as e:
+        logging.error(f"Error creating dataset: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 # Endpoint to generate AI insights using OpenAI
 @app.route('/generate-insights', methods=['POST'])

@@ -70,13 +70,31 @@ const tutorialsData = [
   },
   {
     id: 3,
-    title: 'How to Collect Soccer Statistics on Amateur Games',
+    title: 'How to Collect Soccer Statistics on Games',
     description: 'A guide to collecting and analyzing Soccer stats for non-professional and professional games.',
     category: 'soccer',
     type: 'blog',
     thumbnail: SoccerCollectMain,
     link: '/blog/SoccerCollect',
   },
+  {
+  id: 4,
+  title: 'How to Simply Collect GAA Statistics',
+  description: 'A guide to collecting and analyzing GAA stats for any game.',
+  category: 'gaa',
+  type: 'blog',
+  thumbnail: SoccerCollectMain,
+  link: '/blog/GAACollect',
+},
+{
+  id: 5,
+  title: 'How to Simply Collect American Football Statistics',
+  description: 'A guide to collecting and analyzing American Footballs stats for any game.',
+  category: 'american_football',
+  type: 'blog',
+  thumbnail: SoccerCollectMain,
+  link: '/blog/AmericanFootballCollect',
+},
   // Add more tutorial objects here
 ];
 

@@ -1,4 +1,4 @@
-// src/blogs/BballCollect.js
+// src/blogs/AmericanFootballCollect.js
 
 import React from 'react';
 import styled from 'styled-components';
@@ -47,62 +47,62 @@ const TipsBox = styled(Box)`
   margin: 20px 0;
 `;
 
-const BballCollect = () => {
+const AmericanFootballCollect = () => {
   const steps = [
     {
       label: '1. Select the Sport',
       description:
-        'Go to the sidebar and select the sport in the drop down.',
+        'Navigate to the sidebar and choose American Football from the drop-down menu.',
       image: "", // Add your image path here
     },
     {
-      label: '2. Click on Action Button then on the Court to Record Event',
+      label: '2. Click on Action Button then on the Field to Record Event',
       description:
-        'Navigate to the side of the page where its says instructions and click a button below like shot or assist. Then click on the location on the court where the event happened.',
+        'In the instructions section, click on an action button like "Touchdown" or "Interception". Then, click on the specific location on the field where the event occurred.',
       image: "", // Add your image path here
     },
     {
       label: '3. Fill in Action Details',
       description:
-        'A popup will appear once you click the court. Enter the details on the popup and click submit to record the action.',
+        'A popup will appear after clicking the field. Enter the necessary details in the popup and click "Submit" to record the event.',
       image: "", // Add your image path here
     },
     {
       label: '4. Wrong Action/Location?',
       description:
-        'Just go down to the button Undo Last Marker to remove the last marker placed.',
+        'If you need to remove an incorrect marker, use the "Undo Last Marker" button located at the bottom of the sidebar.',
       image: "", // Add your image path here
     },
     {
       label: '5. Export Raw Data',
       description:
-        'After the game, export the data for further. There is a limit of one per user per day for free users and unlimited for Scorelect Pro users.',
+        'After the game, export your data for further analysis. Free users are limited to one export per day, while Scorelect Pro users enjoy unlimited exports.',
       image: "", // Add your image path here
     },
   ];
 
   const tips = [
-    'Utilize the real-time analytics features to make informed decisions during the match.',
-    'Regularly export and back up your data to prevent loss.',
-    'Take advantage of customizable reports to focus on the metrics that matter most to your team.',
+    'Leverage real-time analytics to make strategic decisions during the game.',
+    'Regularly export and back up your data to prevent any loss of information.',
+    'Utilize customizable reports to focus on the most relevant metrics for your team’s performance.',
   ];
 
   return (
     <BlogContainer maxWidth="lg">
       <Typography variant="h3" gutterBottom>
-        Collecting Basketball Statistics on Amateur Games
+        Collecting American Football Statistics on Amateur Games
       </Typography>
       <Typography variant="subtitle1" color="#5E2E8F" paragraph>
-        A comprehensive guide to collecting and analyzing basketball stats for non-professional games using Scorelect.
+        A comprehensive guide to collecting and analyzing American Football stats for non-professional games using Scorelect.
       </Typography>
 
-      <Image src="/images/basketball_stats_banner.jpg" alt="Basketball Statistics" />
+      <Image src="/images/american_football_stats_banner.jpg" alt="American Football Statistics" />
 
       <Typography variant="h5" gutterBottom>
-        Why Collect Basketball Statistics?
+        Why Collect American Football Statistics?
       </Typography>
       <Typography variant="body1" paragraph>
-        Collecting basketball statistics is essential for understanding team performance, identifying strengths and weaknesses, and making informed decisions to improve gameplay. Whether you're a coach, player, or enthusiast, having access to accurate data can significantly enhance your strategic approach to the game.
+        Collecting American Football statistics is crucial for understanding team performance, identifying strengths and weaknesses, and making informed decisions to enhance gameplay. Whether you're a coach, player, or enthusiast, access to accurate data can significantly improve your strategic approach to the game.
       </Typography>
 
       <Box sx={{ width: '100%', marginTop: '40px' }}>
@@ -141,7 +141,7 @@ const BballCollect = () => {
         Getting Started with Scorelect
       </Typography>
       <Typography variant="body1" paragraph>
-        Scorelect offers an intuitive platform for collecting and analyzing basketball statistics. Follow the steps outlined above to get started and make the most out of your data.
+        Scorelect offers an intuitive platform for collecting and analyzing American Football statistics. Follow the steps outlined above to get started and maximize your data insights.
       </Typography>
 
       <Typography variant="h5" gutterBottom>
@@ -213,4 +213,4 @@ const BballCollect = () => {
   );
 };
 
-export default BballCollect;
+export default AmericanFootballCollect;

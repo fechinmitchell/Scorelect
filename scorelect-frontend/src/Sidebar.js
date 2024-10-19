@@ -120,6 +120,7 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => { //
             <li><button onClick={() => onNavigate('/')}>Home</button></li>
             <li><button onClick={() => onNavigate('/saved-games')}>Saved Games</button></li>
             <li><button onClick={() => onNavigate('/howto')}>How To</button></li>
+            <li><button onClick={() => onNavigate('/sports-datahub')}>Sports Data Hub</button></li>
             <li><button onClick={handleAnalysisAccess}>Analysis</button></li>
             {/* Fetch user data when "Profile" is clicked */}
             <li>

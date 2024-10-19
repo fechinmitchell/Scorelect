@@ -105,7 +105,7 @@ const HowTo = () => {
 
   useEffect(() => {
     filterTutorials();
-    // eslint-disable-next-line react-hooks/exhaustive--deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, searchTerm]);
 
   const handleChange = (event, newValue) => {

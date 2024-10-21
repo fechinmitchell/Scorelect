@@ -34,6 +34,8 @@ import { SpeedInsights } from '@vercel/speed-insights/react';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 import { GameContext } from './GameContext'; // Import GameContext
+import SportsDataHub from './SportsDataHub';
+import PublishDataset from './PublishDataset';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
@@ -160,6 +162,8 @@ const App = () => {
             <Route path="/success" element={<Success setUserRole={setUserRole} />} />
             <Route path="/cancel" element={<Cancel />} />
             <Route path="/howto" element={<HowTo />} />
+            <Route path="/sports-datahub" element={<SportsDataHub />} />
+            <Route path="/publish-dataset" element={<PublishDataset />} />
             <Route
               path="/analysis"
               element={<Analysis onSportSelect={(sport) => setSelectedSport(sport)} />}

@@ -1,0 +1,110 @@
+/* src/components/PublishDataset.css */
+
+/* Modal Overlay */
+.publish-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.75);
+    z-index: 1000;
+  }
+  
+  /* Modal Content */
+  .publish-modal {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    transform: translate(-50%, -50%);
+    background: #2e2e2e;
+    padding: 30px;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    outline: none;
+  }
+  
+  /* Form Styling */
+  .publish-form {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .form-group {
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .form-group label {
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #ffffff;
+  }
+  
+  .form-group input[type="text"],
+  .form-group input[type="number"],
+  .form-group textarea,
+  .form-group input[type="file"] {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+  }
+  
+  .form-group textarea {
+    resize: vertical;
+    min-height: 80px;
+  }
+  
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+  
+  .form-actions button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+  
+  .form-actions button[type="submit"] {
+    background-color: #17a2b8; /* Teal */
+    color: white;
+  }
+  
+  .form-actions button[type="submit"]:hover {
+    background-color: #138496; /* Darker teal */
+  }
+  
+  .form-actions button[type="button"] {
+    background-color: #6c757d; /* Gray */
+    color: white;
+  }
+  
+  .form-actions button[type="button"]:hover {
+    background-color: #5a6268; /* Darker gray */
+  }
+  
+  /* Responsive Design */
+  @media (max-width: 600px) {
+    .publish-modal {
+      padding: 20px;
+    }
+  
+    .form-actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  
+    .form-actions button {
+      width: 100%;
+    }
+  }
+  

@@ -1,85 +1,88 @@
-// src/SavedGames.js
+// src/components/SavedGames.js
 
 import React, { useEffect, useState, useContext } from 'react';
 import { getAuth } from 'firebase/auth';
 import Swal from 'sweetalert2';
 import './SavedGames.css';
-import { GameContext } from './GameContext'; // Import GameContext for managing game data
-import PropTypes from 'prop-types'; // Import PropTypes for type checking
+import { GameContext } from './GameContext';
+import PropTypes from 'prop-types';
+import PublishDataset from './PublishDataset'; // Import the PublishDataset component
 
 /**
  * SavedGames Component
  * 
- * This component fetches and displays the user's saved games, allowing them to load, delete, or download datasets.
- * When a game is loaded, it communicates with the parent component to update the selected sport and game data.
+ * This component fetches and displays the user's saved games, allowing them to load, delete, download, or publish datasets.
+ * It integrates the PublishDataset component for publishing datasets.
  * 
  * Props:
  * - userType (string): The type of user (e.g., 'free', 'premium').
  * - onLoadGame (function): Function to handle loading a game, provided by the parent component.
  */
 const SavedGames = ({ userType, onLoadGame }) => {
-  const [datasets, setDatasets] = useState({}); // State to hold grouped datasets
-  const auth = getAuth(); // Firebase Authentication instance
-  const { setLoadedCoords } = useContext(GameContext); // Function to set loaded game data
-  const [loading, setLoading] = useState(true); // State to manage loading status
-  const [fetchError, setFetchError] = useState(null); // State to manage fetch errors
+  const [datasets, setDatasets] = useState({});
+  const auth = getAuth();
+  const { setLoadedCoords } = useContext(GameContext);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
+  const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  const [selectedDataset, setSelectedDataset] = useState(null);
 
-  // Get the API URL from environment variables
   const apiUrl = process.env.REACT_APP_API_URL;
 
   /**
    * Fetches the saved games for the authenticated user and groups them by dataset.
    */
-  useEffect(() => {
-    const fetchSavedGames = async () => {
-      const user = auth.currentUser;
+  const fetchSavedGames = async () => {
+    const user = auth.currentUser;
 
-      if (!user) {
-        console.warn('User not authenticated, cannot fetch saved games.');
-        setLoading(false);
-        return;
+    if (!user) {
+      console.warn('User not authenticated, cannot fetch saved games.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/load-games`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await user.getIdToken()}`,
+        },
+        body: JSON.stringify({ uid: user.uid }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch saved games.');
       }
 
-      try {
-        const response = await fetch(`${apiUrl}/load-games`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${await user.getIdToken()}`, // Include authorization if required
-          },
-          body: JSON.stringify({ uid: user.uid }),
-        });
+      const gamesList = await response.json();
+      console.log('Fetched games list:', gamesList);
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch saved games.');
+      // Group games by datasetName
+      const groupedDatasets = gamesList.reduce((acc, game) => {
+        const dataset = game.datasetName || 'Default';
+        if (!acc[dataset]) {
+          acc[dataset] = [];
         }
+        acc[dataset].push(game);
+        return acc;
+      }, {});
 
-        const gamesList = await response.json();
-        console.log('Fetched games list:', gamesList); // Debug: Log fetched games
+      console.log('Grouped Datasets:', groupedDatasets);
 
-        // Group games by datasetName
-        const groupedDatasets = gamesList.reduce((acc, game) => {
-          const dataset = game.datasetName || 'Default'; // Use 'Default' if no datasetName
-          if (!acc[dataset]) {
-            acc[dataset] = [];
-          }
-          acc[dataset].push(game);
-          return acc;
-        }, {});
+      setDatasets(groupedDatasets);
+      setLoading(false);
+      setFetchError(null);
+    } catch (error) {
+      console.error('Error fetching saved games:', error);
+      setFetchError('Failed to fetch saved games.');
+      setLoading(false);
+    }
+  };
 
-        console.log('Grouped Datasets:', groupedDatasets); // Debug: Log grouped datasets
-
-        setDatasets(groupedDatasets);
-        setLoading(false);
-        setFetchError(null);
-      } catch (error) {
-        console.error('Error fetching saved games:', error);
-        setFetchError('Failed to fetch saved games.');
-        setLoading(false);
-      }
-    };
-
+  useEffect(() => {
     fetchSavedGames();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth, apiUrl]);
 
   /**
@@ -91,10 +94,8 @@ const SavedGames = ({ userType, onLoadGame }) => {
     console.log('Attempting to load game:', game.gameName, 'for user:', auth.currentUser.uid);
     if (game.gameData && game.gameData.length > 0) {
       try {
-        // Communicate with the parent component to set the selected sport and game data
         onLoadGame(game.sport, game.gameData);
         Swal.fire('Success', `Game "${game.gameName}" loaded successfully!`, 'success');
-        // Navigation is handled within the parent component's loadGame function
       } catch (error) {
         console.error('Error loading game data:', error);
         Swal.fire('Error', 'Failed to load game data.', 'error');
@@ -128,21 +129,20 @@ const SavedGames = ({ userType, onLoadGame }) => {
       if (result.isConfirmed) {
         try {
           const token = await user.getIdToken();
-          const response = await fetch(`${apiUrl}/delete-game`, { // Ensure /delete-game endpoint exists
+          const response = await fetch(`${apiUrl}/delete-game`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`, // Include authorization if required
+              'Authorization': `Bearer ${token}`,
             },
             body: JSON.stringify({ uid: user.uid, gameId }),
           });
 
           const resultData = await response.json();
-          console.log('Delete game response:', resultData); // Debug: Log delete response
+          console.log('Delete game response:', resultData);
 
           if (response.ok) {
             Swal.fire('Deleted!', `Game "${gameName}" has been deleted.`, 'success');
-            // Update the datasets state by removing the deleted game
             setDatasets((prevDatasets) => {
               const updatedDatasets = { ...prevDatasets };
               for (const dataset in updatedDatasets) {
@@ -183,7 +183,7 @@ const SavedGames = ({ userType, onLoadGame }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`, // Include authorization if required
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ uid: user.uid, datasetName }),
       });
@@ -236,17 +236,16 @@ const SavedGames = ({ userType, onLoadGame }) => {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`, // Include authorization if required
+              'Authorization': `Bearer ${token}`,
             },
             body: JSON.stringify({ uid: user.uid, datasetName }),
           });
 
           const resultData = await response.json();
-          console.log('Delete dataset response:', resultData); // Debug: Log delete dataset response
+          console.log('Delete dataset response:', resultData);
 
           if (response.ok) {
             Swal.fire('Deleted!', `Dataset "${datasetName}" and all its games have been deleted.`, 'success');
-            // Update the datasets state by removing the deleted dataset
             setDatasets((prevDatasets) => {
               const updatedDatasets = { ...prevDatasets };
               delete updatedDatasets[datasetName];
@@ -264,11 +263,32 @@ const SavedGames = ({ userType, onLoadGame }) => {
   };
 
   /**
-   * Renders the component based on the current state:
-   * - Loading state
-   * - Error state
-   * - Displaying grouped datasets and their games
+   * Handles opening the PublishDataset modal for a specific dataset.
+   * 
+   * @param {string} datasetName - The name of the dataset to publish.
    */
+  const handlePublishDataset = (datasetName) => {
+    setSelectedDataset(datasetName);
+    setIsPublishModalOpen(true);
+  };
+
+  /**
+   * Closes the PublishDataset modal.
+   */
+  const closePublishModal = () => {
+    setIsPublishModalOpen(false);
+    setSelectedDataset(null);
+  };
+
+  /**
+   * Callback function to handle successful dataset publication.
+   */
+  const handlePublishSuccess = () => {
+    Swal.fire('Published!', `Dataset "${selectedDataset}" has been published successfully.`, 'success');
+    closePublishModal();
+    fetchSavedGames(); // Refresh the saved games list
+  };
+
   if (loading) {
     return (
       <div className="saved-games-container">
@@ -288,6 +308,19 @@ const SavedGames = ({ userType, onLoadGame }) => {
   return (
     <div className="saved-games-container">
       <h2>Saved Games</h2>
+
+      {/* Publish Dataset Modal */}
+      {isPublishModalOpen && selectedDataset && (
+        <PublishDataset
+          isOpen={isPublishModalOpen}
+          onClose={closePublishModal}
+          datasetName={selectedDataset}
+          onPublishSuccess={handlePublishSuccess}
+          apiUrl={apiUrl}
+          userType={userType}
+        />
+      )}
+
       {userType === 'free' ? (
         <p>Please upgrade to access saved games.</p>
       ) : (
@@ -307,6 +340,12 @@ const SavedGames = ({ userType, onLoadGame }) => {
                       Download Dataset
                     </button>
                     <button
+                      className="publish-dataset-button"
+                      onClick={() => handlePublishDataset(datasetName)}
+                    >
+                      Publish Dataset
+                    </button>
+                    <button
                       className="delete-dataset-button"
                       onClick={() => handleDeleteDataset(datasetName)}
                     >
@@ -319,7 +358,7 @@ const SavedGames = ({ userType, onLoadGame }) => {
                 ) : (
                   <ul className="saved-games-list">
                     {games.map((game) => {
-                      console.log('Rendering game:', game); // Debug: Log each game being rendered
+                      console.log('Rendering game:', game);
                       return (
                         <li key={game.gameId || game.gameName} className="saved-game-item">
                           <div className="game-info">

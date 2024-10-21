@@ -108,6 +108,31 @@
   background-color: #43a047; /* Darker green on hover */
 }
 
+/* Withdraw section */
+.withdraw-section {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.withdraw-section input[type="number"] {
+  padding: 8px;
+  width: 200px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+.withdraw-button {
+  background-color: #17a2b8; /* Teal */
+  color: white;
+}
+
+.withdraw-button:hover {
+  background-color: #138496; /* Darker teal on hover */
+}
+
 /* Spinner styling (if used) */
 .spinner {
   border: 8px solid #f3f3f3; /* Light gray */

@@ -10,6 +10,8 @@ from dotenv import load_dotenv  # Library for loading environment variables from
 import openai  # OpenAI API for interacting with GPT models
 from openai import OpenAI, OpenAIError  # Classes and error handling for OpenAI API
 import json  # Standard library for JSON operations
+import uuid  # For generating unique IDs
+from datetime import datetime  # For handling timestamps
 
 # Load environment variables from the .env file into the application
 load_dotenv()
@@ -614,33 +616,98 @@ def stripe_webhook():
         # Verify the event by checking the signature
         event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
 
-        logging.info(f"Received event: {event['type']}")
+        logging.info(f"Received Stripe event: {event['type']}")
 
-        # Handle the checkout session completion event
+        # Handle different Stripe event types
         if event['type'] == 'checkout.session.completed':
             session = event['data']['object']
-            customer_id = session['customer']  # Stripe customer ID
-            subscription_id = session['subscription']  # Stripe subscription ID
+            customer_id = session['customer']
+            subscription_id = session.get('subscription')
 
             # Retrieve the user from Firestore using the Stripe customer ID
             user_docs = db.collection('users').where('stripeCustomerId', '==', customer_id).get()
             for doc in user_docs:
-                uid = doc.id  # Get the Firestore user document ID
-
-                # Update Firestore with the subscription ID and set the role to 'paid'
+                uid = doc.id
                 user_ref = db.collection('users').document(uid)
                 user_ref.set({
                     'subscriptionId': subscription_id,
-                    'role': 'paid'  # Set the role to 'paid'
+                    'role': 'paid'
                 }, merge=True)
                 logging.info(f"Updated user {uid} to 'paid' with subscription {subscription_id}")
 
-        return jsonify(success=True)
+        elif event['type'] == 'payout.paid':
+            payout = event['data']['object']
+            payout_id = payout['id']
+            account_id = payout['destination']
+
+            # Optionally, update Firestore with payout details
+            user_docs = db.collection('users').where('stripeAccountId', '==', account_id).get()
+            for doc in user_docs:
+                uid = doc.id
+                earnings_ref = db.collection('earnings').document(uid)
+                earnings_ref.update({
+                    'pending_payouts': firestore.Increment(-payout['amount'] / 100)  # Assuming amount is in cents
+                })
+                logging.info(f"Payout {payout_id} processed for user {uid}")
+
+        elif event['type'] == 'payment_intent.succeeded':
+            payment_intent = event['data']['object']
+            payment_intent_id = payment_intent['id']
+            amount_received = payment_intent['amount_received']
+            currency = payment_intent['currency']
+            customer_id = payment_intent['customer']
+
+            # Optionally, update Firestore or notify users
+            logging.info(f"PaymentIntent succeeded: {payment_intent_id} for amount {amount_received} {currency}")
+
+        elif event['type'] == 'payment_intent.payment_failed':
+            payment_intent = event['data']['object']
+            payment_intent_id = payment_intent['id']
+            failure_message = payment_intent['last_payment_error']['message']
+
+            # Optionally, notify users or handle failed payments
+            logging.error(f"PaymentIntent failed: {payment_intent_id}, Reason: {failure_message}")
+
+            # Example: Update user's role to 'free' if payment failed
+            customer_id = payment_intent['customer']
+            user_docs = db.collection('users').where('stripeCustomerId', '==', customer_id).get()
+            for doc in user_docs:
+                uid = doc.id
+                user_ref = db.collection('users').document(uid)
+                user_ref.set({'role': 'free'}, merge=True)
+                logging.info(f"Updated user {uid} to 'free' due to payment failure.")
+
+        elif event['type'] == 'invoice.payment_failed':
+            invoice = event['data']['object']
+            subscription_id = invoice['subscription']
+
+            # Example: Handle subscription payment failure
+            handle_failed_payment(subscription_id)
+            logging.error(f"Invoice payment failed for subscription {subscription_id}")
+
+        elif event['type'] == 'customer.subscription.deleted':
+            subscription = event['data']['object']
+            subscription_id = subscription['id']
+
+            # Example: Handle subscription cancellation
+            handle_subscription_cancel(subscription_id)
+            logging.info(f"Subscription {subscription_id} has been canceled.")
+
+        elif event['type'] == 'customer.subscription.updated':
+            subscription = event['data']['object']
+            handle_subscription_update(subscription)
+            logging.info(f"Subscription {subscription['id']} has been updated to status {subscription['status']}.")
+
+        else:
+            logging.warning(f"Unhandled event type: {event['type']}")
+
+        return jsonify(success=True), 200
+
     except stripe.error.SignatureVerificationError as e:
-        logging.error(f"Signature verification error: {str(e)}")
+        logging.error(f"Stripe Signature Verification Error: {str(e)}")
         return jsonify(error=str(e)), 400
     except Exception as e:
-        logging.error(f"Webhook error: {str(e)}")
+        logging.error(f"Stripe Webhook Error: {str(e)}")
         return jsonify(error=str(e)), 500
 
 # Function to handle failed payments and update user role
@@ -838,6 +905,358 @@ def get_user_data():
     except Exception as e:
         logging.error(f"Error retrieving user data: {str(e)}")
         return jsonify({'error': str(e)}), 500
+    
+#Sports Hub Section 
+# Helper function to add a new dataset
+def add_dataset(name, description, price, creator_uid, preview_snippet):
+    try:
+        datasets_ref = db.collection('datasets')
+        dataset_id = str(uuid.uuid4())  # Generate a unique ID for the dataset
+        datasets_ref.document(dataset_id).set({
+            'name': name,
+            'description': description,
+            'price': price,
+            'creator_uid': creator_uid,
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'preview_snippet': preview_snippet
+        })
+        logging.info(f"Dataset '{name}' added with ID {dataset_id} by user {creator_uid}.")
+        return dataset_id
+    except Exception as e:
+        logging.error(f"Error adding dataset '{name}' by user {creator_uid}: {str(e)}")
+        return None
+
+# Helper function to record a transaction
+def record_transaction(buyer_uid, dataset_id, amount, commission):
+    try:
+        transactions_ref = db.collection('transactions')
+        transaction_id = str(uuid.uuid4())  # Generate a unique ID for the transaction
+        transactions_ref.document(transaction_id).set({
+            'buyer_uid': buyer_uid,
+            'dataset_id': dataset_id,
+            'amount': amount,
+            'commission': commission,
+            'timestamp': firestore.SERVER_TIMESTAMP
+        })
+        logging.info(f"Transaction recorded: ID {transaction_id} for dataset {dataset_id} by user {buyer_uid}.")
+        return transaction_id
+    except Exception as e:
+        logging.error(f"Error recording transaction for dataset '{dataset_id}' by user '{buyer_uid}': {str(e)}")
+        return None
+
+# Helper function to add a review
+def add_review(reviewer_uid, dataset_id, rating, comment):
+    try:
+        reviews_ref = db.collection('reviews')
+        review_id = str(uuid.uuid4())  # Generate a unique ID for the review
+        reviews_ref.document(review_id).set({
+            'reviewer_uid': reviewer_uid,
+            'dataset_id': dataset_id,
+            'rating': rating,
+            'comment': comment,
+            'timestamp': firestore.SERVER_TIMESTAMP
+        })
+        logging.info(f"Review added: ID {review_id} for dataset {dataset_id} by user {reviewer_uid}.")
+        return review_id
+    except Exception as e:
+        logging.error(f"Error adding review for dataset '{dataset_id}' by user '{reviewer_uid}': {str(e)}")
+        return None
+
+# Helper function to initialize earnings for a new user
+def initialize_earnings(uid):
+    try:
+        earnings_ref = db.collection('earnings').document(uid)
+        earnings_ref.set({
+            'total_earnings': 0.0,
+            'pending_payouts': 0.0,
+            'last_updated': firestore.SERVER_TIMESTAMP
+        })
+        logging.info(f"Earnings initialized for user {uid}.")
+    except Exception as e:
+        logging.error(f"Error initializing earnings for user {uid}: {str(e)}")
+
+@app.route('/signup', methods=['POST'])
+def signup():
+    try:
+        data = request.json
+        email = data.get('email')
+        password = data.get('password')
+        full_name = data.get('fullName')  # Assuming you collect full name
+
+        if not email or not password or not full_name:
+            logging.error("Incomplete signup data provided.")
+            return jsonify({'error': 'Email, password, and full name are required.'}), 400
+
+        # Create the user in Firebase Authentication
+        user = firebase_admin.auth.create_user(
+            email=email,
+            password=password,
+            display_name=full_name
+        )
+        uid = user.uid
+        logging.info(f"User created with UID: {uid}, Email: {email}")
+
+        # Initialize earnings for the new user
+        initialize_earnings(uid)
+
+        # Store additional user information in Firestore
+        user_ref = db.collection('users').document(uid)
+        user_ref.set({
+            'email': email,
+            'fullName': full_name,
+            'role': 'free',  # Default role
+            'created_at': firestore.SERVER_TIMESTAMP
+        }, merge=True)
+
+        logging.info(f"User {uid} added to Firestore with default role 'free'.")
+
+        return jsonify({'success': True, 'uid': uid}), 201
+    except firebase_admin.auth.AuthError as e:
+        logging.error(f"Firebase Auth Error during signup: {str(e)}")
+        return jsonify({'error': 'Authentication failed.'}), 400
+    except Exception as e:
+        logging.error(f"Error during signup: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/publish-dataset', methods=['POST'])
+def publish_dataset():
+    try:
+        data = request.json
+        name = data.get('name')
+        description = data.get('description')
+        price = data.get('price')
+        creator_uid = data.get('creator_uid')
+        preview_snippet = data.get('preview_snippet')  # Ensure this is generated appropriately
+
+        if not all([name, description, price, creator_uid, preview_snippet]):
+            logging.error("Incomplete dataset publishing data provided.")
+            return jsonify({'error': 'All dataset fields are required.'}), 400
+
+        # Add dataset to Firestore
+        dataset_id = add_dataset(name, description, price, creator_uid, preview_snippet)
+
+        if dataset_id:
+            return jsonify({'success': True, 'dataset_id': dataset_id}), 201
+        else:
+            return jsonify({'error': 'Failed to add dataset.'}), 400
+    except Exception as e:
+        logging.error(f"Error in publish_dataset endpoint: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/stripe/callback', methods=['GET'])
+def stripe_callback():
+    try:
+        code = request.args.get('code')
+        error = request.args.get('error')
+
+        if error:
+            logging.error(f"Stripe OAuth error: {error}")
+            return jsonify({'error': 'Stripe OAuth failed.'}), 400
+
+        # Exchange the authorization code for an access token
+        response = stripe.OAuth.token(
+            grant_type='authorization_code',
+            code=code,
+        )
+
+        connected_account_id = response['stripe_user_id']
+        logging.info(f"Stripe account connected: {connected_account_id}")
+
+        # Assume you pass the UID as a query parameter during OAuth initiation
+        uid = request.args.get('state')  # Ensure you pass UID as 'state' when generating the OAuth URL
+
+        if uid:
+            # Store the connected Stripe account ID in Firestore
+            user_ref = db.collection('users').document(uid)
+            user_ref.set({'stripeAccountId': connected_account_id}, merge=True)
+            logging.info(f"Stored Stripe account ID {connected_account_id} for user {uid}.")
+            return jsonify({'success': True, 'stripeAccountId': connected_account_id}), 200
+        else:
+            logging.error("UID not provided in OAuth callback.")
+            return jsonify({'error': 'UID is required.'}), 400
+
+    except Exception as e:
+        logging.error(f"Error in Stripe OAuth callback: {str(e)}")
+        return jsonify({'error': 'Stripe OAuth callback failed.'}), 500
+
+@app.route('/connect-stripe', methods=['GET'])
+def connect_stripe():
+    try:
+        uid = request.args.get('uid')  # Get UID from query parameters
+        if not uid:
+            logging.error("UID not provided for Stripe Connect.")
+            return jsonify({'error': 'UID is required to connect Stripe.'}), 400
+
+        # Define the redirect URI after Stripe OAuth
+        redirect_uri = 'https://scorelect.com/stripe/callback'
+
+        # Generate the Stripe Connect OAuth link with state parameter
+        stripe_connect_url = stripe.OAuth.authorize_url(
+            response_type='code',
+            scope='read_write',
+            client_id=STRIPE_CLIENT_ID,
+            redirect_uri=redirect_uri,
+            state=uid  # Pass UID to retrieve in callback
+        )
+
+        logging.info(f"Generated Stripe Connect URL for UID {uid}: {stripe_connect_url}")
+        return jsonify({'url': stripe_connect_url}), 200
+    except Exception as e:
+        logging.error(f"Error generating Stripe Connect URL: {str(e)}")
+        return jsonify({'error': 'Failed to generate Stripe Connect URL.'}), 500
+
+@app.route('/purchase-dataset', methods=['POST'])
+def purchase_dataset():
+    try:
+        data = request.json
+        buyer_uid = data.get('buyer_uid')
+        dataset_id = data.get('dataset_id')
+        payment_method = data.get('payment_method')  # Stripe Payment Method ID
+
+        if not all([buyer_uid, dataset_id, payment_method]):
+            logging.error("Incomplete purchase data provided.")
+            return jsonify({'error': 'buyer_uid, dataset_id, and payment_method are required.'}), 400
+
+        # Retrieve the dataset details from Firestore
+        dataset_doc = db.collection('datasets').document(dataset_id).get()
+        if not dataset_doc.exists:
+            logging.error(f"Dataset '{dataset_id}' not found.")
+            return jsonify({'error': 'Dataset not found.'}), 404
+
+        dataset = dataset_doc.to_dict()
+        price = dataset.get('price')
+        creator_uid = dataset.get('creator_uid')
+
+        if not all([price, creator_uid]):
+            logging.error(f"Incomplete dataset information for '{dataset_id}'.")
+            return jsonify({'error': 'Dataset information incomplete.'}), 400
+
+        # Retrieve the creator's Stripe account ID
+        creator_doc = db.collection('users').document(creator_uid).get()
+        if not creator_doc.exists:
+            logging.error(f"Creator '{creator_uid}' not found.")
+            return jsonify({'error': 'Dataset creator not found.'}), 404
+
+        creator = creator_doc.to_dict()
+        stripe_account_id = creator.get('stripeAccountId')
+
+        if not stripe_account_id:
+            logging.error(f"Stripe account not connected for creator '{creator_uid}'.")
+            return jsonify({'error': 'Dataset creator Stripe account not connected.'}), 400
+
+        # Calculate commission and creator payout
+        commission_percentage = 0.20
+        commission = price * commission_percentage
+        payout = price - commission
+
+        # Create a PaymentIntent with destination charge for Stripe Connect
+        payment_intent = stripe.PaymentIntent.create(
+            amount=int(price * 100),  # Convert to cents
+            currency='usd',
+            payment_method=payment_method,
+            confirmation_method='manual',
+            confirm=True,
+            transfer_data={
+                'destination': stripe_account_id,
+                'amount': int(payout * 100),
+            },
+        )
+
+        # Record the transaction in Firestore
+        transaction_id = record_transaction(buyer_uid, dataset_id, price, commission)
+
+        logging.info(f"PaymentIntent created for transaction {transaction_id}.")
+        return jsonify({
+            'clientSecret': payment_intent.client_secret,
+            'transaction_id': transaction_id
+        }), 200
+
+    except stripe.error.CardError as e:
+        logging.error(f"Stripe Card Error: {e.user_message}")
+        return jsonify({'error': e.user_message}), 400
+    except stripe.error.RateLimitError as e:
+        logging.error("Stripe Rate Limit Error.")
+        return jsonify({'error': 'Too many requests to Stripe.'}), 429
+    except stripe.error.InvalidRequestError as e:
+        logging.error(f"Stripe Invalid Request Error: {str(e)}")
+        return jsonify({'error': 'Invalid payment request.'}), 400
+    except stripe.error.AuthenticationError as e:
+        logging.error("Stripe Authentication Error.")
+        return jsonify({'error': 'Authentication with Stripe failed.'}), 401
+    except stripe.error.APIConnectionError as e:
+        logging.error("Stripe Network Error.")
+        return jsonify({'error': 'Network communication with Stripe failed.'}), 502
+    except stripe.error.StripeError as e:
+        logging.error(f"Stripe Error: {str(e)}")
+        return jsonify({'error': 'Payment processing failed.'}), 500
+    except Exception as e:
+        logging.error(f"Error processing purchase: {str(e)}")
+        return jsonify({'error': 'An error occurred during purchase.'}), 500
+
+from flask import Flask, request, jsonify
+import json
+
+@app.route('/upload-dataset', methods=['POST'])
+def upload_dataset():
+    try:
+        # Ensure 'uid' and 'datasetName' are in the form data
+        uid = request.form.get('uid')
+        dataset_name = request.form.get('datasetName')
+        file = request.files.get('file')
+        
+        # Validate input parameters
+        if not uid or not dataset_name or not file:
+            logging.error("UID, datasetName, or file not provided for dataset upload.")
+            return jsonify({'error': 'UID, datasetName, and file are required.'}), 400
+        
+        # Ensure the uploaded file is a JSON file
+        if not file.filename.endswith('.json'):
+            logging.error("Uploaded file is not a JSON file.")
+            return jsonify({'error': 'Only JSON files are allowed.'}), 400
+        
+        # Read and parse the JSON file
+        try:
+            file_content = file.read().decode('utf-8')
+            games_data = json.loads(file_content)
+            
+            if not isinstance(games_data, list):
+                logging.error("JSON file does not contain a list of games.")
+                return jsonify({'error': 'JSON file must contain a list of games.'}), 400
+        except json.JSONDecodeError:
+            logging.error("Invalid JSON format in uploaded file.")
+            return jsonify({'error': 'Invalid JSON format.'}), 400
+        
+        # Iterate through each game and save to Firestore
+        for game in games_data:
+            game_name = game.get('gameName')
+            game_data = game.get('gameData')
+            match_date = game.get('matchDate')
+            sport = game.get('sport')
+            
+            # Validate each game's data
+            if not all([game_name, game_data, match_date, sport]):
+                logging.warning(f"Incomplete game data for game: {game}")
+                continue  # Skip incomplete game entries
+            
+            # Reference to the specific game document
+            game_doc_ref = db.collection('savedGames').document(uid).collection('games').document(game_name)
+            
+            # Save the game data in Firestore
+            game_doc_ref.set({
+                'gameData': game_data,
+                'datasetName': dataset_name,
+                'matchDate': match_date,
+                'sport': sport
+            }, merge=True)
+            
+            logging.info(f"Game '{game_name}' uploaded under dataset '{dataset_name}' for user {uid}.")
+        
+        return jsonify({'success': True, 'message': 'Dataset uploaded successfully.'}), 200
+    
+    except Exception as e:
+        logging.error(f"Error uploading dataset: {str(e)}")
+        return jsonify({'error': 'An error occurred while uploading the dataset.'}), 500
 
 # Run the Flask app on port 5001 in debug mode
 if __name__ == '__main__':

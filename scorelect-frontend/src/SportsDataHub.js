@@ -5,13 +5,6 @@ import './SportsDataHub.css';
 import Swal from 'sweetalert2';
 import PropTypes from 'prop-types';
 
-/**
- * SportsDataHub Component
- * 
- * This component allows users to browse, search, and purchase/download published datasets.
- * Users can search by name or filter by sport categories like Soccer, GAA, etc.
- * Provides an option to view a sample of the dataset before purchasing.
- */
 const SportsDataHub = () => {
   const [datasets, setDatasets] = useState([]);
   const [filteredDatasets, setFilteredDatasets] = useState([]);
@@ -20,9 +13,6 @@ const SportsDataHub = () => {
   const [loading, setLoading] = useState(true);
   const apiUrl = process.env.REACT_APP_API_URL;
 
-  /**
-   * Fetches published datasets from the backend.
-   */
   const fetchPublishedDatasets = async () => {
     try {
       const response = await fetch(`${apiUrl}/published-datasets`, {
@@ -52,9 +42,6 @@ const SportsDataHub = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /**
-   * Filters datasets based on search term and selected sport.
-   */
   const filterDatasets = () => {
     let filtered = datasets;
 
@@ -65,7 +52,7 @@ const SportsDataHub = () => {
     if (searchTerm.trim() !== '') {
       const lowerSearch = searchTerm.toLowerCase();
       filtered = filtered.filter(dataset =>
-        dataset.publishName.toLowerCase().includes(lowerSearch) ||
+        dataset.name.toLowerCase().includes(lowerSearch) ||
         dataset.description.toLowerCase().includes(lowerSearch)
       );
     }
@@ -78,25 +65,16 @@ const SportsDataHub = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, selectedSport, datasets]);
 
-  /**
-   * Handles purchasing a dataset.
-   * This is a placeholder; implement payment gateway integration here.
-   */
   const handlePurchase = async (dataset) => {
-    // Placeholder: Implement payment integration (e.g., Stripe)
-    Swal.fire('Purchase', `Purchased dataset "${dataset.publishName}" successfully!`, 'success');
+    Swal.fire('Purchase', `Purchased dataset "${dataset.name}" successfully!`, 'success');
   };
 
-  /**
-   * Handles downloading a dataset.
-   */
   const handleDownload = async (dataset) => {
     try {
       const response = await fetch(`${apiUrl}/download-published-dataset`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // Include authentication headers if required
         },
         body: JSON.stringify({ datasetId: dataset.id }),
       });
@@ -109,21 +87,18 @@ const SportsDataHub = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${dataset.publishName}_data.json`;
+      a.download = `${dataset.name}_data.json`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-      Swal.fire('Downloaded!', `Dataset "${dataset.publishName}" has been downloaded.`, 'success');
+      Swal.fire('Downloaded!', `Dataset "${dataset.name}" has been downloaded.`, 'success');
     } catch (error) {
       console.error('Error downloading dataset:', error);
       Swal.fire('Error', 'Failed to download dataset.', 'error');
     }
   };
 
-  /**
-   * Handles viewing a sample of the dataset.
-   */
   const handleViewSample = async (dataset) => {
     try {
       const response = await fetch(`${apiUrl}/sample-dataset`, {
@@ -140,7 +115,7 @@ const SportsDataHub = () => {
 
       const data = await response.json();
       Swal.fire({
-        title: `Sample of "${dataset.publishName}"`,
+        title: `Sample of "${dataset.name}"`,
         html: `<pre>${JSON.stringify(data.sample, null, 2)}</pre>`,
         width: '60%',
         heightAuto: true,
@@ -179,16 +154,21 @@ const SportsDataHub = () => {
           {filteredDatasets.length > 0 ? (
             filteredDatasets.map((dataset) => (
               <div key={dataset.id} className="dataset-card">
-                <img src={dataset.imageUrl} alt={dataset.publishName} className="dataset-image" />
-                <h3>{dataset.publishName}</h3>
+                {/* Use preview_snippet as image URL if image is uploaded */}
+                {dataset.preview_snippet && dataset.preview_snippet.startsWith('http') ? (
+                  <img src={dataset.preview_snippet} alt={dataset.name} className="dataset-image" />
+                ) : (
+                  <div className="placeholder-image">No Image</div>
+                )}
+                <h3>{dataset.name}</h3>
                 <p>{dataset.description}</p>
                 <p><strong>Sport:</strong> {dataset.category}</p>
                 <p>
-                  <strong>Price:</strong> {dataset.isFree ? 'Free' : `$${dataset.price.toFixed(2)}`}
+                  <strong>Price:</strong> {dataset.price === 0 ? 'Free' : `$${dataset.price.toFixed(2)}`}
                 </p>
                 <div className="dataset-actions">
                   <button onClick={() => handleViewSample(dataset)}>View Sample</button>
-                  {dataset.isFree ? (
+                  {dataset.price === 0 ? (
                     <button onClick={() => handleDownload(dataset)}>Download</button>
                   ) : (
                     <button onClick={() => handlePurchase(dataset)}>Purchase</button>

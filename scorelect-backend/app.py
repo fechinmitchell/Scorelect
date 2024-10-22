@@ -908,23 +908,25 @@ def get_user_data():
     
 #Sports Hub Section 
 # Helper function to add a new dataset
-def add_dataset(name, description, price, creator_uid, preview_snippet):
+# Helper function to add a new dataset
+def add_dataset(name, description, price, creator_uid, preview_snippet, category):
     try:
-        datasets_ref = db.collection('datasets')
-        dataset_id = str(uuid.uuid4())  # Generate a unique ID for the dataset
-        datasets_ref.document(dataset_id).set({
+        dataset_ref = db.collection('datasets').document()
+        dataset_ref.set({
             'name': name,
             'description': description,
             'price': price,
             'creator_uid': creator_uid,
-            'created_at': firestore.SERVER_TIMESTAMP,
-            'preview_snippet': preview_snippet
+            'preview_snippet': preview_snippet,
+            'category': category,
+            'created_at': firestore.SERVER_TIMESTAMP
         })
-        logging.info(f"Dataset '{name}' added with ID {dataset_id} by user {creator_uid}.")
-        return dataset_id
+        logging.info(f"Dataset '{name}' added with ID {dataset_ref.id}.")
+        return dataset_ref.id
     except Exception as e:
-        logging.error(f"Error adding dataset '{name}' by user {creator_uid}: {str(e)}")
+        logging.error(f"Error adding dataset '{name}': {str(e)}")
         return None
+
 
 # Helper function to record a transaction
 def record_transaction(buyer_uid, dataset_id, amount, commission):
@@ -1018,31 +1020,103 @@ def signup():
         logging.error(f"Error during signup: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+# Updated /publish-dataset Endpoint
 @app.route('/publish-dataset', methods=['POST'])
 def publish_dataset():
     try:
-        data = request.json
+        logging.info("Received publish-dataset request.")
+        data = request.form
+        files = request.files
+        logging.info(f"Form data: {data}")
+        logging.info(f"Files: {files}")
+
+        # Extract form data
         name = data.get('name')
         description = data.get('description')
         price = data.get('price')
         creator_uid = data.get('creator_uid')
-        preview_snippet = data.get('preview_snippet')  # Ensure this is generated appropriately
+        preview_snippet = data.get('preview_snippet')
+        category = data.get('category')
+        is_free = data.get('isFree') == 'true'  # Convert string to boolean
 
-        if not all([name, description, price, creator_uid, preview_snippet]):
+        # Validate required fields
+        if not all([name, description, creator_uid, preview_snippet, category]):
             logging.error("Incomplete dataset publishing data provided.")
-            return jsonify({'error': 'All dataset fields are required.'}), 400
+            return jsonify({'error': 'Name, description, creator_uid, preview_snippet, and category are required.'}), 400
+
+        # Validate price if the dataset is not free
+        if not is_free:
+            if not price or float(price) <= 0:
+                logging.error("Invalid price provided for a paid dataset.")
+                return jsonify({'error': 'Valid price is required for paid datasets.'}), 400
+            price = float(price)
+        else:
+            price = 0.0  # Set price to 0 for free datasets
+
+        # Check free dataset limit if applicable
+        if is_free:
+            free_limit = 5  # Set your free dataset limit here
+            user_games_ref = db.collection('datasets').where('creator_uid', '==', creator_uid).where('price', '==', 0.0)
+            # Manual count since .count() is not available
+            free_count = sum(1 for _ in user_games_ref.stream())
+            logging.info(f"User {creator_uid} has {free_count} free datasets.")
+            if free_count >= free_limit:
+                logging.error("Free dataset limit reached.")
+                return jsonify({'error': 'Free dataset limit reached. Upgrade to premium to publish more datasets.'}), 403
+
+        # Handle image upload if provided
+        if 'image' in files:
+            image = files['image']
+            if image and image.filename.endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                image_url = save_image(image)
+                if image_url:
+                    preview_snippet = image_url  # Use the image URL as the preview snippet
+                else:
+                    logging.error("Failed to save image.")
+                    return jsonify({'error': 'Failed to save image.'}), 500
+            else:
+                logging.error("Invalid image file uploaded.")
+                return jsonify({'error': 'Invalid image file.'}), 400
 
         # Add dataset to Firestore
-        dataset_id = add_dataset(name, description, price, creator_uid, preview_snippet)
+        dataset_id = add_dataset(name, description, price, creator_uid, preview_snippet, category)
 
         if dataset_id:
+            logging.info(f"Dataset '{name}' added with ID {dataset_id}.")
             return jsonify({'success': True, 'dataset_id': dataset_id}), 201
         else:
+            logging.error("Failed to add dataset.")
             return jsonify({'error': 'Failed to add dataset.'}), 400
+
     except Exception as e:
         logging.error(f"Error in publish_dataset endpoint: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+def save_image(image_file):
+    try:
+        from firebase_admin import storage
+
+        # Initialize Firebase Storage bucket
+        bucket = storage.bucket()
+        
+        # Generate a unique filename
+        unique_filename = f'datasets/{uuid.uuid4()}_{image_file.filename}'
+        
+        # Create a blob and upload the file
+        blob = bucket.blob(unique_filename)
+        blob.upload_from_file(image_file, content_type=image_file.content_type)
+        
+        # Make the blob publicly accessible
+        blob.make_public()
+        
+        logging.info(f"Image uploaded to {blob.public_url}")
+        return blob.public_url
+    except firebase_admin.exceptions.FirebaseError as fe:
+        logging.error(f"Firebase error while saving image: {str(fe)}")
+        return None
+    except Exception as e:
+        logging.error(f"Unexpected error while saving image: {str(e)}")
+        return None
 
 @app.route('/stripe/callback', methods=['GET'])
 def stripe_callback():
@@ -1257,6 +1331,33 @@ def upload_dataset():
     except Exception as e:
         logging.error(f"Error uploading dataset: {str(e)}")
         return jsonify({'error': 'An error occurred while uploading the dataset.'}), 500
+    
+@app.route('/published-datasets', methods=['GET'])
+def get_published_datasets():
+    try:
+        datasets_ref = db.collection('datasets')
+        datasets = []
+        for doc in datasets_ref.stream():
+            dataset = doc.to_dict()
+            dataset['id'] = doc.id
+            datasets.append(dataset)
+        logging.info(f"Fetched {len(datasets)} published datasets.")
+        return jsonify({'datasets': datasets}), 200
+    except Exception as e:
+        logging.error(f"Error fetching published datasets: {str(e)}")
+        return jsonify({'error': 'Failed to fetch published datasets.'}), 500
+
+def check_free_dataset_limit(creator_uid, limit=5):
+    try:
+        user_games_ref = db.collection('datasets').where('creator_uid', '==', creator_uid).where('price', '==', 0.0)
+        # Manual count since .count() is not available
+        count = sum(1 for _ in user_games_ref.stream())
+        logging.info(f"User {creator_uid} has {count} free datasets.")
+        return count < limit
+    except Exception as e:
+        logging.error(f"Error checking free dataset limit for user {creator_uid}: {str(e)}")
+        return False
+
 
 # Run the Flask app on port 5001 in debug mode
 if __name__ == '__main__':

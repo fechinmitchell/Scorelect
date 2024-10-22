@@ -10,8 +10,8 @@ import { getAuth } from 'firebase/auth'; // Import getAuth
 /**
  * PublishDataset Component
  * 
- * This component renders a modal that allows users to publish a dataset by providing a name, description, image, and pricing options.
- * Premium users can set a price; free users can only publish datasets for free.
+ * This component renders a modal that allows users to publish a dataset by providing a name, description, preview snippet, image, category, and pricing options.
+ * Currently, all datasets are published for free. Pricing options are commented out for future implementation.
  * 
  * Props:
  * - isOpen (bool): Determines if the modal is open.
@@ -24,9 +24,11 @@ import { getAuth } from 'firebase/auth'; // Import getAuth
 const PublishDataset = ({ isOpen, onClose, datasetName, onPublishSuccess, apiUrl, userType }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [previewSnippet, setPreviewSnippet] = useState(''); // Add preview_snippet field
+  const [category, setCategory] = useState('Soccer'); // Add category field with default value
   const [image, setImage] = useState(null);
-  const [isFree, setIsFree] = useState(true);
-  const [price, setPrice] = useState('');
+  // const [isFree, setIsFree] = useState(true); // Commented out: All datasets are free
+  // const [price, setPrice] = useState(''); // Commented out: Price is not needed
   const [submitting, setSubmitting] = useState(false);
 
   const auth = getAuth(); // Initialize auth
@@ -38,12 +40,14 @@ const PublishDataset = ({ isOpen, onClose, datasetName, onPublishSuccess, apiUrl
     e.preventDefault();
 
     // Validation
-    if (!name.trim() || !description.trim()) {
+    if (!name.trim() || !description.trim() || !previewSnippet.trim()) {
       Swal.fire('Error', 'Please fill in all required fields.', 'error');
       return;
     }
 
-    if (!isFree && (!price || isNaN(price) || Number(price) <= 0)) {
+    /*
+    // Commented out: Price validation
+    if (!isFree && (isNaN(price) || Number(price) <= 0)) {
       Swal.fire('Error', 'Please enter a valid price.', 'error');
       return;
     }
@@ -52,25 +56,39 @@ const PublishDataset = ({ isOpen, onClose, datasetName, onPublishSuccess, apiUrl
       Swal.fire('Error', 'Only premium users can set a price.', 'error');
       return;
     }
+    */
 
-    if (image && !image.type.startsWith('image/')) {
-      Swal.fire('Error', 'Please upload a valid image file.', 'error');
+    /*
+    // Commented out: Check if the user is allowed to set a price
+    if (!isFree && userType !== 'premium') {
+      Swal.fire('Error', 'Only premium users can set a price.', 'error');
       return;
     }
+    */
+
+    /*
+    // Commented out: Handle price in form data
+    if (!isFree) {
+      formData.append('price', price);
+    }
+    */
 
     setSubmitting(true);
 
     try {
       // Prepare form data
       const formData = new FormData();
-      formData.append('uid', auth.currentUser.uid); // Use auth here
+      formData.append('creator_uid', auth.currentUser.uid); // Change to 'creator_uid'
       formData.append('datasetName', datasetName);
-      formData.append('publishName', name);
+      formData.append('name', name); // Change to 'name'
       formData.append('description', description);
-      formData.append('isFree', isFree);
-      if (!isFree) {
-        formData.append('price', price);
-      }
+      formData.append('preview_snippet', previewSnippet); // Add 'preview_snippet'
+      formData.append('category', category); // Add 'category'
+      // formData.append('isFree', isFree); // Commented out: All datasets are free
+      formData.append('isFree', true); // Ensure isFree is always true
+      // if (!isFree) {
+      //   formData.append('price', price);
+      // }
       if (image) {
         formData.append('image', image);
       }
@@ -78,7 +96,7 @@ const PublishDataset = ({ isOpen, onClose, datasetName, onPublishSuccess, apiUrl
       const response = await fetch(`${apiUrl}/publish-dataset`, {
         method: 'POST',
         headers: {
-          // 'Content-Type': 'multipart/form-data', // Do not set Content-Type; let the browser set it including the boundary
+          // Do not set 'Content-Type'; let the browser handle it
           'Authorization': `Bearer ${await auth.currentUser.getIdToken()}`,
         },
         body: formData,
@@ -93,7 +111,17 @@ const PublishDataset = ({ isOpen, onClose, datasetName, onPublishSuccess, apiUrl
       const result = await response.json();
       console.log('Publish dataset response:', result);
 
+      Swal.fire('Success', 'Dataset published successfully!', 'success');
       onPublishSuccess(); // Notify parent component of success
+
+      // Optionally, reset the form fields
+      setName('');
+      setDescription('');
+      setPreviewSnippet('');
+      setCategory('Soccer');
+      setImage(null);
+      // setIsFree(true); // Commented out: Always free
+      // setPrice(''); // Commented out: Price is not needed
     } catch (error) {
       console.error('Error publishing dataset:', error);
       Swal.fire('Error', error.message || 'Failed to publish dataset.', 'error');
@@ -116,7 +144,7 @@ const PublishDataset = ({ isOpen, onClose, datasetName, onPublishSuccess, apiUrl
       isOpen={isOpen}
       onRequestClose={onClose}
       contentLabel="Publish Dataset"
-      ariaHideApp={false} // Add this line to prevent accessibility warning
+      ariaHideApp={false} // Prevent accessibility warning
       className="publish-modal"
       overlayClassName="publish-overlay"
     >
@@ -143,7 +171,32 @@ const PublishDataset = ({ isOpen, onClose, datasetName, onPublishSuccess, apiUrl
             required
           ></textarea>
         </div>
+        {/* <div className="form-group">
+          <label htmlFor="preview-snippet">Preview Snippet:</label>
+          <textarea
+            id="preview-snippet"
+            value={previewSnippet}
+            onChange={(e) => setPreviewSnippet(e.target.value)}
+            placeholder="Enter a preview snippet for your dataset"
+            required
+          ></textarea>
+        </div> */} 
         <div className="form-group">
+          <label htmlFor="dataset-category">Category:</label>
+          <select
+            id="dataset-category"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            required
+          >
+            <option value="Soccer">Soccer</option>
+            <option value="GAA">GAA</option>
+            <option value="Basketball">Basketball</option>
+            <option value="AmericanFootball">American Football</option>
+            {/* Add more categories as needed */}
+          </select>
+        </div>
+        {/* <div className="form-group">
           <label htmlFor="publish-image">Image:</label>
           <input
             type="file"
@@ -151,7 +204,8 @@ const PublishDataset = ({ isOpen, onClose, datasetName, onPublishSuccess, apiUrl
             accept="image/*"
             onChange={handleImageChange}
           />
-        </div>
+        </div> */}
+        {/*
         <div className="form-group">
           <label>
             <input
@@ -177,6 +231,7 @@ const PublishDataset = ({ isOpen, onClose, datasetName, onPublishSuccess, apiUrl
             />
           </div>
         )}
+        */}
         <div className="form-actions">
           <button type="submit" disabled={submitting}>
             {submitting ? 'Publishing...' : 'Publish'}

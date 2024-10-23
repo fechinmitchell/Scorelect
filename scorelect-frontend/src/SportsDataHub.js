@@ -3,8 +3,13 @@
 import React, { useEffect, useState } from 'react';
 import './SportsDataHub.css';
 import Swal from 'sweetalert2';
-import PropTypes from 'prop-types';
 
+/**
+ * SportsDataHub Component
+ * 
+ * This component displays a hub where users can browse, search, filter, download, and view samples of various sports datasets.
+ * Users can download entire datasets or view a sample of actions from each dataset.
+ */
 const SportsDataHub = () => {
   const [datasets, setDatasets] = useState([]);
   const [filteredDatasets, setFilteredDatasets] = useState([]);
@@ -13,6 +18,9 @@ const SportsDataHub = () => {
   const [loading, setLoading] = useState(true);
   const apiUrl = process.env.REACT_APP_API_URL;
 
+  /**
+   * Fetches all published datasets from the backend.
+   */
   const fetchPublishedDatasets = async () => {
     try {
       const response = await fetch(`${apiUrl}/published-datasets`, {
@@ -42,6 +50,9 @@ const SportsDataHub = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Filters datasets based on search term and selected sport.
+   */
   const filterDatasets = () => {
     let filtered = datasets;
 
@@ -65,10 +76,18 @@ const SportsDataHub = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, selectedSport, datasets]);
 
+  /**
+   * Handles the purchase of a dataset.
+   * Note: The actual purchase logic should be implemented here.
+   */
   const handlePurchase = async (dataset) => {
     Swal.fire('Purchase', `Purchased dataset "${dataset.name}" successfully!`, 'success');
+    // Implement actual purchase logic here
   };
 
+  /**
+   * Handles downloading the entire dataset as a JSON file.
+   */
   const handleDownload = async (dataset) => {
     try {
       const response = await fetch(`${apiUrl}/download-published-dataset`, {
@@ -80,7 +99,8 @@ const SportsDataHub = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to download dataset.');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to download dataset.');
       }
 
       const blob = await response.blob();
@@ -95,10 +115,13 @@ const SportsDataHub = () => {
       Swal.fire('Downloaded!', `Dataset "${dataset.name}" has been downloaded.`, 'success');
     } catch (error) {
       console.error('Error downloading dataset:', error);
-      Swal.fire('Error', 'Failed to download dataset.', 'error');
+      Swal.fire('Error', error.message || 'Failed to download dataset.', 'error');
     }
   };
 
+  /**
+   * Handles viewing a sample of actions from the dataset.
+   */
   const handleViewSample = async (dataset) => {
     try {
       const response = await fetch(`${apiUrl}/sample-dataset`, {
@@ -110,19 +133,36 @@ const SportsDataHub = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch dataset sample.');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch dataset sample.');
       }
 
       const data = await response.json();
+      const sampleActions = data.sample;
+
+      if (!sampleActions || sampleActions.length === 0) {
+        Swal.fire({
+          title: `Sample of "${dataset.name}"`,
+          text: 'No sample actions available.',
+          icon: 'info',
+        });
+        return;
+      }
+
+      // Format the sample actions for display
+      const formattedSample = sampleActions.map((action, index) => (
+        `<li><strong>Action ${index + 1}:</strong> ${JSON.stringify(action)}</li>`
+      )).join('');
+
       Swal.fire({
         title: `Sample of "${dataset.name}"`,
-        html: `<pre>${JSON.stringify(data.sample, null, 2)}</pre>`,
+        html: `<ul style="text-align: left;">${formattedSample}</ul>`,
         width: '60%',
         heightAuto: true,
       });
     } catch (error) {
       console.error('Error fetching dataset sample:', error);
-      Swal.fire('Error', 'Failed to fetch dataset sample.', 'error');
+      Swal.fire('Error', error.message || 'Failed to fetch dataset sample.', 'error');
     }
   };
 

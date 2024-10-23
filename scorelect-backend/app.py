@@ -12,6 +12,7 @@ from openai import OpenAI, OpenAIError  # Classes and error handling for OpenAI 
 import json  # Standard library for JSON operations
 import uuid  # For generating unique IDs
 from datetime import datetime  # For handling timestamps
+import random  # Add this line at the top with other imports
 
 # Load environment variables from the .env file into the application
 load_dotenv()
@@ -1357,7 +1358,75 @@ def check_free_dataset_limit(creator_uid, limit=5):
     except Exception as e:
         logging.error(f"Error checking free dataset limit for user {creator_uid}: {str(e)}")
         return False
+    
+# Updated /sample-dataset Endpoint
+@app.route('/download-published-dataset', methods=['POST'])
+def download_published_dataset():
+    try:
+        data = request.json
+        dataset_id = data.get('datasetId')
 
+        if not dataset_id:
+            logging.error("Dataset ID not provided for download.")
+            return jsonify({'error': 'Dataset ID is required.'}), 400
+
+        # Fetch the dataset from Firestore
+        dataset_doc = db.collection('datasets').document(dataset_id).get()
+        if not dataset_doc.exists:
+            logging.error(f"Dataset '{dataset_id}' not found.")
+            return jsonify({'error': 'Dataset not found.'}), 404
+
+        dataset = dataset_doc.to_dict()
+        dataset_name = dataset.get('name')
+        if not dataset_name:
+            logging.error(f"Dataset '{dataset_id}' does not have a 'name' field.")
+            return jsonify({'error': "Dataset does not have a 'name' field."}), 400
+
+        # Fetch all games associated with this dataset by iterating through all users
+        games = []
+        users_ref = db.collection('users').stream()
+        for user_doc in users_ref:
+            user_id = user_doc.id
+            games_ref = db.collection('savedGames').document(user_id).collection('games').where('datasetName', '==', dataset_name).stream()
+            for game_doc in games_ref:
+                game_data = game_doc.to_dict()
+                game_data['gameName'] = game_doc.id
+                actions = game_data.get('gameData', [])
+                if isinstance(actions, list):
+                    games.extend(actions)
+                else:
+                    games.append(actions)
+
+        if not games:
+            logging.warning(f"No games found under dataset '{dataset_name}' for download.")
+            return jsonify({'error': f"No games found under dataset '{dataset_name}'."}), 404
+
+        # Prepare the data to download
+        download_data = {
+            'dataset': dataset,
+            'games': games
+        }
+
+        # Serialize the data to JSON, handling datetime objects
+        json_data = json.dumps(download_data, default=firestore_to_json, indent=2)
+
+        # Create a Flask response with the JSON data as a file
+        response = make_response(json_data)
+        response.headers['Content-Disposition'] = f'attachment; filename={dataset.get("name", "dataset")}_data.json'
+        response.mimetype = 'application/json'
+
+        logging.info(f"Dataset '{dataset_id}' downloaded successfully with {len(games)} actions.")
+        return response
+
+    except Exception as e:
+        logging.error(f"Error downloading dataset '{dataset_id}': {str(e)}")
+        return jsonify({'error': 'An error occurred while downloading the dataset.'}), 500
+
+# Helper function to convert Firestore data to JSON serializable format
+def firestore_to_json(obj):
+    if isinstance(obj, datetime):  # Corrected line
+        return obj.isoformat()
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 # Run the Flask app on port 5001 in debug mode
 if __name__ == '__main__':

@@ -1382,12 +1382,16 @@ def download_published_dataset():
             logging.error(f"Dataset '{dataset_id}' does not have a 'name' field.")
             return jsonify({'error': "Dataset does not have a 'name' field."}), 400
 
+        # Optionally remove 'creator_uid' if it's not needed
+        dataset.pop('creator_uid', None)  # Remove 'creator_uid' from the dataset
+
         # Fetch all games associated with this dataset by iterating through all users
         games = []
         users_ref = db.collection('users').stream()
         for user_doc in users_ref:
             user_id = user_doc.id
-            games_ref = db.collection('savedGames').document(user_id).collection('games').where('datasetName', '==', dataset_name).stream()
+            games_ref = db.collection('savedGames').document(user_id).collection('games')\
+                .where('datasetName', '==', dataset_name).stream()
             for game_doc in games_ref:
                 game_data = game_doc.to_dict()
                 game_data['gameName'] = game_doc.id

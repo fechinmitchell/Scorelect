@@ -68,6 +68,12 @@
     color: #555;
     text-align: center;
   }
+
+  p {
+    font-size: 0.95rem;
+    color: #555;
+    text-align: center;
+  }
   
   .dataset-actions {
     margin-top: 15px;

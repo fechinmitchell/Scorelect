@@ -16,6 +16,11 @@
     margin-bottom: 20px;
 }
 
+.saved-games-container p {
+    text-align: center;
+    color: #333;
+    margin-bottom: 20px;
+}
 /* Styling for each dataset section */
 .dataset-section {
     margin-bottom: 30px;

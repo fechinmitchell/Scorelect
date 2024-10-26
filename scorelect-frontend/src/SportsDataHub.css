@@ -28,6 +28,12 @@
     border: 1px solid #ccc;
     border-radius: 5px;
   }
+
+   p {
+    text-align: center;
+    color: #333;
+    margin-bottom: 30px;
+  }
   
   .search-filter-container select {
     padding: 10px;

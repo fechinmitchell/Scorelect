@@ -1432,6 +1432,60 @@ def firestore_to_json(obj):
         return obj.isoformat()
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
+@app.route('/sample-dataset', methods=['POST'])
+def sample_dataset():
+    try:
+        data = request.json  # Get JSON data from the request
+        dataset_id = data.get('datasetId')  # Extract datasetId
+        
+        if not dataset_id:
+            logging.error("Dataset ID not provided for sample request.")
+            return jsonify({'error': 'Dataset ID is required.'}), 400
+        
+        # Fetch the dataset from Firestore
+        dataset_doc = db.collection('datasets').document(dataset_id).get()
+        if not dataset_doc.exists:
+            logging.error(f"Dataset '{dataset_id}' not found.")
+            return jsonify({'error': 'Dataset not found.'}), 404
+        
+        dataset = dataset_doc.to_dict()
+        dataset_name = dataset.get('name')
+        
+        if not dataset_name:
+            logging.error(f"Dataset '{dataset_id}' does not have a 'name' field.")
+            return jsonify({'error': "Dataset does not have a 'name' field."}), 400
+        
+        # Fetch all games associated with this dataset
+        games = []
+        users_ref = db.collection('users').stream()
+        for user_doc in users_ref:
+            user_id = user_doc.id
+            games_ref = db.collection('savedGames').document(user_id).collection('games')\
+                .where('datasetName', '==', dataset_name).stream()
+            for game_doc in games_ref:
+                game_data = game_doc.to_dict()
+                actions = game_data.get('gameData', [])
+                if isinstance(actions, list):
+                    games.extend(actions)
+                else:
+                    games.append(actions)
+        
+        if not games:
+            logging.warning(f"No games found under dataset '{dataset_name}' for sampling.")
+            return jsonify({'sample': []}), 200  # Return empty sample
+        
+        # Determine the number of samples you want to return
+        sample_size = min(10, len(games))  # For example, 10 samples or fewer if not enough games
+        sample_actions = random.sample(games, sample_size)  # Randomly select sample_size actions
+        
+        logging.info(f"Returning {len(sample_actions)} sample actions for dataset '{dataset_name}'.")
+        return jsonify({'sample': sample_actions}), 200
+    
+    except Exception as e:
+        logging.error(f"Error in sample_dataset endpoint: {str(e)}")
+        return jsonify({'error': 'An error occurred while fetching the dataset sample.'}), 500
+
+
 # Run the Flask app on port 5001 in debug mode
 if __name__ == '__main__':
     app.run(port=5001, debug=True)

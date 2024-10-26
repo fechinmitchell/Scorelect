@@ -68,12 +68,6 @@
     color: #555;
     text-align: center;
   }
-
-  p {
-    font-size: 0.95rem;
-    color: #555;
-    text-align: center;
-  }
   
   .dataset-actions {
     margin-top: 15px;
@@ -81,24 +75,30 @@
     gap: 10px;
   }
   
-  .dataset-actions button {
+  .dataset-actions .action-button {
+    position: relative; /* For positioning the spinner */
     padding: 8px 12px;
     border: none;
     border-radius: 5px;
     cursor: pointer;
     transition: background-color 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px; /* Ensures consistent button height */
+    width: 100px; /* Optional: set a fixed width for consistency */
   }
   
-  .dataset-actions button:hover {
+  .dataset-actions .action-button:hover {
     opacity: 0.9;
   }
   
-  .dataset-actions button:nth-child(1) {
+  .dataset-actions .action-button:nth-child(1) {
     background-color: #17a2b8; /* Teal */
     color: white;
   }
   
-  .dataset-actions button:nth-child(2) {
+  .dataset-actions .action-button:nth-child(2) {
     background-color: #28a745; /* Green */
     color: white;
   }
@@ -116,5 +116,43 @@
     .search-filter-container select {
       width: 80%;
     }
+  
+    .dataset-actions .action-button {
+      width: 80px; /* Adjust width for smaller screens */
+      padding: 8px 10px;
+    }
   }
+  
+  /* Spinner Styles */
+  .spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.6);
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    position: absolute;
+    /* Center the spinner within the button */
+    top: -20%;
+    left: 40%;
+  }
+  
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  
+  /* Hidden class to hide button text */
+  .button-text.hidden {
+    visibility: hidden;
+  }
+  
+  /* Optional: Adjust button styles when disabled */
+  .dataset-actions .action-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
   

@@ -16,6 +16,7 @@ const SportsDataHub = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSport, setSelectedSport] = useState('All');
   const [loading, setLoading] = useState(true);
+  const [loadingOperations, setLoadingOperations] = useState({}); // New state
   const apiUrl = process.env.REACT_APP_API_URL;
 
   /**
@@ -89,6 +90,9 @@ const SportsDataHub = () => {
    * Handles downloading the entire dataset as a JSON file.
    */
   const handleDownload = async (dataset) => {
+    // Set loading state for this download action
+    setLoadingOperations(prev => ({ ...prev, [`download-${dataset.id}`]: true }));
+    
     try {
       const response = await fetch(`${apiUrl}/download-published-dataset`, {
         method: 'POST',
@@ -116,6 +120,9 @@ const SportsDataHub = () => {
     } catch (error) {
       console.error('Error downloading dataset:', error);
       Swal.fire('Error', error.message || 'Failed to download dataset.', 'error');
+    } finally {
+      // Reset loading state
+      setLoadingOperations(prev => ({ ...prev, [`download-${dataset.id}`]: false }));
     }
   };
 
@@ -123,6 +130,9 @@ const SportsDataHub = () => {
    * Handles viewing a sample of actions from the dataset.
    */
   const handleViewSample = async (dataset) => {
+    // Set loading state for this view sample action
+    setLoadingOperations(prev => ({ ...prev, [`viewSample-${dataset.id}`]: true }));
+    
     try {
       const response = await fetch(`${apiUrl}/sample-dataset`, {
         method: 'POST',
@@ -131,15 +141,15 @@ const SportsDataHub = () => {
         },
         body: JSON.stringify({ datasetId: dataset.id }),
       });
-
+  
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to fetch dataset sample.');
       }
-
+  
       const data = await response.json();
       const sampleActions = data.sample;
-
+  
       if (!sampleActions || sampleActions.length === 0) {
         Swal.fire({
           title: `Sample of "${dataset.name}"`,
@@ -148,12 +158,12 @@ const SportsDataHub = () => {
         });
         return;
       }
-
+  
       // Format the sample actions for display
       const formattedSample = sampleActions.map((action, index) => (
         `<li><strong>Action ${index + 1}:</strong> ${JSON.stringify(action)}</li>`
       )).join('');
-
+  
       Swal.fire({
         title: `Sample of "${dataset.name}"`,
         html: `<ul style="text-align: left;">${formattedSample}</ul>`,
@@ -163,8 +173,11 @@ const SportsDataHub = () => {
     } catch (error) {
       console.error('Error fetching dataset sample:', error);
       Swal.fire('Error', error.message || 'Failed to fetch dataset sample.', 'error');
+    } finally {
+      // Reset loading state
+      setLoadingOperations(prev => ({ ...prev, [`viewSample-${dataset.id}`]: false }));
     }
-  };
+  };  
 
   return (
     <div className="sports-datahub-container">
@@ -192,30 +205,60 @@ const SportsDataHub = () => {
       ) : (
         <div className="datasets-grid">
           {filteredDatasets.length > 0 ? (
-            filteredDatasets.map((dataset) => (
-              <div key={dataset.id} className="dataset-card">
-                {/* Use preview_snippet as image URL if image is uploaded */}
-                {dataset.preview_snippet && dataset.preview_snippet.startsWith('http') ? (
-                  <img src={dataset.preview_snippet} alt={dataset.name} className="dataset-image" />
-                ) : (
-                  <div className="placeholder-image">No Image</div>
-                )}
-                <h3>{dataset.name}</h3>
-                <p>{dataset.description}</p>
-                <p><strong>Sport:</strong> {dataset.category}</p>
-                <p>
-                  <strong>Price:</strong> {dataset.price === 0 ? 'Free' : `$${dataset.price.toFixed(2)}`}
-                </p>
-                <div className="dataset-actions">
-                  <button onClick={() => handleViewSample(dataset)}>View Sample</button>
-                  {dataset.price === 0 ? (
-                    <button onClick={() => handleDownload(dataset)}>Download</button>
+            filteredDatasets.map((dataset) => {
+              const isDownloading = loadingOperations[`download-${dataset.id}`];
+              const isViewingSample = loadingOperations[`viewSample-${dataset.id}`];
+              
+              return (
+                <div key={dataset.id} className="dataset-card">
+                  {/* Use preview_snippet as image URL if image is uploaded */}
+                  {dataset.preview_snippet && dataset.preview_snippet.startsWith('http') ? (
+                    <img src={dataset.preview_snippet} alt={dataset.name} className="dataset-image" />
                   ) : (
-                    <button onClick={() => handlePurchase(dataset)}>Purchase</button>
+                    <div className="placeholder-image">No Image</div>
                   )}
+                  <h3>{dataset.name}</h3>
+                  <p>{dataset.description}</p>
+                  <p><strong>Sport:</strong> {dataset.category}</p>
+                  <p>
+                    <strong>Price:</strong> {dataset.price === 0 ? 'Free' : `$${dataset.price.toFixed(2)}`}
+                  </p>
+                  <div className="dataset-actions">
+                    <button
+                      onClick={() => handleViewSample(dataset)}
+                      disabled={isViewingSample || isDownloading}
+                      className="action-button"
+                      aria-busy={isViewingSample}
+                      aria-label={isViewingSample ? 'Loading sample...' : 'View Sample'}
+                    >
+                      {isViewingSample && <span className="spinner"></span>}
+                      <span className={`button-text ${isViewingSample ? 'hidden' : ''}`}>View Sample</span>
+                    </button>
+                    {dataset.price === 0 ? (
+                      <button
+                        onClick={() => handleDownload(dataset)}
+                        disabled={isDownloading || isViewingSample}
+                        className="action-button"
+                        aria-busy={isDownloading}
+                        aria-label={isDownloading ? 'Downloading...' : 'Download'}
+                      >
+                        {isDownloading && <span className="spinner"></span>}
+                        <span className={`button-text ${isDownloading ? 'hidden' : ''}`}>Download</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handlePurchase(dataset)}
+                        disabled={isDownloading || isViewingSample}
+                        className="action-button"
+                        aria-label="Purchase"
+                      >
+                        Purchase
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           ) : (
             <p>No datasets found.</p>
           )}

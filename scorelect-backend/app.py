@@ -1041,9 +1041,9 @@ def publish_dataset():
         is_free = data.get('isFree') == 'true'  # Convert string to boolean
 
         # Validate required fields
-        if not all([name, description, creator_uid, preview_snippet, category]):
+        if not all([name, description, creator_uid, category]):
             logging.error("Incomplete dataset publishing data provided.")
-            return jsonify({'error': 'Name, description, creator_uid, preview_snippet, and category are required.'}), 400
+            return jsonify({'error': 'Name, description, creator_uid, and category are required.'}), 400
 
         # Validate price if the dataset is not free
         if not is_free:
@@ -1056,7 +1056,7 @@ def publish_dataset():
 
         # Check free dataset limit if applicable
         if is_free:
-            free_limit = 5  # Set your free dataset limit here
+            free_limit = 20  # Set your free dataset limit here
             user_games_ref = db.collection('datasets').where('creator_uid', '==', creator_uid).where('price', '==', 0.0)
             # Manual count since .count() is not available
             free_count = sum(1 for _ in user_games_ref.stream())
@@ -1084,6 +1084,26 @@ def publish_dataset():
 
         if dataset_id:
             logging.info(f"Dataset '{name}' added with ID {dataset_id}.")
+
+            # Copy games from user's 'savedGames' to 'datasets/{dataset_id}/games'
+            games_ref = db.collection('savedGames').document(creator_uid).collection('games').where('datasetName', '==', name)
+            games_snapshot = games_ref.stream()
+            batch = db.batch()
+            games_copied = 0
+            for game_doc in games_snapshot:
+                game_data = game_doc.to_dict()
+                # Remove any user-specific data if necessary
+                # game_data.pop('some_user_field', None)
+
+                # Write to 'datasets/{dataset_id}/games/{game_doc.id}'
+                new_game_ref = db.collection('datasets').document(dataset_id).collection('games').document(game_doc.id)
+                batch.set(new_game_ref, game_data)
+                games_copied += 1
+
+            # Commit the batch write
+            batch.commit()
+            logging.info(f"Copied {games_copied} games to dataset '{dataset_id}'.")
+
             return jsonify({'success': True, 'dataset_id': dataset_id}), 201
         else:
             logging.error("Failed to add dataset.")
@@ -1370,67 +1390,59 @@ def download_published_dataset():
             logging.error("Dataset ID not provided for download.")
             return jsonify({'error': 'Dataset ID is required.'}), 400
 
-        # Fetch the dataset from Firestore
+        # Fetch the dataset document from Firestore
         dataset_doc = db.collection('datasets').document(dataset_id).get()
         if not dataset_doc.exists:
             logging.error(f"Dataset '{dataset_id}' not found.")
             return jsonify({'error': 'Dataset not found.'}), 404
 
         dataset = dataset_doc.to_dict()
-        dataset_name = dataset.get('name')
-        if not dataset_name:
-            logging.error(f"Dataset '{dataset_id}' does not have a 'name' field.")
-            return jsonify({'error': "Dataset does not have a 'name' field."}), 400
+        dataset_name = dataset.get('name', 'Unnamed Dataset')
+        logging.info(f"Found dataset '{dataset_name}' with ID '{dataset_id}'.")
 
-        # Optionally remove 'creator_uid' if it's not needed
-        dataset.pop('creator_uid', None)  # Remove 'creator_uid' from the dataset
+        # Optional: Remove sensitive information if necessary
+        dataset.pop('creator_uid', None)
 
-        # Fetch all games associated with this dataset by iterating through all users
+        # Fetch games within this dataset from 'datasets/{dataset_id}/games'
+        games_ref = db.collection('datasets').document(dataset_id).collection('games')
+        games_snapshot = games_ref.stream()
+
         games = []
-        users_ref = db.collection('users').stream()
-        for user_doc in users_ref:
-            user_id = user_doc.id
-            games_ref = db.collection('savedGames').document(user_id).collection('games')\
-                .where('datasetName', '==', dataset_name).stream()
-            for game_doc in games_ref:
-                game_data = game_doc.to_dict()
-                game_data['gameName'] = game_doc.id
-                actions = game_data.get('gameData', [])
-                if isinstance(actions, list):
-                    games.extend(actions)
-                else:
-                    games.append(actions)
+        for game_doc in games_snapshot:
+            game_data = game_doc.to_dict()
+            game_data['gameName'] = game_doc.id
+            actions = game_data.get('gameData', [])
+            
+            if isinstance(actions, list):
+                games.extend(actions)
+            else:
+                games.append(actions)
 
+        # Check if any games were found
         if not games:
-            logging.warning(f"No games found under dataset '{dataset_name}' for download.")
+            logging.warning(f"No games found under dataset '{dataset_name}' (ID: {dataset_id}) for download.")
             return jsonify({'error': f"No games found under dataset '{dataset_name}'."}), 404
 
-        # Prepare the data to download
+        # Prepare JSON data for download
         download_data = {
             'dataset': dataset,
             'games': games
         }
 
-        # Serialize the data to JSON, handling datetime objects
+        # Serialize the data to JSON, using firestore_to_json to handle datetime fields
         json_data = json.dumps(download_data, default=firestore_to_json, indent=2)
 
-        # Create a Flask response with the JSON data as a file
+        # Create response with JSON data as a file attachment
         response = make_response(json_data)
-        response.headers['Content-Disposition'] = f'attachment; filename={dataset.get("name", "dataset")}_data.json'
+        response.headers['Content-Disposition'] = f'attachment; filename={dataset_name.replace(" ", "_")}_data.json'
         response.mimetype = 'application/json'
 
-        logging.info(f"Dataset '{dataset_id}' downloaded successfully with {len(games)} actions.")
+        logging.info(f"Dataset '{dataset_id}' downloaded successfully with {len(games)} games.")
         return response
 
     except Exception as e:
         logging.error(f"Error downloading dataset '{dataset_id}': {str(e)}")
         return jsonify({'error': 'An error occurred while downloading the dataset.'}), 500
-
-# Helper function to convert Firestore data to JSON serializable format
-def firestore_to_json(obj):
-    if isinstance(obj, datetime):  # Corrected line
-        return obj.isoformat()
-    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 @app.route('/sample-dataset', methods=['POST'])
 def sample_dataset():
@@ -1455,20 +1467,17 @@ def sample_dataset():
             logging.error(f"Dataset '{dataset_id}' does not have a 'name' field.")
             return jsonify({'error': "Dataset does not have a 'name' field."}), 400
         
-        # Fetch all games associated with this dataset
+        # Fetch games associated with this dataset from 'datasets/{dataset_id}/games'
         games = []
-        users_ref = db.collection('users').stream()
-        for user_doc in users_ref:
-            user_id = user_doc.id
-            games_ref = db.collection('savedGames').document(user_id).collection('games')\
-                .where('datasetName', '==', dataset_name).stream()
-            for game_doc in games_ref:
-                game_data = game_doc.to_dict()
-                actions = game_data.get('gameData', [])
-                if isinstance(actions, list):
-                    games.extend(actions)
-                else:
-                    games.append(actions)
+        games_ref = db.collection('datasets').document(dataset_id).collection('games')
+        games_snapshot = games_ref.stream()
+        for game_doc in games_snapshot:
+            game_data = game_doc.to_dict()
+            actions = game_data.get('gameData', [])
+            if isinstance(actions, list):
+                games.extend(actions)
+            else:
+                games.append(actions)
         
         if not games:
             logging.warning(f"No games found under dataset '{dataset_name}' for sampling.")
@@ -1485,6 +1494,11 @@ def sample_dataset():
         logging.error(f"Error in sample_dataset endpoint: {str(e)}")
         return jsonify({'error': 'An error occurred while fetching the dataset sample.'}), 500
 
+def firestore_to_json(obj):
+    """Custom JSON serializer for Firestore datetime fields."""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f"Type {type(obj)} not serializable")
 
 # Run the Flask app on port 5001 in debug mode
 if __name__ == '__main__':

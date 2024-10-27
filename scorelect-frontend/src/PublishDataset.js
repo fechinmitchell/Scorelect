@@ -40,7 +40,7 @@ const PublishDataset = ({ isOpen, onClose, datasetName, onPublishSuccess, apiUrl
     e.preventDefault();
 
     // Validation
-    if (!name.trim() || !description.trim() || !previewSnippet.trim()) {
+    if (!name.trim() || !description.trim()) {
       Swal.fire('Error', 'Please fill in all required fields.', 'error');
       return;
     }

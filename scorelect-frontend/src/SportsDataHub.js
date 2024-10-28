@@ -3,20 +3,16 @@
 import React, { useEffect, useState } from 'react';
 import './SportsDataHub.css';
 import Swal from 'sweetalert2';
+import { useAuth } from './AuthContext'; // Import useAuth hook
 
-/**
- * SportsDataHub Component
- * 
- * This component displays a hub where users can browse, search, filter, download, and view samples of various sports datasets.
- * Users can download entire datasets or view a sample of actions from each dataset.
- */
 const SportsDataHub = () => {
+  const { currentUser } = useAuth(); // Use the useAuth hook to access the current user
   const [datasets, setDatasets] = useState([]);
   const [filteredDatasets, setFilteredDatasets] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSport, setSelectedSport] = useState('All');
   const [loading, setLoading] = useState(true);
-  const [loadingOperations, setLoadingOperations] = useState({}); // New state
+  const [loadingOperations, setLoadingOperations] = useState({});
   const apiUrl = process.env.REACT_APP_API_URL;
 
   /**
@@ -58,14 +54,15 @@ const SportsDataHub = () => {
     let filtered = datasets;
 
     if (selectedSport !== 'All') {
-      filtered = filtered.filter(dataset => dataset.category === selectedSport);
+      filtered = filtered.filter((dataset) => dataset.category === selectedSport);
     }
 
     if (searchTerm.trim() !== '') {
       const lowerSearch = searchTerm.toLowerCase();
-      filtered = filtered.filter(dataset =>
-        dataset.name.toLowerCase().includes(lowerSearch) ||
-        dataset.description.toLowerCase().includes(lowerSearch)
+      filtered = filtered.filter(
+        (dataset) =>
+          dataset.name.toLowerCase().includes(lowerSearch) ||
+          dataset.description.toLowerCase().includes(lowerSearch)
       );
     }
 
@@ -90,9 +87,8 @@ const SportsDataHub = () => {
    * Handles downloading the entire dataset as a JSON file.
    */
   const handleDownload = async (dataset) => {
-    // Set loading state for this download action
-    setLoadingOperations(prev => ({ ...prev, [`download-${dataset.id}`]: true }));
-    
+    setLoadingOperations((prev) => ({ ...prev, [`download-${dataset.id}`]: true }));
+
     try {
       const response = await fetch(`${apiUrl}/download-published-dataset`, {
         method: 'POST',
@@ -121,8 +117,7 @@ const SportsDataHub = () => {
       console.error('Error downloading dataset:', error);
       Swal.fire('Error', error.message || 'Failed to download dataset.', 'error');
     } finally {
-      // Reset loading state
-      setLoadingOperations(prev => ({ ...prev, [`download-${dataset.id}`]: false }));
+      setLoadingOperations((prev) => ({ ...prev, [`download-${dataset.id}`]: false }));
     }
   };
 
@@ -130,9 +125,8 @@ const SportsDataHub = () => {
    * Handles viewing a sample of actions from the dataset.
    */
   const handleViewSample = async (dataset) => {
-    // Set loading state for this view sample action
-    setLoadingOperations(prev => ({ ...prev, [`viewSample-${dataset.id}`]: true }));
-    
+    setLoadingOperations((prev) => ({ ...prev, [`viewSample-${dataset.id}`]: true }));
+
     try {
       const response = await fetch(`${apiUrl}/sample-dataset`, {
         method: 'POST',
@@ -141,15 +135,15 @@ const SportsDataHub = () => {
         },
         body: JSON.stringify({ datasetId: dataset.id }),
       });
-  
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to fetch dataset sample.');
       }
-  
+
       const data = await response.json();
       const sampleActions = data.sample;
-  
+
       if (!sampleActions || sampleActions.length === 0) {
         Swal.fire({
           title: `Sample of "${dataset.name}"`,
@@ -158,12 +152,15 @@ const SportsDataHub = () => {
         });
         return;
       }
-  
+
       // Format the sample actions for display
-      const formattedSample = sampleActions.map((action, index) => (
-        `<li><strong>Action ${index + 1}:</strong> ${JSON.stringify(action)}</li>`
-      )).join('');
-  
+      const formattedSample = sampleActions
+        .map(
+          (action, index) =>
+            `<li><strong>Action ${index + 1}:</strong> ${JSON.stringify(action)}</li>`
+        )
+        .join('');
+
       Swal.fire({
         title: `Sample of "${dataset.name}"`,
         html: `<ul style="text-align: left;">${formattedSample}</ul>`,
@@ -174,10 +171,60 @@ const SportsDataHub = () => {
       console.error('Error fetching dataset sample:', error);
       Swal.fire('Error', error.message || 'Failed to fetch dataset sample.', 'error');
     } finally {
-      // Reset loading state
-      setLoadingOperations(prev => ({ ...prev, [`viewSample-${dataset.id}`]: false }));
+      setLoadingOperations((prev) => ({ ...prev, [`viewSample-${dataset.id}`]: false }));
     }
-  };  
+  };
+
+  /**
+   * Handles deleting a dataset owned by the user.
+   */
+  const handleDeleteDataset = async (dataset) => {
+    // Ensure the user is logged in
+    if (!currentUser) {
+      Swal.fire('Error', 'You must be logged in to delete datasets.', 'error');
+      return;
+    }
+
+    const confirmDeletion = await Swal.fire({
+      title: 'Are you sure?',
+      text: `Do you want to delete the dataset "${dataset.name}"? This action cannot be undone.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonText: 'Cancel',
+    });
+
+    if (confirmDeletion.isConfirmed) {
+      setLoadingOperations((prev) => ({ ...prev, [`delete-${dataset.id}`]: true }));
+
+      try {
+        const response = await fetch(`${apiUrl}/delete-published-dataset`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ uid: currentUser.uid, datasetId: dataset.id }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to delete dataset.');
+        }
+
+        // Remove the deleted dataset from the local state
+        setDatasets((prev) => prev.filter((ds) => ds.id !== dataset.id));
+        setFilteredDatasets((prev) => prev.filter((ds) => ds.id !== dataset.id));
+
+        Swal.fire('Deleted!', `Dataset "${dataset.name}" has been deleted.`, 'success');
+      } catch (error) {
+        console.error('Error deleting dataset:', error);
+        Swal.fire('Error', error.message || 'Failed to delete dataset.', 'error');
+      } finally {
+        setLoadingOperations((prev) => ({ ...prev, [`delete-${dataset.id}`]: false }));
+      }
+    }
+  };
 
   return (
     <div className="sports-datahub-container">
@@ -189,10 +236,7 @@ const SportsDataHub = () => {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
-        <select
-          value={selectedSport}
-          onChange={(e) => setSelectedSport(e.target.value)}
-        >
+        <select value={selectedSport} onChange={(e) => setSelectedSport(e.target.value)}>
           <option value="All">All Sports</option>
           <option value="Soccer">Soccer</option>
           <option value="GAA">GAA</option>
@@ -208,51 +252,82 @@ const SportsDataHub = () => {
             filteredDatasets.map((dataset) => {
               const isDownloading = loadingOperations[`download-${dataset.id}`];
               const isViewingSample = loadingOperations[`viewSample-${dataset.id}`];
-              
+              const isDeleting = loadingOperations[`delete-${dataset.id}`];
+
+              // Determine if the current user is the creator of the dataset
+              const isOwner = currentUser
+                ? dataset.creator_uid === currentUser.uid
+                : false;
+
               return (
                 <div key={dataset.id} className="dataset-card">
                   {/* Use preview_snippet as image URL if image is uploaded */}
                   {dataset.preview_snippet && dataset.preview_snippet.startsWith('http') ? (
-                    <img src={dataset.preview_snippet} alt={dataset.name} className="dataset-image" />
+                    <img
+                      src={dataset.preview_snippet}
+                      alt={dataset.name}
+                      className="dataset-image"
+                    />
                   ) : (
                     <div className="placeholder-image">No Image</div>
                   )}
                   <h3>{dataset.name}</h3>
                   <p>{dataset.description}</p>
-                  <p><strong>Sport:</strong> {dataset.category}</p>
                   <p>
-                    <strong>Price:</strong> {dataset.price === 0 ? 'Free' : `$${dataset.price.toFixed(2)}`}
+                    <strong>Sport:</strong> {dataset.category}
+                  </p>
+                  <p>
+                    <strong>Price:</strong>{' '}
+                    {dataset.price === 0 ? 'Free' : `$${dataset.price.toFixed(2)}`}
                   </p>
                   <div className="dataset-actions">
                     <button
                       onClick={() => handleViewSample(dataset)}
-                      disabled={isViewingSample || isDownloading}
+                      disabled={isViewingSample || isDownloading || isDeleting}
                       className="action-button"
                       aria-busy={isViewingSample}
                       aria-label={isViewingSample ? 'Loading sample...' : 'View Sample'}
                     >
                       {isViewingSample && <span className="spinner"></span>}
-                      <span className={`button-text ${isViewingSample ? 'hidden' : ''}`}>View Sample</span>
+                      <span className={`button-text ${isViewingSample ? 'hidden' : ''}`}>
+                        View Sample
+                      </span>
                     </button>
                     {dataset.price === 0 ? (
                       <button
                         onClick={() => handleDownload(dataset)}
-                        disabled={isDownloading || isViewingSample}
+                        disabled={isDownloading || isViewingSample || isDeleting}
                         className="action-button"
                         aria-busy={isDownloading}
                         aria-label={isDownloading ? 'Downloading...' : 'Download'}
                       >
                         {isDownloading && <span className="spinner"></span>}
-                        <span className={`button-text ${isDownloading ? 'hidden' : ''}`}>Download</span>
+                        <span className={`button-text ${isDownloading ? 'hidden' : ''}`}>
+                          Download
+                        </span>
                       </button>
                     ) : (
                       <button
                         onClick={() => handlePurchase(dataset)}
-                        disabled={isDownloading || isViewingSample}
+                        disabled={isDownloading || isViewingSample || isDeleting}
                         className="action-button"
                         aria-label="Purchase"
                       >
                         Purchase
+                      </button>
+                    )}
+                    {isOwner && (
+                      <button
+                        onClick={() => handleDeleteDataset(dataset)}
+                        disabled={isDeleting || isDownloading || isViewingSample}
+                        className="action-button delete-button"
+                        aria-busy={isDeleting}
+                        aria-label={isDeleting ? 'Deleting...' : 'Delete Dataset'}
+                      >
+                        {isDeleting && <span className="spinner"></span>}
+                        <span className={`button-text ${isDeleting ? 'hidden' : ''}`}>
+                          Delete
+                        </span>
                       </button>
                     )}
                   </div>

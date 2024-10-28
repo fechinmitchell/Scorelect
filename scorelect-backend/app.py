@@ -288,30 +288,35 @@ def save_game():
         dataset_name = data.get('datasetName')  # Extract the dataset name
         match_date = data.get('matchDate')  # Extract match date
         sport = data.get('sport')  # Extract sport
-        
+
         # Validate if required fields are provided
         if not user_id or not game_name or not game_data or not match_date or not sport:
             logging.error("Incomplete game data provided.")
             return jsonify({'error': 'UID, gameName, gameData, matchDate, and sport are required.'}), 400
-    
+
         # Validate dataset_name (optional)
         if not dataset_name:
             dataset_name = 'Default'  # Assign to 'Default' if not provided
-    
+
+        # Normalize dataset name
+        dataset_name_normalized = dataset_name.strip().lower()
+
         # Save the game data in Firestore under the user's document
         game_doc_ref = db.collection('savedGames').document(user_id).collection('games').document(game_name)
         game_doc_ref.set({
             'gameData': game_data,
             'datasetName': dataset_name,  # Store the dataset name
+            'datasetName_normalized': dataset_name_normalized,  # Store normalized dataset name
             'matchDate': match_date,      # Store match date
             'sport': sport                # Store sport
         }, merge=True)  # Merge to avoid overwriting existing data
-    
+
         logging.info(f"Game '{game_name}' saved for user {user_id} under dataset '{dataset_name}' with matchDate '{match_date}' and sport '{sport}'.")
         return jsonify({"success": True}), 201  # Respond with success and Created status
     except Exception as e:
         logging.error(f"Error saving game: {str(e)}")
         return jsonify(error=str(e)), 400
+
 
 # Endpoint to load saved games from Firestore, optionally filtered by datasetName
 @app.route('/load-games', methods=['POST'])
@@ -1036,7 +1041,7 @@ def publish_dataset():
         description = data.get('description')
         price = data.get('price')
         creator_uid = data.get('creator_uid')
-        preview_snippet = data.get('preview_snippet')
+        # preview_snippet = data.get('preview_snippet')  # Commented out for now
         category = data.get('category')
         is_free = data.get('isFree') == 'true'  # Convert string to boolean
 
@@ -1065,22 +1070,22 @@ def publish_dataset():
                 logging.error("Free dataset limit reached.")
                 return jsonify({'error': 'Free dataset limit reached. Upgrade to premium to publish more datasets.'}), 403
 
-        # Handle image upload if provided
-        if 'image' in files:
-            image = files['image']
-            if image and image.filename.endswith(('.png', '.jpg', '.jpeg', '.gif')):
-                image_url = save_image(image)
-                if image_url:
-                    preview_snippet = image_url  # Use the image URL as the preview snippet
-                else:
-                    logging.error("Failed to save image.")
-                    return jsonify({'error': 'Failed to save image.'}), 500
-            else:
-                logging.error("Invalid image file uploaded.")
-                return jsonify({'error': 'Invalid image file.'}), 400
+        # Handle image upload if provided (Commented out for now)
+        # if 'image' in files:
+        #     image = files['image']
+        #     if image and image.filename.endswith(('.png', '.jpg', '.jpeg', '.gif')):
+        #         image_url = save_image(image)
+        #         if image_url:
+        #             preview_snippet = image_url  # Use the image URL as the preview snippet
+        #         else:
+        #             logging.error("Failed to save image.")
+        #             return jsonify({'error': 'Failed to save image.'}), 500
+        #     else:
+        #         logging.error("Invalid image file uploaded.")
+        #         return jsonify({'error': 'Invalid image file.'}), 400
 
         # Add dataset to Firestore
-        dataset_id = add_dataset(name, description, price, creator_uid, preview_snippet, category)
+        dataset_id = add_dataset(name, description, price, creator_uid, None, category)  # preview_snippet set to None
 
         if dataset_id:
             logging.info(f"Dataset '{name}' added with ID {dataset_id}.")
@@ -1113,31 +1118,31 @@ def publish_dataset():
         logging.error(f"Error in publish_dataset endpoint: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-def save_image(image_file):
-    try:
-        from firebase_admin import storage
+# def save_image(image_file):
+#     try:
+#         from firebase_admin import storage
 
-        # Initialize Firebase Storage bucket
-        bucket = storage.bucket()
+#         # Initialize Firebase Storage bucket
+#         bucket = storage.bucket()
         
-        # Generate a unique filename
-        unique_filename = f'datasets/{uuid.uuid4()}_{image_file.filename}'
+#         # Generate a unique filename
+#         unique_filename = f'datasets/{uuid.uuid4()}_{image_file.filename}'
         
-        # Create a blob and upload the file
-        blob = bucket.blob(unique_filename)
-        blob.upload_from_file(image_file, content_type=image_file.content_type)
+#         # Create a blob and upload the file
+#         blob = bucket.blob(unique_filename)
+#         blob.upload_from_file(image_file, content_type=image_file.content_type)
         
-        # Make the blob publicly accessible
-        blob.make_public()
+#         # Make the blob publicly accessible
+#         blob.make_public()
         
-        logging.info(f"Image uploaded to {blob.public_url}")
-        return blob.public_url
-    except firebase_admin.exceptions.FirebaseError as fe:
-        logging.error(f"Firebase error while saving image: {str(fe)}")
-        return None
-    except Exception as e:
-        logging.error(f"Unexpected error while saving image: {str(e)}")
-        return None
+#         logging.info(f"Image uploaded to {blob.public_url}")
+#         return blob.public_url
+#     except firebase_admin.exceptions.FirebaseError as fe:
+#         logging.error(f"Firebase error while saving image: {str(fe)}")
+#         return None
+#     except Exception as e:
+#         logging.error(f"Unexpected error while saving image: {str(e)}")
+#         return None
 
 @app.route('/stripe/callback', methods=['GET'])
 def stripe_callback():
@@ -1499,6 +1504,42 @@ def firestore_to_json(obj):
     if isinstance(obj, datetime):
         return obj.isoformat()
     raise TypeError(f"Type {type(obj)} not serializable")
+
+@app.route('/delete-published-dataset', methods=['POST'])
+def delete_published_dataset():
+    try:
+        data = request.json  # Get the JSON data from the request
+        uid = data.get('uid')  # Extract the user ID
+        dataset_id = data.get('datasetId')  # Extract the dataset ID
+
+        # Validate that UID and dataset ID are provided
+        if not uid or not dataset_id:
+            logging.error("UID or datasetId not provided for dataset deletion.")
+            return jsonify({'error': 'UID and datasetId are required.'}), 400
+
+        # Fetch the dataset document from Firestore
+        dataset_doc = db.collection('datasets').document(dataset_id).get()
+        if not dataset_doc.exists:
+            logging.warning(f"Dataset '{dataset_id}' not found.")
+            return jsonify({'error': 'Dataset not found.'}), 404
+
+        dataset = dataset_doc.to_dict()
+
+        # Verify that the requesting user is the creator of the dataset
+        creator_uid = dataset.get('creator_uid')
+        if creator_uid != uid:
+            logging.warning(f"User '{uid}' attempted to delete dataset '{dataset_id}' not owned by them.")
+            return jsonify({'error': 'Unauthorized access. You can only delete your own datasets.'}), 403
+
+        # Delete the dataset document
+        db.collection('datasets').document(dataset_id).delete()
+        logging.info(f"Dataset '{dataset_id}' deleted by user '{uid}'.")
+
+        return jsonify({'success': True, 'message': 'Dataset deleted successfully.'}), 200
+
+    except Exception as e:
+        logging.error(f"Error deleting published dataset: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 # Run the Flask app on port 5001 in debug mode
 if __name__ == '__main__':

@@ -10,6 +10,7 @@ import { Analytics } from '@vercel/analytics/react';
 import Modal from 'react-modal'; // Import react-modal
 import { GameProvider } from './GameContext'; // Import GameProvider
 import { UserProvider } from './UserContext'; // Import UserProvider
+import { AuthProvider } from './AuthContext'; // Import AuthProvider
 
 // Set the app element for react-modal
 Modal.setAppElement('#root'); // Ensure '#root' matches your HTML root element
@@ -21,12 +22,14 @@ root.render(
   <React.StrictMode>
     <BrowserRouter>
       <StripeSetup>
-        <UserProvider> {/* Wrap with UserProvider */}
-          <GameProvider> {/* Nested GameProvider */}
-            <App />
-            <Analytics />
-          </GameProvider>
-        </UserProvider>
+        <AuthProvider> {/* Wrap with AuthProvider */}
+          <UserProvider> {/* Wrap with UserProvider */}
+            <GameProvider> {/* Nested GameProvider */}
+              <App />
+              <Analytics />
+            </GameProvider>
+          </UserProvider>
+        </AuthProvider>
       </StripeSetup>
     </BrowserRouter>
   </React.StrictMode>

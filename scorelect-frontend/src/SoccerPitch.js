@@ -1225,7 +1225,7 @@ const removePlayerFromTeam2 = (index) => {
         <div className="instructions-container">
           <h3>Instructions</h3>
           {renderActionButtons()}
-          <p>Click on an action then on the pitch to record action at that location. Use the buttons above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
+          <p>Click on an action then on the pitch to record action at that location. Use the buttons above to specify the type of action. For actions (g, b), you will be prompted to enter details.</p>
           <div className="toggle-switches">
           <label>
             <input

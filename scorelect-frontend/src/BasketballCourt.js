@@ -1453,9 +1453,9 @@ const toggleScreenshotModal = () => {
             )}
           </div>
           <div className="form-group">
-            <label>Foot:</label>
+            <label>Hand:</label>
             <select name="foot" value={formData.foot} onChange={handleChange}>
-              <option value="custom">Add New Foot</option>
+              <option value="custom">Add New Hand</option>
               {feet.map(foot => <option key={foot} value={foot}>{foot}</option>)}
             </select>
             {formData.foot === 'custom' && (

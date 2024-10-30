@@ -20,7 +20,11 @@ import {
 import SearchIcon from '@mui/icons-material/Search';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import DescriptionIcon from '@mui/icons-material/Description';
+import BballCollectMain from './images/basketball_collect_main.png';
 import SoccerCollectMain from './images/soccer_collect_main.png';
+import GAACollectMain from './images/gaa_collect_main.png';
+import AMFCollectMain from './images/amfootball_collect_main.png';
+
 
 
 // Styled Components
@@ -65,7 +69,7 @@ const tutorialsData = [
     description: 'A guide to collecting and analyzing basketball stats for non-professional games.',
     category: 'basketball',
     type: 'blog',
-    thumbnail: '/images/basketball_stats.jpg',
+    thumbnail: BballCollectMain,
     link: '/blog/basketball-statistics',
   },
   {
@@ -83,7 +87,7 @@ const tutorialsData = [
   description: 'A guide to collecting and analyzing GAA stats for any game.',
   category: 'gaa',
   type: 'blog',
-  thumbnail: SoccerCollectMain,
+  thumbnail: GAACollectMain,
   link: '/blog/GAACollect',
 },
 {
@@ -92,7 +96,7 @@ const tutorialsData = [
   description: 'A guide to collecting and analyzing American Footballs stats for any game.',
   category: 'american_football',
   type: 'blog',
-  thumbnail: SoccerCollectMain,
+  thumbnail: AMFCollectMain,
   link: '/blog/AmericanFootballCollect',
 },
   // Add more tutorial objects here

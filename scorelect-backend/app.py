@@ -324,67 +324,29 @@ def load_games():
     try:
         data = request.json  # Get the JSON data from the request
         user_id = data.get('uid')  # Extract the user ID
-        dataset_name = data.get('datasetName')  # Extract the dataset name (optional)
-    
+
         # Validate if user ID is provided
         if not user_id:
             logging.error("UID not provided for loading games.")
             return jsonify({'error': 'UID is required.'}), 400
-    
+
         # Reference the saved games collection in Firestore for the user
         games_ref = db.collection('savedGames').document(user_id).collection('games')
-    
-        # Initialize query based on whether datasetName is provided
-        if dataset_name:
-            query = games_ref.where('datasetName', '==', dataset_name)
-        else:
-            query = games_ref  # Fetch all games if no datasetName is specified
-    
-        games_snapshot = query.stream()
+
+        games_snapshot = games_ref.stream()
         games = []  # Initialize an empty list to hold the games
-    
+
         # Iterate over the documents in the games collection
         for doc in games_snapshot:
             game_data = doc.to_dict()  # Convert each document to a dictionary
             game_data['gameName'] = doc.id  # Add the document ID as the game name
             games.append(game_data)  # Add the game data to the list
-    
-        logging.info(f"Loaded {len(games)} games for user {user_id} with dataset '{dataset_name}'.")
+
+        logging.info(f"Loaded {len(games)} games for user {user_id}.")
         return jsonify(games), 200  # Return the list of games in JSON
     except Exception as e:
         logging.error(f"Error loading games: {str(e)}")
         return jsonify({'error': str(e)}), 400
-
-# Endpoint to delete a single game for a user
-@app.route('/delete-game', methods=['POST'])
-def delete_game():
-    try:
-        data = request.json  # Get the JSON data from the request
-        user_id = data.get('uid')  # Extract the user ID
-        game_id = data.get('gameId')  # Extract the game ID
-
-        # Validate if required fields are provided
-        if not user_id or not game_id:
-            logging.error("UID or gameId not provided for game deletion.")
-            return jsonify({'error': 'UID and gameId are required.'}), 400
-
-        # Reference to the specific game document
-        game_doc_ref = db.collection('savedGames').document(user_id).collection('games').document(game_id)
-
-        # Check if the game exists
-        game_doc = game_doc_ref.get()
-        if not game_doc.exists:
-            logging.warning(f"Game '{game_id}' not found for user '{user_id}'.")
-            return jsonify({'error': f"Game '{game_id}' not found."}), 404
-
-        # Delete the game
-        game_doc_ref.delete()
-
-        logging.info(f"Deleted game '{game_id}' for user '{user_id}'.")
-        return jsonify({'success': True, 'message': f"Game '{game_id}' deleted successfully."}), 200
-    except Exception as e:
-        logging.error(f"Error deleting game: {str(e)}")
-        return jsonify({'error': str(e)}), 500
 
 # Endpoint to delete an entire dataset (all games within a dataset) for a user
 @app.route('/delete-dataset', methods=['POST'])
@@ -1540,6 +1502,126 @@ def delete_published_dataset():
     except Exception as e:
         logging.error(f"Error deleting published dataset: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/list-published-datasets', methods=['POST'])
+def list_published_datasets():
+    try:
+        data = request.json
+        uid = data.get('uid')
+        
+        if not uid:
+            logging.error("UID not provided for listing published datasets.")
+            return jsonify({'error': 'UID is required.'}), 400
+
+        datasets_ref = db.collection('datasets').where('creator_uid', '==', uid)
+        datasets_snapshot = datasets_ref.stream()
+
+        dataset_names = [doc.to_dict().get('name') for doc in datasets_snapshot]
+
+        logging.info(f"Listed published datasets for user {uid}: {dataset_names}")
+        return jsonify({'datasets': dataset_names}), 200
+    except Exception as e:
+        logging.error(f"Error listing published datasets: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/get-dataset-details', methods=['POST'])
+def get_dataset_details():
+    try:
+        data = request.json
+        dataset_name = data.get('datasetName')
+        uid = data.get('uid')
+
+        if not dataset_name or not uid:
+            logging.error("Dataset name or UID not provided for fetching details.")
+            return jsonify({'error': 'Dataset name and UID are required.'}), 400
+
+        # Fetch the dataset document from Firestore
+        datasets_ref = db.collection('datasets')
+        query = datasets_ref.where('name', '==', dataset_name).where('creator_uid', '==', uid).limit(1)
+        docs = query.stream()
+        dataset_doc = next(docs, None)
+
+        if not dataset_doc:
+            logging.error(f"Dataset '{dataset_name}' not found for user '{uid}'.")
+            return jsonify({'error': 'Dataset not found.'}), 404
+
+        dataset = dataset_doc.to_dict()
+        dataset['id'] = dataset_doc.id
+
+        return jsonify(dataset), 200
+
+    except Exception as e:
+        logging.error(f"Error fetching dataset details: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/update-dataset', methods=['POST'])
+def update_dataset():
+    try:
+        data = request.json
+        dataset_name = data.get('datasetName')
+        name = data.get('name')
+        description = data.get('description')
+        preview_snippet = data.get('preview_snippet')
+        category = data.get('category')
+        uid = data.get('uid')
+
+        if not all([dataset_name, name, description, category, uid]):
+            logging.error("Incomplete dataset update data provided.")
+            return jsonify({'error': 'All fields are required.'}), 400
+
+        # Fetch the dataset document from Firestore
+        datasets_ref = db.collection('datasets')
+        query = datasets_ref.where('name', '==', dataset_name).where('creator_uid', '==', uid).limit(1)
+        docs = query.stream()
+        dataset_doc = next(docs, None)
+
+        if not dataset_doc:
+            logging.error(f"Dataset '{dataset_name}' not found for user '{uid}'.")
+            return jsonify({'error': 'Dataset not found.'}), 404
+
+        dataset_id = dataset_doc.id
+
+        # Update the dataset document
+        dataset_ref = db.collection('datasets').document(dataset_id)
+        dataset_ref.update({
+            'name': name,
+            'description': description,
+            'preview_snippet': preview_snippet,
+            'category': category,
+            'updated_at': firestore.SERVER_TIMESTAMP
+        })
+
+        # Sync the games from 'savedGames' to 'datasets/{dataset_id}/games'
+        # First, delete existing games in the dataset's 'games' subcollection
+        games_ref = dataset_ref.collection('games')
+        games_docs = games_ref.stream()
+        for game_doc in games_docs:
+            game_doc.reference.delete()
+
+        # Copy current games from user's 'savedGames' collection
+        user_games_ref = db.collection('savedGames').document(uid).collection('games').where('datasetName', '==', dataset_name)
+        user_games_docs = user_games_ref.stream()
+        batch = db.batch()
+        for game_doc in user_games_docs:
+            game_data = game_doc.to_dict()
+            # Remove any user-specific data if necessary
+            # game_data.pop('some_user_field', None)
+
+            # Write to 'datasets/{dataset_id}/games/{game_doc.id}'
+            new_game_ref = dataset_ref.collection('games').document(game_doc.id)
+            batch.set(new_game_ref, game_data)
+
+        # Commit the batch write
+        batch.commit()
+
+        logging.info(f"Dataset '{dataset_id}' updated by user '{uid}' with new games.")
+        return jsonify({'success': True, 'message': 'Dataset updated successfully.'}), 200
+
+    except Exception as e:
+        logging.error(f"Error updating dataset: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 
 # Run the Flask app on port 5001 in debug mode
 if __name__ == '__main__':

@@ -6,14 +6,15 @@ import Swal from 'sweetalert2';
 import './SavedGames.css';
 import { GameContext } from './GameContext';
 import PropTypes from 'prop-types';
-import PublishDataset from './PublishDataset'; // Import the PublishDataset component
+import PublishDataset from './PublishDataset';
+import UpdateDataset from './UpdateDataset'; // Import the UpdateDataset component
 
 /**
  * SavedGames Component
- * 
- * This component fetches and displays the user's saved games, allowing them to load, delete, download, or publish datasets.
- * It integrates the PublishDataset component for publishing datasets.
- * 
+ *
+ * This component fetches and displays the user's saved games, allowing them to load, delete, download, publish, or update datasets.
+ * It integrates the PublishDataset and UpdateDataset components for dataset management.
+ *
  * Props:
  * - userType (string): The type of user (e.g., 'free', 'premium').
  * - onLoadGame (function): Function to handle loading a game, provided by the parent component.
@@ -24,8 +25,13 @@ const SavedGames = ({ userType, onLoadGame }) => {
   const { setLoadedCoords } = useContext(GameContext);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
+
+  // State for PublishDataset modal
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
   const [selectedDataset, setSelectedDataset] = useState(null);
+
+  // State for UpdateDataset modal
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
 
   const apiUrl = process.env.REACT_APP_API_URL;
 
@@ -58,13 +64,34 @@ const SavedGames = ({ userType, onLoadGame }) => {
       const gamesList = await response.json();
       console.log('Fetched games list:', gamesList);
 
-      // Group games by datasetName
+      // Fetch all published datasets created by the user
+      const datasetsResponse = await fetch(`${apiUrl}/list-published-datasets`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await user.getIdToken()}`,
+        },
+        body: JSON.stringify({ uid: user.uid }),
+      });
+
+      if (!datasetsResponse.ok) {
+        throw new Error('Failed to fetch published datasets.');
+      }
+
+      const publishedDatasetsData = await datasetsResponse.json();
+      const publishedDatasetNames = new Set(publishedDatasetsData.datasets);
+
+      // Group games by datasetName and include published status
       const groupedDatasets = gamesList.reduce((acc, game) => {
         const dataset = game.datasetName || 'Default';
         if (!acc[dataset]) {
-          acc[dataset] = [];
+          acc[dataset] = { games: [], isPublished: false };
         }
-        acc[dataset].push(game);
+        acc[dataset].games.push(game);
+        // Check if the dataset is published
+        if (publishedDatasetNames.has(dataset)) {
+          acc[dataset].isPublished = true;
+        }
         return acc;
       }, {});
 
@@ -87,7 +114,7 @@ const SavedGames = ({ userType, onLoadGame }) => {
 
   /**
    * Handles loading a selected game.
-   * 
+   *
    * @param {Object} game - The game object to load.
    */
   const handleLoadGame = async (game) => {
@@ -107,7 +134,7 @@ const SavedGames = ({ userType, onLoadGame }) => {
 
   /**
    * Handles deleting a single game.
-   * 
+   *
    * @param {string} gameId - The unique identifier of the game to delete.
    * @param {string} gameName - The name of the game to delete (for display purposes).
    */
@@ -146,8 +173,10 @@ const SavedGames = ({ userType, onLoadGame }) => {
             setDatasets((prevDatasets) => {
               const updatedDatasets = { ...prevDatasets };
               for (const dataset in updatedDatasets) {
-                updatedDatasets[dataset] = updatedDatasets[dataset].filter((game) => game.gameId !== gameId);
-                if (updatedDatasets[dataset].length === 0) {
+                updatedDatasets[dataset].games = updatedDatasets[dataset].games.filter(
+                  (game) => game.gameId !== gameId
+                );
+                if (updatedDatasets[dataset].games.length === 0) {
                   delete updatedDatasets[dataset];
                 }
               }
@@ -166,7 +195,7 @@ const SavedGames = ({ userType, onLoadGame }) => {
 
   /**
    * Handles downloading a dataset as a JSON file.
-   * 
+   *
    * @param {string} datasetName - The name of the dataset to download.
    * @param {Array} games - The list of games within the dataset.
    */
@@ -211,7 +240,7 @@ const SavedGames = ({ userType, onLoadGame }) => {
 
   /**
    * Handles deleting an entire dataset along with all its games.
-   * 
+   *
    * @param {string} datasetName - The name of the dataset to delete.
    */
   const handleDeleteDataset = async (datasetName) => {
@@ -264,7 +293,7 @@ const SavedGames = ({ userType, onLoadGame }) => {
 
   /**
    * Handles opening the PublishDataset modal for a specific dataset.
-   * 
+   *
    * @param {string} datasetName - The name of the dataset to publish.
    */
   const handlePublishDataset = (datasetName) => {
@@ -286,6 +315,33 @@ const SavedGames = ({ userType, onLoadGame }) => {
   const handlePublishSuccess = () => {
     Swal.fire('Published!', `Dataset "${selectedDataset}" has been published successfully.`, 'success');
     closePublishModal();
+    fetchSavedGames(); // Refresh the saved games list
+  };
+
+  /**
+   * Handles opening the UpdateDataset modal for a specific dataset.
+   *
+   * @param {string} datasetName - The name of the dataset to update.
+   */
+  const handleUpdateDataset = (datasetName) => {
+    setSelectedDataset(datasetName);
+    setIsUpdateModalOpen(true);
+  };
+
+  /**
+   * Closes the UpdateDataset modal.
+   */
+  const closeUpdateModal = () => {
+    setIsUpdateModalOpen(false);
+    setSelectedDataset(null);
+  };
+
+  /**
+   * Callback function to handle successful dataset update.
+   */
+  const handleUpdateSuccess = () => {
+    Swal.fire('Updated!', `Dataset "${selectedDataset}" has been updated successfully.`, 'success');
+    closeUpdateModal();
     fetchSavedGames(); // Refresh the saved games list
   };
 
@@ -321,6 +377,18 @@ const SavedGames = ({ userType, onLoadGame }) => {
         />
       )}
 
+      {/* Update Dataset Modal */}
+      {isUpdateModalOpen && selectedDataset && (
+        <UpdateDataset
+          isOpen={isUpdateModalOpen}
+          onClose={closeUpdateModal}
+          datasetName={selectedDataset}
+          onUpdateSuccess={handleUpdateSuccess}
+          apiUrl={apiUrl}
+          userType={userType}
+        />
+      )}
+
       {userType === 'free' ? (
         <p>Please upgrade to access saved games.</p>
       ) : (
@@ -328,62 +396,76 @@ const SavedGames = ({ userType, onLoadGame }) => {
           {Object.keys(datasets).length === 0 ? (
             <p>No saved games available.</p>
           ) : (
-            Object.entries(datasets).map(([datasetName, games]) => (
-              <div key={datasetName} className="dataset-section">
-                <div className="dataset-header">
-                  <h3>Dataset: {datasetName}</h3>
-                  <div className="dataset-actions">
-                    <button
-                      className="download-dataset-button"
-                      onClick={() => handleDownloadDataset(datasetName, games)}
-                    >
-                      Download Dataset
-                    </button>
-                    <button
-                      className="publish-dataset-button"
-                      onClick={() => handlePublishDataset(datasetName)}
-                    >
-                      Publish Dataset
-                    </button>
-                    <button
-                      className="delete-dataset-button"
-                      onClick={() => handleDeleteDataset(datasetName)}
-                    >
-                      Delete Dataset
-                    </button>
+            Object.entries(datasets).map(([datasetName, datasetInfo]) => {
+              const { games, isPublished } = datasetInfo;
+              return (
+                <div key={datasetName} className="dataset-section">
+                  <div className="dataset-header">
+                    <h3>Dataset: {datasetName}</h3>
+                    <div className="dataset-actions">
+                      <button
+                        className="download-dataset-button"
+                        onClick={() => handleDownloadDataset(datasetName, games)}
+                      >
+                        Download Dataset
+                      </button>
+                      {isPublished ? (
+                        <button
+                          className="update-dataset-button"
+                          onClick={() => handleUpdateDataset(datasetName)}
+                        >
+                          Update Dataset
+                        </button>
+                      ) : (
+                        <button
+                          className="publish-dataset-button"
+                          onClick={() => handlePublishDataset(datasetName)}
+                        >
+                          Publish Dataset
+                        </button>
+                      )}
+                      <button
+                        className="delete-dataset-button"
+                        onClick={() => handleDeleteDataset(datasetName)}
+                      >
+                        Delete Dataset
+                      </button>
+                    </div>
                   </div>
+                  {games.length === 0 ? (
+                    <p>No games in this dataset.</p>
+                  ) : (
+                    <ul className="saved-games-list">
+                      {games.map((game) => {
+                        console.log('Rendering game:', game);
+                        return (
+                          <li key={game.gameId || game.gameName} className="saved-game-item">
+                            <div className="game-info">
+                              <span className="game-name">{game.gameName}</span>
+                              <span className="game-date">
+                                {game.sport ? `${game.sport} - ` : ''}
+                                {game.matchDate ? new Date(game.matchDate).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="game-actions">
+                              <button className="load-button" onClick={() => handleLoadGame(game)}>
+                                Load
+                              </button>
+                              <button
+                                className="delete-button"
+                                onClick={() => handleDeleteGame(game.gameId || game.gameName, game.gameName)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </div>
-                {games.length === 0 ? (
-                  <p>No games in this dataset.</p>
-                ) : (
-                  <ul className="saved-games-list">
-                    {games.map((game) => {
-                      console.log('Rendering game:', game);
-                      return (
-                        <li key={game.gameId || game.gameName} className="saved-game-item">
-                          <div className="game-info">
-                            <span className="game-name">{game.gameName}</span>
-                            <span className="game-date">
-                              {game.sport ? `${game.sport} - ` : ''}
-                              {game.matchDate ? new Date(game.matchDate).toLocaleDateString() : 'N/A'}
-                            </span>
-                          </div>
-                          <div className="game-actions">
-                            <button className="load-button" onClick={() => handleLoadGame(game)}>Load</button>
-                            <button
-                              className="delete-button"
-                              onClick={() => handleDeleteGame(game.gameId || game.gameName, game.gameName)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            ))
+              );
+            })
           )}
         </>
       )}

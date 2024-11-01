@@ -125,7 +125,7 @@
     gap: 10px;
 }
 
-.load-button, .delete-button {
+.load-button, .delete-button, .update-dataset-button {
     padding: 8px 12px;
     font-size: 14px;
     color: #fff;
@@ -149,6 +149,14 @@
 
 .delete-button:hover {
     background: #c82333;
+}
+
+.update-dataset-button {
+    background: #fd7e14; /* Orange */
+}
+
+.update-dataset-button:hover {
+    background: #e8590c;
 }
 
 /* Styling for error messages */

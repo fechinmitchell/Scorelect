@@ -396,38 +396,65 @@ def download_dataset():
         data = request.json  # Get the JSON data from the request
         user_id = data.get('uid')  # Extract the user ID
         dataset_name = data.get('datasetName')  # Extract the dataset name
-    
+
         # Validate if required fields are provided
         if not user_id or not dataset_name:
             logging.error("UID or datasetName not provided for dataset download.")
             return jsonify({'error': 'UID and datasetName are required.'}), 400
-    
+
         # Reference to the user's games collection
         games_ref = db.collection('savedGames').document(user_id).collection('games')
-    
+
         # Query for games with the specified datasetName
         query = games_ref.where('datasetName', '==', dataset_name)
         games_snapshot = query.stream()
-    
-        games_list = []
-    
+
+        games = []
+
         for game_doc in games_snapshot:
             game_data = game_doc.to_dict()
-            game_data['gameName'] = game_doc.id  # Include the game name
-            games_list.append(game_data)
-    
-        if not games_list:
+            game_name = game_doc.id
+            match_date = game_data.get('matchDate')
+            sport = game_data.get('sport')
+            game_actions = game_data.get('gameData', [])
+
+            game_info = {
+                'gameName': game_name,
+                'matchDate': match_date,
+                'sport': sport,
+                'gameData': game_actions
+            }
+
+            games.append(game_info)
+
+        if not games:
             logging.warning(f"No games found under dataset '{dataset_name}' for user {user_id}.")
-            return jsonify({'message': f'No games found under dataset "{dataset_name}".'}), 404
-    
-        # Serialize the games to JSON
-        json_data = json.dumps(games_list, indent=2)
-    
+            return jsonify({'error': f'No games found under dataset "{dataset_name}".'}), 404
+
+        # Prepare the dataset metadata
+        dataset = {
+            'name': dataset_name,
+            'description': '',  # You might not have a description in savedGames, set to empty or fetch if available
+            'price': 0.0,
+            'category': '',  # Set category if available
+            'created_at': None,  # Set created_at if available
+            'updated_at': None  # Set updated_at if available
+        }
+
+        # Prepare JSON data for download
+        download_data = {
+            'dataset': dataset,
+            'games': games
+        }
+
+        # Serialize the data to JSON
+        json_data = json.dumps(download_data, default=firestore_to_json, indent=2)
+
         # Create a Flask response with the JSON data as a file
         response = make_response(json_data)
-        response.headers['Content-Disposition'] = f'attachment; filename={dataset_name}_games.json'
+        response.headers['Content-Disposition'] = f'attachment; filename={dataset_name.replace(" ", "_")}_data.json'
         response.mimetype = 'application/json'
-    
+
         logging.info(f"Dataset '{dataset_name}' for user {user_id} downloaded successfully.")
         return response
     except Exception as e:
@@ -1377,13 +1404,19 @@ def download_published_dataset():
         games = []
         for game_doc in games_snapshot:
             game_data = game_doc.to_dict()
-            game_data['gameName'] = game_doc.id
-            actions = game_data.get('gameData', [])
-            
-            if isinstance(actions, list):
-                games.extend(actions)
-            else:
-                games.append(actions)
+            game_name = game_doc.id
+            match_date = game_data.get('matchDate')
+            sport = game_data.get('sport')
+            game_actions = game_data.get('gameData', [])
+
+            game_info = {
+                'gameName': game_name,
+                'matchDate': match_date,
+                'sport': sport,
+                'gameData': game_actions
+            }
+
+            games.append(game_info)
 
         # Check if any games were found
         if not games:

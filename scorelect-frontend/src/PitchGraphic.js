@@ -1016,16 +1016,38 @@ const handleSaveToDataset = async () => {
     }
   
     // Proceed with downloading data
-    const jsonData = JSON.stringify(coords, null, 2);
+  
+    const datasetName = selectedDataset || newDatasetName || 'My Dataset';
+  
+    const downloadData = {
+      dataset: {
+        name: datasetName,
+        description: '',
+        price: 0.0,
+        category: 'GAA',
+        created_at: null,
+        updated_at: null
+      },
+      games: [
+        {
+          gameName: gameName || 'Unnamed Game',
+          matchDate: matchDate || null,
+          sport: 'GAA',
+          gameData: coords
+        }
+      ]
+    };
+  
+    const jsonData = JSON.stringify(downloadData, null, 2);
     const blob = new Blob([jsonData], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'coordinates.json';
+    a.download = `${datasetName.replace(' ', '_')}_${(gameName || 'Unnamed_Game').replace(' ', '_')}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  };
+  };  
   
 
   const handleDownloadFilteredData = async () => {
@@ -1043,27 +1065,39 @@ const handleSaveToDataset = async () => {
       );
     });
   
-    const jsonData = JSON.stringify(filteredCoords, null, 2);
+    const datasetName = selectedDataset || newDatasetName || 'My Dataset';
+  
+    const downloadData = {
+      dataset: {
+        name: datasetName,
+        description: '',
+        price: 0.0,
+        category: 'GAA',
+        created_at: null,
+        updated_at: null
+      },
+      games: [
+        {
+          gameName: gameName || 'Unnamed Game',
+          matchDate: matchDate || null,
+          sport: 'GAA',
+          gameData: filteredCoords
+        }
+      ]
+    };
+  
+    const jsonData = JSON.stringify(downloadData, null, 2);
     const blob = new Blob([jsonData], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'filtered_coordinates.json';
+    a.download = `${datasetName.replace(' ', '_')}_${(gameName || 'Unnamed_Game').replace(' ', '_')}_filtered.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
   
     setIsDownloadModalOpen(false);
-  };
-  
-
-  const handleAddAction = (newAction, newColor, newType) => {
-    if (!actionCodes.includes(newAction)) {
-      setActionButtons([...actionButtons, { label: newAction.charAt(0).toUpperCase() + newAction.slice(1), value: newAction, color: newColor, type: newType }]);
-      setActionCodes([...actionCodes, newAction]);
-    }
-    setIsAddActionModalOpen(false);
-  };
+  }; 
 
   const renderActionButtons = () => (
     <div className="action-buttons">

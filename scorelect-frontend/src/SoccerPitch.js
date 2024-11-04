@@ -1030,18 +1030,41 @@ const SoccerPitch =() => {
         localStorage.setItem('downloadCount', (downloadsRemaining - 1).toString());
       }
     }
-
-        // Proceed with downloading data
-        const jsonData = JSON.stringify(coords, null, 2);
-        const blob = new Blob([jsonData], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'coordinates.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      };
+  
+    // Proceed with downloading data
+  
+    const datasetName = 'My Dataset';
+  
+    const downloadData = {
+      dataset: {
+        name: datasetName,
+        description: '',
+        price: 0.0,
+        category: 'Soccer',
+        created_at: null,
+        updated_at: null
+      },
+      games: [
+        {
+          gameName: gameName || 'Unnamed Game',
+          matchDate: matchDate || null,
+          sport: 'Soccer',
+          gameData: coords
+        }
+      ]
+    };
+  
+    const jsonData = JSON.stringify(downloadData, null, 2);
+    const blob = new Blob([jsonData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${datasetName.replace(' ', '_')}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+  
   
   
 // Function to handle downloading filtered data
@@ -1060,12 +1083,33 @@ const handleDownloadFilteredData = async () => {
     );
   });
 
-  const jsonData = JSON.stringify(filteredCoords, null, 2);
+  const datasetName = 'My Dataset';
+
+  const downloadData = {
+    dataset: {
+      name: datasetName,
+      description: '',
+      price: 0.0,
+      category: 'Soccer',
+      created_at: null,
+      updated_at: null
+    },
+    games: [
+      {
+        gameName: gameName || 'Unnamed Game',
+        matchDate: matchDate || null,
+        sport: 'Soccer',
+        gameData: filteredCoords
+      }
+    ]
+  };
+
+  const jsonData = JSON.stringify(downloadData, null, 2);
   const blob = new Blob([jsonData], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'filtered_coordinates.json';
+  a.download = `${datasetName.replace(' ', '_')}_filtered.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

@@ -1053,65 +1053,73 @@ const toggleScreenshotModal = () => {
 
   // Function to handle downloading all data
   const handleDownloadData = async () => {
-    if (userType === 'free') {
-      if (downloadsRemaining <= 0) {
-        handlePremiumFeatureAccess('Download Data');
-        return;
-      }
-      // Decrease downloadsRemaining
-      setDownloadsRemaining(downloadsRemaining - 1);
-  
-      const auth = getAuth();
-      const user = auth.currentUser;
-      if (user) {
-        const docRef = doc(firestore, 'users', user.uid);
-        await setDoc(docRef, { downloadsRemaining: downloadsRemaining - 1 }, { merge: true });
-      } else {
-        // Update localStorage for unauthenticated users
-        localStorage.setItem('downloadCount', (downloadsRemaining - 1).toString());
-      }
-    }
-  
-    // Proceed with downloading data
-    const jsonData = JSON.stringify(coords, null, 2);
-    const blob = new Blob([jsonData], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'coordinates.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  // Function to handle downloading filtered data
-  const handleDownloadFilteredData = async () => {
-    if (userType === 'free') {
-      handlePremiumFeatureAccess('Download Filtered Data');
+  if (userType === 'free') {
+    if (downloadsRemaining <= 0) {
+      handlePremiumFeatureAccess('Download Data');
       return;
     }
-  
-    // Proceed with downloading filtered data
-    const filteredCoords = coords.filter((coord) => {
-      return (
-        (downloadTeam ? coord.team === downloadTeam : true) &&
-        (downloadPlayer ? coord.playerName === downloadPlayer : true) &&
-        (downloadAction ? coord.action === downloadAction : true)
+    // Decrease downloadsRemaining
+    setDownloadsRemaining(downloadsRemaining - 1);
+
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      const docRef = doc(firestore, 'users', currentUser.uid);
+      await setDoc(
+        docRef,
+        { downloadsRemaining: downloadsRemaining - 1 },
+        { merge: true }
       );
-    });
-  
-    const jsonData = JSON.stringify(filteredCoords, null, 2);
-    const blob = new Blob([jsonData], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'filtered_coordinates.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  
-    setIsDownloadModalOpen(false);
-  };
+    } else {
+      // Update localStorage for unauthenticated users
+      localStorage.setItem('downloadCount', (downloadsRemaining - 1).toString());
+    }
+  }
+
+  // Proceed with downloading data
+  const jsonData = JSON.stringify(coords, null, 2);
+  const blob = new Blob([jsonData], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+
+  // Create a temporary anchor element and trigger the download
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'coordinates.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+};
+
+// Function to handle downloading filtered data
+const handleDownloadFilteredData = async () => {
+  if (userType === 'free') {
+    handlePremiumFeatureAccess('Download Filtered Data');
+    return;
+  }
+
+  // Proceed with downloading filtered data
+  const filteredCoords = coords.filter((coord) => {
+    return (
+      (downloadTeam ? coord.team === downloadTeam : true) &&
+      (downloadPlayer ? coord.playerName === downloadPlayer : true) &&
+      (downloadAction ? coord.action === downloadAction : true)
+    );
+  });
+
+  const jsonData = JSON.stringify(filteredCoords, null, 2);
+  const blob = new Blob([jsonData], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+
+  // Create a temporary anchor element and trigger the download
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'filtered_coordinates.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  setIsDownloadModalOpen(false);
+};
 
   const handleAddAction = (newAction, newColor, newType) => {
     if (!actionCodes.includes(newAction)) {

@@ -30,6 +30,7 @@
     "react-konva": "^18.2.10",
     "react-modal": "^3.16.1",
     "react-papaparse": "^4.4.0",
+    "react-rnd": "^10.4.13",
     "react-router-dom": "^6.26.2",
     "react-scripts": "5.0.1",
     "react-spring": "^9.7.4",

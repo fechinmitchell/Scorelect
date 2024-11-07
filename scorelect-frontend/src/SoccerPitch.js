@@ -14,7 +14,7 @@ import './SavedGames.css';
 import './AggregatedData.css';
 import { onSnapshot } from 'firebase/firestore'; // Add this import
 import { GameContext } from './GameContext'; // Import GameContext
-
+import { Rnd } from 'react-rnd';
 
 const SoccerPitch =() => {
   const [coords, setCoords] = useState([]);
@@ -504,18 +504,27 @@ const SoccerPitch =() => {
     const stage = e.target.getStage();
     const point = stage.getPointerPosition();
     const newCoord = { x: point.x / xScale, y: point.y / yScale };
-
+  
     if (actionType && actionType.type === 'line') {
-      setCurrentCoords([...currentCoords, newCoord]);
-      if (currentCoords.length === 1) {
-        setFormData({ ...formData, from: currentCoords[0], to: newCoord, type: actionType.value });
+      if (currentCoords.length === 0) {
+        setCurrentCoords([newCoord]); // Start with the first point
+      } else if (currentCoords.length === 1) {
+        const fromCoord = currentCoords[0];
+        const toCoord = newCoord;
+        setFormData({
+          ...formData,
+          from: fromCoord,
+          to: toCoord,
+          type: actionType.value,
+        });
         setOpenLineDialog(true);
+        setCurrentCoords([]); // Reset after capturing the line
       }
     } else if (actionType) {
       setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType.value });
       setOpenDialog(true);
     }
-  };
+  };  
 
   const handleTap = (e) => {
     handleClick(e);
@@ -614,6 +623,7 @@ const SoccerPitch =() => {
     setCurrentCoords([]);
     setCustomInput({ action: '', team: '', position: '', pressure: '', foot: '', color: '#000000', type: 'marker' });
     setIsContextMenuOpen(false);
+    setActionType(''); // Reset actionType here
   };
 
   const handleChange = (e) => {
@@ -1395,182 +1405,258 @@ const removePlayerFromTeam2 = (index) => {
     </div>
   </div>
 </div>
+</div>
 
       {openDialog && (
+      <Rnd
+        default={{
+          x: window.innerWidth / 2 - 200,
+          y: window.innerHeight / 2 - 200,
+          width: 400,
+          height: 500,
+        }}
+        minWidth={300}
+        minHeight={400}
+        bounds="window"
+        enableResizing={{
+          top: true,
+          right: true,
+          bottom: true,
+          left: true,
+          topRight: true,
+          bottomRight: true,
+          bottomLeft: true,
+          topLeft: true,
+        }}
+        dragHandleClassName="drag-handle"
+        resizeHandleStyles={{
+          top: {
+            cursor: 'n-resize',
+            height: '10px',
+            top: '-5px',
+          },
+          right: {
+            cursor: 'e-resize',
+            width: '10px',
+            right: '-5px',
+          },
+          bottom: {
+            cursor: 's-resize',
+            height: '10px',
+            bottom: '-5px',
+          },
+          left: {
+            cursor: 'w-resize',
+            width: '10px',
+            left: '-5px',
+          },
+          topRight: {
+            cursor: 'ne-resize',
+            width: '20px',
+            height: '20px',
+            right: '-10px',
+            top: '-10px',
+          },
+          bottomRight: {
+            cursor: 'se-resize',
+            width: '20px',
+            height: '20px',
+            right: '-10px',
+            bottom: '-10px',
+          },
+          bottomLeft: {
+            cursor: 'sw-resize',
+            width: '20px',
+            height: '20px',
+            left: '-10px',
+            bottom: '-10px',
+          },
+          topLeft: {
+            cursor: 'nw-resize',
+            width: '20px',
+            height: '20px',
+            left: '-10px',
+            top: '-10px',
+          },
+        }}
+        style={{ zIndex: 1000 }}
+      >
         <div className="dialog-container">
-          <h3>Enter Action Details</h3>
-          <div className="form-group">
-            <label>Action:</label>
-            <select name="action" value={formData.action} onChange={handleChange}>
-              <option value="custom">Add New Action</option>
-              {recentActions.map(action => <option key={action} value={action}>{action}</option>)}
-              {actionCodes.map(action => <option key={action} value={action}>{action}</option>)}
-            </select>
-            {formData.action === 'custom' && (
-              <div className="form-group">
-                <label>New Action:</label>
-                <input type="text" name="customAction" value={customInput.action} onChange={(e) => setCustomInput({ ...customInput, action: e.target.value })} />
-              </div>
-            )}
+          <div className="dialog-header drag-handle">
+            <h3>Enter Action Details</h3>
+            <button className="close-button" onClick={handleCloseDialog}>
+              &#10005;
+            </button>
           </div>
-          <div className="form-group">
-            <label>Team:</label>
-            <select name="team" value={formData.team} onChange={handleChange}>
-              <option value="custom">Add New Team</option>
-              {recentTeams.map(team => <option key={team} value={team}>{team}</option>)}
-              {teams.map(team => <option key={team} value={team}>{team}</option>)}
-            </select>
-            {formData.team === 'custom' && (
-              <div className="form-group">
-                <label>New Team Name:</label>
-                <input type="text" name="customTeam" value={customInput.team} onChange={(e) => setCustomInput({ ...customInput, team: e.target.value })} />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Player Name:</label>
-            <input type="text" name="playerName" value={formData.playerName} onChange={handleChange} />
-          </div>
-          <div className="form-group">
-            <label>Player Number:</label>
-            <input type="text" name="player" value={formData.player} onChange={handleChange} />
-          </div>
-          <div className="form-group">
-            <label>Position:</label>
-            <select name="position" value={formData.position} onChange={handleChange}>
-              <option value="custom">Add New Position</option>
-              {positions.map(position => <option key={position} value={position}>{position}</option>)}
-            </select>
-            {formData.position === 'custom' && (
-              <div className="form-group">
-                <label>New Position:</label>
-                <input type="text" name="customPosition" value={customInput.position} onChange={(e) => setCustomInput({ ...customInput, position: e.target.value })} />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Pressure:</label>
-            <select name="pressure" value={formData.pressure} onChange={handleChange}>
-              <option value="custom">Add New Pressure</option>
-              {pressures.map(pressure => <option key={pressure} value={pressure}>{pressure}</option>)}
-            </select>
-            {formData.pressure === 'custom' && (
-              <div className="form-group">
-                <label>New Pressure:</label>
-                <input type="text" name="customPressure" value={customInput.pressure} onChange={(e) => setCustomInput({ ...customInput, pressure: e.target.value })} />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Foot:</label>
-            <select name="foot" value={formData.foot} onChange={handleChange}>
-              <option value="custom">Add New Foot</option>
-              {feet.map(foot => <option key={foot} value={foot}>{foot}</option>)}
-            </select>
-            {formData.foot === 'custom' && (
-              <div className="form-group">
-                <label>New Foot:</label>
-                <input type="text" name="customFoot" value={customInput.foot} onChange={(e) => setCustomInput({ ...customInput, foot: e.target.value })} />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Minute:</label>
-            <input type="text" name="minute" value={formData.minute} onChange={handleChange} />
+          <div className="form-content">
+            <div className="form-group">
+              <label>Action:</label>
+              <select name="action" value={formData.action} onChange={handleChange}>
+                <option value="custom">Add New Action</option>
+                {recentActions.map((action) => (
+                  <option key={action} value={action}>
+                    {action}
+                  </option>
+                ))}
+                {actionCodes.map((action) => (
+                  <option key={action} value={action}>
+                    {action}
+                  </option>
+                ))}
+              </select>
+              {formData.action === 'custom' && (
+                <div className="form-group">
+                  <label>New Action:</label>
+                  <input
+                    type="text"
+                    name="customAction"
+                    value={customInput.action}
+                    onChange={(e) =>
+                      setCustomInput({ ...customInput, action: e.target.value })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+            <div className="form-group">
+              <label>Team:</label>
+              <select name="team" value={formData.team} onChange={handleChange}>
+                <option value="custom">Add New Team</option>
+                {recentTeams.map((team) => (
+                  <option key={team} value={team}>
+                    {team}
+                  </option>
+                ))}
+                {teams.map((team) => (
+                  <option key={team} value={team}>
+                    {team}
+                  </option>
+                ))}
+              </select>
+              {formData.team === 'custom' && (
+                <div className="form-group">
+                  <label>New Team Name:</label>
+                  <input
+                    type="text"
+                    name="customTeam"
+                    value={customInput.team}
+                    onChange={(e) =>
+                      setCustomInput({ ...customInput, team: e.target.value })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+            <div className="form-group">
+              <label>Player Name:</label>
+              <input
+                type="text"
+                name="playerName"
+                value={formData.playerName}
+                onChange={handleChange}
+              />
+            </div>
+            <div className="form-group">
+              <label>Player Number:</label>
+              <input
+                type="text"
+                name="player"
+                value={formData.player}
+                onChange={handleChange}
+              />
+            </div>
+            <div className="form-group">
+              <label>Position:</label>
+              <select name="position" value={formData.position} onChange={handleChange}>
+                <option value="custom">Add New Position</option>
+                {positions.map((position) => (
+                  <option key={position} value={position}>
+                    {position}
+                  </option>
+                ))}
+              </select>
+              {formData.position === 'custom' && (
+                <div className="form-group">
+                  <label>New Position:</label>
+                  <input
+                    type="text"
+                    name="customPosition"
+                    value={customInput.position}
+                    onChange={(e) =>
+                      setCustomInput({ ...customInput, position: e.target.value })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+            <div className="form-group">
+              <label>Pressure:</label>
+              <select name="pressure" value={formData.pressure} onChange={handleChange}>
+                <option value="custom">Add New Pressure</option>
+                {pressures.map((pressure) => (
+                  <option key={pressure} value={pressure}>
+                    {pressure}
+                  </option>
+                ))}
+              </select>
+              {formData.pressure === 'custom' && (
+                <div className="form-group">
+                  <label>New Pressure:</label>
+                  <input
+                    type="text"
+                    name="customPressure"
+                    value={customInput.pressure}
+                    onChange={(e) =>
+                      setCustomInput({ ...customInput, pressure: e.target.value })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+            <div className="form-group">
+              <label>Foot:</label>
+              <select name="foot" value={formData.foot} onChange={handleChange}>
+                <option value="custom">Add New Foot</option>
+                {feet.map((foot) => (
+                  <option key={foot} value={foot}>
+                    {foot}
+                  </option>
+                ))}
+              </select>
+              {formData.foot === 'custom' && (
+                <div className="form-group">
+                  <label>New Hand:</label>
+                  <input
+                    type="text"
+                    name="customFoot"
+                    value={customInput.foot}
+                    onChange={(e) =>
+                      setCustomInput({ ...customInput, foot: e.target.value })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+            <div className="form-group">
+              <label>Minute:</label>
+              <input
+                type="text"
+                name="minute"
+                value={formData.minute}
+                onChange={handleChange}
+              />
+            </div>
           </div>
           <div className="button-container">
-            <button className="button" onClick={handleCloseDialog}>Cancel</button>
-            <button className="button" onClick={handleFormSubmit}>Submit</button>
+            <button className="button" onClick={handleCloseDialog}>
+              Cancel
+            </button>
+            <button className="button" onClick={handleFormSubmit}>
+              Submit
+            </button>
           </div>
         </div>
-      )}
-      {openLineDialog && (
-        <div className="dialog-container">
-          <h3>Enter Action Details for Line</h3>
-          <div className="form-group">
-            <label>Action:</label>
-            <select name="action" value={formData.action} onChange={handleChange}>
-              <option value="custom">Add New Action</option>
-              {recentActions.map(action => <option key={action} value={action}>{action}</option>)}
-              {actionCodes.map(action => <option key={action} value={action}>{action}</option>)}
-            </select>
-            {formData.action === 'custom' && (
-              <div className="form-group">
-                <label>New Action:</label>
-                <input type="text" name="customAction" value={customInput.action} onChange={(e) => setCustomInput({ ...customInput, action: e.target.value })} />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Team:</label>
-            <select name="team" value={formData.team} onChange={handleChange}>
-              <option value="custom">Add New Team</option>
-              {recentTeams.map(team => <option key={team} value={team}>{team}</option>)}
-              {teams.map(team => <option key={team} value={team}>{team}</option>)}
-            </select>
-            {formData.team === 'custom' && (
-              <div className="form-group">
-                <label>New Team Name:</label>
-                <input type="text" name="customTeam" value={customInput.team} onChange={(e) => setCustomInput({ ...customInput, team: e.target.value })} />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Player Name:</label>
-            <input type="text" name="playerName" value={formData.playerName} onChange={handleChange} />
-          </div>
-          <div className="form-group">
-            <label>Player Number:</label>
-            <input type="text" name="player" value={formData.player} onChange={handleChange} />
-          </div>
-          <div className="form-group">
-            <label>Position:</label>
-            <select name="position" value={formData.position} onChange={handleChange}>
-              <option value="custom">Add New Position</option>
-              {positions.map(position => <option key={position} value={position}>{position}</option>)}
-            </select>
-            {formData.position === 'custom' && (
-              <div className="form-group">
-                <label>New Position:</label>
-                <input type="text" name="customPosition" value={customInput.position} onChange={(e) => setCustomInput({ ...customInput, position: e.target.value })} />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Pressure:</label>
-            <select name="pressure" value={formData.pressure} onChange={handleChange}>
-              <option value="custom">Add New Pressure</option>
-              {pressures.map(pressure => <option key={pressure} value={pressure}>{pressure}</option>)}
-            </select>
-            {formData.pressure === 'custom' && (
-              <div className="form-group">
-                <label>New Pressure:</label>
-                <input type="text" name="customPressure" value={customInput.pressure} onChange={(e) => setCustomInput({ ...customInput, pressure: e.target.value })} />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Foot:</label>
-            <select name="foot" value={formData.foot} onChange={handleChange}>
-              <option value="custom">Add New Foot</option>
-              {feet.map(foot => <option key={foot} value={foot}>{foot}</option>)}
-            </select>
-            {formData.foot === 'custom' && (
-              <div className="form-group">
-                <label>New Foot:</label>
-                <input type="text" name="customFoot" value={customInput.foot} onChange={(e) => setCustomInput({ ...customInput, foot: e.target.value })} />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Minute:</label>
-            <input type="text" name="minute" value={formData.minute} onChange={handleChange} />
-          </div>
-          <div className="button-container">
-            <button className="button" onClick={handleCloseLineDialog}>Cancel</button>
-            <button className="button" onClick={handleFormSubmit}>Submit</button>
-          </div>
-        </div>
+      </Rnd>
       )}
       <Modal
         isOpen={isModalOpen}
@@ -2517,8 +2603,6 @@ const removePlayerFromTeam2 = (index) => {
 </Modal>
 
     </div>
-    </div>
-
 
   );
 }

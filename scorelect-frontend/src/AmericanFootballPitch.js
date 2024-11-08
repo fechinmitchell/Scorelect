@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
-import { Stage, Layer, Rect, Line, Circle, Arc, Group, Text } from 'react-konva';
+import { Stage, Layer, Rect, Line, Circle, Arc, Group, Text, Arrow } from 'react-konva';
 import Modal from 'react-modal';
 import Konva from 'konva';
 import html2canvas from 'html2canvas';
@@ -1316,19 +1316,39 @@ const handleSaveToDataset = async () => {
   <Layer>
             {coords.map((coord, index) => {
               if (coord.from && coord.to) {
-                return (
-                  <Line
-                    key={index}
-                    points={[
-                      coord.from.x * xScale,
-                      coord.from.y * yScale,
-                      coord.to.x * xScale,
-                      coord.to.y * yScale
-                    ]}
-                    stroke={getColor(coord.type)}
-                    strokeWidth={2}
-                  />
-                );
+                // Check if the action type is "pass" or "pass incomplete"
+                if (coord.type === 'pass' || coord.type === 'pass incomplete') {
+                  return (
+                    <Arrow
+                      key={index}
+                      points={[
+                        coord.from.x * xScale,
+                        coord.from.y * yScale,
+                        coord.to.x * xScale,
+                        coord.to.y * yScale
+                      ]}
+                      stroke={getColor(coord.type)}
+                      strokeWidth={2}
+                      pointerLength={10} // Length of the arrowhead
+                      pointerWidth={10}  // Width of the arrowhead
+                    />
+                  );
+                } else {
+                  // Render a regular line if the action type is not "pass" or "pass incomplete"
+                  return (
+                    <Line
+                      key={index}
+                      points={[
+                        coord.from.x * xScale,
+                        coord.from.y * yScale,
+                        coord.to.x * xScale,
+                        coord.to.y * yScale
+                      ]}
+                      stroke={getColor(coord.type)}
+                      strokeWidth={2}
+                    />
+                  );
+                }
               }
       return (
         <Group key={index}>

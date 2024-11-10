@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
-import { Stage, Layer, Rect, Line, Circle, Arc, Group, Text } from 'react-konva';
+import { Stage, Layer, Rect, Line, Circle, Arc, Group, Text, Arrow} from 'react-konva';
 import Modal from 'react-modal';
 import Konva from 'konva';
 import html2canvas from 'html2canvas';
@@ -497,23 +497,27 @@ const BasketballCourt = () => {
     const point = stage.getPointerPosition();
     const newCoord = { x: point.x / xScale, y: point.y / yScale };
   
-    if (actionType && actionType.type === 'line') {
+    // Find the current action button to determine its type
+    const currentAction = actionButtons.find(button => button.value === actionType);
+    
+    if (currentAction?.type === 'line') {
       if (currentCoords.length === 0) {
         setCurrentCoords([newCoord]); // Start with the first point
       } else if (currentCoords.length === 1) {
         const fromCoord = currentCoords[0];
         const toCoord = newCoord;
-        setFormData({
+        const lineData = {
           ...formData,
           from: fromCoord,
           to: toCoord,
-          type: actionType.value,
-        });
-        setOpenLineDialog(true);
+          type: actionType,
+        };
+        setCoords([...coords, lineData]); // Add the line to coords immediately
         setCurrentCoords([]); // Reset after capturing the line
+        setOpenLineDialog(true); // Open the dialog for line details
       }
-    } else if (actionType) {
-      setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType.value });
+    } else {
+      setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType });
       setOpenDialog(true);
     }
   };  
@@ -624,8 +628,9 @@ const BasketballCourt = () => {
   };
 
   const handleActionButtonClick = (action) => {
-    setActionType(action);
+    setActionType(action.value);
     setFormData({ ...formData, action: action.value });
+    setCurrentCoords([]); // Reset currentCoords when switching actions
   };
 
   const handleClearMarkers = () => {
@@ -667,7 +672,8 @@ const BasketballCourt = () => {
   
     filteredCoords.forEach((coord) => {
       if (coord.from && coord.to) {
-        const line = new Konva.Line({
+        // Change from Line to Arrow for line-type actions
+        const arrow = new Konva.Arrow({
           points: [
             coord.from.x * xScale,
             coord.from.y * yScale,
@@ -676,8 +682,11 @@ const BasketballCourt = () => {
           ],
           stroke: getColor(coord.type),
           strokeWidth: 2,
+          pointerLength: 10,
+          pointerWidth: 10,
+          fill: getColor(coord.type)
         });
-        layer.add(line);
+        layer.add(arrow);
       } else {
         const shape = new Konva.Circle({
           x: coord.x * xScale,
@@ -1044,7 +1053,7 @@ const toggleScreenshotModal = () => {
 
   const getColor = (type) => {
     const button = actionButtons.find(button => button.value === type);
-    return button ? button.color : 'black';
+    return button ? button.color : 'black'; // Default to black if no match is found
   };
 
   const handleDeleteAction = (actionToDelete) => {
@@ -1343,6 +1352,10 @@ const handleDownloadFilteredData = async () => {
           ref={stageRef}
           scaleX={zoomLevel}
           scaleY={zoomLevel}
+          preventDefault={false}
+          style={{
+            pointerEvents: openDialog || openLineDialog || isContextMenuOpen ? 'none' : 'auto',
+          }}
         >
           {renderBasketballCourt()}
           {isContextMenuOpen && renderContextMenu()}
@@ -1350,7 +1363,7 @@ const handleDownloadFilteredData = async () => {
             {coords.map((coord, index) => {
               if (coord.from && coord.to) {
                 return (
-                  <Line
+                  <Arrow
                     key={index}
                     points={[
                       coord.from.x * xScale,
@@ -1360,46 +1373,24 @@ const handleDownloadFilteredData = async () => {
                     ]}
                     stroke={getColor(coord.type)}
                     strokeWidth={2}
+                    pointerLength={10}
+                    pointerWidth={10}
+                  />
+                );
+              } else {
+                return (
+                  <Circle
+                    key={index}
+                    x={coord.x * xScale}
+                    y={coord.y * yScale}
+                    radius={6}
+                    fill={getColor(coord.type)}
                   />
                 );
               }
-      return (
-        <Group key={index}>
-          <Circle
-            x={coord.x * xScale}
-            y={coord.y * yScale}
-            radius={6}
-            fill={getColor(coord.type)}
-          />
-          {displayPlayerNumber && (
-            <Text
-              x={coord.x * xScale}
-              y={coord.y * yScale - 4}  // Adjusted to align the text vertically better
-              text={coord.player}
-              fontSize={8}
-              fill="white"
-              align="center"
-              width={10}  // Set the width to ensure consistent alignment
-              offsetX={coord.player.length === 1 ? 4.5 : 4.5}  // Fine-tuned offset values for better centering
-              />
-          )}
-          {displayPlayerName && (
-            <Text
-              x={coord.x * xScale}
-              y={coord.y * yScale - 16}  // Position the name above the marker
-              text={coord.playerName}
-              fontSize={10}
-              fill="black"
-              align="center"
-              width={coord.playerName.length * 6}  // Adjust the width based on the name length
-              offsetX={(coord.playerName.length * 6) / 2}  // Center the text horizontally
-            />
-          )}
-        </Group>
-      );
-    })}
-  </Layer>
-</Stage>
+            })}
+          </Layer>
+        </Stage>
 <div className="aggregated-data-container">
       <AggregatedData data={aggregateData} />
     </div>
@@ -1658,6 +1649,209 @@ const handleDownloadFilteredData = async () => {
       </Rnd>
       )}
 
+{openLineDialog && (
+      <Rnd
+        default={{
+          x: window.innerWidth / 2 - 200,
+          y: window.innerHeight / 2 - 200,
+          width: 400,
+          height: 400,
+        }}
+        minWidth={300}
+        minHeight={300}
+        bounds="window"
+        enableResizing={{
+          top: true,
+          right: true,
+          bottom: true,
+          left: true,
+          topRight: true,
+          bottomRight: true,
+          bottomLeft: true,
+          topLeft: true,
+        }}
+        style={{ zIndex: 1000 }}
+        dragHandleClassName="drag-handle" // Add this line
+
+      >
+        <div className="dialog-container">
+          <div className="dialog-header drag-handle">
+            <h3>Enter Action Details</h3>
+            <button className="close-button" onClick={handleCloseDialog}>
+              &#10005;
+            </button>
+          </div>
+          <div className="form-content">
+            <div className="form-group">
+              <label>Action:</label>
+              <select name="action" value={formData.action} onChange={handleChange}>
+                <option value="custom">Add New Action</option>
+                {recentActions.map((action) => (
+                  <option key={action} value={action}>
+                    {action}
+                  </option>
+                ))}
+                {actionCodes.map((action) => (
+                  <option key={action} value={action}>
+                    {action}
+                  </option>
+                ))}
+              </select>
+              {formData.action === 'custom' && (
+                <div className="form-group">
+                  <label>New Action:</label>
+                  <input
+                    type="text"
+                    name="customAction"
+                    value={customInput.action}
+                    onChange={(e) =>
+                      setCustomInput({ ...customInput, action: e.target.value })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+            <div className="form-group">
+              <label>Team:</label>
+              <select name="team" value={formData.team} onChange={handleChange}>
+                <option value="custom">Add New Team</option>
+                {recentTeams.map((team) => (
+                  <option key={team} value={team}>
+                    {team}
+                  </option>
+                ))}
+                {teams.map((team) => (
+                  <option key={team} value={team}>
+                    {team}
+                  </option>
+                ))}
+              </select>
+              {formData.team === 'custom' && (
+                <div className="form-group">
+                  <label>New Team Name:</label>
+                  <input
+                    type="text"
+                    name="customTeam"
+                    value={customInput.team}
+                    onChange={(e) =>
+                      setCustomInput({ ...customInput, team: e.target.value })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+            <div className="form-group">
+              <label>Player Name:</label>
+              <input
+                type="text"
+                name="playerName"
+                value={formData.playerName}
+                onChange={handleChange}
+              />
+            </div>
+            <div className="form-group">
+              <label>Player Number:</label>
+              <input
+                type="text"
+                name="player"
+                value={formData.player}
+                onChange={handleChange}
+              />
+            </div>
+            <div className="form-group">
+              <label>Position:</label>
+              <select name="position" value={formData.position} onChange={handleChange}>
+                <option value="custom">Add New Position</option>
+                {positions.map((position) => (
+                  <option key={position} value={position}>
+                    {position}
+                  </option>
+                ))}
+              </select>
+              {formData.position === 'custom' && (
+                <div className="form-group">
+                  <label>New Position:</label>
+                  <input
+                    type="text"
+                    name="customPosition"
+                    value={customInput.position}
+                    onChange={(e) =>
+                      setCustomInput({ ...customInput, position: e.target.value })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+            <div className="form-group">
+              <label>Pressure:</label>
+              <select name="pressure" value={formData.pressure} onChange={handleChange}>
+                <option value="custom">Add New Pressure</option>
+                {pressures.map((pressure) => (
+                  <option key={pressure} value={pressure}>
+                    {pressure}
+                  </option>
+                ))}
+              </select>
+              {formData.pressure === 'custom' && (
+                <div className="form-group">
+                  <label>New Pressure:</label>
+                  <input
+                    type="text"
+                    name="customPressure"
+                    value={customInput.pressure}
+                    onChange={(e) =>
+                      setCustomInput({ ...customInput, pressure: e.target.value })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+            <div className="form-group">
+              <label>Hand:</label>
+              <select name="foot" value={formData.foot} onChange={handleChange}>
+                <option value="custom">Add New Hand</option>
+                {feet.map((foot) => (
+                  <option key={foot} value={foot}>
+                    {foot}
+                  </option>
+                ))}
+              </select>
+              {formData.foot === 'custom' && (
+                <div className="form-group">
+                  <label>New Hand:</label>
+                  <input
+                    type="text"
+                    name="customFoot"
+                    value={customInput.foot}
+                    onChange={(e) =>
+                      setCustomInput({ ...customInput, foot: e.target.value })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+            <div className="form-group">
+              <label>Minute:</label>
+              <input
+                type="text"
+                name="minute"
+                value={formData.minute}
+                onChange={handleChange}
+              />
+            </div>
+          </div>
+          <div className="button-container">
+            <button className="button" onClick={handleCloseDialog}>
+              Cancel
+            </button>
+            <button className="button" onClick={handleFormSubmit}>
+              Submit
+            </button>
+          </div>
+        </div>
+      </Rnd>
+    )}
+
       <Modal
         isOpen={isModalOpen}
         onRequestClose={toggleModal}
@@ -1692,12 +1886,12 @@ const handleDownloadFilteredData = async () => {
                 <strong>Minute:</strong> {coord.minute}<br />
                 {coord.from && coord.to ? (
                   <>
-                    <strong>From X:</strong> {coord.from.x.toFixed(2)}, <strong>From Y:</strong> {coord.from.y.toFixed(2)}<br />
-                    <strong>To X:</strong> {coord.to.x.toFixed(2)}, <strong>To Y:</strong> {coord.to.y.toFixed(2)}
+                    <strong>From X:</strong> {coord.from.x?.toFixed(2) || 'N/A'}, <strong>From Y:</strong> {coord.from.y?.toFixed(2) || 'N/A'}<br />
+                    <strong>To X:</strong> {coord.to.x?.toFixed(2) || 'N/A'}, <strong>To Y:</strong> {coord.to.y?.toFixed(2) || 'N/A'}
                   </>
                 ) : (
                   <>
-                    <strong>X:</strong> {coord.x.toFixed(2)}, <strong>Y:</strong> {coord.y.toFixed(2)}
+                    <strong>X:</strong> {coord.x?.toFixed(2) || 'N/A'}, <strong>Y:</strong> {coord.y?.toFixed(2) || 'N/A'}
                   </>
                 )}
               </li>
@@ -2164,7 +2358,7 @@ const handleDownloadFilteredData = async () => {
               margin: '5px',
               borderRadius: '5px',
               border: '1px solid #ccc',
-              marginRight: '20px',
+              marginRight: '20px'
             }}
           >
             <option value="">All Teams</option>

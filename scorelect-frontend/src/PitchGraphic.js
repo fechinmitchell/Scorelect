@@ -536,6 +536,7 @@ const handleSaveToDataset = async () => {
         setOpenLineDialog(true);
         setCurrentCoords([]); // Reset after capturing the line
       }
+      
     } else if (actionType) {
       setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType.value });
       setOpenDialog(true);
@@ -649,86 +650,56 @@ const handleSaveToDataset = async () => {
     setCoords(coords.slice(0, -1));
   };
 
-  const handleDownloadScreenshot = async () => {
-    if (userType === 'free') {
-      handlePremiumFeatureAccess('Download Screenshot');
-      return;
-    }
-  
-    // Proceed with downloading screenshot
-    const filteredCoords = coords.filter((coord) => {
-      return (
-        (screenshotTeam ? coord.team === screenshotTeam : true) &&
-        (screenshotPlayer ? coord.playerName === screenshotPlayer : true) &&
-        (screenshotAction ? coord.action === screenshotAction : true)
-      );
-    });
-  
+  const handleScreenshot = () => {
     const screenshotLayer = document.createElement('div');
+    screenshotLayer.style.position = 'absolute';
+    screenshotLayer.style.top = '-9999px';
     document.body.appendChild(screenshotLayer);
-  
+
     const stage = new Konva.Stage({
       container: screenshotLayer,
       width: canvasSize.width,
       height: canvasSize.height,
     });
-  
+
     const layer = new Konva.Layer();
     stage.add(layer);
-  
+
+    // Render the pitch
     renderGAAPitchForScreenshot(layer);
-  
-    filteredCoords.forEach((coord) => {
+
+    // Add all markers and arrows
+    coords.forEach((coord) => {
       if (coord.from && coord.to) {
-        const line = new Konva.Line({
+        // Create arrow for line-type actions
+        const arrow = new Konva.Arrow({
           points: [
             coord.from.x * xScale,
             coord.from.y * yScale,
             coord.to.x * xScale,
-            coord.to.y * yScale,
+            coord.to.y * yScale
           ],
           stroke: getColor(coord.type),
           strokeWidth: 2,
+          pointerLength: 10,
+          pointerWidth: 10,
+          fill: getColor(coord.type)
         });
-        layer.add(line);
+        layer.add(arrow);
       } else {
-        const shape = new Konva.Circle({
+        // Create circle for marker-type actions
+        const circle = new Konva.Circle({
           x: coord.x * xScale,
           y: coord.y * yScale,
-          radius: 5,
-          fill: getColor(coord.type),
+          radius: 6,
+          fill: getColor(coord.type)
         });
-        layer.add(shape);
-  
-        if (displayPlayerNumber && coord.player) {
-          const playerNumberText = new Konva.Text({
-            x: coord.x * xScale - 5, // Adjusted x position for better centering
-            y: coord.y * yScale - 4, // Slightly adjusted y position
-            text: coord.player,
-            fontSize: 8,
-            fill: 'white',
-            align: 'center',
-            width: 10, // Fixed width to center the text
-          });
-          layer.add(playerNumberText);
-        }
-  
-        if (displayPlayerName && coord.playerName) {
-          const playerNameText = new Konva.Text({
-            x: coord.x * xScale - 28,
-            y: coord.y * yScale - 16,
-            text: coord.playerName,
-            fontSize: 10,
-            fill: 'black',
-            align: 'center',
-          });
-          layer.add(playerNameText);
-        }
+        layer.add(circle);
       }
     });
-  
+
     layer.draw();
-  
+
     html2canvas(screenshotLayer, {
       width: canvasSize.width,
       height: canvasSize.height,
@@ -739,7 +710,7 @@ const handleSaveToDataset = async () => {
       link.click();
       document.body.removeChild(screenshotLayer);
     });
-  
+
     setIsScreenshotModalOpen(false);
   };
   
@@ -2315,7 +2286,7 @@ const handleSaveToDataset = async () => {
   </div>
   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
     <button
-      onClick={handleDownloadScreenshot}
+      onClick={handleScreenshot}
       style={{
         background: '#007bff',
         color: '#fff',

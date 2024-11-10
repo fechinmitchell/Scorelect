@@ -213,16 +213,15 @@
 /* Dialog overlay to center the dialog at the top */
 .dialog-overlay {
   position: fixed;
-  top: 0; /* Align at the top */
+  top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   display: flex;
-  justify-content: center; /* Center horizontally */
-  align-items: flex-start; /* Align items at the start vertically */
-  padding-top: 20px; /* Add some space from the top */
-  background-color: rgba(0, 0, 0, 0.5); /* Optional: semi-transparent background */
-  z-index: 1000; /* Ensure it appears above other elements */
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
 }
 
 /* Dialog container (Action Modal Styling) */
@@ -231,11 +230,13 @@
   border: 1px solid #000;
   width: 100%;
   max-width: 500px;
-  margin-top: -170px; /* Move up by 100px */
-  margin-left: -305px; /* Move left by 100px */
-  border-radius: 10px; /* Added border-radius for aesthetics */
-  max-height: 90vh; /* Ensure dialog doesn't exceed viewport height */
-  overflow-y: auto; /* Enable scrolling within the dialog if needed */
+  border-radius: 10px;
+  max-height: 90vh;
+  overflow-y: auto;
+  margin: 0 auto;
+  position: relative;
+  left: 0;
+  transform: none;
 }
 
 /* Dialog header */
@@ -376,6 +377,7 @@
   /* Dialog adjustments */
   .dialog-container {
     max-width: 90%; /* Reduce max-width on smaller screens */
+    margin: 20px auto;
   }
 
   .dialog-container .button {
@@ -425,8 +427,18 @@
   }
 
   /* Dialog adjustments */
+  .dialog-overlay {
+    padding: 0;
+    align-items: center;
+  }
+
   .dialog-container {
-    max-width: 95%; /* Reduce max-width on smaller screens */
+    max-width: 90%;
+    padding: 15px;
+    margin: 0 auto;
+    position: relative;
+    left: 0;
+    transform: translateY(-10%);
   }
 
   .dialog-container .button {

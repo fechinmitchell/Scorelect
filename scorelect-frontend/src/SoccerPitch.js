@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
-import { Stage, Layer, Rect, Line, Circle, Arc, Group, Text } from 'react-konva';
+import { Stage, Layer, Rect, Line, Circle, Arc, Group, Text, Arrow } from 'react-konva';
 import Modal from 'react-modal';
 import Konva from 'konva';
 import html2canvas from 'html2canvas';
@@ -58,7 +58,7 @@ const SoccerPitch =() => {
   const navigate = useNavigate();
   const { loadedCoords } = useContext(GameContext); // Access loadedCoords from context
 
-  const stageRef = useRef();
+  const stageRef = useRef(null);
   const [downloadsRemaining, setDownloadsRemaining] = useState(1);
   const [user, setUser] = useState(null);
   const location = useLocation();
@@ -507,20 +507,28 @@ const SoccerPitch =() => {
   
     if (actionType && actionType.type === 'line') {
       if (currentCoords.length === 0) {
-        setCurrentCoords([newCoord]); // Start with the first point
+        // First click - just store the starting point
+        setCurrentCoords([newCoord]);
       } else if (currentCoords.length === 1) {
-        const fromCoord = currentCoords[0];
-        const toCoord = newCoord;
-        setFormData({
+        // Second click - create the line and open dialog
+        const lineData = {
           ...formData,
-          from: fromCoord,
-          to: toCoord,
-          type: actionType.value,
+          from: currentCoords[0],
+          to: newCoord,
+          type: actionType.value
+        };
+        setCoords([...coords, lineData]);
+        setCurrentCoords([]); // Reset for next action
+        setFormData({ // Set form data for the dialog
+          ...formData,
+          from: currentCoords[0],
+          to: newCoord,
+          type: actionType.value
         });
-        setOpenLineDialog(true);
-        setCurrentCoords([]); // Reset after capturing the line
+        setOpenDialog(true);
       }
     } else if (actionType) {
+      // Handle regular markers
       setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType.value });
       setOpenDialog(true);
     }
@@ -633,6 +641,7 @@ const SoccerPitch =() => {
   const handleActionButtonClick = (action) => {
     setActionType(action);
     setFormData({ ...formData, action: action.value });
+    setCurrentCoords([]); // Reset currentCoords when switching actions
   };
 
   const handleClearMarkers = () => {
@@ -997,6 +1006,35 @@ const SoccerPitch =() => {
     });
     layer.add(penaltyArc2);
     
+    // Add arrows and markers from coords
+    coords.forEach((coord) => {
+      if (coord.from && coord.to) {
+        // Create arrow for line-type actions
+        const arrow = new Konva.Arrow({
+          points: [
+            coord.from.x * xScale,
+            coord.from.y * yScale,
+            coord.to.x * xScale,
+            coord.to.y * yScale
+          ],
+          stroke: getColor(coord.type),
+          strokeWidth: 2,
+          pointerLength: 10,
+          pointerWidth: 10,
+          fill: getColor(coord.type)
+        });
+        layer.add(arrow);
+      } else {
+        // Create circle for marker-type actions
+        const circle = new Konva.Circle({
+          x: coord.x * xScale,
+          y: coord.y * yScale,
+          radius: 6,
+          fill: getColor(coord.type)
+        });
+        layer.add(circle);
+      }
+    });
   };
 
   const getColor = (type) => {
@@ -1333,23 +1371,27 @@ const removePlayerFromTeam2 = (index) => {
 
     <div className="pitch-and-data-container">
       <div className="stage-container"></div>
-        <Stage
-          width={canvasSize.width}
-          height={canvasSize.height}
-          onClick={handleClick}
-          onContextMenu={handleRightClick}
-          onTap={handleTap}
-          ref={stageRef}
-          scaleX={zoomLevel}
-          scaleY={zoomLevel}
-        >
+          <Stage
+            width={canvasSize.width}
+            height={canvasSize.height}
+            onClick={handleClick}
+            onContextMenu={handleRightClick}
+            onTap={handleTap}
+            ref={stageRef}
+            scaleX={zoomLevel}
+            scaleY={zoomLevel}
+            preventDefault={false}
+            style={{
+              pointerEvents: openDialog || openLineDialog || isContextMenuOpen ? 'none' : 'auto',
+            }}
+          >
           {renderSoccerPitch()}
           {isContextMenuOpen && renderContextMenu()}
           <Layer>
             {coords.map((coord, index) => {
               if (coord.from && coord.to) {
                 return (
-                  <Line
+                  <Arrow
                     key={index}
                     points={[
                       coord.from.x * xScale,
@@ -1359,45 +1401,40 @@ const removePlayerFromTeam2 = (index) => {
                     ]}
                     stroke={getColor(coord.type)}
                     strokeWidth={2}
+                    pointerLength={10}
+                    pointerWidth={10}
+                    fill={getColor(coord.type)}
                   />
                 );
               }
-      return (
-        <Group key={index}>
-          <Circle
-            x={coord.x * xScale}
-            y={coord.y * yScale}
-            radius={6}
-            fill={getColor(coord.type)}
-          />
-          {displayPlayerNumber && (
-            <Text
-              x={coord.x * xScale}
-              y={coord.y * yScale - 4}  // Adjusted to align the text vertically better
-              text={coord.player}
-              fontSize={8}
-              fill="white"
-              align="center"
-              width={10}  // Set the width to ensure consistent alignment
-              offsetX={coord.player.length === 1 ? 4.5 : 4.5}  // Fine-tuned offset values for better centering
+              return (
+                <Circle
+                  key={index}
+                  x={coord.x * xScale}
+                  y={coord.y * yScale}
+                  radius={6}
+                  fill={getColor(coord.type)}
+                />
+              );
+            })}
+            
+            {/* Show the line being drawn */}
+            {currentCoords.length === 1 && stageRef.current && (
+              <Arrow
+                points={[
+                  currentCoords[0].x * xScale,
+                  currentCoords[0].y * yScale,
+                  stageRef.current.getPointerPosition().x,
+                  stageRef.current.getPointerPosition().y
+                ]}
+                stroke={getColor(actionType?.value)}
+                strokeWidth={2}
+                pointerLength={10}
+                pointerWidth={10}
+                fill={getColor(actionType?.value)}
               />
-          )}
-          {displayPlayerName && (
-            <Text
-              x={coord.x * xScale}
-              y={coord.y * yScale - 16}  // Position the name above the marker
-              text={coord.playerName}
-              fontSize={10}
-              fill="black"
-              align="center"
-              width={coord.playerName.length * 6}  // Adjust the width based on the name length
-              offsetX={(coord.playerName.length * 6) / 2}  // Center the text horizontally
-            />
-          )}
-        </Group>
-      );
-    })}
-  </Layer>
+            )}
+          </Layer>
 
 </Stage>
 <div className="aggregated-data-container">

@@ -96,7 +96,7 @@
   background-color: #501387;
   color: white;
   border: none;
-  padding: 8px 16px; /* Reduced padding */
+  padding: 8px 16px;
   cursor: pointer;
   font-size: 0.8rem;
   margin: 5px;
@@ -147,7 +147,7 @@
   background-color: #501387;
   color: white;
   border: none;
-  padding: 8px 16px; /* Reduced padding */
+  padding: 8px 16px;
   cursor: pointer;
   font-size: 0.8rem;
   margin: 5px 0;
@@ -210,7 +210,7 @@
   white-space: normal; /* Ensure text wraps properly */
 }
 
-/* Dialog overlay to center the dialog at the top */
+/* Dialog overlay to center the dialog */
 .dialog-overlay {
   position: fixed;
   top: 0;
@@ -218,8 +218,8 @@
   width: 100%;
   height: 100%;
   display: flex;
-  justify-content: center;
-  align-items: center;
+  justify-content: center; /* Center horizontally */
+  align-items: center;     /* Center vertically */
   background-color: rgba(0, 0, 0, 0.5);
   z-index: 1000;
 }
@@ -231,12 +231,10 @@
   width: 100%;
   max-width: 500px;
   border-radius: 10px;
-  max-height: 90vh;
+  max-height: 80vh;
   overflow-y: auto;
   margin: 0 auto;
   position: relative;
-  left: 0;
-  transform: none;
 }
 
 /* Dialog header */
@@ -244,16 +242,16 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #2e2e2e; /* Slightly darker for the header */
+  background-color: #2e2e2e;
   padding: 10px;
-  border-top-left-radius: 10px; /* Match the container's border radius */
+  border-top-left-radius: 10px;
   border-top-right-radius: 10px;
 }
 
 .dialog-header h3 {
   margin: 0;
   font-size: 12px;
-  color: #fff; /* White text for visibility */
+  color: #fff;
 }
 
 .close-button {
@@ -261,7 +259,6 @@
   border: none;
   font-size: 12px;
   cursor: pointer;
-  line-height: 1;
   color: #fff;
 }
 
@@ -276,49 +273,39 @@
 
 /* Form group inside modal */
 .form-group {
-  margin-bottom: 5px; /* Reduced spacing between form groups */
+  margin-bottom: 5px;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 5px; /* Reduced spacing below labels */
+  margin-bottom: 5px;
   color: white;
-    font-size: 12px;    /* Adjust font size */
-
+  font-size: 12px;
 }
 
 .form-group input,
 .form-group select {
   width: 100%;
-  padding: 6px;       /* Reduced padding */
+  padding: 6px;
   border: 1px solid #000;
   border-radius: 5px;
   background-color: #2e2e2e;
   color: white;
   box-sizing: border-box;
-  height: 30px;       /* Adjusted height */
-  appearance: none;
-  font-size: 12px;    /* Adjust font size */
-}
-
-.form-group select {
-  background-image: url('data:image/svg+xml;charset=US-ASCII,<svg%20xmlns%3D"htt...'); /* Keep or adjust as needed */
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  background-size: 10px;
-  padding-right: 30px; /* Make space for the arrow */
+  height: 30px;
+  font-size: 12px;
 }
 
 /* Button container inside dialog */
 .dialog-container .button-container {
   display: flex;
-  flex-direction: row; /* Arrange buttons horizontally */
-  justify-content: space-around; /* Space buttons evenly */
+  flex-direction: row;
+  justify-content: space-around;
   align-items: center;
   padding: 10px;
   width: 95%;
   background-color: #2e2e2e;
-  border-bottom-left-radius: 10px; /* Match the container's border radius */
+  border-bottom-left-radius: 10px;
   border-bottom-right-radius: 10px;
 }
 
@@ -326,11 +313,10 @@
   background-color: #501387;
   color: white;
   border: none;
-  padding: 8px 16px;   /* Adjusted padding */
+  padding: 8px 16px;
   cursor: pointer;
   font-size: 0.9rem;
-  margin: 0 5px;       /* Adjusted margin */
-  width: auto;         /* Auto width to fit content */
+  margin: 0 5px;
   border-radius: 5px;
   text-align: center;
 }
@@ -356,7 +342,7 @@
 /* Adjustments for screens up to 768px */
 @media (max-width: 768px) {
   .content {
-    gap: 20px; /* Further reduce gap */
+    gap: 20px;
   }
 
   .instructions-container {
@@ -370,13 +356,9 @@
     margin: 5px 0;
   }
 
-  .toggle-switches label {
-    font-size: 0.9rem;
-  }
-
   /* Dialog adjustments */
   .dialog-container {
-    max-width: 90%; /* Reduce max-width on smaller screens */
+    max-width: 90%;
     margin: 20px auto;
   }
 
@@ -384,10 +366,6 @@
     font-size: 0.8rem;
     padding: 8px;
     margin: 0 5px;
-  }
-
-  .dialog-container .button-container {
-    padding: 10px;
   }
 
   .form-group input,
@@ -402,18 +380,18 @@
   }
 }
 
-/* Adjustments for screens up to 480px (iPhone portrait mode) */
+/* Adjustments for screens up to 480px */
 @media (max-width: 480px) {
   .content {
-    gap: 10px; /* Minimal gap on small screens */
-    flex-direction: column; /* Stack content vertically */
+    gap: 10px;
+    flex-direction: column;
     align-items: center;
   }
 
   .instructions-container,
   .pitch-container,
   .pitch-and-data-container {
-    width: 100%; /* Full width */
+    width: 100%;
   }
 
   .button,
@@ -422,13 +400,8 @@
     padding: 8px;
   }
 
-  .toggle-switches label {
-    font-size: 0.85rem;
-  }
-
   /* Dialog adjustments */
   .dialog-overlay {
-    padding: 0;
     align-items: center;
   }
 
@@ -436,9 +409,7 @@
     max-width: 90%;
     padding: 15px;
     margin: 0 auto;
-    position: relative;
-    left: 0;
-    transform: translateY(-10%);
+    transform: translateY(-200px); /* Move up by 200px in portrait mode */
   }
 
   .dialog-container .button {
@@ -469,10 +440,6 @@
   .action-button {
     font-size: 0.7rem;
     padding: 6px;
-  }
-
-  .toggle-switches label {
-    font-size: 0.8rem;
   }
 
   /* Dialog adjustments */
@@ -506,10 +473,6 @@
     padding: 5px;
   }
 
-  .toggle-switches label {
-    font-size: 0.75rem;
-  }
-
   /* Dialog adjustments */
   .dialog-container .button {
     font-size: 0.65rem;
@@ -529,6 +492,27 @@
   }
 }
 
+/* Landscape mode adjustments */
+@media (orientation: landscape) {
+  .dialog-overlay {
+    justify-content: center; /* Center horizontally */
+    align-items: center;     /* Center vertically */
+  }
+
+  .dialog-container {
+    transform: translate(-305px, -130px);
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+  }
+}
+
+/* Portrait mode adjustments */
+@media (orientation: portrait) {
+  .dialog-container {
+    transform: translateY(-200px);
+  }
+}
+
 /* Adjustments for landscape orientation on small screens */
 @media (max-width: 667px) and (orientation: landscape) {
   .content {
@@ -536,13 +520,13 @@
   }
 
   .pitch-container {
-    width: 60%; /* Adjusted width */
+    width: 60%;
     padding: 10px;
   }
 
   .instructions-container {
     margin-top: 0;
-    max-width: 40%; /* Adjusted width */
+    max-width: 40%;
   }
 
   .button-container,
@@ -556,16 +540,6 @@
   .action-button {
     width: 48%;
     margin: 5px 1%;
-  }
-
-  /* Dialog adjustments */
-  .dialog-container .button {
-    width: auto;
-    margin: 0 5px;
-  }
-
-  .dialog-container .button-container {
-    padding: 10px;
   }
 }
 
@@ -597,39 +571,5 @@
   .action-button {
     width: 100%;
     margin: 5px 0;
-  }
-
-  /* Dialog adjustments */
-  .dialog-container .button {
-    width: auto;
-    margin: 0 5px;
-  }
-
-  .dialog-container .button-container {
-    padding: 10px;
-  }
-}
-
-/* Modal adjustments for small screens */
-@media (max-width: 480px) {
-  .dialog-container {
-    max-width: 90%;
-    padding: 15px;
-  }
-
-  .dialog-container .button {
-    font-size: 0.75rem;
-    padding: 8px;
-  }
-
-  .form-group input,
-  .form-group select {
-    font-size: 12px;
-    padding: 4px;
-    height: 26px;
-  }
-
-  .form-group label {
-    font-size: 12px;
   }
 }

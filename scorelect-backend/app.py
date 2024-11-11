@@ -1,7 +1,7 @@
 import os  # Standard library for interacting with the operating system, e.g., for environment variables
 import stripe  # Stripe's Python library for payments and subscriptions
 import logging  # Standard Python library for logging events, useful for debugging and monitoring
-from flask import Flask, request, jsonify, send_file, make_response # Flask framework for building web apps and APIs
+from flask import Flask, request, jsonify, send_file, send_from_directory, make_response # Flask framework for building web apps and APIs
 from flask_cors import CORS, cross_origin  # Flask extension for enabling Cross-Origin Resource Sharing (CORS)
 from flask_talisman import Talisman  # Flask extension for security by adding Content Security Policy (CSP)
 import firebase_admin  # Firebase Admin SDK for interacting with Firebase services
@@ -21,7 +21,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
 # Initialize the Flask application
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', static_url_path='')
 
 # Enable CORS (Cross-Origin Resource Sharing) to allow requests from specified origins
 CORS(app, resources={r"/*": {"origins": [
@@ -1654,7 +1654,9 @@ def update_dataset():
         logging.error(f"Error updating dataset: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-
+@app.route('/sitemap.xml')
+def sitemap():
+    return send_from_directory('static', 'sitemap.xml')
 
 # Run the Flask app on port 5001 in debug mode
 if __name__ == '__main__':

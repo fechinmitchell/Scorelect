@@ -1359,383 +1359,551 @@ const handleSaveToDataset = async () => {
   </div>
 
 
-
-      {openDialog && (
-        <Rnd
-        default={{
-          x: window.innerWidth / 2 - 200,
-          y: window.innerHeight / 2 - 200,
-          width: 400,
-          height: 400,
-        }}
-        minWidth={300}
-        minHeight={300}
-        bounds="window"
-        enableResizing={{
-          top: true,
-          right: true,
-          bottom: true,
-          left: true,
-          topRight: true,
-          bottomRight: true,
-          bottomLeft: true,
-          topLeft: true,
-        }}
-        dragHandleClassName="drag-handle"
-        resizeHandleStyles={{
-          bottomRight: {
-            cursor: 'se-resize',
-            width: '20px',
-            height: '20px',
-            right: '-10px',
-            bottom: '-10px',
-            backgroundColor: 'transparent', // Or a visible color if you prefer
-          },
-          // Add styles for other handles
-        }}
-        style={{ zIndex: 1000 }}
-      >
-        <div className="dialog-container">
-          <h3>Enter Action Details</h3>
-          <div className="form-group">
-            <label>Action:</label>
-            <select name="action" value={formData.action} onChange={handleChange}>
-              <option value="custom">Add New Action</option>
-              {recentActions.map((action) => (
-                <option key={action} value={action}>
-                  {action}
-                </option>
-              ))}
-              {actionCodes.map((action) => (
-                <option key={action} value={action}>
-                  {action}
-                </option>
-              ))}
-            </select>
-            {formData.action === 'custom' && (
-              <div className="form-group">
-                <label>New Action:</label>
-                <input
-                  type="text"
-                  name="customAction"
-                  value={customInput.action}
-                  onChange={(e) => setCustomInput({ ...customInput, action: e.target.value })}
-                />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Team:</label>
-            <select name="team" value={formData.team} onChange={handleChange}>
-              <option value="custom">Add New Team</option>
-              {recentTeams.map((team) => (
-                <option key={team} value={team}>
-                  {team}
-                </option>
-              ))}
-              {teams.map((team) => (
-                <option key={team} value={team}>
-                  {team}
-                </option>
-              ))}
-            </select>
-            {formData.team === 'custom' && (
-              <div className="form-group">
-                <label>New Team Name:</label>
-                <input
-                  type="text"
-                  name="customTeam"
-                  value={customInput.team}
-                  onChange={(e) => setCustomInput({ ...customInput, team: e.target.value })}
-                />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Player Name:</label>
-            <input type="text" name="playerName" value={formData.playerName} onChange={handleChange} />
-          </div>
-          <div className="form-group">
-            <label>Player Number:</label>
-            <input type="text" name="player" value={formData.player} onChange={handleChange} />
-          </div>
-          <div className="form-group">
-            <label>Position:</label>
-            <select name="position" value={formData.position} onChange={handleChange}>
-              <option value="custom">Add New Position</option>
-              {positions.map((position) => (
-                <option key={position} value={position}>
-                  {position}
-                </option>
-              ))}
-            </select>
-            {formData.position === 'custom' && (
-              <div className="form-group">
-                <label>New Position:</label>
-                <input
-                  type="text"
-                  name="customPosition"
-                  value={customInput.position}
-                  onChange={(e) => setCustomInput({ ...customInput, position: e.target.value })}
-                />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Pressure:</label>
-            <select name="pressure" value={formData.pressure} onChange={handleChange}>
-              <option value="custom">Add New Pressure</option>
-              {pressures.map((pressure) => (
-                <option key={pressure} value={pressure}>
-                  {pressure}
-                </option>
-              ))}
-            </select>
-            {formData.pressure === 'custom' && (
-              <div className="form-group">
-                <label>New Pressure:</label>
-                <input
-                  type="text"
-                  name="customPressure"
-                  value={customInput.pressure}
-                  onChange={(e) => setCustomInput({ ...customInput, pressure: e.target.value })}
-                />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Foot:</label>
-            <select name="foot" value={formData.foot} onChange={handleChange}>
-              <option value="custom">Add New Foot</option>
-              {feet.map((foot) => (
-                <option key={foot} value={foot}>
-                  {foot}
-                </option>
-              ))}
-            </select>
-            {formData.foot === 'custom' && (
-              <div className="form-group">
-                <label>New Foot:</label>
-                <input
-                  type="text"
-                  name="customFoot"
-                  value={customInput.foot}
-                  onChange={(e) => setCustomInput({ ...customInput, foot: e.target.value })}
-                />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Minute:</label>
-            <input type="text" name="minute" value={formData.minute} onChange={handleChange} />
-          </div>
-          <div className="button-container">
-            <button
-              className="button"
-              onClick={() => {
-                handleCloseDialog();
-                setActionType('');
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              className="button"
-              onClick={() => {
-                handleFormSubmit();
-                setActionType('');
-              }}
-            >
-              Submit
-            </button>
-          </div>
+  {openDialog && (
+  <Rnd
+    default={{
+      x: window.innerWidth / 2 - 200,
+      y: window.innerHeight / 2 - 200,
+      width: 400,
+      height: 500,
+    }}
+    minWidth={300}
+    minHeight={400}
+    bounds="window"
+    enableResizing={{
+      top: true,
+      right: true,
+      bottom: true,
+      left: true,
+      topRight: true,
+      bottomRight: true,
+      bottomLeft: true,
+      topLeft: true,
+    }}
+    dragHandleClassName="drag-handle"
+    resizeHandleStyles={{
+      top: {
+        cursor: 'n-resize',
+        height: '10px',
+        top: '-5px',
+      },
+      right: {
+        cursor: 'e-resize',
+        width: '10px',
+        right: '-5px',
+      },
+      bottom: {
+        cursor: 's-resize',
+        height: '10px',
+        bottom: '-5px',
+      },
+      left: {
+        cursor: 'w-resize',
+        width: '10px',
+        left: '-5px',
+      },
+      topRight: {
+        cursor: 'ne-resize',
+        width: '20px',
+        height: '20px',
+        right: '-10px',
+        top: '-10px',
+      },
+      bottomRight: {
+        cursor: 'se-resize',
+        width: '20px',
+        height: '20px',
+        right: '-10px',
+        bottom: '-10px',
+      },
+      bottomLeft: {
+        cursor: 'sw-resize',
+        width: '20px',
+        height: '20px',
+        left: '-10px',
+        bottom: '-10px',
+      },
+      topLeft: {
+        cursor: 'nw-resize',
+        width: '20px',
+        height: '20px',
+        left: '-10px',
+        top: '-10px',
+      },
+    }}
+    style={{ zIndex: 1000 }}
+  >
+    <div className="dialog-container">
+      <div className="dialog-header drag-handle">
+        <h3>Enter Action Details</h3>
+        <button className="close-button" onClick={handleCloseDialog}>
+          &#10005;
+        </button>
+      </div>
+      <div className="form-content">
+        <div className="form-group">
+          <label>Action:</label>
+          <select name="action" value={formData.action} onChange={handleChange}>
+            <option value="custom">Add New Action</option>
+            {recentActions.map((action) => (
+              <option key={action} value={action}>
+                {action}
+              </option>
+            ))}
+            {actionCodes.map((action) => (
+              <option key={action} value={action}>
+                {action}
+              </option>
+            ))}
+          </select>
+          {formData.action === 'custom' && (
+            <div className="form-group">
+              <label>New Action:</label>
+              <input
+                type="text"
+                name="customAction"
+                value={customInput.action}
+                onChange={(e) =>
+                  setCustomInput({ ...customInput, action: e.target.value })
+                }
+              />
+            </div>
+          )}
         </div>
-        </Rnd>
 
-
-      )}
-      {openLineDialog && (
-        <Rnd
-        default={{
-          x: window.innerWidth / 2 - 200,
-          y: window.innerHeight / 2 - 200,
-          width: 400,
-          height: 400,
-        }}
-        minWidth={300}
-        minHeight={300}
-        bounds="window"
-        enableResizing={{
-          top: true,
-          right: true,
-          bottom: true,
-          left: true,
-          topRight: true,
-          bottomRight: true,
-          bottomLeft: true,
-          topLeft: true,
-        }}
-        style={{ zIndex: 1000 }}
-        dragHandleClassName="drag-handle" // Add this line
-
-      >
-        <div className="dialog-container">
-          <h3>Enter Action Details for Line</h3>
-          <div className="form-group">
-            <label>Action:</label>
-            <select name="action" value={formData.action} onChange={handleChange}>
-              <option value="custom">Add New Action</option>
-              {recentActions.map((action) => (
-                <option key={action} value={action}>
-                  {action}
-                </option>
-              ))}
-              {actionCodes.map((action) => (
-                <option key={action} value={action}>
-                  {action}
-                </option>
-              ))}
-            </select>
-            {formData.action === 'custom' && (
-              <div className="form-group">
-                <label>New Action:</label>
-                <input
-                  type="text"
-                  name="customAction"
-                  value={customInput.action}
-                  onChange={(e) => setCustomInput({ ...customInput, action: e.target.value })}
-                />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Team:</label>
-            <select name="team" value={formData.team} onChange={handleChange}>
-              <option value="custom">Add New Team</option>
-              {recentTeams.map((team) => (
-                <option key={team} value={team}>
-                  {team}
-                </option>
-              ))}
-              {teams.map((team) => (
-                <option key={team} value={team}>
-                  {team}
-                </option>
-              ))}
-            </select>
-            {formData.team === 'custom' && (
-              <div className="form-group">
-                <label>New Team Name:</label>
-                <input
-                  type="text"
-                  name="customTeam"
-                  value={customInput.team}
-                  onChange={(e) => setCustomInput({ ...customInput, team: e.target.value })}
-                />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Player Name:</label>
-            <input type="text" name="playerName" value={formData.playerName} onChange={handleChange} />
-          </div>
-          <div className="form-group">
-            <label>Player Number:</label>
-            <input type="text" name="player" value={formData.player} onChange={handleChange} />
-          </div>
-          <div className="form-group">
-            <label>Position:</label>
-            <select name="position" value={formData.position} onChange={handleChange}>
-              <option value="custom">Add New Position</option>
-              {positions.map((position) => (
-                <option key={position} value={position}>
-                  {position}
-                </option>
-              ))}
-            </select>
-            {formData.position === 'custom' && (
-              <div className="form-group">
-                <label>New Position:</label>
-                <input
-                  type="text"
-                  name="customPosition"
-                  value={customInput.position}
-                  onChange={(e) => setCustomInput({ ...customInput, position: e.target.value })}
-                />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Pressure:</label>
-            <select name="pressure" value={formData.pressure} onChange={handleChange}>
-              <option value="custom">Add New Pressure</option>
-              {pressures.map((pressure) => (
-                <option key={pressure} value={pressure}>
-                  {pressure}
-                </option>
-              ))}
-            </select>
-            {formData.pressure === 'custom' && (
-              <div className="form-group">
-                <label>New Pressure:</label>
-                <input
-                  type="text"
-                  name="customPressure"
-                  value={customInput.pressure}
-                  onChange={(e) => setCustomInput({ ...customInput, pressure: e.target.value })}
-                />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Foot:</label>
-            <select name="foot" value={formData.foot} onChange={handleChange}>
-              <option value="custom">Add New Foot</option>
-              {feet.map((foot) => (
-                <option key={foot} value={foot}>
-                  {foot}
-                </option>
-              ))}
-            </select>
-            {formData.foot === 'custom' && (
-              <div className="form-group">
-                <label>New Foot:</label>
-                <input
-                  type="text"
-                  name="customFoot"
-                  value={customInput.foot}
-                  onChange={(e) => setCustomInput({ ...customInput, foot: e.target.value })}
-                />
-              </div>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Minute:</label>
-            <input type="text" name="minute" value={formData.minute} onChange={handleChange} />
-          </div>
-          <div className="button-container">
-            <button
-              className="button"
-              onClick={() => {
-                handleCloseLineDialog();
-                setActionType('');
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              className="button"
-              onClick={() => {
-                handleFormSubmit();
-                setActionType('');
-              }}
-            >
-              Submit
-            </button>
-          </div>
+        <div className="form-group">
+          <label>Team:</label>
+          <select name="team" value={formData.team} onChange={handleChange}>
+            <option value="custom">Add New Team</option>
+            {recentTeams.map((team) => (
+              <option key={team} value={team}>
+                {team}
+              </option>
+            ))}
+            {teams.map((team) => (
+              <option key={team} value={team}>
+                {team}
+              </option>
+            ))}
+          </select>
+          {formData.team === 'custom' && (
+            <div className="form-group">
+              <label>New Team Name:</label>
+              <input
+                type="text"
+                name="customTeam"
+                value={customInput.team}
+                onChange={(e) =>
+                  setCustomInput({ ...customInput, team: e.target.value })
+                }
+              />
+            </div>
+          )}
         </div>
-        </Rnd>
-      )}
+
+        <div className="form-group">
+          <label>Player Name:</label>
+          <input
+            type="text"
+            name="playerName"
+            value={formData.playerName}
+            onChange={handleChange}
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Player Number:</label>
+          <input
+            type="text"
+            name="player"
+            value={formData.player}
+            onChange={handleChange}
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Position:</label>
+          <select name="position" value={formData.position} onChange={handleChange}>
+            <option value="custom">Add New Position</option>
+            {positions.map((position) => (
+              <option key={position} value={position}>
+                {position}
+              </option>
+            ))}
+          </select>
+          {formData.position === 'custom' && (
+            <div className="form-group">
+              <label>New Position:</label>
+              <input
+                type="text"
+                name="customPosition"
+                value={customInput.position}
+                onChange={(e) =>
+                  setCustomInput({ ...customInput, position: e.target.value })
+                }
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="form-group">
+          <label>Pressure:</label>
+          <select name="pressure" value={formData.pressure} onChange={handleChange}>
+            <option value="custom">Add New Pressure</option>
+            {pressures.map((pressure) => (
+              <option key={pressure} value={pressure}>
+                {pressure}
+              </option>
+            ))}
+          </select>
+          {formData.pressure === 'custom' && (
+            <div className="form-group">
+              <label>New Pressure:</label>
+              <input
+                type="text"
+                name="customPressure"
+                value={customInput.pressure}
+                onChange={(e) =>
+                  setCustomInput({ ...customInput, pressure: e.target.value })
+                }
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="form-group">
+          <label>Foot:</label>
+          <select name="foot" value={formData.foot} onChange={handleChange}>
+            <option value="custom">Add New Foot</option>
+            {feet.map((foot) => (
+              <option key={foot} value={foot}>
+                {foot}
+              </option>
+            ))}
+          </select>
+          {formData.foot === 'custom' && (
+            <div className="form-group">
+              <label>New Foot:</label>
+              <input
+                type="text"
+                name="customFoot"
+                value={customInput.foot}
+                onChange={(e) =>
+                  setCustomInput({ ...customInput, foot: e.target.value })
+                }
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="form-group">
+          <label>Minute:</label>
+          <input
+            type="text"
+            name="minute"
+            value={formData.minute}
+            onChange={handleChange}
+          />
+        </div>
+      </div>
+
+      <div className="button-container">
+        <button
+          className="button"
+          onClick={() => {
+            handleCloseDialog();
+            setActionType('');
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          className="button"
+          onClick={() => {
+            handleFormSubmit();
+            setActionType('');
+          }}
+        >
+          Submit
+        </button>
+      </div>
+    </div>
+  </Rnd>
+)}
+
+{openLineDialog && (
+  <Rnd
+    default={{
+      x: window.innerWidth / 2 - 200,
+      y: window.innerHeight / 2 - 200,
+      width: 400,
+      height: 500,
+    }}
+    minWidth={300}
+    minHeight={400}
+    bounds="window"
+    enableResizing={{
+      top: true,
+      right: true,
+      bottom: true,
+      left: true,
+      topRight: true,
+      bottomRight: true,
+      bottomLeft: true,
+      topLeft: true,
+    }}
+    dragHandleClassName="drag-handle"
+    resizeHandleStyles={{
+      top: {
+        cursor: 'n-resize',
+        height: '10px',
+        top: '-5px',
+      },
+      right: {
+        cursor: 'e-resize',
+        width: '10px',
+        right: '-5px',
+      },
+      bottom: {
+        cursor: 's-resize',
+        height: '10px',
+        bottom: '-5px',
+      },
+      left: {
+        cursor: 'w-resize',
+        width: '10px',
+        left: '-5px',
+      },
+      topRight: {
+        cursor: 'ne-resize',
+        width: '20px',
+        height: '20px',
+        right: '-10px',
+        top: '-10px',
+      },
+      bottomRight: {
+        cursor: 'se-resize',
+        width: '20px',
+        height: '20px',
+        right: '-10px',
+        bottom: '-10px',
+      },
+      bottomLeft: {
+        cursor: 'sw-resize',
+        width: '20px',
+        height: '20px',
+        left: '-10px',
+        bottom: '-10px',
+      },
+      topLeft: {
+        cursor: 'nw-resize',
+        width: '20px',
+        height: '20px',
+        left: '-10px',
+        top: '-10px',
+      },
+    }}
+    style={{ zIndex: 1000 }}
+  >
+    <div className="dialog-container">
+      <div className="dialog-header drag-handle">
+        <h3>Enter Action Details for Line</h3>
+        <button className="close-button" onClick={handleCloseLineDialog}>
+          &#10005;
+        </button>
+      </div>
+      <div className="form-content">
+        {/* Reusing the same form groups as in openDialog */}
+        <div className="form-group">
+          <label>Action:</label>
+          <select name="action" value={formData.action} onChange={handleChange}>
+            <option value="custom">Add New Action</option>
+            {recentActions.map((action) => (
+              <option key={action} value={action}>
+                {action}
+              </option>
+            ))}
+            {actionCodes.map((action) => (
+              <option key={action} value={action}>
+                {action}
+              </option>
+            ))}
+          </select>
+          {formData.action === 'custom' && (
+            <div className="form-group">
+              <label>New Action:</label>
+              <input
+                type="text"
+                name="customAction"
+                value={customInput.action}
+                onChange={(e) =>
+                  setCustomInput({ ...customInput, action: e.target.value })
+                }
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="form-group">
+          <label>Team:</label>
+          <select name="team" value={formData.team} onChange={handleChange}>
+            <option value="custom">Add New Team</option>
+            {recentTeams.map((team) => (
+              <option key={team} value={team}>
+                {team}
+              </option>
+            ))}
+            {teams.map((team) => (
+              <option key={team} value={team}>
+                {team}
+              </option>
+            ))}
+          </select>
+          {formData.team === 'custom' && (
+            <div className="form-group">
+              <label>New Team Name:</label>
+              <input
+                type="text"
+                name="customTeam"
+                value={customInput.team}
+                onChange={(e) =>
+                  setCustomInput({ ...customInput, team: e.target.value })
+                }
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="form-group">
+          <label>Player Name:</label>
+          <input
+            type="text"
+            name="playerName"
+            value={formData.playerName}
+            onChange={handleChange}
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Player Number:</label>
+          <input
+            type="text"
+            name="player"
+            value={formData.player}
+            onChange={handleChange}
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Position:</label>
+          <select name="position" value={formData.position} onChange={handleChange}>
+            <option value="custom">Add New Position</option>
+            {positions.map((position) => (
+              <option key={position} value={position}>
+                {position}
+              </option>
+            ))}
+          </select>
+          {formData.position === 'custom' && (
+            <div className="form-group">
+              <label>New Position:</label>
+              <input
+                type="text"
+                name="customPosition"
+                value={customInput.position}
+                onChange={(e) =>
+                  setCustomInput({ ...customInput, position: e.target.value })
+                }
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="form-group">
+          <label>Pressure:</label>
+          <select name="pressure" value={formData.pressure} onChange={handleChange}>
+            <option value="custom">Add New Pressure</option>
+            {pressures.map((pressure) => (
+              <option key={pressure} value={pressure}>
+                {pressure}
+              </option>
+            ))}
+          </select>
+          {formData.pressure === 'custom' && (
+            <div className="form-group">
+              <label>New Pressure:</label>
+              <input
+                type="text"
+                name="customPressure"
+                value={customInput.pressure}
+                onChange={(e) =>
+                  setCustomInput({ ...customInput, pressure: e.target.value })
+                }
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="form-group">
+          <label>Foot:</label>
+          <select name="foot" value={formData.foot} onChange={handleChange}>
+            <option value="custom">Add New Foot</option>
+            {feet.map((foot) => (
+              <option key={foot} value={foot}>
+                {foot}
+              </option>
+            ))}
+          </select>
+          {formData.foot === 'custom' && (
+            <div className="form-group">
+              <label>New Foot:</label>
+              <input
+                type="text"
+                name="customFoot"
+                value={customInput.foot}
+                onChange={(e) =>
+                  setCustomInput({ ...customInput, foot: e.target.value })
+                }
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="form-group">
+          <label>Minute:</label>
+          <input
+            type="text"
+            name="minute"
+            value={formData.minute}
+            onChange={handleChange}
+          />
+        </div>
+      </div>
+
+      <div className="button-container">
+        <button
+          className="button"
+          onClick={() => {
+            handleCloseLineDialog();
+            setActionType('');
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          className="button"
+          onClick={() => {
+            handleFormSubmit();
+            setActionType('');
+          }}
+        >
+          Submit
+        </button>
+      </div>
+    </div>
+  </Rnd>
+)}
+
 
       <Modal
         isOpen={isModalOpen}

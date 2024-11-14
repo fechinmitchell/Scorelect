@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import Swal from 'sweetalert2';
-import { readString } from 'react-papaparse'; // For CSV parsing
+import PropTypes from 'prop-types';
 
 const Container = styled.div`
   display: flex;
@@ -109,39 +109,33 @@ const FilterPage = () => {
       const fileExtension = file.name.split('.').pop().toLowerCase();
 
       if (fileExtension === 'csv') {
-        readString(content, {
-          header: true,
-          skipEmptyLines: true,
-          complete: (results) => {
-            if (results.errors.length) {
-              console.error('CSV Parsing Errors:', results.errors);
-              Swal.fire({
-                title: 'Parsing Error',
-                text: 'There were errors parsing the CSV file.',
-                icon: 'error',
-                confirmButtonText: 'OK',
-              });
-              return;
-            }
-            console.log('Parsed CSV Data:', results.data);
-            setData(results.data);
-            extractFilterOptions(results.data);
-          },
+        // Handle CSV parsing if needed in the future
+        // Currently, datasets are in JSON format
+        Swal.fire({
+          title: 'Unsupported Format',
+          text: 'Please upload a JSON file.',
+          icon: 'warning',
+          confirmButtonText: 'OK',
         });
       } else if (fileExtension === 'json') {
         try {
           const jsonData = JSON.parse(content);
-          if (!Array.isArray(jsonData)) {
-            throw new Error('JSON data is not an array.');
+          if (!jsonData.dataset || !jsonData.games || !Array.isArray(jsonData.games)) {
+            throw new Error('Invalid dataset structure');
           }
-          console.log('Parsed JSON Data:', jsonData);
-          setData(jsonData);
-          extractFilterOptions(jsonData);
+          setData(jsonData.games);
+          extractFilterOptions(jsonData.games);
+          Swal.fire({
+            title: 'Data Parsed',
+            text: 'Your dataset has been successfully parsed.',
+            icon: 'success',
+            confirmButtonText: 'OK',
+          });
         } catch (error) {
           console.error('JSON Parsing Error:', error);
           Swal.fire({
             title: 'Invalid JSON',
-            text: 'Failed to parse JSON file. Ensure it is a valid JSON array.',
+            text: 'Failed to parse JSON file. Ensure it has the correct structure.',
             icon: 'error',
             confirmButtonText: 'OK',
           });
@@ -149,7 +143,7 @@ const FilterPage = () => {
       } else {
         Swal.fire({
           title: 'Unsupported Format',
-          text: 'Please upload a CSV or JSON file.',
+          text: 'Please upload a JSON file.',
           icon: 'warning',
           confirmButtonText: 'OK',
         });
@@ -169,44 +163,28 @@ const FilterPage = () => {
     reader.readAsText(file);
   }, [file, navigate, sport]);
 
-  const extractFilterOptions = (dataset) => {
+  const extractFilterOptions = (games) => {
     const teams = new Set();
     const actions = new Set();
     const players = new Set();
 
-    dataset.forEach((entry) => {
-      // Handle case-insensitive keys
-      const keys = Object.keys(entry).map((key) => key.toLowerCase());
+    games.forEach((game) => {
+      game.gameData.forEach((entry) => {
+        // Extract Teams
+        if (entry.team) {
+          teams.add(entry.team);
+        }
 
-      // Extract Team
-      const teamKey = keys.find((key) => key === 'team' || key === 'teamname');
-      if (teamKey && entry[teamKey]) {
-        teams.add(entry[teamKey]);
-      }
+        // Extract Actions
+        if (entry.action) {
+          actions.add(entry.action);
+        }
 
-      // Extract Action
-      const actionKey = keys.find(
-        (key) =>
-          key === 'action' ||
-          key === 'actiontype' ||
-          key === 'playtype' ||
-          key === 'shottype' // Added for basketball
-      );
-      if (actionKey && entry[actionKey]) {
-        actions.add(entry[actionKey]);
-      }
-
-      // Extract Player Name
-      const playerKey = keys.find(
-        (key) =>
-          key === 'player' ||
-          key === 'playername' ||
-          key === 'player_name' ||
-          key === 'playername'
-      );
-      if (playerKey && entry[playerKey]) {
-        players.add(entry[playerKey]);
-      }
+        // Extract Players
+        if (entry.playerName) {
+          players.add(entry.playerName);
+        }
+      });
     });
 
     setTeamOptions([...teams]);
@@ -238,15 +216,14 @@ const FilterPage = () => {
     };
 
     // Filter data based on selected filters
-    const filteredData = data.filter((entry) => {
-      const teamMatch = filters.team ? entry.team === filters.team : true;
-      const actionMatch = filters.action
-        ? entry.action === filters.action || entry.playType === filters.action
-        : true;
-      const playerMatch = filters.player
-        ? entry.player === filters.player || entry.playerName === filters.player
-        : true;
-      return teamMatch && actionMatch && playerMatch;
+    const filteredData = data.filter((game) => {
+      const filteredGameData = game.gameData.filter((entry) => {
+        const teamMatch = filters.team ? entry.team === filters.team : true;
+        const actionMatch = filters.action ? entry.action === filters.action : true;
+        const playerMatch = filters.player ? entry.playerName === filters.player : true;
+        return teamMatch && actionMatch && playerMatch;
+      });
+      return filteredGameData.length > 0;
     });
 
     // Determine the heatmap page to navigate to based on the selected sport
@@ -383,5 +360,7 @@ const FilterPage = () => {
     </Container>
   );
 };
+
+FilterPage.propTypes = {};
 
 export default FilterPage;

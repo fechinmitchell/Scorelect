@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import PropTypes from 'prop-types';
 import SportButton from './SportButton';
-import SoccerPitchGrid from './SoccerPitchGrid';
 import { useSpring, animated } from 'react-spring';
 import { useDropzone } from 'react-dropzone';
 import { useNavigate } from 'react-router-dom';
@@ -16,6 +15,7 @@ import {
   FaFutbol,
 } from 'react-icons/fa';
 
+// Styled Components
 const Container = styled.div`
   display: flex;
   flex-direction: column;
@@ -32,10 +32,6 @@ const ButtonRow = styled.div`
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
-`;
-
-const PitchAnimation = styled(animated.div)`
-  margin-top: 30px;
 `;
 
 const DropzoneContainer = styled.div`
@@ -99,36 +95,16 @@ const IconWrapper = styled.div`
 
 const Analysis = ({ onSportSelect }) => {
   const [selectedSport, setSelectedSport] = useState(null);
-  const [animateHeatmaps, setAnimateHeatmaps] = useState(Array(20 * 12).fill(false));
   const [uploadedFile, setUploadedFile] = useState(null);
+  const [parsedData, setParsedData] = useState(null); // Store parsed JSON data
+  const [datasetType, setDatasetType] = useState(null); // 'aggregated' or 'single'
   const navigate = useNavigate();
 
+  // Handle Sport Button Click
   const handleSportClick = (sport) => {
     setSelectedSport(sport);
     onSportSelect(sport);
   };
-
-  // Animation for heatmaps
-  useEffect(() => {
-    if (selectedSport) return; // Stop animation once a sport is selected
-
-    const interval = setInterval(() => {
-      setAnimateHeatmaps((prev) => {
-        const newAnimate = [...prev];
-        const randomIndex = Math.floor(Math.random() * newAnimate.length);
-        newAnimate[randomIndex] = !newAnimate[randomIndex];
-        return newAnimate;
-      });
-    }, 1000); // Change heatmap every 1 second
-
-    return () => clearInterval(interval);
-  }, [selectedSport]);
-
-  const animationProps = useSpring({
-    opacity: selectedSport ? 0 : 1,
-    transform: selectedSport ? 'scale(0.8)' : 'scale(1)',
-    config: { duration: 500 },
-  });
 
   // Dropzone setup
   const onDrop = (acceptedFiles) => {
@@ -137,20 +113,54 @@ const Analysis = ({ onSportSelect }) => {
     const file = acceptedFiles[0];
     setUploadedFile(file);
 
-    Swal.fire({
-      title: 'File Uploaded',
-      text: `${file.name} has been uploaded successfully.`,
-      icon: 'success',
-      confirmButtonText: 'OK',
-    });
+    // Read the file content
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const json = JSON.parse(reader.result);
+        setParsedData(json);
+        determineDatasetType(json);
+        Swal.fire({
+          title: 'File Uploaded',
+          text: `${file.name} has been uploaded and parsed successfully.`,
+          icon: 'success',
+          confirmButtonText: 'OK',
+        });
+      } catch (error) {
+        console.error('Error parsing JSON:', error);
+        Swal.fire({
+          title: 'Invalid File',
+          text: 'The uploaded file is not a valid JSON.',
+          icon: 'error',
+          confirmButtonText: 'OK',
+        });
+      }
+    };
+    reader.readAsText(file);
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: '.csv, application/json',
+    accept: '.json',
     multiple: false,
   });
 
+  // Determine Dataset Type
+  const determineDatasetType = (data) => {
+    if (data.games && Array.isArray(data.games)) {
+      if (data.games.length > 1) {
+        setDatasetType('aggregated');
+      } else if (data.games.length === 1) {
+        setDatasetType('single');
+      } else {
+        setDatasetType(null);
+      }
+    } else {
+      setDatasetType(null);
+    }
+  };
+
+  // Handle Continue Button Click
   const handleContinue = () => {
     if (!uploadedFile) {
       Swal.fire({
@@ -172,15 +182,28 @@ const Analysis = ({ onSportSelect }) => {
       return;
     }
 
+    if (!parsedData) {
+      Swal.fire({
+        title: 'No Data Parsed',
+        text: 'The uploaded dataset could not be parsed.',
+        icon: 'error',
+        confirmButtonText: 'OK',
+      });
+      return;
+    }
+
     // Navigate to the filter page with the uploaded file and selected sport
     navigate('/analysis/filter', {
       state: { file: uploadedFile, sport: selectedSport },
     });
   };
 
+  // Handle Reset Button Click
   const handleReset = () => {
     setSelectedSport(null);
     setUploadedFile(null);
+    setParsedData(null);
+    setDatasetType(null);
   };
 
   // Function to get sport-specific icons
@@ -201,7 +224,7 @@ const Analysis = ({ onSportSelect }) => {
 
   return (
     <Container>
-      {/* Always display the Sport Buttons */}
+      {/* Sport Selection Buttons */}
       <ButtonRow>
         <SportButton
           sport="Soccer"
@@ -225,13 +248,10 @@ const Analysis = ({ onSportSelect }) => {
         />
       </ButtonRow>
 
-      {/* Conditionally render the grid or the dropzone */}
-      {!selectedSport ? (
-        <PitchAnimation style={animationProps}>
-          <SoccerPitchGrid animateHeatmaps={animateHeatmaps} />
-        </PitchAnimation>
-      ) : (
+      {/* Conditionally render the dropzone and buttons after selecting a sport */}
+      {selectedSport && (
         <>
+          {/* Dropzone for File Upload */}
           <DropzoneContainer {...getRootProps()}>
             <input {...getInputProps()} />
             {isDragActive ? (

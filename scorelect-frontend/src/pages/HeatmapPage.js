@@ -120,11 +120,11 @@ const StyledTabs = styled(Tabs)`
     min-width: 50%;
     transition: background-color 0.3s ease-in-out;
     color: #000000;
-    background-color: #D3D3D3;
+    background-color: #d3d3d3;
   }
   .MuiTab-root.Mui-selected {
-    background-color: #5E2E8F;
-    color: #D3D3D3;
+    background-color: #5e2e8f;
+    color: #d3d3d3;
   }
 `;
 
@@ -154,7 +154,6 @@ const HeatmapPage = () => {
   const [selectedStat, setSelectedStat] = useState('All');
   const [showXG, setShowXG] = useState(true);
   const backendUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
-
 
   // Function to calculate XG using logistic regression approximation
   const calculateShotFeatures = (x, y) => {
@@ -197,7 +196,7 @@ const HeatmapPage = () => {
     }
 
     const processHeatmapAndXG = () => {
-      const filteredData = data.filter((entry) => {
+      const filteredData = data.flatMap((game) => game.gameData).filter((entry) => {
         // Normalize keys to lowercase
         const normalizedEntry = {};
         Object.keys(entry).forEach((key) => {
@@ -306,190 +305,190 @@ const HeatmapPage = () => {
     }
   };
 
-// Function to render the soccer pitch
-const renderSoccerPitch = () => {
-  console.log('Rendering Soccer Pitch'); // Debugging log
-  const numStripes = 10;
-  const stripeWidth = stageWidth / numStripes;
+  // Function to render the soccer pitch
+  const renderSoccerPitch = () => {
+    console.log('Rendering Soccer Pitch'); // Debugging log
+    const numStripes = 10;
+    const stripeWidth = stageWidth / numStripes;
 
-  return (
-    <>
-      {/* Pitch Background */}
-      <Rect x={0} y={0} width={stageWidth} height={stageHeight} fill="#00A86B" />
+    return (
+      <>
+        {/* Pitch Background */}
+        <Rect x={0} y={0} width={stageWidth} height={stageHeight} fill="#00A86B" />
 
-      {/* Stripes */}
-      {Array.from({ length: numStripes }, (_, i) => (
-        <Rect
-          key={i}
-          x={i * stripeWidth}
-          y={0}
-          width={stripeWidth}
-          height={stageHeight}
-          fill={i % 2 === 0 ? '#A8D5BA' : '#8FBF9C'}
-          opacity={0.3} // Adjust opacity for subtlety
+        {/* Stripes */}
+        {Array.from({ length: numStripes }, (_, i) => (
+          <Rect
+            key={i}
+            x={i * stripeWidth}
+            y={0}
+            width={stripeWidth}
+            height={stageHeight}
+            fill={i % 2 === 0 ? '#A8D5BA' : '#8FBF9C'}
+            opacity={0.3} // Adjust opacity for subtlety
+          />
+        ))}
+
+        {/* Outer Lines */}
+        <Line
+          points={[0, 0, stageWidth, 0, stageWidth, stageHeight, 0, stageHeight, 0, 0]}
+          stroke="#000000"
+          strokeWidth={2}
         />
-      ))}
 
-      {/* Outer Lines */}
-      <Line
-        points={[0, 0, stageWidth, 0, stageWidth, stageHeight, 0, stageHeight, 0, 0]}
-        stroke="#000000"
-        strokeWidth={2}
-      />
+        {/* 6-yard Boxes */}
+        {/* Left 6-yard Box */}
+        <Line
+          points={[0, yScale * 23.1, xScale * 5.5, yScale * 23.1, xScale * 5.5, yScale * 44.9, 0, yScale * 44.9]}
+          stroke="#000000"
+          strokeWidth={2}
+        />
+        {/* Right 6-yard Box */}
+        <Line
+          points={[
+            stageWidth,
+            yScale * 23.1,
+            xScale * 99.5,
+            yScale * 23.1,
+            xScale * 99.5,
+            yScale * 44.9,
+            stageWidth,
+            yScale * 44.9,
+          ]}
+          stroke="#000000"
+          strokeWidth={2}
+        />
 
-      {/* 6-yard Boxes */}
-      {/* Left 6-yard Box */}
-      <Line
-        points={[0, yScale * 23.1, xScale * 5.5, yScale * 23.1, xScale * 5.5, yScale * 44.9, 0, yScale * 44.9]}
-        stroke="#000000"
-        strokeWidth={2}
-      />
-      {/* Right 6-yard Box */}
-      <Line
-        points={[
-          stageWidth,
-          yScale * 23.1,
-          xScale * 99.5,
-          yScale * 23.1,
-          xScale * 99.5,
-          yScale * 44.9,
-          stageWidth,
-          yScale * 44.9,
-        ]}
-        stroke="#000000"
-        strokeWidth={2}
-      />
+        {/* Penalty Areas */}
+        {/* Left Penalty Area */}
+        <Line
+          points={[0, yScale * 14, xScale * 16.5, yScale * 14, xScale * 16.5, yScale * 54, 0, yScale * 54]}
+          stroke="#000000"
+          strokeWidth={2}
+        />
+        {/* Right Penalty Area */}
+        <Line
+          points={[
+            stageWidth,
+            yScale * 14,
+            xScale * 88.5,
+            yScale * 14,
+            xScale * 88.5,
+            yScale * 54,
+            stageWidth,
+            yScale * 54,
+          ]}
+          stroke="#000000"
+          strokeWidth={2}
+        />
 
-      {/* Penalty Areas */}
-      {/* Left Penalty Area */}
-      <Line
-        points={[0, yScale * 14, xScale * 16.5, yScale * 14, xScale * 16.5, yScale * 54, 0, yScale * 54]}
-        stroke="#000000"
-        strokeWidth={2}
-      />
-      {/* Right Penalty Area */}
-      <Line
-        points={[
-          stageWidth,
-          yScale * 14,
-          xScale * 88.5,
-          yScale * 14,
-          xScale * 88.5,
-          yScale * 54,
-          stageWidth,
-          yScale * 54,
-        ]}
-        stroke="#000000"
-        strokeWidth={2}
-      />
+        {/* Penalty Spots */}
+        <Circle x={xScale * 11} y={yScale * 34} radius={xScale * 0.4} fill="#000000" />
+        <Circle x={xScale * 94} y={yScale * 34} radius={xScale * 0.4} fill="#000000" />
 
-      {/* Penalty Spots */}
-      <Circle x={xScale * 11} y={yScale * 34} radius={xScale * 0.4} fill="#000000" />
-      <Circle x={xScale * 94} y={yScale * 34} radius={xScale * 0.4} fill="#000000" />
+        {/* Halfway Line */}
+        <Line points={[xScale * 52.5, 0, xScale * 52.5, stageHeight]} stroke="#000000" strokeWidth={2} />
 
-      {/* Halfway Line */}
-      <Line points={[xScale * 52.5, 0, xScale * 52.5, stageHeight]} stroke="#000000" strokeWidth={2} />
+        {/* Center Circle */}
+        <Circle
+          x={xScale * 52.5}
+          y={yScale * 34}
+          radius={xScale * 9.15}
+          stroke="#000000"
+          strokeWidth={2}
+        />
 
-      {/* Center Circle */}
-      <Circle
-        x={xScale * 52.5}
-        y={yScale * 34}
-        radius={xScale * 9.15}
-        stroke="#000000"
-        strokeWidth={2}
-      />
+        {/* Corner Arcs */}
+        {/* Top Left */}
+        <Arc
+          x={0}
+          y={0}
+          innerRadius={0}
+          outerRadius={xScale * 1}
+          angle={90}
+          rotation={0}
+          stroke="#000000"
+          strokeWidth={2}
+        />
+        {/* Bottom Left */}
+        <Arc
+          x={0}
+          y={stageHeight}
+          innerRadius={0}
+          outerRadius={xScale * 1}
+          angle={90}
+          rotation={270}
+          stroke="#000000"
+          strokeWidth={2}
+        />
+        {/* Top Right */}
+        <Arc
+          x={stageWidth}
+          y={0}
+          innerRadius={0}
+          outerRadius={xScale * 1}
+          angle={90}
+          rotation={90}
+          stroke="#000000"
+          strokeWidth={2}
+        />
+        {/* Bottom Right */}
+        <Arc
+          x={stageWidth}
+          y={stageHeight}
+          innerRadius={0}
+          outerRadius={xScale * 1}
+          angle={90}
+          rotation={180}
+          stroke="#000000"
+          strokeWidth={2}
+        />
 
-      {/* Corner Arcs */}
-      {/* Top Left */}
-      <Arc
-        x={0}
-        y={0}
-        innerRadius={0}
-        outerRadius={xScale * 1}
-        angle={90}
-        rotation={0}
-        stroke="#000000"
-        strokeWidth={2}
-      />
-      {/* Bottom Left */}
-      <Arc
-        x={0}
-        y={stageHeight}
-        innerRadius={0}
-        outerRadius={xScale * 1}
-        angle={90}
-        rotation={270}
-        stroke="#000000"
-        strokeWidth={2}
-      />
-      {/* Top Right */}
-      <Arc
-        x={stageWidth}
-        y={0}
-        innerRadius={0}
-        outerRadius={xScale * 1}
-        angle={90}
-        rotation={90}
-        stroke="#000000"
-        strokeWidth={2}
-      />
-      {/* Bottom Right */}
-      <Arc
-        x={stageWidth}
-        y={stageHeight}
-        innerRadius={0}
-        outerRadius={xScale * 1}
-        angle={90}
-        rotation={180}
-        stroke="#000000"
-        strokeWidth={2}
-      />
+        {/* Penalty Arcs */}
+        {/* Right Penalty Arc */}
+        <Arc
+          x={xScale * 94}
+          y={yScale * 34}
+          innerRadius={xScale * 9.15}
+          outerRadius={xScale * 9.15}
+          angle={105}
+          rotation={127.5}
+          stroke="#000000"
+          strokeWidth={2}
+        />
+        {/* Left Penalty Arc */}
+        <Arc
+          x={xScale * 11}
+          y={yScale * 34}
+          innerRadius={xScale * 9.15}
+          outerRadius={xScale * 9.15}
+          angle={105}
+          rotation={307.5}
+          stroke="#000000"
+          strokeWidth={2}
+        />
 
-      {/* Penalty Arcs */}
-      {/* Right Penalty Arc */}
-      <Arc
-        x={xScale * 94}
-        y={yScale * 34}
-        innerRadius={xScale * 9.15}
-        outerRadius={xScale * 9.15}
-        angle={105}
-        rotation={127.5}
-        stroke="#000000"
-        strokeWidth={2}
-      />
-      {/* Left Penalty Arc */}
-      <Arc
-        x={xScale * 11}
-        y={yScale * 34}
-        innerRadius={xScale * 9.15}
-        outerRadius={xScale * 9.15}
-        angle={105}
-        rotation={307.5}
-        stroke="#000000"
-        strokeWidth={2}
-      />
-
-      {/* "SCORELECT.COM" Text */}
-      <Text
-        text="SCORELECT.COM"
-        x={xScale * 22.5}
-        y={stageHeight / 40.25}
-        fontSize={stageWidth / 50}
-        fill="#D3D3D3"
-        opacity={0.7}
-        align="center"
-      />
-      <Text
-        text="SCORELECT.COM"
-        x={stageWidth - xScale * 22.5}
-        y={stageHeight / 1.02}
-        fontSize={stageWidth / 50}
-        fill="#D3D3D3"
-        opacity={0.7}
-        rotation={180}
-        align="center"
-      />
-    </>
+        {/* "SCORELECT.COM" Text */}
+        <Text
+          text="SCORELECT.COM"
+          x={xScale * 22.5}
+          y={stageHeight / 40.25}
+          fontSize={stageWidth / 50}
+          fill="#D3D3D3"
+          opacity={0.7}
+          align="center"
+        />
+        <Text
+          text="SCORELECT.COM"
+          x={stageWidth - xScale * 22.5}
+          y={stageHeight / 1.02}
+          fontSize={stageWidth / 50}
+          fill="#D3D3D3"
+          opacity={0.7}
+          rotation={180}
+          align="center"
+        />
+      </>
   );
 };
 
@@ -707,13 +706,13 @@ const renderSoccerPitch = () => {
     setTabValue(newValue);
   };
 
-// Function to Generate AI Insights
-const generateAIInsights = async () => {
-  setIsGeneratingInsights(true);
+  // Function to Generate AI Insights
+  const generateAIInsights = async () => {
+    setIsGeneratingInsights(true);
 
-  try {
-    // Prepare the enhanced summary
-    const summary = `We have analyzed a soccer match with the following data:
+    try {
+      // Prepare the enhanced summary
+      const summary = `We have analyzed a ${sport} match with the following data:
 - Total Actions: ${processedData.length}
 - Selected Stat: ${selectedStat}
 - Actions Distribution:
@@ -721,42 +720,42 @@ ${aggregateDataForBarChart()
   .map((item) => `  - ${item.action}: ${item.count}`)
   .join('\n')}
 ${showXG ? `- Expected Goals (XG) by Team:\n${Object.entries(
-      processedData.reduce((acc, curr) => {
-        const team = curr.team || 'Unknown';
-        if (!acc[team]) acc[team] = 0;
-        acc[team] += curr.xg || 0;
-        return acc;
-      }, {})
-    )
-      .map(([team, xg]) => `  - ${team}: ${xg.toFixed(2)}`)
-      .join('\n')}` : ''}
+  processedData.reduce((acc, curr) => {
+    const team = curr.team || 'Unknown';
+    if (!acc[team]) acc[team] = 0;
+    acc[team] += curr.xg || 0;
+    return acc;
+  }, {})
+)
+  .map(([team, xg]) => `  - ${team}: ${xg.toFixed(2)}`)
+  .join('\n')}` : ''}
 `;
 
-  console.log('Summary being sent to backend:', summary);
+      console.log('Summary being sent to backend:', summary);
 
-  // Use the full backend URL
-  const response = await axios.post(`${backendUrl}/generate-insights`, { summary });
+      // Use the full backend URL
+      const response = await axios.post(`${backendUrl}/generate-insights`, { summary });
 
-  console.log('Response from backend:', response.data);
+      console.log('Response from backend:', response.data);
 
-  if (response.data.error) {
-    throw new Error(response.data.error);
-  }
+      if (response.data.error) {
+        throw new Error(response.data.error);
+      }
 
-  setAIInsights(response.data.insights);
-  } catch (error) {
-  console.error('Error generating AI insights:', error);
+      setAIInsights(response.data.insights);
+    } catch (error) {
+      console.error('Error generating AI insights:', error);
 
-  Swal.fire({
-    title: 'Error',
-    text: `Failed to generate AI insights: ${error.response?.data?.error || error.message}`,
-    icon: 'error',
-    confirmButtonText: 'OK',
-  });
-  } finally {
-  setIsGeneratingInsights(false);
-  }
-};
+      Swal.fire({
+        title: 'Error',
+        text: `Failed to generate AI insights: ${error.response?.data?.error || error.message}`,
+        icon: 'error',
+        confirmButtonText: 'OK',
+      });
+    } finally {
+      setIsGeneratingInsights(false);
+    }
+  };
 
   // Use useEffect to call generateAIInsights when switching to AI tab
   useEffect(() => {
@@ -766,101 +765,101 @@ ${showXG ? `- Expected Goals (XG) by Team:\n${Object.entries(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabValue]);
 
-    return (
-      <Container>
-        {/* Tabs at the top */}
-        <Box sx={{ width: '25%', marginBottom: '20px' }}>
-          <StyledTabs
-            value={tabValue}
-            onChange={handleTabChange}
-            centered
-            TabIndicatorProps={{ style: { display: 'none' } }}
-          >
-            <Tab label="Analysis" value="analysis" />
-            <Tab label="AI Insight" value="ai" />
-          </StyledTabs>
-        </Box>
-  
-        {/* Analysis Tab Content */}
-        {tabValue === 'analysis' && (
-          <>
-            <AnalysisTitle>{sport} Heatmap Analysis</AnalysisTitle>
-            {/* Dropdown and Checkbox */}
-            <Box sx={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
-              <FormControl variant="outlined" sx={{ minWidth: 200, marginRight: '20px' }}>
-                <InputLabel id="stat-select-label">Select Stat</InputLabel>
-                <Select
-                  labelId="stat-select-label"
-                  id="stat-select"
-                  value={selectedStat}
-                  onChange={(e) => setSelectedStat(e.target.value)}
-                  label="Select Stat"
-                >
-                  <MenuItem value="All">All</MenuItem>
-                  <MenuItem value="Goals">Goals</MenuItem>
-                  <MenuItem value="Assists">Assists</MenuItem>
-                  <MenuItem value="Shots on Target">Shots on Target</MenuItem>
-                  <MenuItem value="Shots off Target">Shots off Target</MenuItem>
-                </Select>
-              </FormControl>
-              <FormControlLabel
-                control={<Checkbox checked={showXG} onChange={(e) => setShowXG(e.target.checked)} />}
-                label="Show XG"
-              />
-            </Box>
-            <HeatmapContainer>
-              <Stage width={stageWidth} height={stageHeight} ref={stageRef}>
-                {/* Soccer Pitch Layer */}
-                <Layer>{renderSoccerPitch()}</Layer>
-  
-                {/* Smooth Heatmap Layer */}
-                {charts.heatmap && isHeatmapReady && renderSmoothHeatmap()}
-  
-                {/* Shots with XG Tooltip Layer */}
-                {isHeatmapReady && renderShotsWithXG()}
-              </Stage>
-              <GenerateButton onClick={handleExport}>Export Heatmap</GenerateButton>
-              {/* Tooltip for XG */}
-              {tooltip.visible && (
-                <TooltipDiv
-                  style={{
-                    top: tooltip.y,
-                    left: tooltip.x,
-                    display: tooltip.visible ? 'block' : 'none',
-                  }}
-                >
-                  {tooltip.content}
-                </TooltipDiv>
-              )}
-            </HeatmapContainer>
-  
-            {/* Additional Visualizations */}
-            <ChartsContainer>
-              {charts.xgChart && renderXGChart()}
-              {charts.heatmap && renderActionsDistributionChart()}
-              <AggregatedDataChart data={processedData} sport={sport} />
-              <ShotsTable data={processedData} />
-            </ChartsContainer>
-          </>
-        )}
-  
-        {/* AI Insight Tab Content */}
-        {tabValue === 'ai' && (
-          <Box sx={{ width: '90%', maxWidth: 1000, marginTop: '40px' }}>
-            <Typography variant="h4" gutterBottom>
-              AI Insights
-            </Typography>
-            {isGeneratingInsights ? (
-              <Typography variant="body1">Generating insights, please wait...</Typography>
-            ) : (
-              <Typography variant="body1" style={{ whiteSpace: 'pre-wrap' }}>
-                {aiInsights}
-              </Typography>
-            )}
+  return (
+    <Container>
+      {/* Tabs at the top */}
+      <Box sx={{ width: '25%', marginBottom: '20px' }}>
+        <StyledTabs
+          value={tabValue}
+          onChange={handleTabChange}
+          centered
+          TabIndicatorProps={{ style: { display: 'none' } }}
+        >
+          <Tab label="Analysis" value="analysis" />
+          <Tab label="AI Insight" value="ai" />
+        </StyledTabs>
+      </Box>
+
+      {/* Analysis Tab Content */}
+      {tabValue === 'analysis' && (
+        <>
+          <AnalysisTitle>{sport} Heatmap Analysis</AnalysisTitle>
+          {/* Dropdown and Checkbox */}
+          <Box sx={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
+            <FormControl variant="outlined" sx={{ minWidth: 200, marginRight: '20px' }}>
+              <InputLabel id="stat-select-label">Select Stat</InputLabel>
+              <Select
+                labelId="stat-select-label"
+                id="stat-select"
+                value={selectedStat}
+                onChange={(e) => setSelectedStat(e.target.value)}
+                label="Select Stat"
+              >
+                <MenuItem value="All">All</MenuItem>
+                <MenuItem value="Goals">Goals</MenuItem>
+                <MenuItem value="Assists">Assists</MenuItem>
+                <MenuItem value="Shots on Target">Shots on Target</MenuItem>
+                <MenuItem value="Shots off Target">Shots off Target</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControlLabel
+              control={<Checkbox checked={showXG} onChange={(e) => setShowXG(e.target.checked)} />}
+              label="Show XG"
+            />
           </Box>
-        )}
-      </Container>
-    );
-  };
+          <HeatmapContainer>
+            <Stage width={stageWidth} height={stageHeight} ref={stageRef}>
+              {/* Soccer Pitch Layer */}
+              <Layer>{renderSoccerPitch()}</Layer>
+
+              {/* Smooth Heatmap Layer */}
+              {charts.heatmap && isHeatmapReady && renderSmoothHeatmap()}
+
+              {/* Shots with XG Tooltip Layer */}
+              {isHeatmapReady && renderShotsWithXG()}
+            </Stage>
+            <GenerateButton onClick={handleExport}>Export Heatmap</GenerateButton>
+            {/* Tooltip for XG */}
+            {tooltip.visible && (
+              <TooltipDiv
+                style={{
+                  top: tooltip.y,
+                  left: tooltip.x,
+                  display: tooltip.visible ? 'block' : 'none',
+                }}
+              >
+                {tooltip.content}
+              </TooltipDiv>
+            )}
+          </HeatmapContainer>
+
+          {/* Additional Visualizations */}
+          <ChartsContainer>
+            {charts.xgChart && renderXGChart()}
+            {charts.heatmap && renderActionsDistributionChart()}
+            <AggregatedDataChart data={processedData} sport={sport} />
+            <ShotsTable data={processedData} sport={sport} />
+          </ChartsContainer>
+        </>
+      )}
+
+      {/* AI Insight Tab Content */}
+      {tabValue === 'ai' && (
+        <Box sx={{ width: '90%', maxWidth: 1000, marginTop: '40px' }}>
+          <Typography variant="h4" gutterBottom>
+            AI Insights
+          </Typography>
+          {isGeneratingInsights ? (
+            <Typography variant="body1">Generating insights, please wait...</Typography>
+          ) : (
+            <Typography variant="body1" style={{ whiteSpace: 'pre-wrap' }}>
+              {aiInsights}
+            </Typography>
+          )}
+        </Box>
+      )}
+    </Container>
+  );
+};
 
 export default HeatmapPage;

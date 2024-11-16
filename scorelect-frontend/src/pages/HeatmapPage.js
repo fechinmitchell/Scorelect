@@ -182,6 +182,80 @@ const HeatmapPage = () => {
     return xg;
   };
 
+  // Function to aggregate data for Actions Distribution Chart
+  const aggregateDataForBarChart = () => {
+    const actionAggregation = {};
+
+    processedData.forEach((entry) => {
+      const action = entry.action || 'Unknown';
+
+      if (!actionAggregation[action]) {
+        actionAggregation[action] = 0;
+      }
+
+      actionAggregation[action] += 1;
+    });
+
+    const chartData = Object.keys(actionAggregation).map((action) => ({
+      action,
+      count: actionAggregation[action],
+    }));
+
+    return chartData;
+  };
+
+  // Function to generate AI Insights
+  const generateAIInsights = async () => {
+    setIsGeneratingInsights(true);
+
+    try {
+      // Prepare the enhanced summary
+      const summary = `We have analyzed a ${sport} match with the following data:
+- Total Actions: ${processedData.length}
+- Selected Stat: ${selectedStat}
+- Actions Distribution:
+${aggregateDataForBarChart()
+  .map((item) => `  - ${item.action}: ${item.count}`)
+  .join('\n')}
+${showXG ? `- Expected Goals (XG) by Team:
+${Object.entries(
+  processedData.reduce((acc, curr) => {
+    const team = curr.team || 'Unknown';
+    if (!acc[team]) acc[team] = 0;
+    acc[team] += curr.xg || 0;
+    return acc;
+  }, {})
+)
+  .map(([team, xg]) => `  - ${team}: ${xg.toFixed(2)}`)
+  .join('\n')}` : ''}
+`;
+
+      console.log('Summary being sent to backend:', summary);
+
+      // Use the full backend URL
+      const response = await axios.post(`${backendUrl}/generate-insights`, { summary });
+
+      console.log('Response from backend:', response.data);
+
+      if (response.data.error) {
+        throw new Error(response.data.error);
+      }
+
+      setAIInsights(response.data.insights);
+    } catch (error) {
+      console.error('Error generating AI insights:', error);
+
+      Swal.fire({
+        title: 'Error',
+        text: `Failed to generate AI insights: ${error.response?.data?.error || error.message}`,
+        icon: 'error',
+        confirmButtonText: 'OK',
+      });
+    } finally {
+      setIsGeneratingInsights(false);
+    }
+  };
+
   // Process data to generate heatmap and calculate XG
   useEffect(() => {
     if (!data || !sport) {
@@ -281,6 +355,14 @@ const HeatmapPage = () => {
 
     processHeatmapAndXG();
   }, [data, navigate, sport, selectedStat, showXG]);
+
+  // useEffect to generate AI Insights on component mount
+  useEffect(() => {
+    if (!aiInsights && !isGeneratingInsights && isHeatmapReady) {
+      generateAIInsights();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiInsights, isGeneratingInsights, isHeatmapReady]); // Ensure heatmap is ready before generating insights
 
   // Handle Export Functionality
   const handleExport = () => {
@@ -489,8 +571,7 @@ const HeatmapPage = () => {
           align="center"
         />
       </>
-  );
-};
+    );};
 
   // Function to render the smooth heatmap
   const renderSmoothHeatmap = () => {
@@ -599,28 +680,6 @@ const HeatmapPage = () => {
     return <Layer>{shotGroups}</Layer>;
   };
 
-  // Function to aggregate data for Actions Distribution Chart
-  const aggregateDataForBarChart = () => {
-    const actionAggregation = {};
-
-    processedData.forEach((entry) => {
-      const action = entry.action || 'Unknown';
-
-      if (!actionAggregation[action]) {
-        actionAggregation[action] = 0;
-      }
-
-      actionAggregation[action] += 1;
-    });
-
-    const chartData = Object.keys(actionAggregation).map((action) => ({
-      action,
-      count: actionAggregation[action],
-    }));
-
-    return chartData;
-  };
-
   // Render Actions Distribution Chart
   const renderActionsDistributionChart = () => (
     <ActionsDistributionContainer>
@@ -701,69 +760,92 @@ const HeatmapPage = () => {
     );
   };
 
+  // Function to render AI Insights (Separate Function for Clarity)
+  const renderAIInsights = () => (
+    <Box sx={{ width: '90%', maxWidth: 1000, marginTop: '40px' }}>
+      <Typography variant="h4" gutterBottom>
+        AI Insights
+      </Typography>
+      {isGeneratingInsights ? (
+        <Typography variant="body1" style={{ whiteSpace: 'pre-wrap', color: 'white'}}>Generating insights, please wait...</Typography>
+      ) : (
+        <Typography
+          variant="body1"
+          style={{ whiteSpace: 'pre-wrap', color: 'white' }} // Ensures text is white
+        >
+          {aiInsights}
+        </Typography>
+      )}
+    </Box>
+  );
+
+  // Function to render Analysis Tab Content (Separate Function for Clarity)
+  const renderAnalysisContent = () => (
+    <>
+      <AnalysisTitle>{sport} Heatmap Analysis</AnalysisTitle>
+      {/* Dropdown and Checkbox */}
+      <Box sx={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
+        <FormControl variant="outlined" sx={{ minWidth: 200, marginRight: '20px' }}>
+          <InputLabel id="stat-select-label">Select Stat</InputLabel>
+          <Select
+            labelId="stat-select-label"
+            id="stat-select"
+            value={selectedStat}
+            onChange={(e) => setSelectedStat(e.target.value)}
+            label="Select Stat"
+          >
+            <MenuItem value="All">All</MenuItem>
+            <MenuItem value="Goals">Goals</MenuItem>
+            <MenuItem value="Assists">Assists</MenuItem>
+            <MenuItem value="Shots on Target">Shots on Target</MenuItem>
+            <MenuItem value="Shots off Target">Shots off Target</MenuItem>
+          </Select>
+        </FormControl>
+        <FormControlLabel
+          control={<Checkbox checked={showXG} onChange={(e) => setShowXG(e.target.checked)} />}
+          label="Show XG"
+        />
+      </Box>
+      <HeatmapContainer>
+        <Stage width={stageWidth} height={stageHeight} ref={stageRef}>
+          {/* Soccer Pitch Layer */}
+          <Layer>{renderSoccerPitch()}</Layer>
+
+          {/* Smooth Heatmap Layer */}
+          {charts.heatmap && isHeatmapReady && renderSmoothHeatmap()}
+
+          {/* Shots with XG Tooltip Layer */}
+          {isHeatmapReady && renderShotsWithXG()}
+        </Stage>
+        <GenerateButton onClick={handleExport}>Export Heatmap</GenerateButton>
+        {/* Tooltip for XG */}
+        {tooltip.visible && (
+          <TooltipDiv
+            style={{
+              top: tooltip.y,
+              left: tooltip.x,
+              display: tooltip.visible ? 'block' : 'none',
+            }}
+          >
+            {tooltip.content}
+          </TooltipDiv>
+        )}
+      </HeatmapContainer>
+
+      {/* Additional Visualizations */}
+      <ChartsContainer>
+        {charts.xgChart && renderXGChart()}
+        {charts.heatmap && renderActionsDistributionChart()}
+        <AggregatedDataChart data={processedData} sport={sport} />
+        <ShotsTable data={processedData} sport={sport} />
+      </ChartsContainer>
+    </>
+  );
+
   // Handle Tab Change
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
   };
-
-  // Function to Generate AI Insights
-  const generateAIInsights = async () => {
-    setIsGeneratingInsights(true);
-
-    try {
-      // Prepare the enhanced summary
-      const summary = `We have analyzed a ${sport} match with the following data:
-- Total Actions: ${processedData.length}
-- Selected Stat: ${selectedStat}
-- Actions Distribution:
-${aggregateDataForBarChart()
-  .map((item) => `  - ${item.action}: ${item.count}`)
-  .join('\n')}
-${showXG ? `- Expected Goals (XG) by Team:\n${Object.entries(
-  processedData.reduce((acc, curr) => {
-    const team = curr.team || 'Unknown';
-    if (!acc[team]) acc[team] = 0;
-    acc[team] += curr.xg || 0;
-    return acc;
-  }, {})
-)
-  .map(([team, xg]) => `  - ${team}: ${xg.toFixed(2)}`)
-  .join('\n')}` : ''}
-`;
-
-      console.log('Summary being sent to backend:', summary);
-
-      // Use the full backend URL
-      const response = await axios.post(`${backendUrl}/generate-insights`, { summary });
-
-      console.log('Response from backend:', response.data);
-
-      if (response.data.error) {
-        throw new Error(response.data.error);
-      }
-
-      setAIInsights(response.data.insights);
-    } catch (error) {
-      console.error('Error generating AI insights:', error);
-
-      Swal.fire({
-        title: 'Error',
-        text: `Failed to generate AI insights: ${error.response?.data?.error || error.message}`,
-        icon: 'error',
-        confirmButtonText: 'OK',
-      });
-    } finally {
-      setIsGeneratingInsights(false);
-    }
-  };
-
-  // Use useEffect to call generateAIInsights when switching to AI tab
-  useEffect(() => {
-    if (tabValue === 'ai' && !aiInsights && !isGeneratingInsights) {
-      generateAIInsights();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabValue]);
 
   return (
     <Container>
@@ -780,84 +862,9 @@ ${showXG ? `- Expected Goals (XG) by Team:\n${Object.entries(
         </StyledTabs>
       </Box>
 
-      {/* Analysis Tab Content */}
-      {tabValue === 'analysis' && (
-        <>
-          <AnalysisTitle>{sport} Heatmap Analysis</AnalysisTitle>
-          {/* Dropdown and Checkbox */}
-          <Box sx={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
-            <FormControl variant="outlined" sx={{ minWidth: 200, marginRight: '20px' }}>
-              <InputLabel id="stat-select-label">Select Stat</InputLabel>
-              <Select
-                labelId="stat-select-label"
-                id="stat-select"
-                value={selectedStat}
-                onChange={(e) => setSelectedStat(e.target.value)}
-                label="Select Stat"
-              >
-                <MenuItem value="All">All</MenuItem>
-                <MenuItem value="Goals">Goals</MenuItem>
-                <MenuItem value="Assists">Assists</MenuItem>
-                <MenuItem value="Shots on Target">Shots on Target</MenuItem>
-                <MenuItem value="Shots off Target">Shots off Target</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControlLabel
-              control={<Checkbox checked={showXG} onChange={(e) => setShowXG(e.target.checked)} />}
-              label="Show XG"
-            />
-          </Box>
-          <HeatmapContainer>
-            <Stage width={stageWidth} height={stageHeight} ref={stageRef}>
-              {/* Soccer Pitch Layer */}
-              <Layer>{renderSoccerPitch()}</Layer>
-
-              {/* Smooth Heatmap Layer */}
-              {charts.heatmap && isHeatmapReady && renderSmoothHeatmap()}
-
-              {/* Shots with XG Tooltip Layer */}
-              {isHeatmapReady && renderShotsWithXG()}
-            </Stage>
-            <GenerateButton onClick={handleExport}>Export Heatmap</GenerateButton>
-            {/* Tooltip for XG */}
-            {tooltip.visible && (
-              <TooltipDiv
-                style={{
-                  top: tooltip.y,
-                  left: tooltip.x,
-                  display: tooltip.visible ? 'block' : 'none',
-                }}
-              >
-                {tooltip.content}
-              </TooltipDiv>
-            )}
-          </HeatmapContainer>
-
-          {/* Additional Visualizations */}
-          <ChartsContainer>
-            {charts.xgChart && renderXGChart()}
-            {charts.heatmap && renderActionsDistributionChart()}
-            <AggregatedDataChart data={processedData} sport={sport} />
-            <ShotsTable data={processedData} sport={sport} />
-          </ChartsContainer>
-        </>
-      )}
-
-      {/* AI Insight Tab Content */}
-      {tabValue === 'ai' && (
-        <Box sx={{ width: '90%', maxWidth: 1000, marginTop: '40px' }}>
-          <Typography variant="h4" gutterBottom>
-            AI Insights
-          </Typography>
-          {isGeneratingInsights ? (
-            <Typography variant="body1">Generating insights, please wait...</Typography>
-          ) : (
-            <Typography variant="body1" style={{ whiteSpace: 'pre-wrap' }}>
-              {aiInsights}
-            </Typography>
-          )}
-        </Box>
-      )}
+      {/* Conditional Rendering Based on Selected Tab */}
+      {tabValue === 'analysis' && renderAnalysisContent()}
+      {tabValue === 'ai' && renderAIInsights()}
     </Container>
   );
 };

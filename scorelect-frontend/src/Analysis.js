@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import PropTypes from 'prop-types';
 import SportButton from './SportButton';
-import { useSpring, animated } from 'react-spring';
 import { useDropzone } from 'react-dropzone';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
@@ -13,6 +12,7 @@ import {
   FaBasketballBall,
   FaVolleyballBall,
   FaFutbol,
+  FaUpload,
 } from 'react-icons/fa';
 
 // Styled Components
@@ -41,17 +41,47 @@ const DropzoneContainer = styled.div`
   border: 2px dashed #501387;
   border-radius: 10px;
   display: flex;
-  flex-direction: column; /* Changed to column to accommodate icon */
+  flex-direction: column; /* Align items vertically */
   align-items: center;
   justify-content: center;
   color: #501387;
   font-size: 1.2rem;
   cursor: pointer;
-  background-color: #f9f9f9;
+  background: ${(props) => {
+    switch (props.selectedSport) {
+      case 'Soccer':
+        return 'linear-gradient(135deg, #c7c3ca, #b486df)'; // Light blue gradient
+      case 'GAA':
+        return 'linear-gradient(135deg, #c7c3ca, #b486df)'; // Light pink gradient
+      case 'Basketball':
+        return 'linear-gradient(135deg, #c7c3ca, #b486df)'; // Light green gradient
+      case 'AmericanFootball':
+        return 'linear-gradient(135deg, #c7c3ca, #b486df)'; // Light yellow gradient
+      default:
+        return 'linear-gradient(135deg, #c7c3ca, #b486df)'; // Light gray gradient
+    }
+  }};
+  transition: background 0.3s, opacity 0.3s;
 
   @media (max-width: 850px) {
     width: 100%;
     height: 300px;
+  }
+`;
+
+const DropzoneContent = styled.div`
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  & > p {
+    margin-top: 20px;
+    font-size: 1.2rem;
+  }
+
+  & > svg {
+    margin-top: 10px;
   }
 `;
 
@@ -92,6 +122,13 @@ const IconWrapper = styled.div`
   display: flex;
   justify-content: center;
 `;
+
+const UploadedFileText = styled.p`
+  color: #c7c3ca;
+  font-size: 1rem;
+  margin-top: 10px;
+`;
+
 
 const Analysis = ({ onSportSelect }) => {
   const [selectedSport, setSelectedSport] = useState(null);
@@ -248,23 +285,33 @@ const Analysis = ({ onSportSelect }) => {
         />
       </ButtonRow>
 
-      {/* Conditionally render the dropzone and buttons after selecting a sport */}
+      {/* Dropzone is always visible */}
+      <DropzoneContainer
+        {...getRootProps()}
+        selectedSport={selectedSport}
+      >
+        <input {...getInputProps()} />
+        <DropzoneContent>
+          {isDragActive ? (
+            <p>Drop the dataset here...</p>
+          ) : selectedSport ? (
+            <p>Drag and drop your {selectedSport} dataset here, or click to select a file</p>
+          ) : (
+            <p>
+              Click on a Sport and drop a file in to analyze
+            </p>
+          )}
+          {!selectedSport && <FaUpload size={50} color="#501387" />}
+          {selectedSport && <IconWrapper>{getSportIcon(selectedSport)}</IconWrapper>}
+        </DropzoneContent>
+      </DropzoneContainer>
+
+      {uploadedFile && <UploadedFileText>Uploaded File: {uploadedFile.name}</UploadedFileText>}
+
+      {/* Continue and Reset Buttons */}
+      <ContinueButton onClick={handleContinue}>Continue</ContinueButton>
       {selectedSport && (
-        <>
-          {/* Dropzone for File Upload */}
-          <DropzoneContainer {...getRootProps()}>
-            <input {...getInputProps()} />
-            {isDragActive ? (
-              <p>Drop the dataset here...</p>
-            ) : (
-              <p>Drop your dataset here or click to select a file</p>
-            )}
-            <IconWrapper>{getSportIcon(selectedSport)}</IconWrapper>
-          </DropzoneContainer>
-          {uploadedFile && <p>Uploaded File: {uploadedFile.name}</p>}
-          <ContinueButton onClick={handleContinue}>Continue</ContinueButton>
-          <ResetButton onClick={handleReset}>Reset Selection</ResetButton>
-        </>
+        <ResetButton onClick={handleReset}>Reset Selection</ResetButton>
       )}
     </Container>
   );

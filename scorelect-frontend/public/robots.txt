@@ -1,4 +1,4 @@
 User-agent: *
 Disallow:
 
-Sitemap: https://api.scorelect.com/sitemap.xml
+Sitemap: https://scorelect.com/sitemap.xml

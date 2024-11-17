@@ -1170,6 +1170,13 @@ const handleSaveToDataset = async () => {
     </div>
   );
   
+  const handleAddAction = (newAction, newColor, newType) => {
+    if (!actionCodes.includes(newAction)) {
+      setActionButtons([...actionButtons, { label: newAction.charAt(0).toUpperCase() + newAction.slice(1), value: newAction, color: newColor, type: newType }]);
+      setActionCodes([...actionCodes, newAction]);
+    }
+    setIsAddActionModalOpen(false);
+  };
 
   return (
   <div class="scroll-container">
@@ -2083,7 +2090,107 @@ const handleSaveToDataset = async () => {
           `}
         </style>
       </Modal>
-
+      <Modal
+        isOpen={isAddActionModalOpen}
+        onRequestClose={() => setIsAddActionModalOpen(false)}
+        contentLabel="Add Action"
+        style={{
+          content: {
+            top: '50%',
+            left: '50%',
+            right: 'auto',
+            bottom: 'auto',
+            marginRight: '-50%',
+            transform: 'translate(-50%, -50%)',
+            width: '50%',
+            maxHeight: '60%',
+            overflowY: 'auto',
+            background: '#2e2e2e',
+            padding: '20px',
+            borderRadius: '10px',
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)'
+          }
+        }}
+      >
+        <h2>Add Action</h2>
+        <div className="form-group">
+          <label>Action Name:</label>
+          <input
+            type="text"
+            value={customInput.action}
+            onChange={(e) => setCustomInput({ ...customInput, action: e.target.value })}
+            placeholder="Enter new action"
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px'
+            }}
+          />
+          <label>Marker Color:</label>
+          <input
+            type="color"
+            value={customInput.color}
+            onChange={(e) => setCustomInput({ ...customInput, color: e.target.value })}
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px'
+            }}
+          />
+          <label>Type:</label>
+          <select
+            value={customInput.type}
+            onChange={(e) => setCustomInput({ ...customInput, type: e.target.value })}
+            style={{
+              width: '97%',
+              padding: '10px',
+              margin: '5px',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+              marginRight: '20px'
+            }}
+          >
+            <option value="marker">Marker</option>
+            <option value="line">Line</option>
+          </select>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <button
+            onClick={() => handleAddAction(customInput.action, customInput.color, customInput.type)}
+            style={{
+              background: '#007bff',
+              color: '#fff',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              transition: 'background 0.3s'
+            }}
+          >
+            Add Action
+          </button>
+          <button
+            onClick={() => setIsAddActionModalOpen(false)}
+            style={{
+              background: '#6c757d',
+              color: '#fff',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              transition: 'background 0.3s'
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      </Modal>
       <Modal
   isOpen={isDownloadModalOpen}
   onRequestClose={() => setIsDownloadModalOpen(false)}

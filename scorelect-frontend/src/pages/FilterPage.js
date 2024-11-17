@@ -1,5 +1,3 @@
-// src/pages/FilterPage.js
-
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
@@ -90,6 +88,7 @@ const FilterPage = () => {
     teamPerformance: true,
     playsDistribution: true,
   });
+  const [selectedMatch, setSelectedMatch] = useState('all'); // New state for match selection
 
   useEffect(() => {
     if (!file || !sport) {
@@ -108,16 +107,7 @@ const FilterPage = () => {
       const content = reader.result;
       const fileExtension = file.name.split('.').pop().toLowerCase();
 
-      if (fileExtension === 'csv') {
-        // Handle CSV parsing if needed in the future
-        // Currently, datasets are in JSON format
-        Swal.fire({
-          title: 'Unsupported Format',
-          text: 'Please upload a JSON file.',
-          icon: 'warning',
-          confirmButtonText: 'OK',
-        });
-      } else if (fileExtension === 'json') {
+      if (fileExtension === 'json') {
         try {
           const jsonData = JSON.parse(content);
           if (!jsonData.dataset || !jsonData.games || !Array.isArray(jsonData.games)) {
@@ -170,20 +160,9 @@ const FilterPage = () => {
 
     games.forEach((game) => {
       game.gameData.forEach((entry) => {
-        // Extract Teams
-        if (entry.team) {
-          teams.add(entry.team);
-        }
-
-        // Extract Actions
-        if (entry.action) {
-          actions.add(entry.action);
-        }
-
-        // Extract Players
-        if (entry.playerName) {
-          players.add(entry.playerName);
-        }
+        if (entry.team) teams.add(entry.team);
+        if (entry.action) actions.add(entry.action);
+        if (entry.playerName) players.add(entry.playerName);
       });
     });
 
@@ -194,14 +173,10 @@ const FilterPage = () => {
 
   const handleChartSelection = (e) => {
     const { name, checked } = e.target;
-    setSelectedCharts((prev) => ({
-      ...prev,
-      [name]: checked,
-    }));
+    setSelectedCharts((prev) => ({ ...prev, [name]: checked }));
   };
 
   const handleContinue = () => {
-    // Validate filters or proceed with all data
     const filters = {
       team: selectedTeam || null,
       action: selectedAction || null,
@@ -215,32 +190,32 @@ const FilterPage = () => {
       playsDistribution: selectedCharts.playsDistribution,
     };
 
-    // Filter data based on selected filters
-    const filteredData = data.filter((game) => {
-      const filteredGameData = game.gameData.filter((entry) => {
-        const teamMatch = filters.team ? entry.team === filters.team : true;
-        const actionMatch = filters.action ? entry.action === filters.action : true;
-        const playerMatch = filters.player ? entry.playerName === filters.player : true;
-        return teamMatch && actionMatch && playerMatch;
+    let filteredData;
+
+    if (selectedMatch === 'all') {
+      // Analyze all matches
+      filteredData = data.filter((game) => {
+        const filteredGameData = game.gameData.filter((entry) => {
+          const teamMatch = filters.team ? entry.team === filters.team : true;
+          const actionMatch = filters.action ? entry.action === filters.action : true;
+          const playerMatch = filters.player ? entry.playerName === filters.player : true;
+          return teamMatch && actionMatch && playerMatch;
+        });
+        return filteredGameData.length > 0;
       });
-      return filteredGameData.length > 0;
-    });
-
-    // Determine the heatmap page to navigate to based on the selected sport
-    let heatmapPage = '/analysis/heatmap';
-
-    if (sport === 'GAA') {
-      heatmapPage = '/analysis/heatmap-gaa';
-    } else if (sport === 'AmericanFootball') {
-      heatmapPage = '/analysis/heatmap-af';
-    } else if (sport === 'Basketball') {
-      heatmapPage = '/analysis/heatmap-bball'; // Added for basketball
+    } else {
+      // Analyze selected match
+      filteredData = data.filter((game) => game.gameName === selectedMatch);
     }
 
-    // Navigate to the appropriate heatmap page with the filtered data
-    navigate(heatmapPage, {
-      state: { data: filteredData, filters, charts, sport },
-    });
+    const heatmapPage = {
+      Soccer: '/analysis/heatmap',
+      GAA: '/analysis/heatmap-gaa',
+      AmericanFootball: '/analysis/heatmap-af',
+      Basketball: '/analysis/heatmap-bball',
+    }[sport] || '/analysis/heatmap';
+
+    navigate(heatmapPage, { state: { data: filteredData, filters, charts, sport } });
   };
 
   return (
@@ -248,8 +223,22 @@ const FilterPage = () => {
       <FilterContainer>
         <h2>Filter Your Data</h2>
 
-        {/* Headings for Filters */}
-        <h3>Choose Filters</h3>
+        {/* Match Selection */}
+        <FilterGroup>
+          <Label htmlFor="match">Select Match:</Label>
+          <Select
+            id="match"
+            value={selectedMatch}
+            onChange={(e) => setSelectedMatch(e.target.value)}
+          >
+            <option value="all">All Matches</option>
+            {data.map((game) => (
+              <option key={game.gameName} value={game.gameName}>
+                {game.gameName}
+              </option>
+            ))}
+          </Select>
+        </FilterGroup>
 
         {/* Team Filter */}
         <FilterGroup>
@@ -302,10 +291,7 @@ const FilterPage = () => {
           </Select>
         </FilterGroup>
 
-        {/* Headings for Chart Selection */}
-        <h3>Select Charts to Generate</h3>
-
-        {/* Chart Type Selection */}
+        {/* Chart Selection */}
         <FilterGroup>
           <CheckboxGroup>
             <CheckboxLabel>
@@ -317,7 +303,6 @@ const FilterPage = () => {
               />{' '}
               Heatmap
             </CheckboxLabel>
-            {/* Show XG/xP Chart option for Soccer and Basketball */}
             {(sport === 'Soccer' || sport === 'Basketball') && (
               <CheckboxLabel>
                 <input
@@ -326,31 +311,8 @@ const FilterPage = () => {
                   checked={selectedCharts.xgChart}
                   onChange={handleChartSelection}
                 />{' '}
-                {sport === 'Soccer' ? 'Expected Goals (XG) Chart' : 'Expected Points (xP) Chart'}
+                {sport === 'Soccer' ? 'Expected Goals (XG)' : 'Expected Points (xP)'}
               </CheckboxLabel>
-            )}
-            {/* Additional charts for American Football */}
-            {sport === 'AmericanFootball' && (
-              <>
-                <CheckboxLabel>
-                  <input
-                    type="checkbox"
-                    name="teamPerformance"
-                    checked={selectedCharts.teamPerformance}
-                    onChange={handleChartSelection}
-                  />{' '}
-                  Team Performance Chart
-                </CheckboxLabel>
-                <CheckboxLabel>
-                  <input
-                    type="checkbox"
-                    name="playsDistribution"
-                    checked={selectedCharts.playsDistribution}
-                    onChange={handleChartSelection}
-                  />{' '}
-                  Plays Distribution Chart
-                </CheckboxLabel>
-              </>
             )}
           </CheckboxGroup>
         </FilterGroup>

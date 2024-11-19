@@ -1,16 +1,12 @@
-// src/Profile.js
-
 import React, { useEffect, useState } from 'react';
 import { getAuth, signOut } from 'firebase/auth';
-import { doc, updateDoc } from 'firebase/firestore';
-import { firestore } from './firebase';
 import { useNavigate } from 'react-router-dom';
 import './Profile.css';
 import { FaUserCircle } from 'react-icons/fa';
 import Swal from 'sweetalert2';
 import { useAuth } from './AuthContext'; // Import useAuth
 
-const Profile = ({ onLogout, apiUrl }) => {
+const Profile = ({ onLogout }) => {
   const { currentUser, userData } = useAuth(); // Get currentUser and userData from context
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const navigate = useNavigate();
@@ -25,31 +21,9 @@ const Profile = ({ onLogout, apiUrl }) => {
   /**
    * Handles withdrawal of earnings.
    */
-  const handleWithdraw = async () => {
-    if (!withdrawAmount || isNaN(withdrawAmount) || Number(withdrawAmount) <= 0) {
-      Swal.fire('Error', 'Please enter a valid withdrawal amount.', 'error');
-      return;
-    }
-
-    if (Number(withdrawAmount) > (userData?.earnings || 0)) {
-      Swal.fire('Error', 'Withdrawal amount exceeds available earnings.', 'error');
-      return;
-    }
-
-    try {
-      const userDocRef = doc(firestore, 'users', currentUser.uid);
-
-      // Update earnings in Firestore
-      await updateDoc(userDocRef, {
-        earnings: (userData?.earnings || 0) - Number(withdrawAmount),
-      });
-
-      setWithdrawAmount('');
-      Swal.fire('Success', `Successfully withdrew $${withdrawAmount}.`, 'success');
-    } catch (error) {
-      console.error('Error processing withdrawal:', error);
-      Swal.fire('Error', 'Failed to process withdrawal.', 'error');
-    }
+  const handleWithdraw = () => {
+    // Show a popup indicating the feature is coming soon
+    Swal.fire('Coming Soon', 'We are working on this feature. It will be available soon!', 'info');
   };
 
   const handleCancelSubscription = () => {
@@ -99,7 +73,7 @@ const Profile = ({ onLogout, apiUrl }) => {
         Logout
       </button>
 
-      {userData.role === 'paid' ? ( // Check for 'paid' instead of 'premium'
+      {userData.role === 'paid' ? (
         <>
           <h3>Subscription Details</h3>
           <p>You are currently subscribed. Thank you for your support.</p>
@@ -109,7 +83,9 @@ const Profile = ({ onLogout, apiUrl }) => {
         </>
       ) : (
         <>
-          <p>You currently have no active subscription. Please subscribe to access premium features.</p>
+          <p>
+            You currently have no active subscription. Please subscribe to access premium features.
+          </p>
           <button className="renew-button" onClick={handleRenewSubscription}>
             Subscribe
           </button>

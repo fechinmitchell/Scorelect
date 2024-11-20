@@ -17,13 +17,25 @@ import { GameContext } from './GameContext'; // Import GameContext
 import { Rnd } from 'react-rnd';
 
 const SoccerPitch =() => {
+
+  const initialActionButtons = [
+    { label: 'Goal', value: 'goal', color: '#009900', type: 'marker' },
+    { label: 'Assist', value: 'assist', color: '#ffa500', type: 'marker' },
+    { label: 'Shot on Target', value: 'shot on target', color: '#3eb9c7', type: 'marker' },
+    { label: 'Shot off Target', value: 'shot off target', color: '#ff0000', type: 'marker' },
+    { label: 'Pass Completed', value: 'pass completed', color: '#fff400', type: 'line' },
+    { label: 'Pass Incomplete', value: 'pass incomplete', color: '#000080', type: 'line' },
+  ];
+
+  const [actionButtons, setActionButtons] = useState(initialActionButtons);
+  const [actionType, setActionType] = useState(initialActionButtons[0]); // Default to first action
+
   const [coords, setCoords] = useState([]);
   const [currentCoords, setCurrentCoords] = useState([]);
-  const [actionType, setActionType] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
   const [openLineDialog, setOpenLineDialog] = useState(false);
   const [formData, setFormData] = useState({
-    action: 'goal',
+    action: initialActionButtons[0].value, // Default action value
     team: 'Arsenal',
     playerName: '',
     player: '',
@@ -32,7 +44,7 @@ const SoccerPitch =() => {
     foot: 'Right',
     minute: '',
     from: null,
-    to: null
+    to: null,
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [customInput, setCustomInput] = useState({ action: '', team: '', position: '', pressure: '', foot: '', color: '#000000', type: 'marker' });
@@ -42,7 +54,6 @@ const SoccerPitch =() => {
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [isScreenshotModalOpen, setIsScreenshotModalOpen] = useState(false);
   const [isSetupTeamModalOpen, setIsSetupTeamModalOpen] = useState(false); // State for Setup Team modal
-  const [actionButtons, setActionButtons] = useState([]);
   const [downloadTeam, setDownloadTeam] = useState('');
   const [downloadPlayer, setDownloadPlayer] = useState('');
   const [downloadAction, setDownloadAction] = useState('');
@@ -504,7 +515,7 @@ const SoccerPitch =() => {
     const stage = e.target.getStage();
     const point = stage.getPointerPosition();
     const newCoord = { x: point.x / xScale, y: point.y / yScale };
-  
+
     if (actionType && actionType.type === 'line') {
       if (currentCoords.length === 0) {
         // First click - just store the starting point
@@ -515,15 +526,15 @@ const SoccerPitch =() => {
           ...formData,
           from: currentCoords[0],
           to: newCoord,
-          type: actionType.value
+          type: actionType.value,
         };
         setCoords([...coords, lineData]);
         setCurrentCoords([]); // Reset for next action
-        setFormData({ // Set form data for the dialog
+        setFormData({
           ...formData,
           from: currentCoords[0],
           to: newCoord,
-          type: actionType.value
+          type: actionType.value,
         });
         setOpenDialog(true);
       }
@@ -532,7 +543,7 @@ const SoccerPitch =() => {
       setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType.value });
       setOpenDialog(true);
     }
-  };  
+  };
 
   const handleTap = (e) => {
     handleClick(e);

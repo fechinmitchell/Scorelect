@@ -17,13 +17,24 @@ import { Rnd } from 'react-rnd';
 
 
 const PitchGraphic = () => {
+  const initialActionButtons = [
+    { label: 'Point', value: 'point', color: '#048522', type: 'marker' },
+    { label: 'Wide', value: 'wide', color: '#ff0000', type: 'marker' },
+    { label: 'Goal', value: 'goal', color: '#0000ff', type: 'marker' },
+    { label: 'Miss', value: 'miss', color: '#ff00ff', type: 'marker' },
+    { label: 'Pass Completed', value: 'successful pass', color: '#00ffff', type: 'line' },
+    { label: 'Pass Incomplete', value: 'unsuccessful pass', color: '#ffff00', type: 'line' },
+  ];
+
+  const [actionButtons, setActionButtons] = useState(initialActionButtons);
+  const [actionType, setActionType] = useState(initialActionButtons[0]); // Default to first action
+
   const [coords, setCoords] = useState([]);
   const [currentCoords, setCurrentCoords] = useState([]);
-  const [actionType, setActionType] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
   const [openLineDialog, setOpenLineDialog] = useState(false);
   const [formData, setFormData] = useState({
-    action: 'point',
+    action: initialActionButtons[0].value, // Default action value
     team: 'Armagh',
     playerName: '',
     player: '',
@@ -32,7 +43,7 @@ const PitchGraphic = () => {
     foot: 'Right',
     minute: '',
     from: null,
-    to: null
+    to: null,
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [customInput, setCustomInput] = useState({ action: '', team: '', position: '', pressure: '', foot: '', color: '#000000', type: 'marker' });
@@ -41,7 +52,6 @@ const PitchGraphic = () => {
   const [isAddActionModalOpen, setIsAddActionModalOpen] = useState(false);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [isScreenshotModalOpen, setIsScreenshotModalOpen] = useState(false);
-  const [actionButtons, setActionButtons] = useState([]);
   const [downloadTeam, setDownloadTeam] = useState('');
   const [downloadPlayer, setDownloadPlayer] = useState('');
   const [downloadAction, setDownloadAction] = useState('');
@@ -520,7 +530,7 @@ const handleSaveToDataset = async () => {
     const stage = e.target.getStage();
     const point = stage.getPointerPosition();
     const newCoord = { x: point.x / xScale, y: point.y / yScale };
-  
+
     if (actionType && actionType.type === 'line') {
       if (currentCoords.length === 0) {
         setCurrentCoords([newCoord]); // Start with the first point
@@ -536,12 +546,11 @@ const handleSaveToDataset = async () => {
         setOpenLineDialog(true);
         setCurrentCoords([]); // Reset after capturing the line
       }
-      
     } else if (actionType) {
       setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType.value });
       setOpenDialog(true);
     }
-  };  
+  };
 
   const handleTap = (e) => {
     handleClick(e);

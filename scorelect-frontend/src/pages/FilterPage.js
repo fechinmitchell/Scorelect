@@ -1,9 +1,13 @@
+// src/components/FilterPage.js
+
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import Swal from 'sweetalert2';
 import PropTypes from 'prop-types';
+import { useAuth } from '../AuthContext'; // Import useAuth
 
+// Styled Components
 const Container = styled.div`
   display: flex;
   flex-direction: column;
@@ -89,6 +93,42 @@ const FilterPage = () => {
     playsDistribution: true,
   });
   const [selectedMatch, setSelectedMatch] = useState('all'); // New state for match selection
+  const { currentUser, userData, loading } = useAuth(); // Get currentUser, userData, and loading from context
+
+  // Check if user is logged in and if they are 'paid' user
+  useEffect(() => {
+    if (loading) {
+      // Still loading user data, do nothing
+      return;
+    }
+    if (!currentUser) {
+      // User not authenticated, redirect to sign-in page
+      Swal.fire({
+        title: 'Authentication Required',
+        text: 'Please sign in to access this page.',
+        icon: 'warning',
+        confirmButtonText: 'Sign In',
+      }).then(() => {
+        navigate('/signin');
+      });
+    } else if (userData && userData.role !== 'paid') {
+      // User is authenticated but not a paid user
+      Swal.fire({
+        title: 'Upgrade Required',
+        text: 'This feature is available for premium users only. Please upgrade your account.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Upgrade Now',
+        cancelButtonText: 'Cancel',
+      }).then((result) => {
+        if (result.isConfirmed) {
+          navigate('/upgrade');
+        } else {
+          navigate('/');
+        }
+      });
+    }
+  }, [currentUser, userData, loading, navigate]);
 
   useEffect(() => {
     if (!file || !sport) {
@@ -217,6 +257,11 @@ const FilterPage = () => {
 
     navigate(heatmapPage, { state: { data: filteredData, filters, charts, sport } });
   };
+
+  // If loading, show a loading message or spinner
+  if (loading) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <Container>

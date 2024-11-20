@@ -14,6 +14,7 @@ import {
   FaFutbol,
   FaUpload,
 } from 'react-icons/fa';
+import { useAuth } from './AuthContext'; // Import useAuth
 
 // Styled Components
 const Container = styled.div`
@@ -129,18 +130,20 @@ const UploadedFileText = styled.p`
   margin-top: 10px;
 `;
 
-
 const Analysis = ({ onSportSelect }) => {
   const [selectedSport, setSelectedSport] = useState(null);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [parsedData, setParsedData] = useState(null); // Store parsed JSON data
   const [datasetType, setDatasetType] = useState(null); // 'aggregated' or 'single'
   const navigate = useNavigate();
+  const { currentUser, userData, loading } = useAuth(); // Get currentUser, userData, and loading from context
 
   // Handle Sport Button Click
   const handleSportClick = (sport) => {
     setSelectedSport(sport);
-    onSportSelect(sport);
+    if (onSportSelect) {
+      onSportSelect(sport);
+    }
   };
 
   // Dropzone setup
@@ -259,6 +262,47 @@ const Analysis = ({ onSportSelect }) => {
     }
   };
 
+  // Check if user is logged in and if they are 'paid' user
+  useEffect(() => {
+    if (loading) {
+      // Still loading user data, do nothing
+      return;
+    }
+    if (!currentUser) {
+      // User not authenticated, redirect to sign-in page
+      Swal.fire({
+        title: 'Authentication Required',
+        text: 'Please sign in to access this page.',
+        icon: 'warning',
+        confirmButtonText: 'Sign In',
+      }).then(() => {
+        navigate('/signin');
+      });
+    } else if (userData && userData.role !== 'paid') {
+      // User is authenticated but not a paid user
+      Swal.fire({
+        title: 'Upgrade Required',
+        text: 'This feature is available for premium users only. Please upgrade your account.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Upgrade Now',
+        cancelButtonText: 'Cancel',
+      }).then((result) => {
+        if (result.isConfirmed) {
+          navigate('/upgrade');
+        } else {
+          navigate('/');
+        }
+      });
+    }
+  }, [currentUser, userData, loading, navigate]);
+
+  // If loading, show a loading message or spinner
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  // Render the component if the user is authenticated and has a 'paid' role
   return (
     <Container>
       {/* Sport Selection Buttons */}
@@ -285,28 +329,30 @@ const Analysis = ({ onSportSelect }) => {
         />
       </ButtonRow>
 
-      {/* Dropzone is always visible */}
-      <DropzoneContainer
-        {...getRootProps()}
-        selectedSport={selectedSport}
-      >
+      {/* Dropzone */}
+      <DropzoneContainer {...getRootProps()} selectedSport={selectedSport}>
         <input {...getInputProps()} />
         <DropzoneContent>
           {isDragActive ? (
             <p>Drop the dataset here...</p>
           ) : selectedSport ? (
-            <p>Drag and drop your {selectedSport} dataset here, or click to select a file</p>
-          ) : (
             <p>
-              Click on a Sport and drop a file in to analyze
+              Drag and drop your {selectedSport} dataset here, or click to
+              select a file
             </p>
+          ) : (
+            <p>Click on a Sport and drop a file in to analyze</p>
           )}
           {!selectedSport && <FaUpload size={50} color="#501387" />}
-          {selectedSport && <IconWrapper>{getSportIcon(selectedSport)}</IconWrapper>}
+          {selectedSport && (
+            <IconWrapper>{getSportIcon(selectedSport)}</IconWrapper>
+          )}
         </DropzoneContent>
       </DropzoneContainer>
 
-      {uploadedFile && <UploadedFileText>Uploaded File: {uploadedFile.name}</UploadedFileText>}
+      {uploadedFile && (
+        <UploadedFileText>Uploaded File: {uploadedFile.name}</UploadedFileText>
+      )}
 
       {/* Continue and Reset Buttons */}
       <ContinueButton onClick={handleContinue}>Continue</ContinueButton>

@@ -38,6 +38,8 @@ import SportsDataHub from './SportsDataHub';
 import PublishDataset from './PublishDataset';
 import { SavedGamesProvider } from './components/SavedGamesContext'; // Import the SavedGamesProvider
 import { SportsDataHubProvider } from './components/SportsDataHubContext'; // Import the SportsDataHubProvider
+import Training from './Training'; // Import the Training page
+
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
@@ -168,6 +170,7 @@ const App = () => {
                 <Route path="/howto" element={<HowTo />} />
                 <Route path="/sports-datahub" element={<SportsDataHub />} /> {/* No change needed */}
                 <Route path="/publish-dataset" element={<PublishDataset />} />
+                <Route path="/training" element={<Training />} />
                 <Route
                   path="/analysis"
                   element={<Analysis onSportSelect={(sport) => setSelectedSport(sport)} />}

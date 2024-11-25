@@ -1,0 +1,48 @@
+/* TrainingPage.css */
+
+.training-page {
+    font-family: Arial, sans-serif;
+    color: #333;
+    background-color: #f9f9f9;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  
+  /* Navbar Styling */
+  .navbar {
+    display: flex;
+    justify-content: center;
+    background-color: #2e2e2e;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+  }
+  
+  .nav-button {
+    background-color: #501387;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    margin: 0 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background-color 0.3s ease;
+  }
+  
+  .nav-button.active {
+    background-color: #663399;
+  }
+  
+  .nav-button:hover {
+    background-color: #5e2e8f;
+  }
+  
+  /* Content Styling */
+  .content {
+    background: #333;
+    border-radius: 5px;
+    padding: 20px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+  

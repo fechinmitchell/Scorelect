@@ -170,7 +170,7 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
           </li>
           <li className="separator">{!collapsed && 'Analytics'}</li>
           <li>
-            <button onClick={handleTrainingClick}>
+            <button onClick={() => onNavigate('/training')}> {/* Updated */}
               <FaChalkboardTeacher className="icon" size={16} />
               {!collapsed && 'Training'}
             </button>

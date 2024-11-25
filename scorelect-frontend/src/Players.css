@@ -1,0 +1,36 @@
+/* Players.css */
+.players-page {
+    padding: 20px;
+  }
+  
+  .players-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+  }
+  
+  .players-table th,
+  .players-table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+  }
+  
+  .players-table th {
+    background-color: #f2f2f2;
+  }
+  
+  .add-player-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  
+  .add-player-form input {
+    padding: 8px;
+    flex: 1 1 200px;
+  }
+  
+  .add-player-form button {
+    padding: 8px 16px;
+  }
+  

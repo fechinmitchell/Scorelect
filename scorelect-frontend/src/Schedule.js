@@ -8,7 +8,7 @@ import 'react-big-calendar/lib/css/react-big-calendar.css';
 
 const localizer = momentLocalizer(moment);
 
-const Modal = ({ isOpen, onClose, onSubmit, title, children }) => {
+const Modal = ({ isOpen, title, children, actions }) => {
   if (!isOpen) return null;
 
   return (
@@ -16,14 +16,7 @@ const Modal = ({ isOpen, onClose, onSubmit, title, children }) => {
       <div className="modal">
         <h2>{title}</h2>
         <div className="modal-content">{children}</div>
-        <div className="modal-actions">
-          <button className="modal-button" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="modal-button" onClick={onSubmit}>
-            Save
-          </button>
-        </div>
+        {actions && <div className="modal-actions">{actions}</div>}
       </div>
     </div>
   );
@@ -186,13 +179,7 @@ const Schedule = () => {
   };
 
   const handleUpdateEvent = () => {
-    const {
-      title,
-      startDate,
-      startTime,
-      endTime,
-      id,
-    } = newEventData;
+    const { title, startDate, startTime, endTime, id } = newEventData;
 
     // Input validation
     if (!title || !startTime || !endTime) {
@@ -270,12 +257,26 @@ const Schedule = () => {
       {/* Modal for adding/editing event */}
       <Modal
         isOpen={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setErrorMessage('');
-        }}
-        onSubmit={newEventData.id ? handleUpdateEvent : handleAddEvent}
         title={newEventData.id ? 'Edit Event' : 'Add Event'}
+        actions={
+          <>
+            <button
+              className="modal-button"
+              onClick={() => {
+                setModalOpen(false);
+                setErrorMessage('');
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              className="modal-button"
+              onClick={newEventData.id ? handleUpdateEvent : handleAddEvent}
+            >
+              Save
+            </button>
+          </>
+        }
       >
         {errorMessage && <p className="error-message">{errorMessage}</p>}
         <label>
@@ -308,14 +309,18 @@ const Schedule = () => {
             }
           />
         </label>
-        {!newEventData.id && ( // Only show recurrence options when adding a new event
+        {!newEventData.id && (
+          // Only show recurrence options when adding a new event
           <>
             <label>
               Recurrence:
               <select
                 value={newEventData.recurrence}
                 onChange={(e) =>
-                  setNewEventData({ ...newEventData, recurrence: e.target.value })
+                  setNewEventData({
+                    ...newEventData,
+                    recurrence: e.target.value,
+                  })
                 }
               >
                 <option value="none">None</option>
@@ -331,7 +336,9 @@ const Schedule = () => {
                   type="date"
                   value={
                     newEventData.recurrenceEndDate
-                      ? moment(newEventData.recurrenceEndDate).format('YYYY-MM-DD')
+                      ? moment(newEventData.recurrenceEndDate).format(
+                          'YYYY-MM-DD'
+                        )
                       : ''
                   }
                   onChange={(e) =>
@@ -351,12 +358,26 @@ const Schedule = () => {
       {selectedEvent && (
         <Modal
           isOpen={eventDetailsOpen}
-          onClose={() => {
-            setEventDetailsOpen(false);
-            setSelectedEvent(null);
-          }}
-          onSubmit={() => {}}
           title="Event Details"
+          actions={
+            <>
+              <button
+                className="modal-button"
+                onClick={() => {
+                  setEventDetailsOpen(false);
+                  setSelectedEvent(null);
+                }}
+              >
+                Close
+              </button>
+              <button className="modal-button" onClick={handleEditEvent}>
+                Edit
+              </button>
+              <button className="modal-button" onClick={handleDeleteEvent}>
+                Delete
+              </button>
+            </>
+          }
         >
           <p>
             <strong>Title:</strong> {selectedEvent.title}
@@ -369,23 +390,6 @@ const Schedule = () => {
             <strong>End:</strong>{' '}
             {moment(selectedEvent.end).format('MMMM Do YYYY, h:mm A')}
           </p>
-          <div className="modal-actions">
-            <button
-              className="modal-button"
-              onClick={() => {
-                setEventDetailsOpen(false);
-                setSelectedEvent(null);
-              }}
-            >
-              Close
-            </button>
-            <button className="modal-button" onClick={handleEditEvent}>
-              Edit
-            </button>
-            <button className="modal-button" onClick={handleDeleteEvent}>
-              Delete
-            </button>
-          </div>
         </Modal>
       )}
     </div>

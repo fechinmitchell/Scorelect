@@ -1,5 +1,168 @@
 /* Schedule.css */
+
 .schedule-page {
     padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #333; /* Match the content background in Training.css */
+    min-height: 100vh;
+  }
+  
+  .schedule-title {
+    margin-bottom: 20px;
+    font-size: 2em;
+    color: #733faa; /* Light text color for visibility */
+  }
+  
+  .calendar-container {
+    width: 100%;
+    max-width: 1200px;
+    background-color: #3b1761; /* Sidebar purple */
+    padding: 20px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+  }
+  
+  .calendar {
+    width: 100%;
+  }
+  
+  /* Calendar Styles */
+  .rbc-calendar {
+    background-color: #5e2e8f; /* Lighter purple */
+    color: #9a88ac;
+  }
+  
+  .rbc-time-view, .rbc-month-view {
+    background-color: #5e2e8f;
+  }
+  
+  .rbc-event {
+    background-color: #ecf0f1; /* Light background for events */
+    color: #3b1761; /* Dark purple text */
+    border-radius: 4px;
+    border: none;
+  }
+  
+  .rbc-toolbar {
+    background-color: #3b1761;
+    color: #ffffff;
+  }
+  
+  .rbc-toolbar button {
+    background-color: #5e2e8f;
+    color: #ecf0f1;
+    border: none;
+    padding: 5px 10px;
+    margin: 0 2px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  
+  .rbc-toolbar button:hover {
+    background-color: #7c52b3;
+  }
+  
+  .rbc-off-range-bg {
+    background-color: #3b1761;
+  }
+  
+  .rbc-off-range {
+    color: #bbb;
+  }
+  
+  .rbc-header {
+    background-color: #3b1761;
+    color: #ffffff;
+    padding: 10px;
+  }
+  
+  .rbc-today {
+    background-color: #5e2e8f;
+  }
+  
+  .rbc-day-bg:hover {
+    background-color: #7c52b3;
+  }
+  
+  .rbc-event-label {
+    color: #3b1761;
+  }
+  
+  .rbc-agenda-view table thead tr {
+    background-color: #3b1761;
+    color: #ffffff;
+  }
+  
+  /* Modal Styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+  
+  .modal {
+    background-color: #3b1761; /* Purple background */
+    color: #ffffff; /* Light text color */
+    padding: 20px;
+    width: 400px;
+    max-width: 90%;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  }
+  
+  .modal h2 {
+    margin-top: 0;
+    color: #ecf0f1;
+  }
+  
+  .modal-content {
+    margin: 20px 0;
+  }
+  
+  .modal-content input {
+    width: 100%;
+    padding: 8px;
+    font-size: 1em;
+    box-sizing: border-box;
+    border: 1px solid #ecf0f1;
+    border-radius: 4px;
+    background-color: #5e2e8f;
+    color: #ecf0f1;
+  }
+  
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+  
+  .modal-button {
+    margin-left: 10px;
+    padding: 8px 16px;
+    border: none;
+    background-color: #5e2e8f; /* Use the lighter purple */
+    color: #ecf0f1;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  
+  .modal-button:hover {
+    background-color: #7c52b3;
+  }
+  
+  .modal-button:first-of-type {
+    background-color: #6c757d; /* Grey for Cancel button */
+  }
+  
+  .modal-button:first-of-type:hover {
+    background-color: #5a6268;
   }
   

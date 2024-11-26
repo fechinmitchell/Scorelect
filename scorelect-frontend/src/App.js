@@ -27,7 +27,7 @@ import BballCollect from './blogs/BballCollect';
 import SoccerCollect from './blogs/SoccerCollect';
 import GAACollect from './blogs/GAACollect';
 import AmericanFootballCollect from './blogs/AmericanFootballCollect';
-import HeatmapBBall from './pages/HeatmapBBall'; // <-- Added import for HeatmapBBall
+import HeatmapBBall from './pages/HeatmapBBall'; // Added import for HeatmapBBall
 import { ToastContainer, toast } from 'react-toastify';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -39,7 +39,6 @@ import PublishDataset from './PublishDataset';
 import { SavedGamesProvider } from './components/SavedGamesContext'; // Import the SavedGamesProvider
 import { SportsDataHubProvider } from './components/SportsDataHubContext'; // Import the SportsDataHubProvider
 import Training from './Training'; // Import the Training page
-
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
@@ -168,9 +167,9 @@ const App = () => {
                 <Route path="/success" element={<Success setUserRole={setUserRole} />} />
                 <Route path="/cancel" element={<Cancel />} />
                 <Route path="/howto" element={<HowTo />} />
-                <Route path="/sports-datahub" element={<SportsDataHub />} /> {/* No change needed */}
+                <Route path="/sports-datahub" element={<SportsDataHub />} />
                 <Route path="/publish-dataset" element={<PublishDataset />} />
-                <Route path="/training" element={<Training />} />
+                <Route path="/training/*" element={<Training />} /> {/* Updated Route */}
                 <Route
                   path="/analysis"
                   element={<Analysis onSportSelect={(sport) => setSelectedSport(sport)} />}
@@ -179,7 +178,7 @@ const App = () => {
                 <Route path="/analysis/heatmap" element={<HeatmapPage />} />
                 <Route path="/analysis/heatmap-gaa" element={<HeatmapGAA />} />
                 <Route path="/analysis/heatmap-af" element={<HeatmapAF />} />
-                <Route path="/analysis/heatmap-bball" element={<HeatmapBBall />} /> {/* <-- Added Route */}
+                <Route path="/analysis/heatmap-bball" element={<HeatmapBBall />} /> {/* Added Route */}
                 <Route path="/blog/basketball-statistics" element={<BballCollect />} />
                 <Route path="/blog/soccercollect" element={<SoccerCollect />} />
                 <Route path="/blog/gaacollect" element={<GAACollect />} />

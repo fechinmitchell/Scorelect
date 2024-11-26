@@ -1,48 +1,45 @@
-/* TrainingPage.css */
+/* src/Training.css */
 
 .training-page {
-    font-family: Arial, sans-serif;
-    color: #333;
-    background-color: #f9f9f9;
-    min-height: 100vh;
-    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
   }
   
-  /* Navbar Styling */
   .navbar {
     display: flex;
-    justify-content: center;
-    background-color: #2e2e2e;
-    padding: 10px;
-    border-radius: 5px;
-    margin-bottom: 20px;
+    background-color: #3b1761;
+    padding: 0;
+    margin: 0;
   }
   
   .nav-button {
-    background-color: #501387;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    margin: 0 10px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 1rem;
-    transition: background-color 0.3s ease;
-  }
-  
-  .nav-button.active {
-    background-color: #663399;
+    flex: 1;
+    padding: 15px;
+    text-align: center;
+    text-decoration: none;
+    color: #ecf0f1;
+    font-weight: bold;
+    transition: background-color 0.3s;
   }
   
   .nav-button:hover {
     background-color: #5e2e8f;
+    color: #fff;
   }
   
-  /* Content Styling */
+  .nav-button.active {
+    background-color: #5e2e8f;
+    color: #fff;
+  }
+  
   .content {
-    background: #333;
-    border-radius: 5px;
+    flex: 1;
     padding: 20px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    background-color: #333;
+    overflow-y: auto;
+    display: flex;              /* Added */
+    flex-direction: column;     /* Added to stack child elements vertically */
+    align-items: center;        /* Added to center child elements horizontally */
   }
   

@@ -1,24 +1,26 @@
 /* Schedule.css */
 
+/* Schedule Page Styles */
 .schedule-page {
     padding: 20px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    background-color: #333; /* Match the content background in Training.css */
+    background-color: #333;
     min-height: 100vh;
   }
   
   .schedule-title {
     margin-bottom: 20px;
     font-size: 2em;
-    color: #733faa; /* Light text color for visibility */
+    color: #733faa;
   }
   
+  /* Calendar Container */
   .calendar-container {
     width: 100%;
     max-width: 1200px;
-    background-color: #3b1761; /* Sidebar purple */
+    background-color: #3b1761;
     padding: 20px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     border-radius: 8px;
@@ -29,30 +31,26 @@
   }
   
   /* Calendar Styles */
-  .rbc-calendar {
-    background-color: #5e2e8f; /* Lighter purple */
+  .rbc-calendar,
+  .rbc-time-view,
+  .rbc-month-view {
+    background-color: #5e2e8f;
     color: #9a88ac;
   }
   
-  .rbc-time-view, .rbc-month-view {
-    background-color: #5e2e8f;
-  }
-  
-  .rbc-event {
-    background-color: #ecf0f1; /* Light background for events */
-    color: #3b1761; /* Dark purple text */
-    border-radius: 4px;
-    border: none;
-  }
-  
+  /* Toolbar Styles */
   .rbc-toolbar {
     background-color: #3b1761;
     color: #ffffff;
   }
   
+  .rbc-toolbar-label {
+    color: #ffffff;
+  }
+  
   .rbc-toolbar button {
     background-color: #5e2e8f;
-    color: #ecf0f1;
+    color: #ffffff !important; /* Ensure text is visible */
     border: none;
     padding: 5px 10px;
     margin: 0 2px;
@@ -62,8 +60,50 @@
   
   .rbc-toolbar button:hover {
     background-color: #7c52b3;
+    color: #ffffff;
   }
   
+  .rbc-toolbar .rbc-active {
+    background-color: #7c52b3;
+    color: #ffffff;
+  }
+  
+  .rbc-toolbar button:disabled {
+    background-color: #5e2e8f;
+    color: #cccccc;
+    cursor: not-allowed;
+  }
+  
+  /* Header Styles */
+  .rbc-header {
+    background-color: #3b1761;
+    color: #ffffff;
+    padding: 10px;
+  }
+  
+  /* Event Styles */
+  .rbc-event {
+    background-color: #ecf0f1;
+    color: #3b1761;
+    border-radius: 4px;
+    border: none;
+  }
+  
+  .rbc-event-label {
+    color: #3b1761;
+  }
+  
+  /* Today Highlight */
+  .rbc-today {
+    background-color: #5e2e8f;
+  }
+  
+  /* Day Background Hover */
+  .rbc-day-bg:hover {
+    background-color: #7c52b3;
+  }
+  
+  /* Off-Range Days */
   .rbc-off-range-bg {
     background-color: #3b1761;
   }
@@ -72,24 +112,7 @@
     color: #bbb;
   }
   
-  .rbc-header {
-    background-color: #3b1761;
-    color: #ffffff;
-    padding: 10px;
-  }
-  
-  .rbc-today {
-    background-color: #5e2e8f;
-  }
-  
-  .rbc-day-bg:hover {
-    background-color: #7c52b3;
-  }
-  
-  .rbc-event-label {
-    color: #3b1761;
-  }
-  
+  /* Agenda View */
   .rbc-agenda-view table thead tr {
     background-color: #3b1761;
     color: #ffffff;
@@ -110,8 +133,8 @@
   }
   
   .modal {
-    background-color: #3b1761; /* Purple background */
-    color: #ffffff; /* Light text color */
+    background-color: #3b1761;
+    color: #ffffff;
     padding: 20px;
     width: 400px;
     max-width: 90%;
@@ -148,7 +171,7 @@
     margin-left: 10px;
     padding: 8px 16px;
     border: none;
-    background-color: #5e2e8f; /* Use the lighter purple */
+    background-color: #5e2e8f;
     color: #ecf0f1;
     border-radius: 4px;
     cursor: pointer;
@@ -159,7 +182,7 @@
   }
   
   .modal-button:first-of-type {
-    background-color: #6c757d; /* Grey for Cancel button */
+    background-color: #6c757d;
   }
   
   .modal-button:first-of-type:hover {

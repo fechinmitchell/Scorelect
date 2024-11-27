@@ -4,6 +4,7 @@ import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import Schedule from './Schedule';
 import Sessions from './Sessions';
 import Players from './Players';
+import MatchDay from './MatchDay'; // Import the new MatchDay component
 import './Training.css';
 
 const Training = () => {
@@ -28,6 +29,12 @@ const Training = () => {
         >
           Players
         </NavLink>
+        <NavLink
+          to="matchday"
+          className={({ isActive }) => `nav-button${isActive ? ' active' : ''}`}
+        >
+          Match Day
+        </NavLink>
       </div>
       <div className="content">
         <Routes>
@@ -35,6 +42,7 @@ const Training = () => {
           <Route path="schedule" element={<Schedule />} />
           <Route path="sessions" element={<Sessions />} />
           <Route path="players" element={<Players />} />
+          <Route path="matchday" element={<MatchDay />} /> {/* Add the MatchDay route */}
         </Routes>
       </div>
     </div>

@@ -1,0 +1,38 @@
+/* src/SoccerLineup.css */
+
+.soccer-lineup {
+    color: #ecf0f1;
+  }
+  
+  .lineup-container {
+    display: flex;
+    justify-content: space-between;
+  }
+  
+  .team-side,
+  .opponent-side {
+    width: 48%;
+  }
+  
+  .field {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    background-color: #3b1761;
+    padding: 20px;
+    border-radius: 10px;
+  }
+  
+  .player-position {
+    width: 25%;
+    text-align: center;
+    margin: 10px 0;
+  }
+  
+  .player-position span {
+    display: block;
+    background-color: #5e2e8f;
+    padding: 10px;
+    border-radius: 50%;
+  }
+  

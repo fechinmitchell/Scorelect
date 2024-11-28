@@ -33,13 +33,5 @@
     color: #fff;
   }
   
-  .content {
-    flex: 1;
-    padding: 20px;
-    background-color: #333;
-    overflow-y: auto;
-    display: flex;              /* Added */
-    flex-direction: column;     /* Added to stack child elements vertically */
-    align-items: center;        /* Added to center child elements horizontally */
-  }
+
   

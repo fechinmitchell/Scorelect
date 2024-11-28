@@ -237,11 +237,12 @@ const Schedule = () => {
           localizer={localizer}
           events={events}
           selectable
+          longPressThreshold={10}
           defaultView="month"
           views={['month', 'week', 'day', 'agenda']}
           onSelectSlot={handleSelectSlot}
           onSelectEvent={handleSelectEvent}
-          style={{ height: 600 }}
+          style={{ height: 'calc(100vh - 200px)', width: '100%' }} // Adjusted height and width
           className="calendar"
           eventPropGetter={(event) => ({
             style: {

@@ -4,7 +4,7 @@ import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import Schedule from './Schedule';
 import Sessions from './Sessions';
 import Players from './Players';
-import MatchDay from './MatchDay'; // Import the new MatchDay component
+import MatchDay from './MatchDay';
 import './Training.css';
 
 const Training = () => {
@@ -36,13 +36,13 @@ const Training = () => {
           Match Day
         </NavLink>
       </div>
-      <div className="content">
+      <div className="training-content"> {/* Changed className */}
         <Routes>
           <Route path="/" element={<Navigate to="schedule" replace />} />
           <Route path="schedule" element={<Schedule />} />
           <Route path="sessions" element={<Sessions />} />
           <Route path="players" element={<Players />} />
-          <Route path="matchday" element={<MatchDay />} /> {/* Add the MatchDay route */}
+          <Route path="matchday" element={<MatchDay />} />
         </Routes>
       </div>
     </div>

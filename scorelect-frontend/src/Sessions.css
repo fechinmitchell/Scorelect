@@ -10,343 +10,283 @@
 
 /* Sessions Page Styles */
 .sessions-page {
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  background-color: var(--background-color);
-  min-height: 100vh;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--background-color);
+    min-height: 130vh;
+    box-sizing: border-box;
 }
 
 .sessions-title {
-  margin-bottom: 10px;
-  font-size: 2em;
-  color: var(--secondary-color);
-  text-align: center;
+    margin-bottom: 10px;
+    font-size: 2em;
+    color: var(--secondary-color);
+    text-align: center;
 }
 
 /* Toolbar Styles */
 .toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-bottom: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
 }
 
-/* Make the "Select Pitch:" label white */
 .toolbar label {
-  color: #FFF;
-  font-size: 1.2em;
+    color: var(--text-color);
+    font-size: 1.2em;
 }
 
-/* Style the select dropdown */
 .toolbar select {
-  padding: 8px 12px;
-  font-size: 1em;
-  border: 1px solid var(--primary-color);
-  border-radius: 4px;
-  background-color: #fff; /* White background */
-  color: #000; /* Black text */
-  cursor: pointer;
-  transition: background-color 0.3s, border-color 0.3s;
-  appearance: none; /* Remove default styling */
-  -webkit-appearance: none; /* Remove default styling in Safari */
-  -moz-appearance: none; /* Remove default styling in Firefox */
-  
-  /* Custom arrow */
-  background-image: url('data:image/svg+xml;charset=US-ASCII,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="5"><polygon points="0,0 10,0 5,5" style="fill:%23000;"/></svg>'); /* Black arrow */
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  background-size: 10px 5px;
-  padding-right: 30px; /* Space for the arrow */
-}
-
-/* Remove arrow in IE */
-.toolbar select::-ms-expand {
-  display: none;
-}
-
-/* Hover and Focus States for Select */
-.toolbar select:hover {
-  background-color: #fff; /* Maintain white background on hover */
+    padding: 8px 12px;
+    font-size: 1em;
+    border: 1px solid var(--primary-color);
+    border-radius: 4px;
+    background-color: #fff;
+    color: #000;
+    cursor: pointer;
+    appearance: none;
+    background-image: url('data:image/svg+xml;charset=US-ASCII,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="5"><polygon points="0,0 10,0 5,5" style="fill:%23000;"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 10px 5px;
+    padding-right: 30px;
+    transition: background-color 0.3s, border-color 0.3s;
 }
 
 .toolbar select:focus {
-  outline: none;
-  border-color: var(--hover-color);
+    outline: none;
+    border-color: var(--hover-color);
 }
 
-/* Object Selection Buttons */
-.object-buttons button {
-  padding: 10px 15px;
-  background-color: var(--primary-color);
-  color: var(--text-color);
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s;
+/* Button Styles */
+.toolbar button {
+    padding: 10px 15px;
+    background-color: var(--primary-color);
+    color: var(--text-color);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
 }
 
-.object-buttons button:hover {
-  background-color: var(--hover-color);
+.toolbar button:hover {
+    background-color: var(--hover-color);
 }
 
-.object-buttons button:active {
-  background-color: var(--active-color);
-}
-
-/* Download Button */
 .toolbar button:last-child {
-  padding: 10px 15px;
-  background-color: var(--primary-color);
-  color: var(--text-color);
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s;
+    background-color: var(--primary-color);
+    color: var(--text-color);
 }
 
 .toolbar button:last-child:hover {
-  background-color: var(--hover-color);
-}
-
-.toolbar button:last-child:active {
-  background-color: var(--active-color);
+    background-color: var(--hover-color);
 }
 
 /* Pitch Container */
 .pitch-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background-color: var(--background-color);
-  padding: 10px;
-  border-radius: 8px;
-  max-width: 100%;
-  overflow-x: auto;
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: var(--background-color);
+    border-radius: 8px;
+    width: 100%;
+    max-height: calc(100vh - 220px); /* Increased max-height with more buffer */
+    height: auto; /* Allow height to adjust */
+    overflow-x: auto;
+    overflow-y: hidden; /* Prevent vertical scrolling */
 }
 
 /* Canvas Styles */
 .konvajs-content {
-  max-width: 100%;
-}
-
-/* Responsive Adjustments */
-@media (max-width: 768px) {
-  .sessions-title {
-    font-size: 1.5em;
-  }
-
-  .toolbar label {
-    font-size: 1em;
-  }
-
-  .toolbar select {
-    font-size: 0.9em;
-  }
-
-  .object-buttons button,
-  .toolbar button:last-child {
-    padding: 8px 12px;
-    font-size: 0.9em;
-  }
-}
-
-/* Disable text selection on non-interactive elements */
-.sessions-page,
-.pitch-container {
-  -webkit-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-}
-
-/* Ensure inputs and interactive elements are selectable */
-.toolbar select,
-.object-buttons button,
-.drill-explanation textarea,
-.toolbar button:last-child {
-  -webkit-user-select: text;
-  -ms-user-select: text;
-  user-select: text;
-}
-
-/* Scrollbar Styling for WebKit Browsers */
-.pitch-container::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.pitch-container::-webkit-scrollbar-thumb {
-  background-color: var(--primary-color);
-  border-radius: 4px;
-}
-
-.pitch-container::-webkit-scrollbar-track {
-  background-color: #3b1761;
-}
-
-/* Touch-friendly adjustments */
-.toolbar select,
-.object-buttons button,
-.toolbar button:last-child {
-  touch-action: manipulation;
+    width: 100%;
+    height: 100%;
 }
 
 /* Drill Explanation Styles */
 .drill-explanation {
-  margin-top: 20px;
-  width: 100%;
+    margin-top: 20px;
+    width: 100%;
+    color: var(--text-color);
 }
 
 .drill-explanation h2 {
-  color: var(--text-color);
+    color: var(--text-color);
 }
 
 .drill-explanation textarea {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid var(--primary-color);
-  border-radius: 4px;
-  background-color: #fff;
-  color: #000;
-  resize: vertical;
-  min-height: 100px;
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--primary-color);
+    border-radius: 4px;
+    background-color: #fff;
+    color: #000;
+    resize: vertical;
+    min-height: 100px;
 }
 
-/* Placeholder color in textarea */
 .drill-explanation textarea::placeholder {
-  color: #666;
+    color: #666;
 }
 
-/* Button styles in other areas */
-.button-container button {
-  padding: 10px 15px;
-  background-color: var(--primary-color);
-  color: var(--text-color);
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s;
+/* Scrollbar Styling */
+.pitch-container::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
 }
 
-.button-container button:hover {
-  background-color: var(--hover-color);
+.pitch-container::-webkit-scrollbar-thumb {
+    background-color: var(--primary-color);
+    border-radius: 4px;
 }
 
-.button-container button:active {
-  background-color: var(--active-color);
+.pitch-container::-webkit-scrollbar-track {
+    background-color: #3b1761;
 }
 
-/* Remove conflicting modal styles */
-/* The following styles are commented out to prevent conflicts with react-bootstrap's modal */
+/* Responsive Adjustments */
+@media (max-width: 480px) {
+    .sessions-title {
+        font-size: 1.4em;
+    }
 
-/*
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+    .toolbar label {
+        font-size: 0.9em;
+    }
+
+    .toolbar select {
+        font-size: 0.8em;
+        padding: 6px 10px;
+    }
+
+    .toolbar button {
+        padding: 7px 10px;
+        font-size: 0.8em;
+    }
+
+    .pitch-container {
+        max-height: calc(100vh - 180px); /* Smaller screens adjustment */
+    }
+    .sessions-page {
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        background-color: var(--background-color);
+        min-height: 120vh;
+        box-sizing: border-box;
+    }
 }
 
-.modal-content {
-  background-color: #fff;
-  padding: 20px;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 400px;
-  box-sizing: border-box;
-}
-*/
+@media (min-width: 481px) and (max-width: 768px) {
+    .sessions-title {
+        font-size: 1.5em;
+    }
 
-/* Ensure that modal inputs and labels are selectable */
-.modal-content form input,
-.modal-content form label {
-  -webkit-user-select: text;
-  -ms-user-select: text;
-  user-select: text;
+    .toolbar label {
+        font-size: 1em;
+    }
+
+    .toolbar select {
+        font-size: 0.9em;
+    }
+
+    .toolbar button {
+        padding: 8px 12px;
+        font-size: 0.9em;
+    }
+
+    .pitch-container {
+        max-height: calc(150vh - 150px); /* Tablet-sized screens */
+    }
 }
 
-/* Custom modal styles */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .pitch-container {
+        max-height: calc(300vh + 200px); /* Laptop screens */
+    }
+
+    .sessions-page {
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        background-color: var(--background-color);
+        min-height: 120vh;
+        box-sizing: border-box;
+    }
+}
+
+@media (min-width: 1025px) {
+    .pitch-container {
+        max-height: calc(150vh + 200px); /* Larger screens */
+    }
+}
+
+/* Modal Styles */
 .custom-modal .modal-content {
-  background-color: #333;
-  color: #fff; /* Change text color for better readability */
+    background-color: #333;
+    color: var(--text-color);
 }
 
 .custom-modal .modal-header,
 .custom-modal .modal-footer {
-  border-color: #444; /* Adjust border color */
+    border-color: #444;
 }
 
 .custom-modal .modal-title {
-  color: #fff;
-}
-
-.custom-modal .modal-header .close {
-  color: #fff;
-  opacity: 0.8;
-}
-
-.custom-modal .modal-header .close:hover {
-  opacity: 1;
+    color: var(--text-color);
 }
 
 .custom-modal .btn-primary {
-  background-color: var(--primary-color);
-  border-color: var(--primary-color);
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
 }
 
 .custom-modal .btn-primary:hover {
-  background-color: var(--hover-color);
-  border-color: var(--hover-color);
+    background-color: var(--hover-color);
+    border-color: var(--hover-color);
 }
 
 .custom-modal .btn-secondary {
-  background-color: #6c757d;
-  border-color: #6c757d;
+    background-color: #6c757d;
+    border-color: #6c757d;
 }
 
 .custom-modal .btn-secondary:hover {
-  background-color: #5a6268;
-  border-color: #5a6268;
+    background-color: #5a6268;
+    border-color: #5a6268;
 }
 
 .custom-modal .btn-danger {
-  background-color: #dc3545;
-  border-color: #dc3545;
+    background-color: #dc3545;
+    border-color: #dc3545;
 }
 
 .custom-modal .btn-danger:hover {
-  background-color: #c82333;
-  border-color: #bd2130;
+    background-color: #c82333;
+    border-color: #bd2130;
 }
 
-/* Adjust form control styles within the modal */
 .custom-modal .form-control {
-  background-color: #444;
-  color: #fff;
-  border: 1px solid #555;
+    background-color: #444;
+    color: var(--text-color);
+    border: 1px solid #555;
 }
 
 .custom-modal .form-control:focus {
-  background-color: #555;
-  color: #fff;
-  border-color: var(--primary-color);
+    background-color: #555;
+    color: var(--text-color);
+    border-color: var(--primary-color);
 }
 
-/* Adjust labels within the modal */
 .custom-modal .form-label,
 .custom-modal .form-check-label {
-  color: #fff;
+    color: var(--text-color);
 }
 
-/* Adjust placeholder color */
 .custom-modal .form-control::placeholder {
-  color: #ccc;
+    color: #ccc;
 }

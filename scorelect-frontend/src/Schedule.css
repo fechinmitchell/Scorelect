@@ -2,7 +2,7 @@
 
 /* Schedule Page Styles */
 .schedule-page {
-    padding: 10px; /* Reduced padding from 20px to 10px */
+    padding: 10px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -11,27 +11,90 @@
   }
   
   .schedule-title {
-    margin-bottom: 10px; /* Reduced margin-bottom from 20px to 10px */
+    margin-bottom: 10px;
     font-size: 2em;
     color: #733faa;
     text-align: center;
   }
   
+  /* Container for Calendar and Agenda */
+  .schedule-container {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    max-width: 1600px; /* Adjust as needed */
+    gap: 20px; /* Space between calendar and agenda */
+    padding: 10px;
+    box-sizing: border-box;
+  }
+  
   /* Calendar Container */
   .calendar-container {
-    width: 100%;
-    max-width: 1200px;
+    flex: 3; /* Increased flex ratio for wider calendar */
     background-color: #3b1761;
-    padding: 5px; /* Reduced padding from 10px to 5px */
+    padding: 5px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     border-radius: 8px;
-    overflow-x: auto; /* Allow horizontal scrolling on small screens */
-    overflow-y: auto; /* Allow vertical scrolling if needed */
+    overflow-x: auto;
+    overflow-y: auto;
+    max-width: 1200px;
   }
   
   .calendar {
     width: 100%;
-    min-width: 300px; /* Reduced min-width from 600px to 300px */
+    min-width: 300px;
+  }
+  
+  /* Agenda Sidebar */
+  .agenda-container {
+    flex: 2; /* Increased flex ratio for wider agenda */
+    background-color: #3b1761; /* Match calendar-container background */
+    padding: 15px;
+    border-radius: 8px;
+    color: #ffffff;
+    max-height: calc(100vh - 200px); /* Adjust based on your layout */
+    overflow-y: auto;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  }
+  
+  .agenda-title {
+    margin-bottom: 10px;
+    font-size: 1.5em;
+    text-align: center;
+    border-bottom: 1px solid #5e2e8f;
+    padding-bottom: 5px;
+  }
+  
+  .agenda-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .agenda-item {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 10px;
+    padding: 10px;
+    background-color: #5e2e8f;
+    border-radius: 4px;
+  }
+  
+  .event-time {
+    font-size: 0.9em;
+    color: #f1c40f;
+  }
+  
+  .event-title {
+    font-size: 1em;
+    margin-top: 5px;
+    color: #ecf0f1;
+  }
+  
+  /* No Events Message */
+  .no-events {
+    text-align: center;
+    color: #bbb;
   }
   
   /* Adjustments for small screens */
@@ -41,11 +104,41 @@
     }
   
     .calendar {
-      min-width: 100%; /* Changed min-width to 100% */
+      min-width: 100%;
     }
   
     .calendar-container {
       padding: 5px;
+    }
+  
+    .agenda-container {
+      padding: 10px;
+    }
+  
+    .agenda-title {
+      font-size: 1.2em;
+    }
+  
+    .agenda-item {
+      padding: 8px;
+    }
+  
+    .event-time {
+      font-size: 0.8em;
+    }
+  
+    .event-title {
+      font-size: 0.9em;
+    }
+  
+    /* Stack agenda below calendar on smaller screens */
+    .schedule-container {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  
+    .agenda-container {
+      max-height: none;
     }
   }
   
@@ -55,14 +148,14 @@
   .rbc-month-view {
     background-color: #5e2e8f;
     color: #9a88ac;
-    max-height: 100%; /* Ensure the month view doesn't exceed container height */
+    max-height: 100%;
   }
   
   /* Toolbar Styles */
   .rbc-toolbar {
     background-color: #3b1761;
     color: #ffffff;
-    padding: 5px; /* Reduced padding for compactness */
+    padding: 5px;
   }
   
   .rbc-toolbar-label {
@@ -73,11 +166,11 @@
     background-color: #5e2e8f;
     color: #ffffff !important;
     border: none;
-    padding: 5px 8px; /* Reduced padding for compactness */
+    padding: 5px 8px;
     margin: 0 2px;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 0.9em; /* Reduced font size for compactness */
+    font-size: 0.9em;
   }
   
   .rbc-toolbar button:hover {
@@ -100,8 +193,8 @@
   .rbc-header {
     background-color: #3b1761;
     color: #ffffff;
-    padding: 5px; /* Reduced padding for compactness */
-    font-size: 0.9em; /* Reduced font size */
+    padding: 5px;
+    font-size: 0.9em;
   }
   
   /* Event Styles */
@@ -118,7 +211,7 @@
   
   /* Event content font size */
   .rbc-event-content {
-    font-size: 0.8em; /* Reduced font size for better fit */
+    font-size: 0.8em;
   }
   
   /* Today Highlight */
@@ -152,15 +245,15 @@
   }
   
   .rbc-row {
-    min-height: 20px; /* Adjust this value as needed */
+    min-height: 20px;
   }
   
   .rbc-row-segment {
-    max-height: 20px; /* Adjust to prevent events from stretching the row */
+    max-height: 20px;
   }
   
   /* Modal Styles */
-  .modal-overlay {
+  .schedule-modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
@@ -173,35 +266,35 @@
     z-index: 1000;
   }
   
-  .modal {
+  .schedule-modal {
     background-color: #3b1761;
     color: #ffffff;
     padding: 20px;
-    width: 90%;          /* Set width to 90% for responsiveness */
-    max-width: 500px;    /* Set a maximum width */
+    width: 90%;
+    max-width: 500px;
     border-radius: 8px;
-    box-sizing: border-box; /* Ensure padding doesn't affect width */
+    box-sizing: border-box;
   }
   
-  .modal h2 {
+  .schedule-modal h2 {
     margin-top: 0;
     color: #ecf0f1;
     font-size: 1.8em;
     text-align: center;
   }
   
-  .modal-content {
+  .schedule-modal-content {
     margin: 20px 0;
   }
   
-  .modal-content label {
+  .schedule-modal-content label {
     display: block;
     margin-bottom: 10px;
     color: #ffffff;
   }
   
-  .modal-content input,
-  .modal-content select {
+  .schedule-modal-content input,
+  .schedule-modal-content select {
     width: 100%;
     padding: 8px;
     font-size: 1em;
@@ -213,13 +306,13 @@
     margin-bottom: 15px;
   }
   
-  .modal-actions {
+  .schedule-modal-actions {
     display: flex;
     justify-content: flex-end;
     flex-wrap: wrap;
   }
   
-  .modal-button {
+  .schedule-modal-button {
     margin: 5px;
     padding: 12px 20px;
     font-size: 1em;
@@ -228,18 +321,18 @@
     color: #ecf0f1;
     border-radius: 4px;
     cursor: pointer;
-    min-width: 100px; /* Ensure buttons are large enough for touch */
+    min-width: 100px;
   }
   
-  .modal-button:hover {
+  .schedule-modal-button:hover {
     background-color: #7c52b3;
   }
   
-  .modal-button:first-of-type {
+  .schedule-modal-button:first-of-type {
     background-color: #6c757d;
   }
   
-  .modal-button:first-of-type:hover {
+  .schedule-modal-button:first-of-type:hover {
     background-color: #5a6268;
   }
   
@@ -258,9 +351,9 @@
   }
   
   /* Ensure inputs and interactive elements are selectable */
-  .modal-content input,
-  .modal-content select,
-  .modal-button {
+  .schedule-modal-content input,
+  .schedule-modal-content select,
+  .schedule-modal-button {
     -webkit-user-select: text;
     -ms-user-select: text;
     user-select: text;
@@ -268,11 +361,11 @@
   
   /* Responsive Adjustments */
   @media (max-width: 600px) {
-    .modal h2 {
+    .schedule-modal h2 {
       font-size: 1.5em;
     }
   
-    .modal-button {
+    .schedule-modal-button {
       padding: 10px 16px;
       font-size: 0.9em;
     }
@@ -290,7 +383,7 @@
   
   /* Adjust calendar cell heights on small screens */
   .rbc-month-view .rbc-row-content {
-    min-height: 80px; /* Adjust as needed */
+    min-height: 80px;
   }
   
   /* Adjust event font size */
@@ -319,19 +412,103 @@
   }
   
   /* Additional styles to prevent elements from overlapping on small screens */
-  .modal-content label,
-  .modal-content input,
-  .modal-content select {
+  .schedule-modal-content label,
+  .schedule-modal-content input,
+  .schedule-modal-content select {
     font-size: 1em;
   }
   
-  .modal-content input::placeholder {
+  .schedule-modal-content input::placeholder {
     color: #ecf0f1;
     opacity: 0.7;
   }
   
   /* Ensuring buttons are easy to tap */
-  .modal-actions .modal-button {
+  .schedule-modal-actions .schedule-modal-button {
     touch-action: manipulation;
   }
   
+  /* ----------------------------------------------------- */
+  /* New Styles for Agenda Sidebar */
+  
+  /* Agenda Sidebar */
+  /* Already defined above with .agenda-container */
+  
+  /* Agenda List */
+  .agenda-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  /* Agenda Item */
+  .agenda-item {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 10px;
+    padding: 10px;
+    background-color: #5e2e8f;
+    border-radius: 4px;
+  }
+  
+  /* Event Time */
+  .event-time {
+    font-size: 0.9em;
+    color: #f1c40f;
+  }
+  
+  /* Event Title */
+  .event-title {
+    font-size: 1em;
+    margin-top: 5px;
+    color: #ecf0f1;
+  }
+  
+  /* No Events Message */
+  .no-events {
+    text-align: center;
+    color: #bbb;
+  }
+  
+  /* Agenda Title */
+  .agenda-title {
+    margin-bottom: 10px;
+    font-size: 1.5em;
+    text-align: center;
+    border-bottom: 1px solid #5e2e8f;
+    padding-bottom: 5px;
+  }
+  
+  /* Responsive Adjustments for Agenda */
+  @media (max-width: 1200px) {
+    .schedule-container {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  
+    .agenda-container {
+      max-height: none;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .agenda-container {
+      padding: 10px;
+    }
+  
+    .agenda-title {
+      font-size: 1.2em;
+    }
+  
+    .agenda-item {
+      padding: 8px;
+    }
+  
+    .event-time {
+      font-size: 0.8em;
+    }
+  
+    .event-title {
+      font-size: 0.9em;
+    }
+  }

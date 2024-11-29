@@ -1,6 +1,6 @@
 // Schedule.js
 import React, { useState, useEffect } from 'react';
-import { Calendar, momentLocalizer } from 'react-big-calendar';
+import { Calendar, momentLocalizer, Views } from 'react-big-calendar';
 import moment from 'moment';
 import { RRule } from 'rrule';
 import './Schedule.css';
@@ -8,16 +8,50 @@ import 'react-big-calendar/lib/css/react-big-calendar.css';
 
 const localizer = momentLocalizer(moment);
 
+// Modal Component
 const Modal = ({ isOpen, title, children, actions }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay">
-      <div className="modal">
+    <div className="schedule-modal-overlay">
+      <div className="schedule-modal">
         <h2>{title}</h2>
-        <div className="modal-content">{children}</div>
-        {actions && <div className="modal-actions">{actions}</div>}
+        <div className="schedule-modal-content">{children}</div>
+        {actions && <div className="schedule-modal-actions">{actions}</div>}
       </div>
+    </div>
+  );
+};
+
+// Agenda Component
+const Agenda = ({ events, selectedDate }) => {
+  // Filter events based on selected date range
+  const filteredEvents = events.filter(event => {
+    const eventDate = moment(event.start).startOf('day');
+    const selected = moment(selectedDate).startOf('day');
+    return eventDate.isSame(selected, 'day') || eventDate.isAfter(selected, 'day');
+  });
+
+  // Sort events chronologically
+  const sortedEvents = filteredEvents.sort((a, b) => a.start - b.start);
+
+  return (
+    <div className="agenda-container">
+      <h3 className="agenda-title">Agenda</h3>
+      {sortedEvents.length === 0 ? (
+        <p className="no-events">No events for this day.</p>
+      ) : (
+        <ul className="agenda-list">
+          {sortedEvents.map(event => (
+            <li key={event.id} className="agenda-item">
+              <span className="event-time">
+                {moment(event.start).format('HH:mm')} - {moment(event.end).format('HH:mm')}
+              </span>
+              <span className="event-title">{event.title}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 };
@@ -32,16 +66,24 @@ const Schedule = () => {
     endTime: '',
     recurrence: 'none',
     recurrenceEndDate: null,
+    id: null,
   });
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [eventDetailsOpen, setEventDetailsOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [currentDate, setCurrentDate] = useState(new Date());
 
   // Load events from localStorage on component mount
   useEffect(() => {
     const savedEvents = JSON.parse(localStorage.getItem('events'));
     if (savedEvents) {
-      setEvents(savedEvents);
+      // Convert date strings back to Date objects
+      const eventsWithDates = savedEvents.map(event => ({
+        ...event,
+        start: new Date(event.start),
+        end: new Date(event.end),
+      }));
+      setEvents(eventsWithDates);
     }
   }, []);
 
@@ -58,6 +100,7 @@ const Schedule = () => {
       endTime: '',
       recurrence: 'none',
       recurrenceEndDate: null,
+      id: null,
     });
     setErrorMessage('');
     setModalOpen(true);
@@ -124,7 +167,7 @@ const Schedule = () => {
       const rule = new RRule(ruleOptions);
       const dates = rule.all();
 
-      newEvents = dates.map((date) => ({
+      newEvents = dates.map(date => ({
         start: date,
         end: new Date(date.getTime() + (endDateTime - startDateTime)),
         title,
@@ -149,17 +192,18 @@ const Schedule = () => {
       endTime: '',
       recurrence: 'none',
       recurrenceEndDate: null,
+      id: null,
     });
     setModalOpen(false);
   };
 
-  const handleSelectEvent = (event) => {
+  const handleSelectEvent = event => {
     setSelectedEvent(event);
     setEventDetailsOpen(true);
   };
 
   const handleDeleteEvent = () => {
-    setEvents(events.filter((e) => e.id !== selectedEvent.id));
+    setEvents(events.filter(e => e.id !== selectedEvent.id));
     setSelectedEvent(null);
     setEventDetailsOpen(false);
   };
@@ -210,7 +254,7 @@ const Schedule = () => {
       return;
     }
 
-    const updatedEvents = events.map((event) =>
+    const updatedEvents = events.map(event =>
       event.id === id
         ? { ...event, title, start: startDateTime, end: endDateTime }
         : event
@@ -229,30 +273,52 @@ const Schedule = () => {
     setModalOpen(false);
   };
 
+  // Helper function to format events for agenda
+  const getAgendaEvents = () => {
+    return events.map(event => ({
+      ...event,
+      start: event.start,
+      end: event.end,
+    }));
+  };
+
   return (
     <div className="schedule-page">
       <h1 className="schedule-title">Team Schedule</h1>
-      <div className="calendar-container">
-        <Calendar
-          localizer={localizer}
-          events={events}
-          selectable
-          longPressThreshold={10}
-          defaultView="month"
-          views={['month', 'week', 'day', 'agenda']}
-          onSelectSlot={handleSelectSlot}
-          onSelectEvent={handleSelectEvent}
-          style={{ height: 'calc(100vh - 200px)', width: '100%' }} // Adjusted height and width
-          className="calendar"
-          eventPropGetter={(event) => ({
-            style: {
-              backgroundColor: '#007bff',
-              color: '#fff',
-              borderRadius: '4px',
-              border: 'none',
-            },
-          })}
-        />
+      <div className="schedule-container">
+        {/* Calendar Section */}
+        <div className="calendar-container">
+          <Calendar
+            localizer={localizer}
+            events={events}
+            selectable
+            longPressThreshold={10}
+            defaultView={Views.MONTH}
+            views={['month', 'week', 'day', 'agenda']}
+            date={currentDate}
+            onNavigate={date => setCurrentDate(date)}
+            onSelectSlot={handleSelectSlot}
+            onSelectEvent={handleSelectEvent}
+            style={{ height: 'calc(100vh - 200px)', width: '100%' }}
+            className="calendar"
+            eventPropGetter={event => ({
+              style: {
+                backgroundColor: '#007bff',
+                color: '#fff',
+                borderRadius: '4px',
+                border: 'none',
+              },
+            })}
+            formats={{
+              agendaDateFormat: (date, culture, localizer) =>
+                localizer.format(date, 'MMM DD, YYYY'),
+              agendaTimeFormat: 'hh:mm A',
+            }}
+          />
+        </div>
+
+        {/* Agenda Sidebar */}
+        <Agenda events={getAgendaEvents()} selectedDate={currentDate} />
       </div>
 
       {/* Modal for adding/editing event */}
@@ -262,7 +328,7 @@ const Schedule = () => {
         actions={
           <>
             <button
-              className="modal-button"
+              className="schedule-modal-button cancel-button"
               onClick={() => {
                 setModalOpen(false);
                 setErrorMessage('');
@@ -271,7 +337,7 @@ const Schedule = () => {
               Cancel
             </button>
             <button
-              className="modal-button"
+              className="schedule-modal-button save-button"
               onClick={newEventData.id ? handleUpdateEvent : handleAddEvent}
             >
               Save
@@ -285,9 +351,10 @@ const Schedule = () => {
           <input
             type="text"
             value={newEventData.title}
-            onChange={(e) =>
+            onChange={e =>
               setNewEventData({ ...newEventData, title: e.target.value })
             }
+            placeholder="Enter event title"
           />
         </label>
         <label>
@@ -295,7 +362,7 @@ const Schedule = () => {
           <input
             type="time"
             value={newEventData.startTime}
-            onChange={(e) =>
+            onChange={e =>
               setNewEventData({ ...newEventData, startTime: e.target.value })
             }
           />
@@ -305,7 +372,7 @@ const Schedule = () => {
           <input
             type="time"
             value={newEventData.endTime}
-            onChange={(e) =>
+            onChange={e =>
               setNewEventData({ ...newEventData, endTime: e.target.value })
             }
           />
@@ -317,7 +384,7 @@ const Schedule = () => {
               Recurrence:
               <select
                 value={newEventData.recurrence}
-                onChange={(e) =>
+                onChange={e =>
                   setNewEventData({
                     ...newEventData,
                     recurrence: e.target.value,
@@ -342,7 +409,7 @@ const Schedule = () => {
                         )
                       : ''
                   }
-                  onChange={(e) =>
+                  onChange={e =>
                     setNewEventData({
                       ...newEventData,
                       recurrenceEndDate: new Date(e.target.value),
@@ -363,7 +430,7 @@ const Schedule = () => {
           actions={
             <>
               <button
-                className="modal-button"
+                className="schedule-modal-button close-button"
                 onClick={() => {
                   setEventDetailsOpen(false);
                   setSelectedEvent(null);
@@ -371,10 +438,13 @@ const Schedule = () => {
               >
                 Close
               </button>
-              <button className="modal-button" onClick={handleEditEvent}>
+              <button className="schedule-modal-button edit-button" onClick={handleEditEvent}>
                 Edit
               </button>
-              <button className="modal-button" onClick={handleDeleteEvent}>
+              <button
+                className="schedule-modal-button delete-button"
+                onClick={handleDeleteEvent}
+              >
                 Delete
               </button>
             </>

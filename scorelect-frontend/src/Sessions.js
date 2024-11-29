@@ -1,12 +1,14 @@
 // Sessions.js
-import React, { useState, useRef } from 'react';
-import { Stage, Layer, Rect, Line, Circle, Arc, Text, Image as KonvaImage, Group, Transformer } from 'react-konva';
+import React, { useState, useRef, useEffect } from 'react';
+import { Stage, Layer, Rect, Line, Circle, Arc, Text, Image as KonvaImage, Group } from 'react-konva';
 import useImage from 'use-image';
 import './Sessions.css';
 import coneImg from './images/cone.png';
 import ballImg from './images/ball.png';
 import playerImg from './images/player.png';
 
+import { Modal, Button, Form } from 'react-bootstrap';
+import 'bootstrap/dist/css/bootstrap.min.css';
 
 const Sessions = () => {
   // State for selected pitch
@@ -57,11 +59,13 @@ const Sessions = () => {
   // Drill explanation text
   const [drillExplanation, setDrillExplanation] = useState('');
 
-// Use the imported images with useImage
-const [coneImage] = useImage(coneImg);
-const [ballImage] = useImage(ballImg);
-const [playerImage] = useImage(playerImg);
+  // Use the imported images with useImage
+  const [coneImage] = useImage(coneImg);
+  const [ballImage] = useImage(ballImg);
+  const [playerImage] = useImage(playerImg);
 
+  // Modal state
+  const [showModal, setShowModal] = useState(false);
 
   // Function to add new object
   const addObject = (type) => {
@@ -75,6 +79,7 @@ const [playerImage] = useImage(playerImg);
     const id = Date.now(); // Unique ID for each object
 
     if (selectedTool) {
+      const defaultSize = 25; // Default size for new objects
       const newObject = {
         id,
         type: selectedTool,
@@ -83,6 +88,9 @@ const [playerImage] = useImage(playerImg);
         rotation: 0,
         scaleX: 1,
         scaleY: 1,
+        size: defaultSize, // Include size property
+        label: '',
+        color: selectedTool === 'player' ? '#000000' : null, // Default color for players
         // Additional properties based on object type
         ...(selectedTool === 'line' && { points: [pointerPosition.x, pointerPosition.y, pointerPosition.x + 50, pointerPosition.y + 50] }),
         ...(selectedTool === 'square' && { width: 50, height: 50 }),
@@ -96,6 +104,7 @@ const [playerImage] = useImage(playerImg);
   // Function to handle object selection
   const handleSelectObject = (id) => {
     setSelectedObjectId(id);
+    setShowModal(true);
   };
 
   // Function to handle object drag
@@ -136,6 +145,7 @@ const [playerImage] = useImage(playerImg);
   const handleDeleteObject = () => {
     setObjects(objects.filter(obj => obj.id !== selectedObjectId));
     setSelectedObjectId(null);
+    setShowModal(false); // Close the modal after deleting
   };
 
   // Function to download the canvas as an image
@@ -265,9 +275,9 @@ const [playerImage] = useImage(playerImg);
           <Line points={[xScale * 80, 0, xScale * 80, canvasSize.height]} stroke={lineColor} strokeWidth={2} />
     
           {/* "SCORELECT" in the end zones */}
-          <Text text="SCORELECT.COM" x={xScale * 22.5} y={canvasSize.height / 40.25} fontSize={canvasSize.width / 60} f  fill="#D3D3D3" opacity={0.7} rotation={0} align="center" />
+          <Text text="SCORELECT.COM" x={xScale * 22.5} y={canvasSize.height / 40.25} fontSize={canvasSize.width / 60} fill="#D3D3D3" opacity={0.7} rotation={0} align="center" />
           <Text text="SCORELECT.COM" x={canvasSize.width - xScale * 22.5} y={canvasSize.height / 1.02} fontSize={canvasSize.width / 60} fill="#D3D3D3" opacity={0.7} rotation={180} align="center" />
-    
+     
           </Layer>
         );
       };
@@ -440,7 +450,7 @@ const renderBasketballCourt = () => (
       ]} stroke={lineColor} strokeWidth={2} />
 
       {/* "SCORELECT" on the court */}
-      <Text text="SCORELECT.COM" x={xScale * 22.5} y={canvasSize.height / 40.25} fontSize={canvasSize.width / 50} f  fill="#D3D3D3" opacity={0.7} rotation={0} align="center" />
+      <Text text="SCORELECT.COM" x={xScale * 22.5} y={canvasSize.height / 40.25} fontSize={canvasSize.width / 50} fill="#D3D3D3" opacity={0.7} rotation={0} align="center" />
       <Text text="SCORELECT.COM" x={canvasSize.width - xScale * 22.5} y={canvasSize.height / 1.02} fontSize={canvasSize.width / 50} fill="#D3D3D3" opacity={0.7} rotation={180} align="center" />
 
     </Layer>
@@ -465,125 +475,165 @@ const renderBasketballCourt = () => (
   };
 
   // Helper function to render interactive objects
-  const renderObjects = () => {
-    return objects.map(obj => {
-      switch (obj.type) {
-        case 'cone':
-          return (
-            <KonvaImage
-              key={obj.id}
-              image={coneImage}
-              x={obj.x}
-              y={obj.y}
-              offsetX={25}
-              offsetY={25}
-              width={50}
-              height={50}
-              draggable
-              onClick={() => handleSelectObject(obj.id)}
-              onTap={() => handleSelectObject(obj.id)}
-              onDragEnd={(e) => handleDragObject(e, obj.id)}
-              onTransformEnd={(e) => handleTransformObject(e, obj.id)}
-              rotation={obj.rotation}
-              scaleX={obj.scaleX}
-              scaleY={obj.scaleY}
-            />
-          );
-        case 'ball':
-          return (
-            <KonvaImage
-              key={obj.id}
-              image={ballImage}
-              x={obj.x}
-              y={obj.y}
-              offsetX={25}
-              offsetY={25}
-              width={50}
-              height={50}
-              draggable
-              onClick={() => handleSelectObject(obj.id)}
-              onTap={() => handleSelectObject(obj.id)}
-              onDragEnd={(e) => handleDragObject(e, obj.id)}
-              onTransformEnd={(e) => handleTransformObject(e, obj.id)}
-              rotation={obj.rotation}
-              scaleX={obj.scaleX}
-              scaleY={obj.scaleY}
-            />
-          );
-        case 'player':
-          return (
-            <Group
-              key={obj.id}
-              x={obj.x}
-              y={obj.y}
-              draggable
-              onClick={() => handleSelectObject(obj.id)}
-              onTap={() => handleSelectObject(obj.id)}
-              onDragEnd={(e) => handleDragObject(e, obj.id)}
-              onTransformEnd={(e) => handleTransformObject(e, obj.id)}
-              rotation={obj.rotation}
-              scaleX={obj.scaleX}
-              scaleY={obj.scaleY}
-            >
-              <Circle
-                radius={25}
-                fill="black"
-              />
-              {obj.number && (
-                <Text
-                  text={obj.number}
-                  fontSize={20}
-                  fill="white"
-                  align="center"
-                  verticalAlign="middle"
-                  offsetX={-10}
-                  offsetY={-10}
+    const renderObjects = () => {
+        return objects.map(obj => {
+        switch (obj.type) {
+            case 'cone':
+            case 'ball':
+            return (
+                <Group
+                key={obj.id}
+                x={obj.x}
+                y={obj.y}
+                draggable
+                onClick={() => handleSelectObject(obj.id)}
+                onTap={() => handleSelectObject(obj.id)}
+                onDragEnd={(e) => handleDragObject(e, obj.id)}
+                onTransformEnd={(e) => handleTransformObject(e, obj.id)}
+                rotation={obj.rotation}
+                scaleX={obj.scaleX}
+                scaleY={obj.scaleY}
+                >
+                {obj.label && (
+                    <Text
+                    text={obj.label}
+                    fontSize={obj.size / 2}
+                    fill="black"
+                    x={-obj.size / 2} // Center the text horizontally
+                    y={-obj.size - (obj.size / 8)} // Position the text above the cone
+                    width={obj.size} // Set the width to align the text
+                    align="center"
+                    />
+                )}
+                <KonvaImage
+                    image={obj.type === 'cone' ? coneImage : ballImage}
+                    x={0}
+                    y={0}
+                    offsetX={obj.size / 2}
+                    offsetY={obj.size / 2}
+                    width={obj.size}
+                    height={obj.size}
                 />
-              )}
-            </Group>
-          );
-        case 'line':
-          return (
-            <Line
-              key={obj.id}
-              points={obj.points}
-              stroke="red"
-              strokeWidth={4}
-              draggable
-              onClick={() => handleSelectObject(obj.id)}
-              onTap={() => handleSelectObject(obj.id)}
-              onDragEnd={(e) => handleDragObject(e, obj.id)}
-              onTransformEnd={(e) => handleTransformObject(e, obj.id)}
-              rotation={obj.rotation}
-              scaleX={obj.scaleX}
-              scaleY={obj.scaleY}
-            />
-          );
-        case 'square':
-          return (
-            <Rect
-              key={obj.id}
-              x={obj.x}
-              y={obj.y}
-              width={obj.width}
-              height={obj.height}
-              fill="transparent"
-              stroke="blue"
-              strokeWidth={2}
-              draggable
-              onClick={() => handleSelectObject(obj.id)}
-              onTap={() => handleSelectObject(obj.id)}
-              onDragEnd={(e) => handleDragObject(e, obj.id)}
-              onTransformEnd={(e) => handleTransformObject(e, obj.id)}
-              rotation={obj.rotation}
-              scaleX={obj.scaleX}
-              scaleY={obj.scaleY}
-            />
-          );
-        default:
-          return null;
+                </Group>
+            );
+            case 'player':
+            return (
+                <Group
+                key={obj.id}
+                x={obj.x}
+                y={obj.y}
+                draggable
+                onClick={() => handleSelectObject(obj.id)}
+                onTap={() => handleSelectObject(obj.id)}
+                onDragEnd={(e) => handleDragObject(e, obj.id)}
+                onTransformEnd={(e) => handleTransformObject(e, obj.id)}
+                rotation={obj.rotation}
+                scaleX={obj.scaleX}
+                scaleY={obj.scaleY}
+                >
+                {obj.label && (
+                    <Text
+                    text={obj.label}
+                    fontSize={obj.size / 2}
+                    fill="black"
+                    x={-obj.size / 2}
+                    y={-obj.size - (obj.size / 2)}
+                    width={obj.size}
+                    align="center"
+                    />
+                )}
+                <Circle
+                    radius={obj.size / 2}
+                    fill={obj.color || 'black'}
+                />
+                {obj.number && (
+                    <Text
+                    text={obj.number}
+                    fontSize={obj.size / 2}
+                    fill="white"
+                    align="center"
+                    verticalAlign="middle"
+                    offsetX={-obj.size / 4}
+                    offsetY={-obj.size / 4}
+                    />
+                )}
+                </Group>
+            );
+            case 'line':
+            return (
+                <Line
+                key={obj.id}
+                points={obj.points}
+                stroke={obj.color || 'black'}
+                strokeWidth={obj.size || 1}
+                draggable
+                onClick={() => handleSelectObject(obj.id)}
+                onTap={() => handleSelectObject(obj.id)}
+                onDragEnd={(e) => handleDragObject(e, obj.id)}
+                onTransformEnd={(e) => handleTransformObject(e, obj.id)}
+                />
+            );
+            case 'square':
+            return (
+                <Rect
+                key={obj.id}
+                x={obj.x}
+                y={obj.y}
+                width={obj.width}
+                height={obj.height}
+                fill={obj.color || 'transparent'}
+                stroke="black"
+                strokeWidth={2}
+                draggable
+                onClick={() => handleSelectObject(obj.id)}
+                onTap={() => handleSelectObject(obj.id)}
+                onDragEnd={(e) => handleDragObject(e, obj.id)}
+                onTransformEnd={(e) => handleTransformObject(e, obj.id)}
+                />
+            );
+            // Add cases for other object types if needed
+            default:
+            return null;
+        }
+        });
+    }; 
+
+  // Modal state variables
+  const selectedObject = objects.find(obj => obj.id === selectedObjectId);
+
+  const [modalLabel, setModalLabel] = useState('');
+  const [modalSize, setModalSize] = useState(25);
+  const [modalColor, setModalColor] = useState('#000000');
+
+  useEffect(() => {
+    if (selectedObject) {
+      setModalLabel(selectedObject.label || '');
+      setModalSize(selectedObject.size || 25);
+      setModalColor(selectedObject.color || '#000000');
+    }
+  }, [selectedObject]);
+
+  const handleModalSubmit = (e) => {
+    e.preventDefault();
+    const updatedObjects = objects.map(obj => {
+      if (obj.id === selectedObjectId) {
+        return {
+          ...obj,
+          label: modalLabel,
+          size: modalSize,
+          color: modalColor,
+        };
       }
+      return obj;
     });
+    setObjects(updatedObjects);
+    setShowModal(false);
+    setSelectedObjectId(null);
+  };
+
+  const handleModalCancel = () => {
+    setShowModal(false);
+    setSelectedObjectId(null);
   };
 
   return (
@@ -612,14 +662,78 @@ const renderBasketballCourt = () => (
           {/* Add more objects as needed */}
         </div>
 
-        {/* Delete button */}
-        {selectedObjectId && (
-          <button onClick={handleDeleteObject}>Delete Selected Object</button>
-        )}
-
+        {/* Remove the Delete button from the toolbar */}
         {/* Download button */}
         <button onClick={handleDownload}>Download Session</button>
       </div>
+
+      {/* Modal */}
+      {showModal && selectedObject && (
+        <Modal
+          show={showModal}
+          onHide={handleModalCancel}
+          centered
+          dialogClassName="custom-modal"
+        >
+          <Modal.Header closeButton>
+            <Modal.Title>
+              Edit {selectedObject.type.charAt(0).toUpperCase() + selectedObject.type.slice(1)}
+            </Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Form onSubmit={handleModalSubmit}>
+              {/* Size Input */}
+              <Form.Group controlId="modal-size">
+                <Form.Label>Size:</Form.Label>
+                <Form.Control
+                  type="number"
+                  value={modalSize}
+                  onChange={(e) => setModalSize(parseInt(e.target.value, 10))}
+                />
+              </Form.Group>
+
+              {/* Label Input */}
+              {(selectedObject.type === 'cone' ||
+                selectedObject.type === 'ball' ||
+                selectedObject.type === 'player') && (
+                <Form.Group controlId="modal-label">
+                  <Form.Label>Text Above Image:</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={modalLabel}
+                    onChange={(e) => setModalLabel(e.target.value)}
+                  />
+                </Form.Group>
+              )}
+
+              {/* Color Input */}
+              {selectedObject.type === 'player' && (
+                <Form.Group controlId="modal-color">
+                  <Form.Label>Color:</Form.Label>
+                  <Form.Control
+                    type="color"
+                    value={modalColor}
+                    onChange={(e) => setModalColor(e.target.value)}
+                  />
+                </Form.Group>
+              )}
+
+              {/* Modal Footer with Delete button */}
+              <Modal.Footer>
+                <Button variant="danger" onClick={handleDeleteObject}>
+                  Delete
+                </Button>
+                <Button variant="secondary" onClick={handleModalCancel}>
+                  Cancel
+                </Button>
+                <Button variant="primary" type="submit">
+                  Save
+                </Button>
+              </Modal.Footer>
+            </Form>
+          </Modal.Body>
+        </Modal>
+      )}
 
       <div className="pitch-container">
         <Stage

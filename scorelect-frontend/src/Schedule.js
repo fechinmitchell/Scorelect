@@ -5,6 +5,7 @@ import moment from 'moment';
 import { RRule } from 'rrule';
 import './Schedule.css';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
+import { saveUserData, getUserData, clearUserData } from './storage'; // Import utility functions
 
 const localizer = momentLocalizer(moment);
 
@@ -57,7 +58,7 @@ const Agenda = ({ events, selectedDate }) => {
 };
 
 const Schedule = ({ userId }) => { // **Assuming userId is passed as a prop**
-  const [events, setEvents] = useState([]);
+  const [userData, setUserData] = useState({ events: [], agendaNotes: "" });
   const [modalOpen, setModalOpen] = useState(false);
   const [newEventData, setNewEventData] = useState({
     title: '',
@@ -73,27 +74,23 @@ const Schedule = ({ userId }) => { // **Assuming userId is passed as a prop**
   const [errorMessage, setErrorMessage] = useState('');
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  // Define a user-specific localStorage key
-  const storageKey = `events_${userId}`;
+  // **Added State Variable for Reset Confirmation Modal**
+  const [showResetModal, setShowResetModal] = useState(false);
 
-  // Load events from localStorage on component mount
+  // Load user data from localStorage on component mount
   useEffect(() => {
-    const savedEvents = JSON.parse(localStorage.getItem(storageKey));
-    if (savedEvents) {
-      // Convert date strings back to Date objects
-      const eventsWithDates = savedEvents.map(event => ({
-        ...event,
-        start: new Date(event.start),
-        end: new Date(event.end),
-      }));
-      setEvents(eventsWithDates);
+    if (userId) {
+      const data = getUserData(userId);
+      setUserData(data);
     }
-  }, [storageKey]);
+  }, [userId]);
 
-  // Save events to localStorage whenever they change
+  // Save user data to localStorage whenever it changes
   useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(events));
-  }, [events, storageKey]);
+    if (userId) {
+      saveUserData(userId, userData);
+    }
+  }, [userData, userId]);
 
   const handleSelectSlot = ({ start }) => {
     setNewEventData({
@@ -187,7 +184,11 @@ const Schedule = ({ userId }) => { // **Assuming userId is passed as a prop**
       ];
     }
 
-    setEvents([...events, ...newEvents]);
+    setUserData(prevData => ({
+      ...prevData,
+      events: [...prevData.events, ...newEvents],
+    }));
+
     setNewEventData({
       title: '',
       startDate: null,
@@ -206,7 +207,10 @@ const Schedule = ({ userId }) => { // **Assuming userId is passed as a prop**
   };
 
   const handleDeleteEvent = () => {
-    setEvents(events.filter(e => e.id !== selectedEvent.id));
+    setUserData(prevData => ({
+      ...prevData,
+      events: prevData.events.filter(e => e.id !== selectedEvent.id),
+    }));
     setSelectedEvent(null);
     setEventDetailsOpen(false);
   };
@@ -257,13 +261,17 @@ const Schedule = ({ userId }) => { // **Assuming userId is passed as a prop**
       return;
     }
 
-    const updatedEvents = events.map(event =>
+    const updatedEvents = userData.events.map(event =>
       event.id === id
         ? { ...event, title, start: startDateTime, end: endDateTime }
         : event
     );
 
-    setEvents(updatedEvents);
+    setUserData(prevData => ({
+      ...prevData,
+      events: updatedEvents,
+    }));
+
     setNewEventData({
       title: '',
       startDate: null,
@@ -278,19 +286,28 @@ const Schedule = ({ userId }) => { // **Assuming userId is passed as a prop**
 
   // Helper function to format events for agenda
   const getAgendaEvents = () => {
-    return events.map(event => ({
+    return userData.events.map(event => ({
       ...event,
       start: event.start,
       end: event.end,
     }));
   };
 
+  // **Added Functions for Reset Confirmation Modal**
+
+  const confirmReset = () => {
+    setUserData({ events: [], agendaNotes: "" });
+    clearUserData(userId);
+    setShowResetModal(false);
+  };
+
+  const cancelReset = () => {
+    setShowResetModal(false);
+  };
+
   // Function to reset the schedule
   const handleResetSchedule = () => {
-    if (window.confirm('Are you sure you want to reset your schedule? This cannot be undone.')) {
-      setEvents([]);
-      localStorage.removeItem(storageKey);
-    }
+    setShowResetModal(true);
   };
 
   return (
@@ -301,7 +318,7 @@ const Schedule = ({ userId }) => { // **Assuming userId is passed as a prop**
         <div className="calendar-container">
           <Calendar
             localizer={localizer}
-            events={events}
+            events={userData.events}
             selectable
             longPressThreshold={10}
             defaultView={Views.MONTH}
@@ -331,6 +348,7 @@ const Schedule = ({ userId }) => { // **Assuming userId is passed as a prop**
         {/* Agenda Sidebar */}
         <div className="agenda-and-reset">
           <Agenda events={getAgendaEvents()} selectedDate={currentDate} />
+          {/* **Updated Reset Button** */}
           <button className="reset-button" onClick={handleResetSchedule}>
             Reset Schedule
           </button>
@@ -479,6 +497,30 @@ const Schedule = ({ userId }) => { // **Assuming userId is passed as a prop**
           </p>
         </Modal>
       )}
+
+      {/* **Added Reset Confirmation Modal** */}
+      <Modal
+        isOpen={showResetModal}
+        title="Reset Schedule"
+        actions={
+          <>
+            <button
+              className="schedule-modal-button cancel-button"
+              onClick={cancelReset}
+            >
+              No
+            </button>
+            <button
+              className="schedule-modal-button confirm-button"
+              onClick={confirmReset}
+            >
+              Yes
+            </button>
+          </>
+        }
+      >
+        <p>Are you sure you want to reset your schedule? This action cannot be undone.</p>
+      </Modal>
     </div>
   );
 };

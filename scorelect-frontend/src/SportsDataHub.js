@@ -224,7 +224,7 @@ const SportsDataHub = () => {
             return (
               <div key={dataset.id} className="dataset-card">
                 {/* Use preview_snippet as image URL if image is uploaded */}
-                {dataset.preview_snippet && dataset.preview_snippet.startsWith('http') ? (
+                {/* {dataset.preview_snippet && dataset.preview_snippet.startsWith('http') ? (
                   <img
                     src={dataset.preview_snippet}
                     alt={dataset.name}
@@ -232,7 +232,7 @@ const SportsDataHub = () => {
                   />
                 ) : (
                   <div className="placeholder-image">No Image</div>
-                )}
+                )} */}
                 <h3>{dataset.name}</h3>
                 <p>{dataset.description}</p>
                 <p>

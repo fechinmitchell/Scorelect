@@ -1554,4 +1554,5 @@ const Sessions = () => {
       </div>
     );
   };
-    export default Sessions;
+
+export default Sessions;

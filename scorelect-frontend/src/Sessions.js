@@ -32,6 +32,8 @@ const Sessions = () => {
   const pitchColor = '#006400';       // Dark green
   const lightStripeColor = '#228B22'; // Light green
   const darkStripeColor = '#006400';  // Dark green
+  const defaultLineColor = '#FFA500';  // Orange for lines
+  const defaultSquareColor = '#FFFF00';// Yellow for squares
   const lineColor = '#FFFFFF';        // White lines
   const courtColor = '#F4A460';       // Tan color for basketball court
 
@@ -115,7 +117,7 @@ const Sessions = () => {
             pointerPosition.x,
             pointerPosition.y,
           ],
-          color: '#000000', // Default color (you can customize this)
+          color: defaultLineColor, // Default color set to orange
           size: 3, // Default stroke width
         };
         setObjects([...objects, newLine]);
@@ -140,7 +142,7 @@ const Sessions = () => {
           rotation: 0,
           scaleX: 1,
           scaleY: 1,
-          color: 'transparent', // Default fill
+          color: defaultSquareColor, // Default stroke set to yellow
         };
         // Adjust position if width or height is negative
         if (width < 0) {
@@ -197,8 +199,8 @@ const Sessions = () => {
           pointerPosition.x,
           pointerPosition.y,
         ],
-        color: '#000000',
-        size: 5,
+        color: defaultLineColor, // Temporary line color set to orange
+        size: 3,
       });
     }
 
@@ -210,7 +212,7 @@ const Sessions = () => {
         y: height < 0 ? pointerPosition.y : squareStartPoint.y,
         width: Math.abs(width),
         height: Math.abs(height),
-        color: '#000000',
+        color: defaultSquareColor, // Temporary square color set to yellow
         size: 2,
       });
     }
@@ -565,13 +567,259 @@ const Sessions = () => {
     );
   };
 
-  const renderGAAPitch = () => {
-    const numStripes = 10;
-    const stripeWidth = canvasSize.width / numStripes;
+    const renderGAAPitch = () => {
+      const numStripes = 10;
+      const stripeWidth = canvasSize.width / numStripes;
 
-    return (
+      return (
+        <Layer>
+          {/* Pitch Background */}
+          <Rect
+            x={0}
+            y={0}
+            width={canvasSize.width}
+            height={canvasSize.height}
+            fill={pitchColor}
+          />
+
+          {/* Stripes */}
+          {Array.from({ length: numStripes }, (_, i) => (
+            <Rect
+              key={i}
+              x={i * stripeWidth}
+              y={0}
+              width={stripeWidth}
+              height={canvasSize.height}
+              fill={i % 2 === 0 ? lightStripeColor : darkStripeColor}
+              opacity={0.3} // Adjust opacity for subtlety
+            />
+          ))}
+
+          {/* Side and Goal Lines */}
+          <Line
+            points={[
+              0,
+              0,
+              canvasSize.width,
+              0,
+              canvasSize.width,
+              canvasSize.height,
+              0,
+              canvasSize.height,
+              0,
+              0,
+            ]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+
+          {/* Additional Lines for GAA Pitch */}
+          <Line
+            points={[
+              canvasSize.width,
+              yScale * 40.75,
+              xScale * 145.2,
+              yScale * 40.75,
+              xScale * 145.2,
+              yScale * 47.25,
+              canvasSize.width,
+              yScale * 47.25,
+            ]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+          <Line
+            points={[
+              0,
+              yScale * 40.75,
+              xScale * -0.2,
+              yScale * 40.75,
+              xScale * -0.2,
+              yScale * 47.25,
+              0,
+              yScale * 47.25,
+            ]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+          <Line
+            points={[
+              canvasSize.width,
+              yScale * 37,
+              xScale * 139,
+              yScale * 37,
+              xScale * 139,
+              yScale * 51,
+              canvasSize.width,
+              yScale * 51,
+            ]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+          <Line
+            points={[
+              0,
+              yScale * 37,
+              xScale * 6,
+              yScale * 37,
+              xScale * 6,
+              yScale * 51,
+              0,
+              yScale * 51,
+            ]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+          <Line
+            points={[
+              0,
+              yScale * 34.5,
+              xScale * 14,
+              yScale * 34.5,
+              xScale * 14,
+              yScale * 53.5,
+              0,
+              yScale * 53.5,
+            ]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+          <Line
+            points={[
+              canvasSize.width,
+              yScale * 34.5,
+              xScale * 131,
+              yScale * 34.5,
+              xScale * 131,
+              yScale * 53.5,
+              canvasSize.width,
+              yScale * 53.5,
+            ]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+          <Line
+            points={[
+              xScale * 72.5,
+              yScale * 39,
+              xScale * 72.5,
+              yScale * 49,
+            ]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+          <Line
+            points={[
+              xScale * 11,
+              yScale * 43.5,
+              xScale * 11,
+              yScale * 44.5,
+            ]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+          <Line
+            points={[
+              xScale * 134,
+              yScale * 43.5,
+              xScale * 134,
+              yScale * 44.5,
+            ]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+
+          {/* Penalty Arcs */}
+          <Arc
+            x={xScale * 124}
+            y={yScale * 44}
+            innerRadius={xScale * 12}
+            outerRadius={xScale * 12}
+            angle={180}
+            rotation={90}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+          <Arc
+            x={xScale * 21}
+            y={yScale * 44}
+            innerRadius={xScale * 12}
+            outerRadius={xScale * 12}
+            angle={180}
+            rotation={270}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+
+          {/* Boundary Lines */}
+          <Line
+            points={[xScale * 14, 0, xScale * 14, canvasSize.height]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+          <Line
+            points={[xScale * 131, 0, xScale * 131, canvasSize.height]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+          <Line
+            points={[xScale * 21, 0, xScale * 21, canvasSize.height]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+          <Line
+            points={[xScale * 124, 0, xScale * 124, canvasSize.height]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+          <Line
+            points={[xScale * 45, 0, xScale * 45, canvasSize.height]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+          <Line
+            points={[xScale * 100, 0, xScale * 100, canvasSize.height]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+          <Line
+            points={[xScale * 65, 0, xScale * 65, canvasSize.height]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+          <Line
+            points={[xScale * 80, 0, xScale * 80, canvasSize.height]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+
+          {/* "SCORELECT" in the end zones */}
+          <Text
+            text="SCORELECT.COM"
+            x={xScale * 22.5}
+            y={canvasSize.height / 40.25}
+            fontSize={canvasSize.width / 60}
+            fill="#D3D3D3"
+            opacity={0.7}
+            rotation={0}
+            align="center"
+          />
+          <Text
+            text="SCORELECT.COM"
+            x={canvasSize.width - xScale * 22.5}
+            y={canvasSize.height / 1.02}
+            fontSize={canvasSize.width / 60}
+            fill="#D3D3D3"
+            opacity={0.7}
+            rotation={180}
+            align="center"
+          />
+        </Layer>
+      );
+    };
+
+    const renderFootballField = () => (
       <Layer>
-        {/* Pitch Background */}
         <Rect
           x={0}
           y={0}
@@ -579,19 +827,6 @@ const Sessions = () => {
           height={canvasSize.height}
           fill={pitchColor}
         />
-
-        {/* Stripes */}
-        {Array.from({ length: numStripes }, (_, i) => (
-          <Rect
-            key={i}
-            x={i * stripeWidth}
-            y={0}
-            width={stripeWidth}
-            height={canvasSize.height}
-            fill={i % 2 === 0 ? lightStripeColor : darkStripeColor}
-            opacity={0.3} // Adjust opacity for subtlety
-          />
-        ))}
 
         {/* Side and Goal Lines */}
         <Line
@@ -611,192 +846,340 @@ const Sessions = () => {
           strokeWidth={2}
         />
 
-        {/* Additional Lines for GAA Pitch */}
-        <Line
-          points={[
-            canvasSize.width,
-            yScale * 40.75,
-            xScale * 145.2,
-            yScale * 40.75,
-            xScale * 145.2,
-            yScale * 47.25,
-            canvasSize.width,
-            yScale * 47.25,
-          ]}
-          stroke={lineColor}
-          strokeWidth={2}
+        {/* End Zones */}
+        <Rect
+          x={0}
+          y={0}
+          width={xScale * 10}
+          height={canvasSize.height}
+          fill="#FF0000"
+          opacity={0.3}
         />
-        <Line
-          points={[
-            0,
-            yScale * 40.75,
-            xScale * -0.2,
-            yScale * 40.75,
-            xScale * -0.2,
-            yScale * 47.25,
-            0,
-            yScale * 47.25,
-          ]}
-          stroke={lineColor}
-          strokeWidth={2}
-        />
-        <Line
-          points={[
-            canvasSize.width,
-            yScale * 37,
-            xScale * 139,
-            yScale * 37,
-            xScale * 139,
-            yScale * 51,
-            canvasSize.width,
-            yScale * 51,
-          ]}
-          stroke={lineColor}
-          strokeWidth={2}
-        />
-        <Line
-          points={[
-            0,
-            yScale * 37,
-            xScale * 6,
-            yScale * 37,
-            xScale * 6,
-            yScale * 51,
-            0,
-            yScale * 51,
-          ]}
-          stroke={lineColor}
-          strokeWidth={2}
-        />
-        <Line
-          points={[
-            0,
-            yScale * 34.5,
-            xScale * 14,
-            yScale * 34.5,
-            xScale * 14,
-            yScale * 53.5,
-            0,
-            yScale * 53.5,
-          ]}
-          stroke={lineColor}
-          strokeWidth={2}
-        />
-        <Line
-          points={[
-            canvasSize.width,
-            yScale * 34.5,
-            xScale * 131,
-            yScale * 34.5,
-            xScale * 131,
-            yScale * 53.5,
-            canvasSize.width,
-            yScale * 53.5,
-          ]}
-          stroke={lineColor}
-          strokeWidth={2}
-        />
-        <Line
-          points={[
-            xScale * 72.5,
-            yScale * 39,
-            xScale * 72.5,
-            yScale * 49,
-          ]}
-          stroke={lineColor}
-          strokeWidth={2}
-        />
-        <Line
-          points={[
-            xScale * 11,
-            yScale * 43.5,
-            xScale * 11,
-            yScale * 44.5,
-          ]}
-          stroke={lineColor}
-          strokeWidth={2}
-        />
-        <Line
-          points={[
-            xScale * 134,
-            yScale * 43.5,
-            xScale * 134,
-            yScale * 44.5,
-          ]}
-          stroke={lineColor}
-          strokeWidth={2}
+        <Rect
+          x={canvasSize.width - xScale * 10}
+          y={0}
+          width={xScale * 10}
+          height={canvasSize.height}
+          fill="#FF0000"
+          opacity={0.3}
         />
 
-        {/* Penalty Arcs */}
-        <Arc
-          x={xScale * 124}
-          y={yScale * 44}
-          innerRadius={0}
-          outerRadius={xScale * 12}
-          angle={180}
+        {/* "SCORELECT" in the End Zones */}
+        <Text
+          text="SCORELECT.COM"
+          x={xScale * 2.5}
+          y={canvasSize.height / 1.07}
+          fontSize={canvasSize.width / 22.5}
+          fill="#FFF"
+          rotation={-90}
+          align="center"
+        />
+        <Text
+          text="SCORELECT.COM"
+          x={canvasSize.width - xScale * 2.5}
+          y={canvasSize.height / 14}
+          fontSize={canvasSize.width / 22.5}
+          fill="#FFF"
           rotation={90}
+          align="center"
+        />
+
+        {/* Yard Lines */}
+        {[...Array(11)].map((_, i) => (
+          <Line
+            key={i}
+            points={[
+              xScale * (10 + i * 10),
+              0,
+              xScale * (10 + i * 10),
+              canvasSize.height,
+            ]}
+            stroke={lineColor}
+            strokeWidth={2}
+          />
+        ))}
+
+        {/* Hash Marks */}
+        {[...Array(11)].map((_, i) => (
+          <React.Fragment key={i}>
+            <Line
+              points={[
+                xScale * (10 + i * 10),
+                yScale * 23.5,
+                xScale * (10 + i * 10),
+                yScale * 29.8,
+              ]}
+              stroke={lineColor}
+              strokeWidth={2}
+            />
+            <Line
+              points={[
+                xScale * (10 + i * 10),
+                yScale * 53.3 - yScale * 23.5,
+                xScale * (10 + i * 10),
+                yScale * 53.3 - yScale * 29.8,
+              ]}
+              stroke={lineColor}
+              strokeWidth={2}
+            />
+          </React.Fragment>
+        ))}
+
+        {/* Yard Line Numbers */}
+        {Array.from({ length: 4 }, (_, i) => (
+          <React.Fragment key={i}>
+            {/* Left side */}
+            <Text
+              text={`${10 + i * 10}`}
+              x={xScale * (19.6 + i * 10) - canvasSize.width / 100}
+              y={yScale * 3}
+              fontSize={canvasSize.width / 40}
+              fill={lineColor}
+              align="center"
+            />
+            <Text
+              text={`${10 + i * 10}`}
+              x={xScale * (19.6 + i * 10) - canvasSize.width / 100}
+              y={canvasSize.height - yScale * 4}
+              fontSize={canvasSize.width / 40}
+              fill={lineColor}
+              align="center"
+            />
+            {/* Right side */}
+            <Text
+              text={`${10 + i * 10}`}
+              x={canvasSize.width - xScale * (20.4 + i * 10) - canvasSize.width / 100}
+              y={yScale * 3}
+              fontSize={canvasSize.width / 40}
+              fill={lineColor}
+              align="center"
+            />
+            <Text
+              text={`${10 + i * 10}`}
+              x={canvasSize.width - xScale * (20.4 + i * 10) - canvasSize.width / 100}
+              y={canvasSize.height - yScale * 4}
+              fontSize={canvasSize.width / 40}
+              fill={lineColor}
+              align="center"
+            />
+          </React.Fragment>
+        ))}
+
+        {/* 50 Yard Line */}
+        <Text
+          text="50"
+          x={canvasSize.width / 2.0175 - canvasSize.width / 100}
+          y={yScale * 3}
+          fontSize={canvasSize.width / 40}
+          fill={lineColor}
+          align="center"
+        />
+        <Text
+          text="50"
+          x={canvasSize.width / 2.0175 - canvasSize.width / 100}
+          y={canvasSize.height - yScale * 4}
+          fontSize={canvasSize.width / 40}
+          fill={lineColor}
+          align="center"
+        />
+      </Layer>
+    );
+
+    // JSX-based renderBasketballCourt function for React rendering
+    const renderBasketballCourt = () => (
+      <Layer>
+        {/* Court Background */}
+        <Rect
+          x={0}
+          y={0}
+          width={canvasSize.width}
+          height={canvasSize.height}
+          fill={courtColor}
+        />
+
+        {/* Playing Surface Outline */}
+        <Line
+          points={[
+            0,
+            0,
+            canvasSize.width,
+            0,
+            canvasSize.width,
+            canvasSize.height,
+            0,
+            canvasSize.height,
+            0,
+            0,
+          ]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+
+        {/* Center Circle */}
+        <Circle
+          x={canvasSize.width / 2}
+          y={canvasSize.height / 2}
+          radius={xScale * 6}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+
+        {/* Center Line */}
+        <Line
+          points={[canvasSize.width / 2, 0, canvasSize.width / 2, canvasSize.height]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+
+        {/* Three-Point Arcs */}
+        <Arc
+          x={xScale * 4.92}
+          y={canvasSize.height / 2}
+          innerRadius={xScale * 23.75}
+          outerRadius={xScale * 23.75}
+          angle={135}
+          rotation={292.5}
           stroke={lineColor}
           strokeWidth={2}
         />
         <Arc
-          x={xScale * 21}
-          y={yScale * 44}
-          innerRadius={0}
-          outerRadius={xScale * 12}
-          angle={180}
-          rotation={270}
+          x={canvasSize.width - xScale * 4.92}
+          y={canvasSize.height / 2}
+          innerRadius={xScale * 23.75}
+          outerRadius={xScale * 23.75}
+          angle={135}
+          rotation={112.5}
           stroke={lineColor}
           strokeWidth={2}
         />
 
-        {/* Boundary Lines */}
-        <Line
-          points={[xScale * 14, 0, xScale * 14, canvasSize.height]}
+        {/* Free Throw Circles */}
+        <Circle
+          x={xScale * 19}
+          y={canvasSize.height / 2}
+          radius={xScale * 6}
           stroke={lineColor}
           strokeWidth={2}
         />
-        <Line
-          points={[xScale * 131, 0, xScale * 131, canvasSize.height]}
-          stroke={lineColor}
-          strokeWidth={2}
-        />
-        <Line
-          points={[xScale * 21, 0, xScale * 21, canvasSize.height]}
-          stroke={lineColor}
-          strokeWidth={2}
-        />
-        <Line
-          points={[xScale * 124, 0, xScale * 124, canvasSize.height]}
-          stroke={lineColor}
-          strokeWidth={2}
-        />
-        <Line
-          points={[xScale * 45, 0, xScale * 45, canvasSize.height]}
-          stroke={lineColor}
-          strokeWidth={2}
-        />
-        <Line
-          points={[xScale * 100, 0, xScale * 100, canvasSize.height]}
-          stroke={lineColor}
-          strokeWidth={2}
-        />
-        <Line
-          points={[xScale * 65, 0, xScale * 65, canvasSize.height]}
-          stroke={lineColor}
-          strokeWidth={2}
-        />
-        <Line
-          points={[xScale * 80, 0, xScale * 80, canvasSize.height]}
+        <Circle
+          x={canvasSize.width - xScale * 19}
+          y={canvasSize.height / 2}
+          radius={xScale * 6}
           stroke={lineColor}
           strokeWidth={2}
         />
 
-        {/* "SCORELECT" in the end zones */}
+        {/* Free Throw Lanes */}
+        <Line
+          points={[
+            0,
+            yScale * 19,
+            xScale * 19,
+            yScale * 19,
+            xScale * 19,
+            canvasSize.height - yScale * 19,
+            0,
+            canvasSize.height - yScale * 19,
+            0,
+            yScale * 19,
+          ]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+        <Line
+          points={[
+            canvasSize.width,
+            yScale * 19,
+            canvasSize.width - xScale * 19,
+            yScale * 19,
+            canvasSize.width - xScale * 19,
+            canvasSize.height - yScale * 19,
+            canvasSize.width,
+            canvasSize.height - yScale * 19,
+            canvasSize.width,
+            yScale * 19,
+          ]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+
+        {/* Outside Free Throw Lanes */}
+        <Line
+          points={[
+            0,
+            yScale * 17,
+            xScale * 19,
+            yScale * 17,
+            xScale * 19,
+            canvasSize.height - yScale * 17,
+            0,
+            canvasSize.height - yScale * 17,
+            0,
+            yScale * 17,
+          ]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+        <Line
+          points={[
+            canvasSize.width,
+            yScale * 17,
+            canvasSize.width - xScale * 19,
+            yScale * 17,
+            canvasSize.width - xScale * 19,
+            canvasSize.height - yScale * 17,
+            canvasSize.width,
+            canvasSize.height - yScale * 17,
+            canvasSize.width,
+            yScale * 17,
+          ]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+
+        {/* Baselines */}
+        <Line
+          points={[xScale * 14, yScale * 3, 0, yScale * 3]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+        <Line
+          points={[
+            xScale * 14,
+            canvasSize.height - yScale * 3,
+            0,
+            canvasSize.height - yScale * 3,
+          ]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+        <Line
+          points={[
+            canvasSize.width - xScale * 14,
+            yScale * 3,
+            canvasSize.width,
+            yScale * 3,
+          ]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+        <Line
+          points={[
+            canvasSize.width - xScale * 14,
+            canvasSize.height - yScale * 3,
+            canvasSize.width,
+            canvasSize.height - yScale * 3,
+          ]}
+          stroke={lineColor}
+          strokeWidth={2}
+        />
+
+        {/* "SCORELECT" on the court */}
         <Text
           text="SCORELECT.COM"
           x={xScale * 22.5}
           y={canvasSize.height / 40.25}
-          fontSize={canvasSize.width / 60}
+          fontSize={canvasSize.width / 50}
           fill="#D3D3D3"
           opacity={0.7}
           rotation={0}
@@ -806,7 +1189,7 @@ const Sessions = () => {
           text="SCORELECT.COM"
           x={canvasSize.width - xScale * 22.5}
           y={canvasSize.height / 1.02}
-          fontSize={canvasSize.width / 60}
+          fontSize={canvasSize.width / 50}
           fill="#D3D3D3"
           opacity={0.7}
           rotation={180}
@@ -814,723 +1197,361 @@ const Sessions = () => {
         />
       </Layer>
     );
-  };
 
-  const renderFootballField = () => (
-    <Layer>
-      <Rect
-        x={0}
-        y={0}
-        width={canvasSize.width}
-        height={canvasSize.height}
-        fill={pitchColor}
-      />
-
-      {/* Side and Goal Lines */}
-      <Line
-        points={[
-          0,
-          0,
-          canvasSize.width,
-          0,
-          canvasSize.width,
-          canvasSize.height,
-          0,
-          canvasSize.height,
-          0,
-          0,
-        ]}
-        stroke={lineColor}
-        strokeWidth={2}
-      />
-
-      {/* End Zones */}
-      <Rect
-        x={0}
-        y={0}
-        width={xScale * 10}
-        height={canvasSize.height}
-        fill="#FF0000"
-        opacity={0.3}
-      />
-      <Rect
-        x={canvasSize.width - xScale * 10}
-        y={0}
-        width={xScale * 10}
-        height={canvasSize.height}
-        fill="#FF0000"
-        opacity={0.3}
-      />
-
-      {/* "SCORELECT" in the End Zones */}
-      <Text
-        text="SCORELECT.COM"
-        x={xScale * 2.5}
-        y={canvasSize.height / 1.07}
-        fontSize={canvasSize.width / 22.5}
-        fill="#FFF"
-        rotation={-90}
-        align="center"
-      />
-      <Text
-        text="SCORELECT.COM"
-        x={canvasSize.width - xScale * 2.5}
-        y={canvasSize.height / 14}
-        fontSize={canvasSize.width / 22.5}
-        fill="#FFF"
-        rotation={90}
-        align="center"
-      />
-
-      {/* Yard Lines */}
-      {[...Array(11)].map((_, i) => (
-        <Line
-          key={i}
-          points={[
-            xScale * (10 + i * 10),
-            0,
-            xScale * (10 + i * 10),
-            canvasSize.height,
-          ]}
-          stroke={lineColor}
-          strokeWidth={2}
-        />
-      ))}
-
-      {/* Hash Marks */}
-      {[...Array(11)].map((_, i) => (
-        <React.Fragment key={i}>
-          <Line
-            points={[
-              xScale * (10 + i * 10),
-              yScale * 23.5,
-              xScale * (10 + i * 10),
-              yScale * 29.8,
-            ]}
-            stroke={lineColor}
-            strokeWidth={2}
-          />
-          <Line
-            points={[
-              xScale * (10 + i * 10),
-              yScale * 53.3 - yScale * 23.5,
-              xScale * (10 + i * 10),
-              yScale * 53.3 - yScale * 29.8,
-            ]}
-            stroke={lineColor}
-            strokeWidth={2}
-          />
-        </React.Fragment>
-      ))}
-
-      {/* Yard Line Numbers */}
-      {Array.from({ length: 4 }, (_, i) => (
-        <React.Fragment key={i}>
-          {/* Left side */}
-          <Text
-            text={`${10 + i * 10}`}
-            x={xScale * (19.6 + i * 10) - canvasSize.width / 100}
-            y={yScale * 3}
-            fontSize={canvasSize.width / 40}
-            fill={lineColor}
-            align="center"
-          />
-          <Text
-            text={`${10 + i * 10}`}
-            x={xScale * (19.6 + i * 10) - canvasSize.width / 100}
-            y={canvasSize.height - yScale * 4}
-            fontSize={canvasSize.width / 40}
-            fill={lineColor}
-            align="center"
-          />
-          {/* Right side */}
-          <Text
-            text={`${10 + i * 10}`}
-            x={canvasSize.width - xScale * (20.4 + i * 10) - canvasSize.width / 100}
-            y={yScale * 3}
-            fontSize={canvasSize.width / 40}
-            fill={lineColor}
-            align="center"
-          />
-          <Text
-            text={`${10 + i * 10}`}
-            x={canvasSize.width - xScale * (20.4 + i * 10) - canvasSize.width / 100}
-            y={canvasSize.height - yScale * 4}
-            fontSize={canvasSize.width / 40}
-            fill={lineColor}
-            align="center"
-          />
-        </React.Fragment>
-      ))}
-
-      {/* 50 Yard Line */}
-      <Text
-        text="50"
-        x={canvasSize.width / 2.0175 - canvasSize.width / 100}
-        y={yScale * 3}
-        fontSize={canvasSize.width / 40}
-        fill={lineColor}
-        align="center"
-      />
-      <Text
-        text="50"
-        x={canvasSize.width / 2.0175 - canvasSize.width / 100}
-        y={canvasSize.height - yScale * 4}
-        fontSize={canvasSize.width / 40}
-        fill={lineColor}
-        align="center"
-      />
-    </Layer>
-  );
-
-  // JSX-based renderBasketballCourt function for React rendering
-  const renderBasketballCourt = () => (
-    <Layer>
-      {/* Court Background */}
-      <Rect
-        x={0}
-        y={0}
-        width={canvasSize.width}
-        height={canvasSize.height}
-        fill={courtColor}
-      />
-
-      {/* Playing Surface Outline */}
-      <Line
-        points={[
-          0,
-          0,
-          canvasSize.width,
-          0,
-          canvasSize.width,
-          canvasSize.height,
-          0,
-          canvasSize.height,
-          0,
-          0,
-        ]}
-        stroke={lineColor}
-        strokeWidth={2}
-      />
-
-      {/* Center Circle */}
-      <Circle
-        x={canvasSize.width / 2}
-        y={canvasSize.height / 2}
-        radius={xScale * 6}
-        stroke={lineColor}
-        strokeWidth={2}
-      />
-
-      {/* Center Line */}
-      <Line
-        points={[canvasSize.width / 2, 0, canvasSize.width / 2, canvasSize.height]}
-        stroke={lineColor}
-        strokeWidth={2}
-      />
-
-      {/* Three-Point Arcs */}
-      <Arc
-        x={xScale * 4.92}
-        y={canvasSize.height / 2}
-        innerRadius={xScale * 23.75}
-        outerRadius={xScale * 23.75}
-        angle={135}
-        rotation={292.5}
-        stroke={lineColor}
-        strokeWidth={2}
-      />
-      <Arc
-        x={canvasSize.width - xScale * 4.92}
-        y={canvasSize.height / 2}
-        innerRadius={xScale * 23.75}
-        outerRadius={xScale * 23.75}
-        angle={135}
-        rotation={112.5}
-        stroke={lineColor}
-        strokeWidth={2}
-      />
-
-      {/* Free Throw Circles */}
-      <Circle
-        x={xScale * 19}
-        y={canvasSize.height / 2}
-        radius={xScale * 6}
-        stroke={lineColor}
-        strokeWidth={2}
-      />
-      <Circle
-        x={canvasSize.width - xScale * 19}
-        y={canvasSize.height / 2}
-        radius={xScale * 6}
-        stroke={lineColor}
-        strokeWidth={2}
-      />
-
-      {/* Free Throw Lanes */}
-      <Line
-        points={[
-          0,
-          yScale * 19,
-          xScale * 19,
-          yScale * 19,
-          xScale * 19,
-          canvasSize.height - yScale * 19,
-          0,
-          canvasSize.height - yScale * 19,
-          0,
-          yScale * 19,
-        ]}
-        stroke={lineColor}
-        strokeWidth={2}
-      />
-      <Line
-        points={[
-          canvasSize.width,
-          yScale * 19,
-          canvasSize.width - xScale * 19,
-          yScale * 19,
-          canvasSize.width - xScale * 19,
-          canvasSize.height - yScale * 19,
-          canvasSize.width,
-          canvasSize.height - yScale * 19,
-          canvasSize.width,
-          yScale * 19,
-        ]}
-        stroke={lineColor}
-        strokeWidth={2}
-      />
-
-      {/* Outside Free Throw Lanes */}
-      <Line
-        points={[
-          0,
-          yScale * 17,
-          xScale * 19,
-          yScale * 17,
-          xScale * 19,
-          canvasSize.height - yScale * 17,
-          0,
-          canvasSize.height - yScale * 17,
-          0,
-          yScale * 17,
-        ]}
-        stroke={lineColor}
-        strokeWidth={2}
-      />
-      <Line
-        points={[
-          canvasSize.width,
-          yScale * 17,
-          canvasSize.width - xScale * 19,
-          yScale * 17,
-          canvasSize.width - xScale * 19,
-          canvasSize.height - yScale * 17,
-          canvasSize.width,
-          canvasSize.height - yScale * 17,
-          canvasSize.width,
-          yScale * 17,
-        ]}
-        stroke={lineColor}
-        strokeWidth={2}
-      />
-
-      {/* Baselines */}
-      <Line
-        points={[xScale * 14, yScale * 3, 0, yScale * 3]}
-        stroke={lineColor}
-        strokeWidth={2}
-      />
-      <Line
-        points={[
-          xScale * 14,
-          canvasSize.height - yScale * 3,
-          0,
-          canvasSize.height - yScale * 3,
-        ]}
-        stroke={lineColor}
-        strokeWidth={2}
-      />
-      <Line
-        points={[
-          canvasSize.width - xScale * 14,
-          yScale * 3,
-          canvasSize.width,
-          yScale * 3,
-        ]}
-        stroke={lineColor}
-        strokeWidth={2}
-      />
-      <Line
-        points={[
-          canvasSize.width - xScale * 14,
-          canvasSize.height - yScale * 3,
-          canvasSize.width,
-          canvasSize.height - yScale * 3,
-        ]}
-        stroke={lineColor}
-        strokeWidth={2}
-      />
-
-      {/* "SCORELECT" on the court */}
-      <Text
-        text="SCORELECT.COM"
-        x={xScale * 22.5}
-        y={canvasSize.height / 40.25}
-        fontSize={canvasSize.width / 50}
-        fill="#D3D3D3"
-        opacity={0.7}
-        rotation={0}
-        align="center"
-      />
-      <Text
-        text="SCORELECT.COM"
-        x={canvasSize.width - xScale * 22.5}
-        y={canvasSize.height / 1.02}
-        fontSize={canvasSize.width / 50}
-        fill="#D3D3D3"
-        opacity={0.7}
-        rotation={180}
-        align="center"
-      />
-    </Layer>
-  );
-
-  // Function to render the selected pitch
-  const renderPitch = () => {
-    switch (selectedPitch) {
-      case 'Soccer':
-        return renderSoccerPitch();
-      case 'GAA':
-        return renderGAAPitch();
-      case 'American Football':
-        return renderFootballField();
-      case 'Basketball':
-        return renderBasketballCourt();
-      default:
-        return null;
-    }
-  };
-
-  // Helper function to render interactive objects
-  const renderObjects = () => {
-    return objects.map((obj) => {
-      switch (obj.type) {
-        case 'cone':
-        case 'ball':
-          return (
-            <Group
-              key={obj.id}
-              id={`object-${obj.id}`} // Unique identifier for Transformer
-              x={obj.x}
-              y={obj.y}
-              draggable
-              onClick={() => handleSelectObject(obj.id)}
-              onTap={() => handleSelectObject(obj.id)}
-              onDragEnd={(e) => handleDragObject(e, obj.id)}
-              onTransformEnd={(e) => handleTransformObject(e, obj.id)}
-              rotation={obj.rotation}
-              scaleX={obj.scaleX}
-              scaleY={obj.scaleY}
-            >
-              {obj.label && (
-                <Text
-                  text={obj.label}
-                  fontSize={obj.size / 2}
-                  fill="black"
-                  x={-obj.size / 2} // Center the text horizontally
-                  y={-obj.size - obj.size / 8} // Position the text above the cone
-                  width={obj.size} // Set the width to align the text
-                  align="center"
-                />
-              )}
-              <KonvaImage
-                image={obj.type === 'cone' ? coneImage : ballImage}
-                x={0}
-                y={0}
-                offsetX={obj.size / 2}
-                offsetY={obj.size / 2}
-                width={obj.size}
-                height={obj.size}
-              />
-            </Group>
-          );
-        case 'player':
-          return (
-            <Group
-              key={obj.id}
-              id={`object-${obj.id}`} // Unique identifier for Transformer
-              x={obj.x}
-              y={obj.y}
-              draggable
-              onClick={() => handleSelectObject(obj.id)}
-              onTap={() => handleSelectObject(obj.id)}
-              onDragEnd={(e) => handleDragObject(e, obj.id)}
-              onTransformEnd={(e) => handleTransformObject(e, obj.id)}
-              rotation={obj.rotation}
-              scaleX={obj.scaleX}
-              scaleY={obj.scaleY}
-            >
-              {obj.label && (
-                <Text
-                  text={obj.label}
-                  fontSize={obj.size / 2}
-                  fill="black"
-                  x={-obj.size / 2}
-                  y={-obj.size - obj.size / 2}
-                  width={obj.size}
-                  align="center"
-                />
-              )}
-              <Circle
-                radius={obj.size / 2}
-                fill={obj.color || 'black'}
-              />
-              {obj.number && (
-                <Text
-                  text={obj.number}
-                  fontSize={obj.size / 2}
-                  fill="white"
-                  align="center"
-                  verticalAlign="middle"
-                  offsetX={-obj.size / 4}
-                  offsetY={-obj.size / 4}
-                />
-              )}
-            </Group>
-          );
-        case 'line':
-          return (
-            <Line
-              key={obj.id}
-              points={obj.points}
-              stroke={obj.color || 'black'}
-              strokeWidth={obj.size || 3} // Default to 5 if size is not defined
-              draggable
-              onClick={() => handleSelectObject(obj.id)}
-              onTap={() => handleSelectObject(obj.id)}
-              onDragEnd={(e) => handleDragObject(e, obj.id)}
-              onTransformEnd={(e) => handleTransformObject(e, obj.id)}
-            />
-          );
-        case 'square':
-          return (
-            <Rect
-              key={obj.id}
-              id={`object-${obj.id}`} // Unique identifier for Transformer
-              x={obj.x}
-              y={obj.y}
-              width={obj.width}
-              height={obj.height}
-              fill={obj.color || 'transparent'}
-              stroke="black"
-              strokeWidth={2}
-              draggable
-              onClick={() => handleSelectObject(obj.id)}
-              onTap={() => handleSelectObject(obj.id)}
-              onDragEnd={(e) => handleDragObject(e, obj.id)}
-              onTransformEnd={(e) => handleTransformObject(e, obj.id)}
-            />
-          );
-        // Add cases for other object types if needed
+    // Function to render the selected pitch
+    const renderPitch = () => {
+      switch (selectedPitch) {
+        case 'Soccer':
+          return renderSoccerPitch();
+        case 'GAA':
+          return renderGAAPitch();
+        case 'American Football':
+          return renderFootballField();
+        case 'Basketball':
+          return renderBasketballCourt();
         default:
           return null;
       }
-    });
-  };
+    };
 
-  // Modal state variables
-  const selectedObject = objects.find((obj) => obj.id === selectedObjectId);
+    // Helper function to render interactive objects
+    const renderObjects = () => {
+      return objects.map((obj) => {
+        switch (obj.type) {
+          case 'cone':
+          case 'ball':
+            return (
+              <Group
+                key={obj.id}
+                id={`object-${obj.id}`} // Unique identifier for Transformer
+                x={obj.x}
+                y={obj.y}
+                draggable
+                onClick={() => handleSelectObject(obj.id)}
+                onTap={() => handleSelectObject(obj.id)}
+                onDragEnd={(e) => handleDragObject(e, obj.id)}
+                onTransformEnd={(e) => handleTransformObject(e, obj.id)}
+                rotation={obj.rotation}
+                scaleX={obj.scaleX}
+                scaleY={obj.scaleY}
+              >
+                {obj.label && (
+                  <Text
+                    text={obj.label}
+                    fontSize={obj.size / 2}
+                    fill="black"
+                    x={-obj.size / 2} // Center the text horizontally
+                    y={-obj.size - obj.size / 8} // Position the text above the cone
+                    width={obj.size} // Set the width to align the text
+                    align="center"
+                  />
+                )}
+                <KonvaImage
+                  image={obj.type === 'cone' ? coneImage : ballImage}
+                  x={0}
+                  y={0}
+                  offsetX={obj.size / 2}
+                  offsetY={obj.size / 2}
+                  width={obj.size}
+                  height={obj.size}
+                />
+              </Group>
+            );
+          case 'player':
+            return (
+              <Group
+                key={obj.id}
+                id={`object-${obj.id}`} // Unique identifier for Transformer
+                x={obj.x}
+                y={obj.y}
+                draggable
+                onClick={() => handleSelectObject(obj.id)}
+                onTap={() => handleSelectObject(obj.id)}
+                onDragEnd={(e) => handleDragObject(e, obj.id)}
+                onTransformEnd={(e) => handleTransformObject(e, obj.id)}
+                rotation={obj.rotation}
+                scaleX={obj.scaleX}
+                scaleY={obj.scaleY}
+              >
+                {obj.label && (
+                  <Text
+                    text={obj.label}
+                    fontSize={obj.size / 2}
+                    fill="black"
+                    x={-obj.size / 2}
+                    y={-obj.size - obj.size / 2}
+                    width={obj.size}
+                    align="center"
+                  />
+                )}
+                <Circle
+                  radius={obj.size / 2}
+                  fill={obj.color || 'black'}
+                />
+                {obj.number && (
+                  <Text
+                    text={obj.number}
+                    fontSize={obj.size / 2}
+                    fill="white"
+                    align="center"
+                    verticalAlign="middle"
+                    offsetX={-obj.size / 4}
+                    offsetY={-obj.size / 4}
+                  />
+                )}
+              </Group>
+            );
+          case 'line':
+            return (
+              <Line
+                key={obj.id}
+                points={obj.points}
+                stroke={obj.color || defaultLineColor} // Use object color or default orange
+                strokeWidth={obj.size || 3} // Default stroke width is 3
+                draggable
+                onClick={() => handleSelectObject(obj.id)}
+                onTap={() => handleSelectObject(obj.id)}
+                onDragEnd={(e) => handleDragObject(e, obj.id)}
+                onTransformEnd={(e) => handleTransformObject(e, obj.id)}
+              />
+            );
+          case 'square':
+            return (
+              <Rect
+                key={obj.id}
+                id={`object-${obj.id}`} // Unique identifier for Transformer
+                x={obj.x}
+                y={obj.y}
+                width={obj.width}
+                height={obj.height}
+                fill="transparent" // Set fill to transparent
+                stroke={obj.color || defaultSquareColor} // Stroke color
+                strokeWidth={2}
+                draggable
+                onClick={() => handleSelectObject(obj.id)}
+                onTap={() => handleSelectObject(obj.id)}
+                onDragEnd={(e) => handleDragObject(e, obj.id)}
+                onTransformEnd={(e) => handleTransformObject(e, obj.id)}
+              />
+            );
+          // Add cases for other object types if needed
+          default:
+            return null;
+        }
+      });
+    };
 
-  const [modalLabel, setModalLabel] = useState('');
-  const [modalSize, setModalSize] = useState(25);
-  const [modalColor, setModalColor] = useState('#000000');
+    // Modal state variables
+    const selectedObject = objects.find((obj) => obj.id === selectedObjectId);
 
-  useEffect(() => {
-    if (selectedObject) {
-      setModalLabel(selectedObject.label || '');
-      setModalSize(selectedObject.size || 25);
-      setModalColor(selectedObject.color || '#000000');
-    }
-  }, [selectedObject]);
+    const [modalLabel, setModalLabel] = useState('');
+    const [modalSize, setModalSize] = useState(25);
+    const [modalColor, setModalColor] = useState(defaultLineColor); // Initialize with default colors
 
-  const handleModalSubmit = (e) => {
-    e.preventDefault();
-    const updatedObjects = objects.map((obj) => {
-      if (obj.id === selectedObjectId) {
-        return {
-          ...obj,
-          label: modalLabel,
-          size: modalSize,
-          color: modalColor,
-        };
+    useEffect(() => {
+      if (selectedObject) {
+        setModalLabel(selectedObject.label || '');
+        setModalSize(selectedObject.size || 25);
+        // Set modal color based on object type with defaults
+        if (selectedObject.type === 'line') {
+          setModalColor(selectedObject.color || defaultLineColor);
+        } else if (selectedObject.type === 'square') {
+          setModalColor(selectedObject.color || defaultSquareColor);
+        } else {
+          setModalColor(selectedObject.color || '#000000'); // Default for players and others
+        }
       }
-      return obj;
-    });
-    setObjects(updatedObjects);
-    setShowModal(false);
-    setSelectedObjectId(null);
-    transformerRef.current.nodes([]);
-    transformerRef.current.getLayer().batchDraw();
-  };
+    }, [selectedObject]);
 
-  const handleModalCancel = () => {
-    setShowModal(false);
-    setSelectedObjectId(null);
-    transformerRef.current.nodes([]);
-    transformerRef.current.getLayer().batchDraw();
-  };
+    const handleModalSubmit = (e) => {
+      e.preventDefault();
+      const updatedObjects = objects.map((obj) => {
+        if (obj.id === selectedObjectId) {
+          return {
+            ...obj,
+            label: modalLabel,
+            size: modalSize,
+            color: modalColor,
+          };
+        }
+        return obj;
+      });
+      setObjects(updatedObjects);
+      setShowModal(false);
+      setSelectedObjectId(null);
+      transformerRef.current.nodes([]);
+      transformerRef.current.getLayer().batchDraw();
+    };
 
-  return (
-    <div className="sessions-page">
-      <h1 className="sessions-title">Training Sessions</h1>
-      <div className="toolbar">
-        <label htmlFor="pitch-select">Select Pitch:</label>
-        <select
-          id="pitch-select"
-          value={selectedPitch}
-          onChange={(e) => setSelectedPitch(e.target.value)}
-        >
-          <option value="Soccer">Soccer</option>
-          <option value="GAA">GAA</option>
-          <option value="American Football">American Football</option>
-          <option value="Basketball">Basketball</option>
-        </select>
+    const handleModalCancel = () => {
+      setShowModal(false);
+      setSelectedObjectId(null);
+      transformerRef.current.nodes([]);
+      transformerRef.current.getLayer().batchDraw();
+    };
 
-        {/* Object selection buttons */}
-        <div className="object-buttons">
-          <button onClick={() => addObject('cone')}>Add Cone</button>
-          <button onClick={() => addObject('ball')}>Add Ball</button>
-          <button onClick={() => addObject('player')}>Add Player</button>
-          <button onClick={() => addObject('line')}>Add Line</button>
-          <button onClick={() => addObject('square')}>Add Square</button>
-          {/* Add more objects as needed */}
+    return (
+      <div className="sessions-page">
+        <h1 className="sessions-title">Training Sessions</h1>
+        <div className="toolbar">
+          <label htmlFor="pitch-select">Select Pitch:</label>
+          <select
+            id="pitch-select"
+            value={selectedPitch}
+            onChange={(e) => setSelectedPitch(e.target.value)}
+          >
+            <option value="Soccer">Soccer</option>
+            <option value="GAA">GAA</option>
+            <option value="American Football">American Football</option>
+            <option value="Basketball">Basketball</option>
+          </select>
+
+          {/* Object selection buttons */}
+          <div className="object-buttons">
+            <button onClick={() => addObject('cone')}>Add Cone</button>
+            <button onClick={() => addObject('ball')}>Add Ball</button>
+            <button onClick={() => addObject('player')}>Add Player</button>
+            <button onClick={() => addObject('line')}>Add Line</button>
+            <button onClick={() => addObject('square')}>Add Square</button>
+            {/* Add more objects as needed */}
+          </div>
+
+          {/* Download button */}
+          <button onClick={handleDownload}>Download Session</button>
         </div>
 
-        {/* Download button */}
-        <button onClick={handleDownload}>Download Session</button>
-      </div>
+        {/* Modal */}
+        {showModal && selectedObject && (
+          <Modal
+            show={showModal}
+            onHide={handleModalCancel}
+            centered
+            dialogClassName="custom-modal"
+          >
+            <Modal.Header closeButton>
+              <Modal.Title>
+                Edit {selectedObject.type.charAt(0).toUpperCase() + selectedObject.type.slice(1)}
+              </Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+              <Form onSubmit={handleModalSubmit}>
+                {/* Size Input */}
+                <Form.Group controlId="modal-size">
+                  <Form.Label>Size:</Form.Label>
+                  <Form.Control
+                    type="number"
+                    value={modalSize}
+                    onChange={(e) => setModalSize(parseInt(e.target.value, 10))}
+                  />
+                </Form.Group>
 
-      {/* Modal */}
-      {showModal && selectedObject && (
-        <Modal
-          show={showModal}
-          onHide={handleModalCancel}
-          centered
-          dialogClassName="custom-modal"
-        >
-          <Modal.Header closeButton>
-            <Modal.Title>
-              Edit {selectedObject.type.charAt(0).toUpperCase() + selectedObject.type.slice(1)}
-            </Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            <Form onSubmit={handleModalSubmit}>
-              {/* Size Input */}
-              <Form.Group controlId="modal-size">
-                <Form.Label>Size:</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={modalSize}
-                  onChange={(e) => setModalSize(parseInt(e.target.value, 10))}
+                {/* Label Input */}
+                {(selectedObject.type === 'cone' ||
+                  selectedObject.type === 'ball' ||
+                  selectedObject.type === 'player') && (
+                  <Form.Group controlId="modal-label">
+                    <Form.Label>Text Above Image:</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={modalLabel}
+                      onChange={(e) => setModalLabel(e.target.value)}
+                    />
+                  </Form.Group>
+                )}
+
+                {/* Color Input for Line and Square */}
+                {(selectedObject.type === 'line' || selectedObject.type === 'square') && (
+                  <Form.Group controlId="modal-color">
+                    <Form.Label>Color:</Form.Label>
+                    <Form.Control
+                      type="color"
+                      value={modalColor}
+                      onChange={(e) => setModalColor(e.target.value)}
+                    />
+                  </Form.Group>
+                )}
+
+                {/* Color Input for Player */}
+                {selectedObject.type === 'player' && (
+                  <Form.Group controlId="modal-player-color">
+                    <Form.Label>Player Color:</Form.Label>
+                    <Form.Control
+                      type="color"
+                      value={modalColor}
+                      onChange={(e) => setModalColor(e.target.value)}
+                    />
+                  </Form.Group>
+                )}
+
+                {/* Modal Footer with Delete button */}
+                <Modal.Footer>
+                  <Button variant="danger" onClick={handleDeleteObject}>
+                    Delete
+                  </Button>
+                  <Button variant="secondary" onClick={handleModalCancel}>
+                    Cancel
+                  </Button>
+                  <Button variant="primary" type="submit">
+                    Save
+                  </Button>
+                </Modal.Footer>
+              </Form>
+            </Modal.Body>
+          </Modal>
+        )}
+
+        <div className="pitch-container">
+          <Stage
+            width={canvasSize.width}
+            height={canvasSize.height}
+            onClick={handlePitchClick}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            ref={stageRef}
+          >
+            {renderPitch()}
+            <Layer>
+              {renderObjects()}
+              {/* Temporary Line */}
+              {tempLine && (
+                <Line
+                  points={tempLine.points}
+                  stroke={tempLine.color}
+                  strokeWidth={tempLine.size}
+                  dash={[4, 4]} // Dashed line for temporary feedback
                 />
-              </Form.Group>
-
-              {/* Label Input */}
-              {(selectedObject.type === 'cone' ||
-                selectedObject.type === 'ball' ||
-                selectedObject.type === 'player') && (
-                <Form.Group controlId="modal-label">
-                  <Form.Label>Text Above Image:</Form.Label>
-                  <Form.Control
-                    type="text"
-                    value={modalLabel}
-                    onChange={(e) => setModalLabel(e.target.value)}
-                  />
-                </Form.Group>
               )}
-
-              {/* Color Input */}
-              {selectedObject.type === 'player' && (
-                <Form.Group controlId="modal-color">
-                  <Form.Label>Color:</Form.Label>
-                  <Form.Control
-                    type="color"
-                    value={modalColor}
-                    onChange={(e) => setModalColor(e.target.value)}
-                  />
-                </Form.Group>
+              {/* Temporary Square */}
+              {tempSquare && (
+                <Rect
+                  x={tempSquare.x}
+                  y={tempSquare.y}
+                  width={tempSquare.width}
+                  height={tempSquare.height}
+                  fill="transparent" // Ensure temporary square is transparent
+                  stroke={tempSquare.color}
+                  strokeWidth={tempSquare.size}
+                  dash={[4, 4]} // Dashed line for temporary feedback
+                />
               )}
+              {/* Transformer for Resizing */}
+              <Transformer ref={transformerRef} />
+            </Layer>
+          </Stage>
+        </div>
 
-              {/* Modal Footer with Delete button */}
-              <Modal.Footer>
-                <Button variant="danger" onClick={handleDeleteObject}>
-                  Delete
-                </Button>
-                <Button variant="secondary" onClick={handleModalCancel}>
-                  Cancel
-                </Button>
-                <Button variant="primary" type="submit">
-                  Save
-                </Button>
-              </Modal.Footer>
-            </Form>
-          </Modal.Body>
-        </Modal>
-      )}
-
-      <div className="pitch-container">
-        <Stage
-          width={canvasSize.width}
-          height={canvasSize.height}
-          onClick={handlePitchClick}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          ref={stageRef}
-        >
-          {renderPitch()}
-          <Layer>
-            {renderObjects()}
-            {/* Temporary Line */}
-            {tempLine && (
-              <Line
-                points={tempLine.points}
-                stroke={tempLine.color}
-                strokeWidth={tempLine.size}
-                dash={[4, 4]} // Dashed line for temporary feedback
-              />
-            )}
-            {/* Temporary Square */}
-            {tempSquare && (
-              <Rect
-                x={tempSquare.x}
-                y={tempSquare.y}
-                width={tempSquare.width}
-                height={tempSquare.height}
-                stroke={tempSquare.color}
-                strokeWidth={tempSquare.size}
-                dash={[4, 4]} // Dashed line for temporary feedback
-              />
-            )}
-            {/* Transformer for Resizing */}
-            <Transformer ref={transformerRef} />
-          </Layer>
-        </Stage>
+        {/* Drill explanation text box */}
+        <div className="drill-explanation">
+          <h2>Drill Explanation:</h2>
+          <textarea
+            value={drillExplanation}
+            onChange={(e) => setDrillExplanation(e.target.value)}
+            rows={5}
+            cols={80}
+            placeholder="Describe the drill here..."
+          />
+        </div>
       </div>
-
-      {/* Drill explanation text box */}
-      <div className="drill-explanation">
-        <h2>Drill Explanation:</h2>
-        <textarea
-          value={drillExplanation}
-          onChange={(e) => setDrillExplanation(e.target.value)}
-          rows={5}
-          cols={80}
-          placeholder="Describe the drill here..."
-        />
-      </div>
-    </div>
-  );
-};
-
-export default Sessions;
+    );
+  };
+    export default Sessions;

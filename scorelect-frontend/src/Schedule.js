@@ -56,7 +56,7 @@ const Agenda = ({ events, selectedDate }) => {
   );
 };
 
-const Schedule = () => {
+const Schedule = ({ userId }) => { // **Assuming userId is passed as a prop**
   const [events, setEvents] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [newEventData, setNewEventData] = useState({
@@ -73,9 +73,12 @@ const Schedule = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [currentDate, setCurrentDate] = useState(new Date());
 
+  // Define a user-specific localStorage key
+  const storageKey = `events_${userId}`;
+
   // Load events from localStorage on component mount
   useEffect(() => {
-    const savedEvents = JSON.parse(localStorage.getItem('events'));
+    const savedEvents = JSON.parse(localStorage.getItem(storageKey));
     if (savedEvents) {
       // Convert date strings back to Date objects
       const eventsWithDates = savedEvents.map(event => ({
@@ -85,12 +88,12 @@ const Schedule = () => {
       }));
       setEvents(eventsWithDates);
     }
-  }, []);
+  }, [storageKey]);
 
   // Save events to localStorage whenever they change
   useEffect(() => {
-    localStorage.setItem('events', JSON.stringify(events));
-  }, [events]);
+    localStorage.setItem(storageKey, JSON.stringify(events));
+  }, [events, storageKey]);
 
   const handleSelectSlot = ({ start }) => {
     setNewEventData({
@@ -282,6 +285,14 @@ const Schedule = () => {
     }));
   };
 
+  // Function to reset the schedule
+  const handleResetSchedule = () => {
+    if (window.confirm('Are you sure you want to reset your schedule? This cannot be undone.')) {
+      setEvents([]);
+      localStorage.removeItem(storageKey);
+    }
+  };
+
   return (
     <div className="schedule-page">
       <h1 className="schedule-title">Team Schedule</h1>
@@ -318,7 +329,12 @@ const Schedule = () => {
         </div>
 
         {/* Agenda Sidebar */}
-        <Agenda events={getAgendaEvents()} selectedDate={currentDate} />
+        <div className="agenda-and-reset">
+          <Agenda events={getAgendaEvents()} selectedDate={currentDate} />
+          <button className="reset-button" onClick={handleResetSchedule}>
+            Reset Schedule
+          </button>
+        </div>
       </div>
 
       {/* Modal for adding/editing event */}

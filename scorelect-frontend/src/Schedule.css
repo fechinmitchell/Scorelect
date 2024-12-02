@@ -350,6 +350,7 @@
   background-color: #7c52b3; /* Lighter purple on hover */
 }
 
+/* Modal Save Button */
 .modal-save-button {
   background-color: #28a745; /* Green for save action */
   color: #fff;
@@ -359,6 +360,7 @@
   background-color: #218838; /* Darker green on hover */
 }
 
+/* Modal Cancel Button */
 .schedule-modal-button.cancel-button {
   background-color: #6c757d; /* Gray for cancel buttons */
   color: #fff;
@@ -368,6 +370,7 @@
   background-color: #5a6268; /* Darker gray on hover */
 }
 
+/* Modal Confirm Button */
 .schedule-modal-button.confirm-button {
   background-color: #dc3545; /* Red for confirm actions */
   color: #fff;
@@ -377,6 +380,7 @@
   background-color: #c82333; /* Darker red on hover */
 }
 
+/* Modal Close Button */
 .schedule-modal-button.close-button {
   background-color: #6c757d; /* Gray for close actions */
   color: #fff;
@@ -386,6 +390,7 @@
   background-color: #5a6268; /* Darker gray on hover */
 }
 
+/* Modal Edit Button */
 .schedule-modal-button.edit-button {
   background-color: #ffc107; /* Amber for edit actions */
   color: #212529;
@@ -395,6 +400,7 @@
   background-color: #e0a800; /* Darker amber on hover */
 }
 
+/* Modal Delete Button */
 .schedule-modal-button.delete-button {
   background-color: #dc3545; /* Red for delete actions */
   color: #fff;
@@ -583,5 +589,3 @@
 .agenda-item:hover {
   background-color: #7c52b3; /* Lighter purple on hover */
 }
-
-/* ----------------------------------------------------- */

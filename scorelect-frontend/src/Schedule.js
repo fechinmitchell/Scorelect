@@ -1,17 +1,20 @@
 // Schedule.js
 import React, { useState, useEffect } from 'react';
-import PropTypes from 'prop-types';
 import { Calendar, momentLocalizer, Views } from 'react-big-calendar';
 import moment from 'moment';
 import { RRule } from 'rrule';
+import { v4 as uuidv4 } from 'uuid'; // UUID generator
+import Swal from 'sweetalert2'; // For user-friendly alerts
 import './Schedule.css';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
-import { saveUserData, getUserData, clearUserData } from './storage'; // Import utility functions
-import Swal from 'sweetalert2'; // For user-friendly alerts
 
+// Initialize moment localizer
 const localizer = momentLocalizer(moment);
 
-// Modal Component
+/**
+ * Modal Component
+ * Handles displaying modal dialogs.
+ */
 const Modal = ({ isOpen, title, children, actions }) => {
   if (!isOpen) return null;
 
@@ -26,9 +29,12 @@ const Modal = ({ isOpen, title, children, actions }) => {
   );
 };
 
-// Agenda Component
+/**
+ * Agenda Component
+ * Displays a list of events for the selected date.
+ */
 const Agenda = ({ events, selectedDate }) => {
-  // Filter events based on selected date range
+  // Filter events based on selected date
   const filteredEvents = events.filter(event => {
     const eventDate = moment(event.start).startOf('day');
     const selected = moment(selectedDate).startOf('day');
@@ -59,9 +65,31 @@ const Agenda = ({ events, selectedDate }) => {
   );
 };
 
-const Schedule = ({ userId, userType }) => { // **Added userType as a prop**
-  console.log('Schedule Component Props:', { userId, userType }); // Debugging line
+/**
+ * Schedule Component
+ * Main component managing the calendar, events, and data persistence.
+ */
+const Schedule = () => {
+  /**
+   * Generates or retrieves a unique user ID from localStorage.
+   * This ensures each user has their own unique schedule.
+   */
+  const getUserId = () => {
+    let userId = localStorage.getItem('userId');
+    if (!userId) {
+      userId = uuidv4();
+      localStorage.setItem('userId', userId);
+      console.log('Generated new userId:', userId);
+    } else {
+      console.log('Retrieved existing userId:', userId);
+    }
+    return userId;
+  };
 
+  // Retrieve or generate userId
+  const userId = getUserId();
+
+  // Initialize state variables
   const [userData, setUserData] = useState({ events: [], agendaNotes: "" });
   const [modalOpen, setModalOpen] = useState(false);
   const [newEventData, setNewEventData] = useState({
@@ -78,25 +106,58 @@ const Schedule = ({ userId, userType }) => { // **Added userType as a prop**
   const [errorMessage, setErrorMessage] = useState('');
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  // **Added State Variable for Reset Confirmation Modal**
+  // State for reset confirmation modal
   const [showResetModal, setShowResetModal] = useState(false);
 
-  // Load user data from localStorage on component mount
+  /**
+   * Storage Utility Functions
+   * Handles saving, retrieving, and clearing user data in localStorage.
+   */
+  const saveUserData = (userId, data) => {
+    localStorage.setItem(`userData_${userId}`, JSON.stringify(data));
+  };
+
+  const getUserData = (userId) => {
+    const data = localStorage.getItem(`userData_${userId}`);
+    return data ? JSON.parse(data) : { events: [], agendaNotes: "" };
+  };
+
+  const clearUserData = (userId) => {
+    localStorage.removeItem(`userData_${userId}`);
+  };
+
+  /**
+   * Load user data from localStorage when component mounts.
+   */
   useEffect(() => {
-    if (userId) {
-      const data = getUserData(userId);
-      setUserData(data);
-    }
+    const data = getUserData(userId);
+    setUserData(data);
+    console.log('User data loaded:', data);
   }, [userId]);
 
-  // **Optional: Auto-Save for Premium Users**
-  useEffect(() => {
-    if (userType === 'premium' && userId) {
-      saveUserData(userId, userData);
-      console.log('Auto-saved schedule for premium user:', userId);
+  /**
+   * Handles saving the schedule to localStorage.
+   */
+  const handleSaveSchedule = () => {
+    console.log('Attempting to save schedule for userId:', userId);
+    if (!userId) {
+      Swal.fire('Error', 'User not authenticated.', 'error');
+      return;
     }
-  }, [userData, userId, userType]);
 
+    try {
+      saveUserData(userId, userData);
+      console.log('Schedule saved:', userData);
+      Swal.fire('Success', 'Your schedule has been saved successfully!', 'success');
+    } catch (error) {
+      console.error('Error saving schedule:', error);
+      Swal.fire('Error', 'Failed to save your schedule.', 'error');
+    }
+  };
+
+  /**
+   * Handles selecting a time slot to add a new event.
+   */
   const handleSelectSlot = ({ start }) => {
     setNewEventData({
       title: '',
@@ -111,6 +172,9 @@ const Schedule = ({ userId, userType }) => { // **Added userType as a prop**
     setModalOpen(true);
   };
 
+  /**
+   * Handles adding a new event to the schedule.
+   */
   const handleAddEvent = () => {
     const {
       title,
@@ -176,7 +240,7 @@ const Schedule = ({ userId, userType }) => { // **Added userType as a prop**
         start: date,
         end: new Date(date.getTime() + (endDateTime - startDateTime)),
         title,
-        id: Date.now() + Math.random(), // Unique ID
+        id: uuidv4(), // Unique ID using UUID
       }));
     } else {
       newEvents = [
@@ -184,7 +248,7 @@ const Schedule = ({ userId, userType }) => { // **Added userType as a prop**
           start: startDateTime,
           end: endDateTime,
           title,
-          id: Date.now() + Math.random(), // Unique ID
+          id: uuidv4(), // Unique ID using UUID
         },
       ];
     }
@@ -204,13 +268,20 @@ const Schedule = ({ userId, userType }) => { // **Added userType as a prop**
       id: null,
     });
     setModalOpen(false);
+    Swal.fire('Success', 'Event added successfully!', 'success');
   };
 
+  /**
+   * Handles selecting an existing event to view details.
+   */
   const handleSelectEvent = event => {
     setSelectedEvent(event);
     setEventDetailsOpen(true);
   };
 
+  /**
+   * Handles deleting an event from the schedule.
+   */
   const handleDeleteEvent = () => {
     setUserData(prevData => ({
       ...prevData,
@@ -221,6 +292,9 @@ const Schedule = ({ userId, userType }) => { // **Added userType as a prop**
     Swal.fire('Deleted!', 'The event has been deleted.', 'success');
   };
 
+  /**
+   * Handles editing an existing event.
+   */
   const handleEditEvent = () => {
     setNewEventData({
       title: selectedEvent.title,
@@ -235,6 +309,9 @@ const Schedule = ({ userId, userType }) => { // **Added userType as a prop**
     setModalOpen(true);
   };
 
+  /**
+   * Handles updating an existing event after editing.
+   */
   const handleUpdateEvent = () => {
     const { title, startDate, startTime, endTime, id } = newEventData;
 
@@ -288,9 +365,12 @@ const Schedule = ({ userId, userType }) => { // **Added userType as a prop**
       id: null,
     });
     setModalOpen(false);
+    Swal.fire('Success', 'Event updated successfully!', 'success');
   };
 
-  // Helper function to format events for agenda
+  /**
+   * Formats events for the Agenda component.
+   */
   const getAgendaEvents = () => {
     return userData.events.map(event => ({
       ...event,
@@ -299,8 +379,9 @@ const Schedule = ({ userId, userType }) => { // **Added userType as a prop**
     }));
   };
 
-  // **Added Functions for Reset Confirmation Modal**
-
+  /**
+   * Confirms resetting the schedule.
+   */
   const confirmReset = () => {
     setUserData({ events: [], agendaNotes: "" });
     clearUserData(userId);
@@ -308,11 +389,16 @@ const Schedule = ({ userId, userType }) => { // **Added userType as a prop**
     Swal.fire('Reset!', 'Your schedule has been reset.', 'success');
   };
 
+  /**
+   * Cancels the reset action.
+   */
   const cancelReset = () => {
     setShowResetModal(false);
   };
 
-  // Function to reset the schedule
+  /**
+   * Initiates the reset schedule process with confirmation.
+   */
   const handleResetSchedule = () => {
     Swal.fire({
       title: 'Are you sure?',
@@ -326,34 +412,6 @@ const Schedule = ({ userId, userType }) => { // **Added userType as a prop**
         confirmReset();
       }
     });
-  };
-
-  /**
-   * Handles saving the schedule explicitly.
-   */
-  const handleSaveSchedule = () => {
-    if (userType !== 'premium') {
-      Swal.fire(
-        'Upgrade Required',
-        'Please upgrade to a premium account to save your schedule.',
-        'warning'
-      );
-      return;
-    }
-
-    if (!userId) {
-      Swal.fire('Error', 'User not authenticated.', 'error');
-      return;
-    }
-
-    try {
-      saveUserData(userId, userData);
-      console.log('Schedule saved:', userData);
-      Swal.fire('Success', 'Your schedule has been saved successfully!', 'success');
-    } catch (error) {
-      console.error('Error saving schedule:', error);
-      Swal.fire('Error', 'Failed to save your schedule.', 'error');
-    }
   };
 
   return (
@@ -395,12 +453,20 @@ const Schedule = ({ userId, userType }) => { // **Added userType as a prop**
         <div className="agenda-and-reset">
           <Agenda events={getAgendaEvents()} selectedDate={currentDate} />
           <div className="button-group">
-            {userType === 'premium' && (
-              <button className="save-schedule-button" onClick={handleSaveSchedule}>
-                Save Schedule
-              </button>
-            )}
-            <button className="reset-button" onClick={handleResetSchedule}>
+            {/* "Save Schedule" button */}
+            <button
+              className="save-schedule-button"
+              onClick={handleSaveSchedule}
+              aria-label="Save your schedule"
+            >
+              Save Schedule
+            </button>
+            {/* "Reset Schedule" button */}
+            <button
+              className="reset-button"
+              onClick={handleResetSchedule}
+              aria-label="Reset your schedule"
+            >
               Reset Schedule
             </button>
           </div>
@@ -490,9 +556,7 @@ const Schedule = ({ userId, userType }) => { // **Added userType as a prop**
                   type="date"
                   value={
                     newEventData.recurrenceEndDate
-                      ? moment(newEventData.recurrenceEndDate).format(
-                          'YYYY-MM-DD'
-                        )
+                      ? moment(newEventData.recurrenceEndDate).format('YYYY-MM-DD')
                       : ''
                   }
                   onChange={e =>
@@ -524,7 +588,10 @@ const Schedule = ({ userId, userType }) => { // **Added userType as a prop**
               >
                 Close
               </button>
-              <button className="schedule-modal-button edit-button" onClick={handleEditEvent}>
+              <button
+                className="schedule-modal-button edit-button"
+                onClick={handleEditEvent}
+              >
                 Edit
               </button>
               <button
@@ -550,7 +617,7 @@ const Schedule = ({ userId, userType }) => { // **Added userType as a prop**
         </Modal>
       )}
 
-      {/* **Added Reset Confirmation Modal** */}
+      {/* Modal for Reset Confirmation */}
       <Modal
         isOpen={showResetModal}
         title="Reset Schedule"
@@ -575,12 +642,6 @@ const Schedule = ({ userId, userType }) => { // **Added userType as a prop**
       </Modal>
     </div>
   );
-};
-
-// Define PropTypes for better type checking and to ensure required props are passed
-Schedule.propTypes = {
-  userId: PropTypes.string.isRequired,
-  userType: PropTypes.string.isRequired, // e.g., 'free', 'premium'
 };
 
 export default Schedule;

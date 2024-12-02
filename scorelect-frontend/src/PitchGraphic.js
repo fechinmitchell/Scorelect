@@ -63,8 +63,8 @@ const PitchGraphic = () => {
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const [pitchColor, setPitchColor] = useState('#00A86B');
-  const [lineColor, setLineColor] = useState('#000000');
+  const [pitchColor, setPitchColor] = useState('#006400');
+  const [lineColor, setLineColor] = useState('#FFF');
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [displayPlayerNumber, setDisplayPlayerNumber] = useState(false);
   const [displayPlayerName, setDisplayPlayerName] = useState(false);
@@ -89,8 +89,8 @@ const PitchGraphic = () => {
   const [gameName, setGameName] = useState('');
   const [showSetupTeamsContainer, setShowSetupTeamsContainer] = useState(false);
   const [userType, setUserType] = useState('free'); // Initialize userType state
-  const lightStripeColor = '#A8D5BA'; // Light green
-  const darkStripeColor = '#8FBF9C';  // Slightly darker green
+  const lightStripeColor = '#228B22'; // Light green
+  const darkStripeColor = '#006400';  // Slightly darker green
 
 
     // New state variables for dataset functionality

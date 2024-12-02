@@ -1373,23 +1373,47 @@ const handleDownloadFilteredData = async () => {
                     ]}
                     stroke={getColor(coord.type)}
                     strokeWidth={2}
-                    pointerLength={10}
-                    pointerWidth={10}
-                  />
-                );
-              } else {
-                return (
-                  <Circle
-                    key={index}
-                    x={coord.x * xScale}
-                    y={coord.y * yScale}
-                    radius={6}
-                    fill={getColor(coord.type)}
+                    pointerLength={10} // Length of the arrowhead
+                    pointerWidth={10}  // Width of the arrowhead
                   />
                 );
               }
-            })}
-          </Layer>
+      return (
+        <Group key={index}>
+          <Circle
+            x={coord.x * xScale}
+            y={coord.y * yScale}
+            radius={6}
+            fill={getColor(coord.type)}
+          />
+          {displayPlayerNumber && (
+            <Text
+              x={coord.x * xScale}
+              y={coord.y * yScale - 4}  // Adjusted to align the text vertically better
+              text={coord.player}
+              fontSize={8}
+              fill="white"
+              align="center"
+              width={10}  // Set the width to ensure consistent alignment
+              offsetX={coord.player.length === 1 ? 4.5 : 4.5}  // Fine-tuned offset values for better centering
+              />
+          )}
+          {displayPlayerName && (
+            <Text
+              x={coord.x * xScale}
+              y={coord.y * yScale - 16}  // Position the name above the marker
+              text={coord.playerName}
+              fontSize={10}
+              fill="black"
+              align="center"
+              width={coord.playerName.length * 6}  // Adjust the width based on the name length
+              offsetX={(coord.playerName.length * 6) / 2}  // Center the text horizontally
+            />
+          )}
+        </Group>
+      );
+    })}
+  </Layer>
         </Stage>
 <div className="aggregated-data-container">
       <AggregatedData data={aggregateData} />

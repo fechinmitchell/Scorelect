@@ -148,7 +148,7 @@ const AmericanFootballPitch = () => {
       { label: 'Run', value: 'run', color: '#32CD32', type: 'line' },
       { label: 'Tackle', value: 'tackle', color: '#FF4500', type: 'marker' },
       { label: 'Touchdown', value: 'touchdown', color: '#FFD700', type: 'marker' },
-      { label: 'Field Goal', value: 'field goal', color: '#800080', type: 'marker' },
+      { label: 'Field Goal', value: 'field-goal', color: '#800080', type: 'marker' },
       { label: 'Interception', value: 'interception', color: '#FF8C00', type: 'marker' },
       { label: 'Fumble', value: 'fumble', color: '#8B4513', type: 'marker' },
     ]);
@@ -414,7 +414,7 @@ const handleSaveToDataset = async () => {
     'run',
     'tackle',
     'touchdown',
-    'field goal',
+    'field-goal',
     'interception',
     'fumble',
   ];
@@ -484,7 +484,7 @@ const handleSaveToDataset = async () => {
         if (e.key === 'r') setActionType('run');
         if (e.key === 't') setActionType('tackle');
         if (e.key === 'd') setActionType('touchdown');
-        if (e.key === 'f') setActionType('field goal');
+        if (e.key === 'f') setActionType('field-goal');
         if (e.key === 'i') setActionType('interception');
       };
       window.addEventListener('keypress', handleKeyPress);
@@ -1331,23 +1331,47 @@ const handleSaveToDataset = async () => {
                     ]}
                     stroke={getColor(coord.type)}
                     strokeWidth={2}
-                    pointerLength={10}
-                    pointerWidth={10}
-                  />
-                );
-              } else {
-                return (
-                  <Circle
-                    key={index}
-                    x={coord.x * xScale}
-                    y={coord.y * yScale}
-                    radius={6}
-                    fill={getColor(coord.type)}
+                    pointerLength={10} // Length of the arrowhead
+                    pointerWidth={10}  // Width of the arrowhead
                   />
                 );
               }
-            })}
-          </Layer>
+      return (
+        <Group key={index}>
+          <Circle
+            x={coord.x * xScale}
+            y={coord.y * yScale}
+            radius={6}
+            fill={getColor(coord.type)}
+          />
+          {displayPlayerNumber && (
+            <Text
+              x={coord.x * xScale}
+              y={coord.y * yScale - 4}  // Adjusted to align the text vertically better
+              text={coord.player}
+              fontSize={8}
+              fill="white"
+              align="center"
+              width={10}  // Set the width to ensure consistent alignment
+              offsetX={coord.player.length === 1 ? 4.5 : 4.5}  // Fine-tuned offset values for better centering
+              />
+          )}
+          {displayPlayerName && (
+            <Text
+              x={coord.x * xScale}
+              y={coord.y * yScale - 16}  // Position the name above the marker
+              text={coord.playerName}
+              fontSize={10}
+              fill="black"
+              align="center"
+              width={coord.playerName.length * 6}  // Adjust the width based on the name length
+              offsetX={(coord.playerName.length * 6) / 2}  // Center the text horizontally
+            />
+          )}
+        </Group>
+      );
+    })}
+  </Layer>
 
 </Stage>
 

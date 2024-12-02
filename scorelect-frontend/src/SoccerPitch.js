@@ -73,8 +73,8 @@ const SoccerPitch =() => {
   const [downloadsRemaining, setDownloadsRemaining] = useState(1);
   const [user, setUser] = useState(null);
   const location = useLocation();
-  const [pitchColor, setPitchColor] = useState('#00A86B'); // State for pitch color
-  const [lineColor, setLineColor] = useState('#000000'); // State for line color
+  const [pitchColor, setPitchColor] = useState('#006400'); // State for pitch color
+  const [lineColor, setLineColor] = useState('#FFF'); // State for line color
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false); // State for settings modal
 
 
@@ -91,8 +91,8 @@ const SoccerPitch =() => {
   const [showSetupTeamsContainer, setShowSetupTeamsContainer] = useState(false);
   const [userType, setUserType] = useState('free'); // Initialize userType state
   // Define stripe colors
-  const lightStripeColor = '#A8D5BA'; // Light green
-  const darkStripeColor = '#8FBF9C';  // Slightly darker green
+  const lightStripeColor = '#228B22'; // Light green
+  const darkStripeColor = '#006400';  // Slightly darker green
 
     // New state variables for dataset functionality
     const [saveToDataset, setSaveToDataset] = useState(false);
@@ -1412,40 +1412,47 @@ const removePlayerFromTeam2 = (index) => {
                     ]}
                     stroke={getColor(coord.type)}
                     strokeWidth={2}
-                    pointerLength={10}
-                    pointerWidth={10}
-                    fill={getColor(coord.type)}
+                    pointerLength={10} // Length of the arrowhead
+                    pointerWidth={10}  // Width of the arrowhead
                   />
                 );
               }
-              return (
-                <Circle
-                  key={index}
-                  x={coord.x * xScale}
-                  y={coord.y * yScale}
-                  radius={6}
-                  fill={getColor(coord.type)}
-                />
-              );
-            })}
-            
-            {/* Show the line being drawn */}
-            {currentCoords.length === 1 && stageRef.current && (
-              <Arrow
-                points={[
-                  currentCoords[0].x * xScale,
-                  currentCoords[0].y * yScale,
-                  stageRef.current.getPointerPosition().x,
-                  stageRef.current.getPointerPosition().y
-                ]}
-                stroke={getColor(actionType?.value)}
-                strokeWidth={2}
-                pointerLength={10}
-                pointerWidth={10}
-                fill={getColor(actionType?.value)}
+      return (
+        <Group key={index}>
+          <Circle
+            x={coord.x * xScale}
+            y={coord.y * yScale}
+            radius={6}
+            fill={getColor(coord.type)}
+          />
+          {displayPlayerNumber && (
+            <Text
+              x={coord.x * xScale}
+              y={coord.y * yScale - 4}  // Adjusted to align the text vertically better
+              text={coord.player}
+              fontSize={8}
+              fill="white"
+              align="center"
+              width={10}  // Set the width to ensure consistent alignment
+              offsetX={coord.player.length === 1 ? 4.5 : 4.5}  // Fine-tuned offset values for better centering
               />
-            )}
-          </Layer>
+          )}
+          {displayPlayerName && (
+            <Text
+              x={coord.x * xScale}
+              y={coord.y * yScale - 16}  // Position the name above the marker
+              text={coord.playerName}
+              fontSize={10}
+              fill="black"
+              align="center"
+              width={coord.playerName.length * 6}  // Adjust the width based on the name length
+              offsetX={(coord.playerName.length * 6) / 2}  // Center the text horizontally
+            />
+          )}
+        </Group>
+      );
+    })}
+  </Layer>
 
 </Stage>
 <div className="aggregated-data-container">

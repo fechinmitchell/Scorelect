@@ -1,11 +1,13 @@
 // Schedule.js
 import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { Calendar, momentLocalizer, Views } from 'react-big-calendar';
 import moment from 'moment';
 import { RRule } from 'rrule';
 import './Schedule.css';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { saveUserData, getUserData, clearUserData } from './storage'; // Import utility functions
+import Swal from 'sweetalert2'; // For user-friendly alerts
 
 const localizer = momentLocalizer(moment);
 
@@ -57,7 +59,9 @@ const Agenda = ({ events, selectedDate }) => {
   );
 };
 
-const Schedule = ({ userId }) => { // **Assuming userId is passed as a prop**
+const Schedule = ({ userId, userType }) => { // **Added userType as a prop**
+  console.log('Schedule Component Props:', { userId, userType }); // Debugging line
+
   const [userData, setUserData] = useState({ events: [], agendaNotes: "" });
   const [modalOpen, setModalOpen] = useState(false);
   const [newEventData, setNewEventData] = useState({
@@ -85,12 +89,13 @@ const Schedule = ({ userId }) => { // **Assuming userId is passed as a prop**
     }
   }, [userId]);
 
-  // Save user data to localStorage whenever it changes
+  // **Optional: Auto-Save for Premium Users**
   useEffect(() => {
-    if (userId) {
+    if (userType === 'premium' && userId) {
       saveUserData(userId, userData);
+      console.log('Auto-saved schedule for premium user:', userId);
     }
-  }, [userData, userId]);
+  }, [userData, userId, userType]);
 
   const handleSelectSlot = ({ start }) => {
     setNewEventData({
@@ -213,6 +218,7 @@ const Schedule = ({ userId }) => { // **Assuming userId is passed as a prop**
     }));
     setSelectedEvent(null);
     setEventDetailsOpen(false);
+    Swal.fire('Deleted!', 'The event has been deleted.', 'success');
   };
 
   const handleEditEvent = () => {
@@ -299,6 +305,7 @@ const Schedule = ({ userId }) => { // **Assuming userId is passed as a prop**
     setUserData({ events: [], agendaNotes: "" });
     clearUserData(userId);
     setShowResetModal(false);
+    Swal.fire('Reset!', 'Your schedule has been reset.', 'success');
   };
 
   const cancelReset = () => {
@@ -307,7 +314,46 @@ const Schedule = ({ userId }) => { // **Assuming userId is passed as a prop**
 
   // Function to reset the schedule
   const handleResetSchedule = () => {
-    setShowResetModal(true);
+    Swal.fire({
+      title: 'Are you sure?',
+      text: 'Do you want to reset your schedule? This action cannot be undone.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, reset it!',
+      cancelButtonText: 'Cancel',
+    }).then((result) => {
+      if (result.isConfirmed) {
+        confirmReset();
+      }
+    });
+  };
+
+  /**
+   * Handles saving the schedule explicitly.
+   */
+  const handleSaveSchedule = () => {
+    if (userType !== 'premium') {
+      Swal.fire(
+        'Upgrade Required',
+        'Please upgrade to a premium account to save your schedule.',
+        'warning'
+      );
+      return;
+    }
+
+    if (!userId) {
+      Swal.fire('Error', 'User not authenticated.', 'error');
+      return;
+    }
+
+    try {
+      saveUserData(userId, userData);
+      console.log('Schedule saved:', userData);
+      Swal.fire('Success', 'Your schedule has been saved successfully!', 'success');
+    } catch (error) {
+      console.error('Error saving schedule:', error);
+      Swal.fire('Error', 'Failed to save your schedule.', 'error');
+    }
   };
 
   return (
@@ -348,10 +394,16 @@ const Schedule = ({ userId }) => { // **Assuming userId is passed as a prop**
         {/* Agenda Sidebar */}
         <div className="agenda-and-reset">
           <Agenda events={getAgendaEvents()} selectedDate={currentDate} />
-          {/* **Updated Reset Button** */}
-          <button className="reset-button" onClick={handleResetSchedule}>
-            Reset Schedule
-          </button>
+          <div className="button-group">
+            {userType === 'premium' && (
+              <button className="save-schedule-button" onClick={handleSaveSchedule}>
+                Save Schedule
+              </button>
+            )}
+            <button className="reset-button" onClick={handleResetSchedule}>
+              Reset Schedule
+            </button>
+          </div>
         </div>
       </div>
 
@@ -371,7 +423,7 @@ const Schedule = ({ userId }) => { // **Assuming userId is passed as a prop**
               Cancel
             </button>
             <button
-              className="schedule-modal-button save-button"
+              className="schedule-modal-button modal-save-button"
               onClick={newEventData.id ? handleUpdateEvent : handleAddEvent}
             >
               Save
@@ -523,6 +575,12 @@ const Schedule = ({ userId }) => { // **Assuming userId is passed as a prop**
       </Modal>
     </div>
   );
+};
+
+// Define PropTypes for better type checking and to ensure required props are passed
+Schedule.propTypes = {
+  userId: PropTypes.string.isRequired,
+  userType: PropTypes.string.isRequired, // e.g., 'free', 'premium'
 };
 
 export default Schedule;

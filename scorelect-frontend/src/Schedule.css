@@ -46,23 +46,7 @@
   min-width: 300px;
 }
 
-/* Reset Schedule Button */
-.reset-button {
-  margin-top: 20px;
-  padding: 10px 20px;
-  background-color: #dc3545; /* Bootstrap's danger color (red) */
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 16px;
-  transition: background-color 0.3s ease;
-}
-
-.reset-button:hover {
-  background-color: #c82333; /* Darker red on hover */
-}
-
+/* ----------------------------------------------------- */
 /* Agenda and Reset Section */
 .agenda-and-reset {
   display: flex;
@@ -71,7 +55,6 @@
   margin-left: 20px;
 }
 
-/* ----------------------------------------------------- */
 /* Agenda Sidebar */
 .agenda-container {
   flex: 2; /* Increased flex ratio for wider agenda */
@@ -121,6 +104,46 @@
 .no-events {
   text-align: center;
   color: #bbb; /* Light gray for no events message */
+}
+
+/* ----------------------------------------------------- */
+/* Button Group Styles */
+.button-group {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+/* Main Save Schedule Button */
+.save-schedule-button {
+  padding: 10px 20px;
+  background-color: #28a745; /* Green */
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s ease;
+}
+
+.save-schedule-button:hover {
+  background-color: #218838; /* Darker green on hover */
+}
+
+/* Reset Schedule Button */
+.reset-button {
+  padding: 10px 20px;
+  background-color: #dc3545; /* Red */
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s ease;
+}
+
+.reset-button:hover {
+  background-color: #c82333; /* Darker red on hover */
 }
 
 /* ----------------------------------------------------- */
@@ -309,6 +332,7 @@
   flex-wrap: wrap;
 }
 
+/* Modal Buttons */
 .schedule-modal-button {
   margin: 5px;
   padding: 12px 20px;
@@ -326,56 +350,57 @@
   background-color: #7c52b3; /* Lighter purple on hover */
 }
 
-.schedule-modal-button:first-of-type {
-  background-color: #6c757d; /* Gray for cancel buttons */
+.modal-save-button {
+  background-color: #28a745; /* Green for save action */
+  color: #fff;
 }
 
-.schedule-modal-button:first-of-type:hover {
+.modal-save-button:hover {
+  background-color: #218838; /* Darker green on hover */
+}
+
+.schedule-modal-button.cancel-button {
+  background-color: #6c757d; /* Gray for cancel buttons */
+  color: #fff;
+}
+
+.schedule-modal-button.cancel-button:hover {
   background-color: #5a6268; /* Darker gray on hover */
 }
 
-.confirm-button {
+.schedule-modal-button.confirm-button {
   background-color: #dc3545; /* Red for confirm actions */
   color: #fff;
 }
 
-.confirm-button:hover {
+.schedule-modal-button.confirm-button:hover {
   background-color: #c82333; /* Darker red on hover */
 }
 
-.cancel-button {
-  background-color: #6c757d; /* Gray for cancel actions */
-  color: #fff;
-}
-
-.cancel-button:hover {
-  background-color: #5a6268; /* Darker gray on hover */
-}
-
-.close-button {
+.schedule-modal-button.close-button {
   background-color: #6c757d; /* Gray for close actions */
   color: #fff;
 }
 
-.close-button:hover {
+.schedule-modal-button.close-button:hover {
   background-color: #5a6268; /* Darker gray on hover */
 }
 
-.edit-button {
+.schedule-modal-button.edit-button {
   background-color: #ffc107; /* Amber for edit actions */
   color: #212529;
 }
 
-.edit-button:hover {
+.schedule-modal-button.edit-button:hover {
   background-color: #e0a800; /* Darker amber on hover */
 }
 
-.delete-button {
+.schedule-modal-button.delete-button {
   background-color: #dc3545; /* Red for delete actions */
   color: #fff;
 }
 
-.delete-button:hover {
+.schedule-modal-button.delete-button:hover {
   background-color: #c82333; /* Darker red on hover */
 }
 
@@ -407,6 +432,7 @@
   user-select: text;
 }
 
+/* ----------------------------------------------------- */
 /* Responsive Adjustments */
 @media (max-width: 768px) {
   .schedule-title {
@@ -455,9 +481,20 @@
     width: 100%;
     margin-left: 0;
   }
+
+  /* Adjust button-group for smaller screens */
+  .button-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .button-group .save-schedule-button,
+  .button-group .reset-button {
+    width: 100%;
+    margin-bottom: 10px;
+  }
 }
 
-/* Responsive Adjustments for Modal */
 @media (max-width: 600px) {
   .schedule-modal h2 {
     font-size: 1.5em;
@@ -479,8 +516,16 @@
   }
 
   /* Adjust calendar row heights on small screens */
-  .rbc-month-view .rbc-row-content {
+  .rbc-month-row {
+    height: auto !important;
+  }
+
+  .rbc-row {
     min-height: 80px;
+  }
+
+  .rbc-row-segment {
+    max-height: 80px;
   }
 
   /* Adjust event font size */

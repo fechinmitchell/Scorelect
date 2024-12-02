@@ -31,10 +31,10 @@ const Modal = ({ isOpen, title, children, actions }) => {
 
 /**
  * Agenda Component
- * Displays a list of events for the selected date.
+ * Displays a list of events for the selected date, including the event date.
  */
 const Agenda = ({ events, selectedDate }) => {
-  // Filter events based on selected date
+  // Filter events based on selected date and after
   const filteredEvents = events.filter(event => {
     const eventDate = moment(event.start).startOf('day');
     const selected = moment(selectedDate).startOf('day');
@@ -53,6 +53,10 @@ const Agenda = ({ events, selectedDate }) => {
         <ul className="agenda-list">
           {sortedEvents.map(event => (
             <li key={event.id} className="agenda-item">
+              {/* Display Event Date */}
+              <span className="event-date">
+                {moment(event.start).format('MMMM Do YYYY')}
+              </span>
               <span className="event-time">
                 {moment(event.start).format('HH:mm')} - {moment(event.end).format('HH:mm')}
               </span>
@@ -556,7 +560,9 @@ const Schedule = () => {
                   type="date"
                   value={
                     newEventData.recurrenceEndDate
-                      ? moment(newEventData.recurrenceEndDate).format('YYYY-MM-DD')
+                      ? moment(newEventData.recurrenceEndDate).format(
+                          'YYYY-MM-DD'
+                        )
                       : ''
                   }
                   onChange={e =>

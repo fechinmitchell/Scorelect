@@ -23,7 +23,7 @@
   display: flex;
   flex-direction: row;
   width: 100%;
-  max-width: 1600px; /* Adjust as needed */
+  /* max-width: 1600px; */ /* Removed to allow full width */
   gap: 20px; /* Space between calendar and agenda */
   padding: 10px;
   box-sizing: border-box;
@@ -31,14 +31,15 @@
 
 /* Calendar Container */
 .calendar-container {
-  flex: 3; /* Increased flex ratio for wider calendar */
+  width: 800px; /* Set fixed width */
+  flex: none; /* Prevent stretching */
   background-color: #3b1761; /* Dark purple background */
   padding: 5px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   border-radius: 8px;
   overflow-x: auto;
   overflow-y: auto;
-  max-width: 1200px;
+  /* max-width: 1200px; */ /* Removed */
 }
 
 .calendar {
@@ -51,15 +52,15 @@
 .agenda-and-reset {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  margin-left: 20px;
+  align-items: stretch; /* Changed from center to stretch */
+  /* margin-left: 20px; */ /* Removed */
 }
 
 /* Agenda Sidebar */
 .agenda-container {
-  flex: 2; /* Increased flex ratio for wider agenda */
+  flex: 1; /* Allow it to take remaining space */
   background-color: #3b1761; /* Match calendar-container background */
-  padding: 15px;
+  padding: 20px; /* Increased padding for more space */
   border-radius: 8px;
   color: #ffffff;
   max-height: calc(100vh - 200px); /* Adjust based on your layout */
@@ -68,7 +69,7 @@
 }
 
 .agenda-title {
-  margin-bottom: 10px;
+  margin-bottom: 15px; /* Increased margin for better spacing */
   font-size: 1.5em;
   text-align: center;
   border-bottom: 1px solid #5e2e8f; /* Purple border under title */
@@ -84,10 +85,16 @@
 .agenda-item {
   display: flex;
   flex-direction: column;
-  margin-bottom: 10px;
-  padding: 10px;
+  margin-bottom: 15px; /* Increased margin for better spacing */
+  padding: 15px; /* Increased padding for better readability */
   background-color: #5e2e8f; /* Medium purple background for items */
   border-radius: 4px;
+}
+
+.event-date {
+  font-size: 0.9em;
+  color: #f1c40f; /* Yellow color for date */
+  margin-bottom: 5px;
 }
 
 .event-time {

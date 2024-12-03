@@ -1,1 +1,173 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"/><link rel="icon" href="/favicon.ico"/><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=yes,initial-scale=0.5,maximum-scale=3"><meta name="theme-color" content="#000000"/><meta name="description" content="Scorelect - A Web App to Collect Sports Data Easily and Efficiently"/><meta property="og:title" content="Scorelect - Sports Data Collection For Everyone"/><meta property="og:description" content="Use Scorelect to seamlessly collect, manage, and analyze sports data for better insights."/><meta property="og:image" content="/logo192.png"/><meta property="og:url" content="https://www.scorelect.com"/><meta property="og:type" content="website"/><meta name="twitter:card" content="summary_large_image"/><meta name="twitter:title" content="Scorelect - Sports Data Collection for Everyone"/><meta name="twitter:description" content="Use Scorelect to seamlessly collect, manage, and analyze sports data for better insights."/><meta name="twitter:image" content="/logo192.png"/><meta name="twitter:site" content="@fechinmitchell"/><meta http-equiv="Content-Security-Policy" content=" default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://m.stripe.network https://hcaptcha.com https://*.hcaptcha.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com https://m.stripe.network https://hcaptcha.com https://*.hcaptcha.com; font-src 'self' data: https://fonts.gstatic.com; script-src 'self' https://js.stripe.com https://www.gstatic.com https://www.googletagmanager.com https://m.stripe.network https://hcaptcha.com https://*.hcaptcha.com https://va.vercel-scripts.com; connect-src 'self' http://localhost:5001 https://api.stripe.com https://www.googleapis.com https://firestore.googleapis.com https://securetoken.googleapis.com https://firebase.googleapis.com https://*.firebaseio.com https://*.firebase.com https://identitytoolkit.googleapis.com https://va.vercel-scripts.com https://scorelect.onrender.com https://api.openai.com; frame-src 'self' https://js.stripe.com https://m.stripe.network https://hcaptcha.com https://*.hcaptcha.com; img-src 'self' data: https://firebasestorage.googleapis.com; "><link rel="apple-touch-icon" href="/logo192.png"/><link rel="manifest" href="/manifest.json"/><title>Scorelect - Sports Data Collection for Everyone</title><script defer="defer" src="/static/js/main.57ef3ac3.js"></script><link href="/static/css/main.6eece118.css" rel="stylesheet"></head><body><noscript>You need to enable JavaScript to run this app.</noscript><div id="root"></div></body></html>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="/favicon.ico" />
+    
+    <!-- Viewport Meta Tag -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, user-scalable=yes, initial-scale=0.5, maximum-scale=3"
+    />
+    
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#000000" />
+    
+    <!-- Description -->
+    <meta
+      name="description"
+      content="Scorelect: Manage, Train, Share, and Analyze Your Team with Ease. Seamlessly collect sports data, organize training sessions, manage your team roster, and gain in-depth analytics to elevate your team."
+    />
+    
+    <!-- Open Graph Meta Tags -->
+    <meta
+      property="og:title"
+      content="Scorelect: Manage, Train, Share, and Analyze Your Team with Ease"
+    />
+    <meta
+      property="og:description"
+      content="Scorelect: Manage, Train, Share, and Analyze Your Team with Ease. Seamlessly collect sports data, organize training sessions, manage your team roster, and gain in-depth analytics to elevate your team."
+    />
+    <meta property="og:image" content="https://www.scorelect.com/images/og-image.png" />
+    <meta property="og:url" content="https://www.scorelect.com" />
+    <meta property="og:type" content="website" />
+    
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="Scorelect: Manage, Train, Share, and Analyze Your Team with Ease"
+    />
+    <meta
+      name="twitter:description"
+      content="Scorelect: Manage, Train, Share, and Analyze Your Team with Ease. Seamlessly collect sports data, organize training sessions, manage your team roster, and gain in-depth analytics to elevate your team."
+    />
+    <meta name="twitter:image" content="https://www.scorelect.com/images/twitter-image.png" />
+    <meta name="twitter:site" content="@Scorelect" />
+    
+    <!-- Content Security Policy -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="
+        default-src 'self'; 
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://m.stripe.network https://hcaptcha.com https://*.hcaptcha.com; 
+        style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com https://m.stripe.network https://hcaptcha.com https://*.hcaptcha.com; 
+        font-src 'self' data: https://fonts.gstatic.com; 
+        script-src 'self' https://js.stripe.com https://www.gstatic.com https://www.googletagmanager.com https://m.stripe.network https://hcaptcha.com https://*.hcaptcha.com https://va.vercel-scripts.com; 
+        connect-src 'self' http://localhost:5001 https://api.stripe.com https://www.googleapis.com https://firestore.googleapis.com https://securetoken.googleapis.com https://firebase.googleapis.com https://*.firebaseio.com https://*.firebase.com https://identitytoolkit.googleapis.com https://va.vercel-scripts.com https://scorelect.onrender.com https://api.openai.com; 
+        frame-src 'self' https://js.stripe.com https://m.stripe.network https://hcaptcha.com https://*.hcaptcha.com; 
+        img-src 'self' data: https://firebasestorage.googleapis.com;
+      "
+    />
+    
+    <!-- Apple Touch Icon -->
+    <link rel="apple-touch-icon" href="/logo192.png" />
+    
+    <!-- Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- Title -->
+    <title>Scorelect: Manage, Train, Share, and Analyze Your Team to Raise the Standard</title>
+    
+    <!-- Stylesheet -->
+    <link href="/static/css/main.6eece118.css" rel="stylesheet" />
+    
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Scorelect",
+      "url": "https://www.scorelect.com",
+      "logo": "https://www.scorelect.com/logo.png",
+      "sameAs": [
+        "https://www.facebook.com/scorelect",
+        "https://www.twitter.com/scorelect",
+        "https://www.linkedin.com/company/scorelect"
+      ],
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "telephone": "+1-800-555-1234",
+        "contactType": "Customer Service",
+        "areaServed": "US"
+      }
+    }
+    </script>
+    
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org/",
+      "@type": "WebSite",
+      "name": "Scorelect",
+      "url": "https://www.scorelect.com",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://www.scorelect.com/search?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+    
+    <!-- Main JavaScript Bundle -->
+    <script defer src="/static/js/main.57ef3ac3.js"></script>
+    
+    <style>
+      /* Add any additional styles here */
+    </style>
+  </head>
+  
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    
+    <header>
+      <nav>
+        <!-- Navigation Links -->
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/features">Features</a></li>
+          <li><a href="/blogs">Blogs</a></li>
+          <li><a href="/contact">Contact</a></li>
+        </ul>
+      </nav>
+      <!-- Optional: Add a tagline in the header -->
+      <h1>Scorelect: Manage, Train, Share, and Analyze Your Team with Ease</h1>
+    </header>
+    
+    <main>
+      <div id="root"></div>
+      
+      <!-- Blog Section -->
+      <section class="blog-section">
+        <h2>Latest How-To Guides & Blogs</h2>
+        <ul class="blog-list">
+          <li class="blog-item">
+            <a href="/how-to-use-scorelect" class="blog-title">How to Use Scorelect for Effective Sports Data Collection</a>
+            <div class="blog-meta">18 Nov 2024 · 6 comments</div>
+            <div class="blog-excerpt">
+              No need to download—just go to Scorelect and try it straight away. It’s similar to other platforms but with enhanced UI and extra features...
+            </div>
+          </li>
+          <li class="blog-item">
+            <a href="/create-web-app-simplify-gaa-football" class="blog-title">Creating a Web App to Simplify GAA and Football Match Stats</a>
+            <div class="blog-meta">18 Nov 2024 · 4 comments</div>
+            <div class="blog-excerpt">
+              Starting to learn sports data analytics? Check out our latest project where we developed a web app to streamline the collection and analysis of match statistics...
+            </div>
+          </li>
+          <!-- Add more blog items as needed -->
+        </ul>
+      </section>
+    </main>
+    
+    <footer>
+      <!-- Footer content -->
+      <p>&copy; 2024 Scorelect. All rights reserved.</p>
+      <ul class="footer-links">
+        <li><a href="/">Home</a></li>
+        <li><a href="/features">Features</a></li>
+        <li><a href="/blogs">Blogs</a></li>
+        <li><a href="/contact">Contact</a></li>
+      </ul>
+    </footer>
+  </body>
+</html>

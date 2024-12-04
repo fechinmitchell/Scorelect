@@ -7,7 +7,7 @@ import Players from './Players';
 import MatchDay from './MatchDay';
 import './Training.css';
 
-const Training = () => {
+const Training = ({ selectedSport, onSportChange }) => {
   return (
     <div className="training-page">
       <div className="navbar">
@@ -36,11 +36,20 @@ const Training = () => {
           Match Day
         </NavLink>
       </div>
-      <div className="training-content"> {/* Changed className */}
+      <div className="training-content">
         <Routes>
           <Route path="/" element={<Navigate to="schedule" replace />} />
           <Route path="schedule" element={<Schedule />} />
-          <Route path="sessions" element={<Sessions />} />
+          {/* Pass selectedSport and onSportChange to Sessions */}
+          <Route
+            path="sessions"
+            element={
+              <Sessions
+                selectedSport={selectedSport}
+                onSportChange={onSportChange}
+              />
+            }
+          />
           <Route path="players" element={<Players />} />
           <Route path="matchday" element={<MatchDay />} />
         </Routes>

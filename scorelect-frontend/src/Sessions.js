@@ -21,9 +21,14 @@ import playerImg from './images/player.png';
 import { Modal, Button, Form } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
-const Sessions = () => {
-  // State for selected pitch
-  const [selectedPitch, setSelectedPitch] = useState('Soccer');
+const Sessions = ({ selectedSport, onSportChange }) => {
+  // Initialize selectedPitch with selectedSport
+  const [selectedPitch, setSelectedPitch] = useState(selectedSport);
+
+    // Update selectedPitch when selectedSport changes
+    useEffect(() => {
+      setSelectedPitch(selectedSport);
+    }, [selectedSport]);
 
   // Define canvas size
   const [canvasSize, setCanvasSize] = useState({ width: 1000, height: 531 });
@@ -94,6 +99,15 @@ const Sessions = () => {
   // Function to add new object
   const addObject = (type) => {
     setSelectedTool(type);
+  };
+
+  const handlePitchChange = (e) => {
+    const newPitch = e.target.value;
+    setSelectedPitch(newPitch);
+    // Optionally update the sport in the sidebar
+    if (onSportChange) {
+      onSportChange(newPitch);
+    }
   };
 
   // Function to handle click on the pitch
@@ -1257,50 +1271,39 @@ const Sessions = () => {
                 />
               </Group>
             );
-          case 'player':
-            return (
-              <Group
-                key={obj.id}
-                id={`object-${obj.id}`} // Unique identifier for Transformer
-                x={obj.x}
-                y={obj.y}
-                draggable
-                onClick={() => handleSelectObject(obj.id)}
-                onTap={() => handleSelectObject(obj.id)}
-                onDragEnd={(e) => handleDragObject(e, obj.id)}
-                onTransformEnd={(e) => handleTransformObject(e, obj.id)}
-                rotation={obj.rotation}
-                scaleX={obj.scaleX}
-                scaleY={obj.scaleY}
-              >
-                {obj.label && (
-                  <Text
-                    text={obj.label}
-                    fontSize={obj.size / 2}
-                    fill="black"
-                    x={-obj.size / 2}
-                    y={-obj.size - obj.size / 2}
-                    width={obj.size}
-                    align="center"
+            case 'player':
+              return (
+                <Group
+                  key={obj.id}
+                  id={`object-${obj.id}`} // Unique identifier for Transformer
+                  x={obj.x}
+                  y={obj.y}
+                  draggable
+                  onClick={() => handleSelectObject(obj.id)}
+                  onTap={() => handleSelectObject(obj.id)}
+                  onDragEnd={(e) => handleDragObject(e, obj.id)}
+                  onTransformEnd={(e) => handleTransformObject(e, obj.id)}
+                  rotation={obj.rotation}
+                  scaleX={obj.scaleX}
+                  scaleY={obj.scaleY}
+                >
+                  <Circle
+                    radius={obj.size / 2}
+                    fill={obj.color || 'red'} // Default color is red
                   />
-                )}
-                <Circle
-                  radius={obj.size / 2}
-                  fill={obj.color || 'black'}
-                />
-                {obj.number && (
-                  <Text
-                    text={obj.number}
-                    fontSize={obj.size / 2}
-                    fill="white"
-                    align="center"
-                    verticalAlign="middle"
-                    offsetX={-obj.size / 4}
-                    offsetY={-obj.size / 4}
-                  />
-                )}
-              </Group>
-            );
+                  {obj.label && (
+                    <Text
+                      text={obj.label}
+                      fontSize={obj.size / 2}
+                      fill="white" // Text color
+                      align="center"
+                      verticalAlign="middle"
+                      offsetX={-obj.size / 4}
+                      offsetY={-obj.size / 4}
+                    />
+                  )}
+                </Group>
+              );
           case 'line':
             return (
               <Line
@@ -1371,7 +1374,7 @@ const Sessions = () => {
             ...obj,
             label: modalLabel,
             size: modalSize,
-            color: modalColor,
+            color: modalColor, // Update color
           };
         }
         return obj;
@@ -1381,7 +1384,7 @@ const Sessions = () => {
       setSelectedObjectId(null);
       transformerRef.current.nodes([]);
       transformerRef.current.getLayer().batchDraw();
-    };
+    };    
 
     const handleModalCancel = () => {
       setShowModal(false);
@@ -1392,19 +1395,20 @@ const Sessions = () => {
 
     return (
       <div className="sessions-page">
-        <h1 className="sessions-title">Training Sessions</h1>
-        <div className="toolbar">
-          <label htmlFor="pitch-select">Select Pitch:</label>
-          <select
-            id="pitch-select"
-            value={selectedPitch}
-            onChange={(e) => setSelectedPitch(e.target.value)}
-          >
-            <option value="Soccer">Soccer</option>
-            <option value="GAA">GAA</option>
-            <option value="American Football">American Football</option>
-            <option value="Basketball">Basketball</option>
-          </select>
+      <h1 className="sessions-title">Training Sessions</h1>
+      <div className="toolbar">
+        <label htmlFor="pitch-select">Select Pitch:</label>
+        <select
+          id="pitch-select"
+          value={selectedPitch}
+          onChange={handlePitchChange}
+        >
+          <option value="Soccer">Soccer</option>
+          <option value="GAA">GAA</option>
+          <option value="American Football">American Football</option>
+          <option value="Basketball">Basketball</option>
+        </select>
+
 
           {/* Object selection buttons */}
           <div className="object-buttons">

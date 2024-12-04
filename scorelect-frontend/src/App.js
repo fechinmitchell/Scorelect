@@ -39,15 +39,20 @@ import PublishDataset from './PublishDataset';
 import { SavedGamesProvider } from './components/SavedGamesContext'; // Import the SavedGamesProvider
 import { SportsDataHubProvider } from './components/SportsDataHubContext'; // Import the SportsDataHubProvider
 import Training from './Training'; // Import the Training page
+import SportSelectionPage from './SportSelectionPage'; // Import the sport selection component
+import Sessions from './Sessions';
+
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 const App = () => {
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState('free');
-  const [selectedSport, setSelectedSport] = useState('Soccer'); // Default sport
+  // const [selectedSport, setSelectedSport] = useState('Soccer'); // Default sport
   const navigate = useNavigate();
   const { loadedCoords, setLoadedCoords } = useContext(GameContext); // Access loadedCoords and its setter
+  const [selectedSport, setSelectedSport] = useState(null); // Default is no sport selected
+
 
   useEffect(() => {
     const auth = getAuth();
@@ -110,6 +115,7 @@ const App = () => {
 
   // Function to render the selected sport's component
   const renderSelectedSport = () => {
+    if (!selectedSport) return <Navigate replace to="/select-sport" />;
     switch (selectedSport) {
       case 'GAA':
         return <PitchGraphic userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />;
@@ -118,17 +124,13 @@ const App = () => {
       case 'Basketball':
         return <BasketballCourt userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />;
       case 'AmericanFootball':
-        return (
-          <AmericanFootballPitch
-            userType={userRole}
-            userId={user?.uid}
-            apiUrl={API_BASE_URL}
-          />
-        );
+        return <AmericanFootballPitch userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />;
       default:
-        return <Navigate replace to="/" />; // Fallback to root if sport is unrecognized
+        return <Navigate replace to="/select-sport" />;
     }
   };
+  
+  
 
   return (
     <SavedGamesProvider> {/* Wrap the application with SavedGamesProvider */}
@@ -136,14 +138,16 @@ const App = () => {
         <div className="app">
           <ToastContainer />
           <div className="main-container">
-            <Sidebar
-              onLogout={handleLogout}
-              onSportChange={handleSportChange}
-              onNavigate={handleNavigate}
-              userType={userRole}
-              user={user}
-              selectedSport={selectedSport} // Pass selectedSport as a prop
-            />
+          {selectedSport && (
+              <Sidebar
+                onLogout={handleLogout}
+                onSportChange={handleSportChange}
+                onNavigate={handleNavigate}
+                userType={userRole}
+                user={user}
+                selectedSport={selectedSport} // Pass selectedSport as a prop
+              />
+            )}
             <div className="content-area">
               <Routes>
                 <Route path="/" element={renderSelectedSport()} />
@@ -169,8 +173,16 @@ const App = () => {
                 <Route path="/howto" element={<HowTo />} />
                 <Route path="/sports-datahub" element={<SportsDataHub />} />
                 <Route path="/publish-dataset" element={<PublishDataset />} />
-                <Route path="/training/*" element={<Training />} /> {/* Updated Route */}
                 <Route
+                    path="/training/*"
+                    element={
+                      <Training
+                        selectedSport={selectedSport}
+                        onSportChange={handleSportChange}
+                      />
+                    }
+                  />                
+                  <Route
                   path="/analysis"
                   element={<Analysis onSportSelect={(sport) => setSelectedSport(sport)} />}
                 />
@@ -184,6 +196,12 @@ const App = () => {
                 <Route path="/blog/gaacollect" element={<GAACollect />} />
                 <Route path="/blog/americanfootballCollect" element={<AmericanFootballCollect />} />
                 <Route path="*" element={<Navigate replace to="/" />} />
+                <Route
+                  path="/select-sport"
+                  element={<SportSelectionPage onSportSelect={handleSportChange} />}
+                />
+                <Route path="*" element={<Navigate replace to="/select-sport" />} />
+
               </Routes>
               <Analytics />
               <SpeedInsights />

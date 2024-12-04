@@ -1,0 +1,112 @@
+/* SportSelectionPage.css */
+.sport-selection-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background: url('./images/texture-bg-2.jpg') no-repeat center center/cover;
+    color: #501387;
+    text-align: center;
+    font-family: 'Roboto', sans-serif;
+    position: relative;
+  }
+  
+  /* Overlay for better contrast */
+  .sport-selection-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.1); /* Adjust opacity for contrast */
+    z-index: 1;
+  }
+  
+  .hero {
+    z-index: 2;
+    position: relative;
+  }
+  
+  .logo {
+    max-width: 800px;
+    margin-bottom: 20px;
+    animation: fadeIn 2s ease-out;
+  }
+  
+/* Tagline with white border */
+.tagline {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 1rem;
+    animation: fadeIn 2s ease-out 0.5s;
+    text-shadow: 
+      -1px -1px 0 white, /* Top left */
+      1px -1px 0 white,  /* Top right */
+      -1px 1px 0 white,  /* Bottom left */
+      1px 1px 0 white;   /* Bottom right */
+  }
+  
+  /* Subtext with white border */
+  .subtext {
+    font-size: 1.2rem;
+    margin-bottom: 2rem;
+    animation: fadeIn 2s ease-out 1s;
+    text-shadow: 
+      -0.5px -0.5px 0 white, 
+      0.5px -0.5px 0 white, 
+      -0.5px 0.5px 0 white, 
+      0.5px 0.5px 0 white;
+  }
+  
+  
+  /* Buttons */
+  .sport-buttons {
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+  }
+  
+  .sport-buttons button {
+    padding: 15px 30px;
+    font-size: 1.5rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    background: white;
+    color: #501387;
+    font-weight: bold;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s ease, background 0.3s ease;
+  }
+  
+  .sport-buttons button:hover {
+    background: #501387;
+    color: white;
+    transform: translateY(-5px);
+  }
+  
+  /* Footer */
+  .footer {
+    z-index: 2;
+    position: absolute;
+    bottom: 20px;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.7);
+  }
+  
+  /* Animations */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  

@@ -22,6 +22,7 @@ import DescriptionIcon from '@mui/icons-material/Description';
 // Styled Components
 const BlogContainer = styled(Container)`
   padding: 40px 0;
+  background-color: #333333;
 
   @media (max-width: 850px) {
     padding: 20px 0;
@@ -31,9 +32,12 @@ const BlogContainer = styled(Container)`
 const StepContent = styled(Box)`
   margin-top: 20px;
   margin-bottom: 20px;
+  color: #FFFFFF;
 `;
 
-const Image = styled.img`
+const Image = styled.img.attrs(props => ({
+  loading: 'lazy',
+}))`
   width: 100%;
   max-height: 400px;
   object-fit: cover;
@@ -45,63 +49,64 @@ const TipsBox = styled(Box)`
   padding: 20px;
   border-left: 5px solid #17a2b8;
   margin: 20px 0;
+  color: #FFFFFF;
 `;
 
 const BballCollect = () => {
   const steps = [
     {
-      label: '1. Select the Sport',
+      label: '1. Collect Team Stats',
       description:
-        'Go to the sidebar and select the sport in the drop down.',
-      image: "", // Add your image path here
+        'Seamlessly collect and manage your team\'s sports data to maximize performance.',
+      image: "/images/step1_bball_collect.png",
     },
     {
-      label: '2. Click on Action Button then on the Court to Record Event',
+      label: '2. Create Training Sessions',
       description:
-        'Navigate to the side of the page where its says instructions and click a button below like shot or assist. Then click on the location on the court where the event happened.',
-      image: "", // Add your image path here
+        'Design and organize effective training sessions tailored to your team\'s needs.',
+      image: "/images/step2_bball_collect.png",
     },
     {
-      label: '3. Fill in Action Details',
+      label: '3. Find Team Stats',
       description:
-        'A popup will appear once you click the court. Enter the details on the popup and click submit to record the action.',
-      image: "", // Add your image path here
+        'Access comprehensive team statistics to inform your coaching strategies.',
+      image: "/images/step3_bball_collect.png",
     },
     {
-      label: '4. Wrong Action/Location?',
+      label: '4. Scout and Analyze Players',
       description:
-        'Just go down to the button Undo Last Marker to remove the last marker placed.',
-      image: "", // Add your image path here
+        'Evaluate and analyze player performance to make informed scouting decisions.',
+      image: "/images/step4_bball_collect.png",
     },
     {
       label: '5. Export Raw Data',
       description:
-        'After the game, export the data for further. There is a limit of one per user per day for free users and unlimited for Scorelect Pro users.',
-      image: "", // Add your image path here
+        'After the game, export your data for further analysis. Free users are limited to one export per day, while Scorelect Pro users enjoy unlimited exports.',
+      image: "/images/step5_bball_collect.png",
     },
   ];
 
   const tips = [
-    'Utilize the real-time analytics features to make informed decisions during the match.',
-    'Regularly export and back up your data to prevent loss.',
-    'Take advantage of customizable reports to focus on the metrics that matter most to your team.',
+    'Leverage real-time analytics to make strategic decisions during the match.',
+    'Regularly export and back up your data to prevent any loss of information.',
+    'Utilize customizable reports to focus on the most relevant metrics for your team’s performance.',
   ];
 
   return (
     <BlogContainer maxWidth="lg">
-      <Typography variant="h3" gutterBottom>
+      <Typography variant="h3" gutterBottom style={{ color: '#FFFFFF' }}>
         Collecting Basketball Statistics on Amateur Games
       </Typography>
-      <Typography variant="subtitle1" color="#5E2E8F" paragraph>
+      <Typography variant="subtitle1" color="#FFFFFF" paragraph>
         A comprehensive guide to collecting and analyzing basketball stats for non-professional games using Scorelect.
       </Typography>
 
       <Image src="/images/basketball_stats_banner.jpg" alt="Basketball Statistics" />
 
-      <Typography variant="h5" gutterBottom>
+      <Typography variant="h5" gutterBottom style={{ color: '#FFFFFF' }}>
         Why Collect Basketball Statistics?
       </Typography>
-      <Typography variant="body1" paragraph>
+      <Typography variant="body1" paragraph style={{ color: '#FFFFFF' }}>
         Collecting basketball statistics is essential for understanding team performance, identifying strengths and weaknesses, and making informed decisions to improve gameplay. Whether you're a coach, player, or enthusiast, having access to accurate data can significantly enhance your strategic approach to the game.
       </Typography>
 
@@ -115,7 +120,7 @@ const BballCollect = () => {
                 </Typography>
               </StepLabel>
               <StepContent>
-                <Typography variant="body1">{step.description}</Typography>
+                <Typography variant="body1" style={{ color: '#FFFFFF' }}>{step.description}</Typography>
                 {step.image && <Image src={step.image} alt={`Step ${index + 1}`} />}
               </StepContent>
             </Step>
@@ -123,28 +128,28 @@ const BballCollect = () => {
         </Stepper>
       </Box>
 
-      <Typography variant="h5" gutterBottom>
+      <Typography variant="h5" gutterBottom style={{ color: '#FFFFFF' }}>
         Best Practices for Data Collection
       </Typography>
-      <Typography variant="body1" paragraph>
+      <Typography variant="body1" paragraph style={{ color: '#FFFFFF' }}>
         To ensure the effectiveness of your data collection process, consider the following best practices:
       </Typography>
       <TipsBox>
-        <Typography variant="body1" component="ul" sx={{ color: '#FFFFFF' }}>
+        <Typography variant="body1" component="ul">
           {tips.map((tip, index) => (
             <li key={index}>{tip}</li>
           ))}
         </Typography>
       </TipsBox>
 
-      <Typography variant="h5" gutterBottom>
+      <Typography variant="h5" gutterBottom style={{ color: '#FFFFFF' }}>
         Getting Started with Scorelect
       </Typography>
-      <Typography variant="body1" paragraph>
+      <Typography variant="body1" paragraph style={{ color: '#FFFFFF' }}>
         Scorelect offers an intuitive platform for collecting and analyzing basketball statistics. Follow the steps outlined above to get started and make the most out of your data.
       </Typography>
 
-      <Typography variant="h5" gutterBottom>
+      <Typography variant="h5" gutterBottom style={{ color: '#FFFFFF' }}>
         Additional Resources
       </Typography>
       <Grid container spacing={2}>
@@ -153,10 +158,11 @@ const BballCollect = () => {
             <CardMedia
               component="img"
               height="140"
-              image="https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg" // Replace VIDEO_ID with actual ID
+              src="https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg" // Replace VIDEO_ID with actual ID
               alt="Tutorial Video"
+              loading="lazy"
             />
-            <CardContent>
+            <CardContent style={{ backgroundColor: '#FFFFFF' }}>
               <Typography variant="h6">Watch Our Tutorial Video</Typography>
               <Typography variant="body2" color="textSecondary">
                 Learn how to use Scorelect with our step-by-step video guide.
@@ -180,10 +186,11 @@ const BballCollect = () => {
             <CardMedia
               component="img"
               height="140"
-              image="/images/scorelect_documentation.jpg" // Ensure this image exists
+              src="/images/scorelect_documentation.jpg" // Ensure this image exists
               alt="Documentation"
+              loading="lazy"
             />
-            <CardContent>
+            <CardContent style={{ backgroundColor: '#FFFFFF' }}>
               <Typography variant="h6">Read Our Detailed Documentation</Typography>
               <Typography variant="body2" color="textSecondary">
                 Dive deeper into Scorelect’s features with our comprehensive documentation.

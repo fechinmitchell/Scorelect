@@ -1,0 +1,144 @@
+/* src/GaaLineup.css */
+
+.gaa-lineup-container {
+    max-width: 900px;
+    margin: 0 auto;
+    font-family: Arial, sans-serif;
+  }
+  
+  .gaa-lineup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .team-name-input {
+    font-size: 32px;
+    font-weight: bold;
+    border: none;
+    border-bottom: 1px solid #ccc;
+    text-align: center;
+    flex-grow: 1;
+    margin-right: 20px;
+  }
+  
+  .team-name-input:focus {
+    outline: none;
+  }
+  
+  .crest-upload {
+    position: relative;
+  }
+  
+  .team-crest {
+    width: 100px;
+    height: 100px;
+    object-fit: contain;
+    cursor: pointer;
+  }
+  
+  .gaa-pitch {
+    position: relative;
+    width: 100%;
+    padding-top: 150%; /* For aspect ratio */
+    background-image: url('./images/gaa-pitch.png'); /* Replace with your pitch image */
+    background-size: cover;
+    background-position: center;
+    margin-top: 20px;
+  }
+  
+  .position-row {
+    position: absolute;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+  
+  .player {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 5px;
+  }
+  
+  .player-number,
+  .player-name,
+  .player-notes {
+    width: 80px;
+    text-align: center;
+    margin-bottom: 2px;
+  }
+  
+  .player-number {
+    font-weight: bold;
+  }
+  
+  .goalkeeper {
+    top: 85%;
+  }
+  
+  .full-backs {
+    top: 70%;
+  }
+  
+  .half-backs {
+    top: 60%;
+  }
+  
+  .midfielders {
+    top: 48%;
+  }
+  
+  .half-forwards {
+    top: 36%;
+  }
+  
+  .full-forwards {
+    top: 22%;
+  }
+  
+  .manager-and-subs {
+    margin-top: 20px;
+  }
+  
+  .manager-section {
+    margin-bottom: 10px;
+  }
+  
+  .manager-name-input {
+    width: 100%;
+    padding: 5px;
+  }
+  
+  .subs-section {
+    margin-top: 10px;
+  }
+  
+  .substitute {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+  }
+  
+  .sub-number {
+    width: 40px;
+    text-align: center;
+    margin-right: 5px;
+  }
+  
+  .sub-name {
+    flex: 1;
+    padding: 5px;
+  }
+  
+  .download-button-container {
+    text-align: center;
+    margin-top: 20px;
+  }
+  
+  .download-button-container button {
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  

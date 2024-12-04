@@ -24,9 +24,14 @@ import step3SoccerCollect from '../images/step3_soccer_collect.png';
 import step4SoccerCollect from '../images/step4_soccer_collect.png';
 import step5SoccerCollect from '../images/step5_soccer_collect.png';
 
+// If using react-lazy-load-image-component
+// import { LazyLoadImage } from 'react-lazy-load-image-component';
+// import 'react-lazy-load-image-component/src/effects/blur.css';
+
 // Styled Components
 const BlogContainer = styled(Container)`
   padding: 40px 0;
+  background-color: #333333; /* Example grey background */
 
   @media (max-width: 850px) {
     padding: 20px 0;
@@ -36,9 +41,12 @@ const BlogContainer = styled(Container)`
 const StepContent = styled(Box)`
   margin-top: 20px;
   margin-bottom: 20px;
+  color: #FFFFFF; /* White text */
 `;
 
-const Image = styled.img`
+const Image = styled.img.attrs(props => ({
+  loading: 'lazy', // Enable lazy loading
+}))`
   width: 100%;
   max-height: 400px;
   object-fit: cover;
@@ -50,38 +58,39 @@ const TipsBox = styled(Box)`
   padding: 20px;
   border-left: 5px solid #17a2b8;
   margin: 20px 0;
+  color: #FFFFFF; /* White text */
 `;
 
 const SoccerCollect = () => {
   const steps = [
     {
-      label: '1. Select the Sport',
+      label: '1. Collect Team Stats',
       description:
-        'Go to the sidebar and select the sport in the drop down.',
+        'Seamlessly collect and manage your team\'s sports data to maximize performance.',
       image: step1SoccerCollect,
     },
     {
-      label: '2. Click on Action Button then on the Pitch to Record Event',
+      label: '2. Create Training Sessions',
       description:
-        'Navigate to the side of the page where its says instructions and click a button below like goal or assist. Then click on the location on the pitch where the event happened.',
+        'Design and organize effective training sessions tailored to your team\'s needs.',
       image: step2SoccerCollect,
     },
     {
-      label: '3. Fill in Action Details',
+      label: '3. Find Team Stats',
       description:
-        'A popup will appear once you click the pitch. Enter the details on the popup and click submit to record the action.',
+        'Access comprehensive team statistics to inform your coaching strategies.',
       image: step3SoccerCollect,
     },
     {
-      label: '4. Wrong Action/Location?',
+      label: '4. Scout and Analyze Players',
       description:
-        'Just go down to the button Undo Last Marker to remove the last marker placed.',
+        'Evaluate and analyze player performance to make informed scouting decisions.',
       image: step4SoccerCollect,
     },
     {
       label: '5. Export Raw Data',
       description:
-        'After the game, export the data for further. There is a limit of one per user per day for free users and unlimited for Scorelect Pro users.',
+        'After the game, export the data for further analysis. Free users have a limit of one export per day, while Scorelect Pro users enjoy unlimited exports.',
       image: step5SoccerCollect,
     },
   ];
@@ -94,17 +103,17 @@ const SoccerCollect = () => {
 
   return (
     <BlogContainer maxWidth="lg">
-      <Typography variant="h3" gutterBottom>
+      <Typography variant="h3" gutterBottom style={{ color: '#FFFFFF' }}>
         Collecting Soccer Statistics on Amateur Games
       </Typography>
-      <Typography variant="h6" color="#5E2E8F" paragraph>
+      <Typography variant="h6" color="#FFFFFF" paragraph>
         A comprehensive guide to collecting and analyzing soccer stats for non-professional & professional games using Scorelect.
       </Typography>
 
-      <Typography variant="h5" gutterBottom>
+      <Typography variant="h5" gutterBottom style={{ color: '#FFFFFF' }}>
         Why Collect Soccer Statistics?
       </Typography>
-      <Typography variant="body1" paragraph>
+      <Typography variant="body1" paragraph style={{ color: '#FFFFFF' }}>
         Collecting Soccer statistics is essential for understanding team performance, identifying strengths and weaknesses, and making informed decisions to improve gameplay. Whether you're a coach, player, or enthusiast, having access to accurate data can significantly enhance your strategic approach to the game.
       </Typography>
 
@@ -118,36 +127,43 @@ const SoccerCollect = () => {
                 </Typography>
               </StepLabel>
               <StepContent>
-                <Typography variant="body1">{step.description}</Typography>
+                <Typography variant="body1" style={{ color: '#FFFFFF' }}>{step.description}</Typography>
                 <Image src={step.image} alt={`Step ${index + 1}`} />
+                {/* If using LazyLoadImage
+                <LazyLoadImage
+                  src={step.image}
+                  alt={`Step ${index + 1}`}
+                  effect="blur"
+                />
+                */}
               </StepContent>
             </Step>
           ))}
         </Stepper>
       </Box>
 
-      <Typography variant="h5" gutterBottom>
+      <Typography variant="h5" gutterBottom style={{ color: '#FFFFFF' }}>
         Best Practices for Data Collection
       </Typography>
-      <Typography variant="body1" paragraph>
+      <Typography variant="body1" paragraph style={{ color: '#FFFFFF' }}>
         To ensure the effectiveness of your data collection process, consider the following best practices:
       </Typography>
       <TipsBox>
-        <Typography variant="body1" component="ul" sx={{ color: '#FFFFFF' }}>
+        <Typography variant="body1" component="ul">
           {tips.map((tip, index) => (
             <li key={index}>{tip}</li>
           ))}
         </Typography>
       </TipsBox>
 
-      <Typography variant="h5" gutterBottom>
+      <Typography variant="h5" gutterBottom style={{ color: '#FFFFFF' }}>
         Getting Started with Scorelect
       </Typography>
-      <Typography variant="body1" paragraph>
+      <Typography variant="body1" paragraph style={{ color: '#FFFFFF' }}>
         Scorelect offers an intuitive platform for collecting and analyzing Soccer statistics. Follow the steps outlined above to get started and make the most out of your data.
       </Typography>
 
-      <Typography variant="h5" gutterBottom>
+      <Typography variant="h5" gutterBottom style={{ color: '#FFFFFF' }}>
         Additional Resources
       </Typography>
       <Grid container spacing={2}>
@@ -156,10 +172,11 @@ const SoccerCollect = () => {
             <CardMedia
               component="img"
               height="140"
-              image="https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg" // Replace VIDEO_ID with actual ID
+              src="https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg" // Replace VIDEO_ID with actual ID
               alt="Tutorial Video"
+              loading="lazy" // Enable lazy loading
             />
-            <CardContent>
+            <CardContent style={{ backgroundColor: '#FFFFFF' }}>
               <Typography variant="h6">Watch Our Tutorial Video</Typography>
               <Typography variant="body2" color="textSecondary">
                 Learn how to use Scorelect with our step-by-step video guide.
@@ -183,10 +200,11 @@ const SoccerCollect = () => {
             <CardMedia
               component="img"
               height="140"
-              image="/images/scorelect_documentation.jpg" // Ensure this image exists
+              src="/images/scorelect_documentation.jpg" // Ensure this image exists
               alt="Documentation"
+              loading="lazy" // Enable lazy loading
             />
-            <CardContent>
+            <CardContent style={{ backgroundColor: '#FFFFFF' }}>
               <Typography variant="h6">Read Our Detailed Documentation</Typography>
               <Typography variant="body2" color="textSecondary">
                 Dive deeper into Scorelect’s features with our comprehensive documentation.

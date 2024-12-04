@@ -1656,7 +1656,9 @@ def update_dataset():
 
 @app.route('/sitemap.xml')
 def sitemap():
-    return send_from_directory('static', 'sitemap.xml')
+    response = make_response(send_from_directory('static', 'sitemap.xml'))
+    response.headers['Content-Type'] = 'application/xml'
+    return response
 
 # Run the Flask app on port 5001 in debug mode
 if __name__ == '__main__':

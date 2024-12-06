@@ -1,5 +1,4 @@
 // src/GaaLineup.js
-
 import React, { useState } from 'react';
 import './GaaLineup.css';
 import defaultCrest from './images/gaa-logo.png'; // Ensure you have a default GAA logo image
@@ -14,7 +13,7 @@ const GaaLineup = () => {
     number: i + 1,
     name: '',
     position: i + 1,
-    notes: '', // Additional line under player name
+    notes: '',
   }));
   const [players, setPlayers] = useState(initialPlayers);
 
@@ -75,9 +74,10 @@ const GaaLineup = () => {
         </div>
       </div>
 
+      {/* Main pitch area now acts as a vertical stack */}
       <div className="gaa-pitch">
-        {/* Goalkeeper */}
-        <div className="position-row goalkeeper">
+        {/* Goalkeeper (position 1) */}
+        <div className="position-row">
           {players.slice(0, 1).map((player, index) => (
             <div className="player" key={player.position}>
               <input
@@ -111,15 +111,15 @@ const GaaLineup = () => {
         </div>
 
         {/* Full Backs (positions 2-4) */}
-        <div className="position-row full-backs">
-          {players.slice(1, 4).map((player, index) => (
+        <div className="position-row">
+          {players.slice(1, 4).map((player, i) => (
             <div className="player" key={player.position}>
               <input
                 type="text"
                 className="player-number"
                 value={player.number}
                 onChange={(e) =>
-                  handlePlayerChange(index + 1, 'number', e.target.value)
+                  handlePlayerChange(i + 1, 'number', e.target.value)
                 }
               />
               <input
@@ -128,7 +128,7 @@ const GaaLineup = () => {
                 placeholder="Player Name"
                 value={player.name}
                 onChange={(e) =>
-                  handlePlayerChange(index + 1, 'name', e.target.value)
+                  handlePlayerChange(i + 1, 'name', e.target.value)
                 }
               />
               <input
@@ -137,7 +137,7 @@ const GaaLineup = () => {
                 placeholder="Notes"
                 value={player.notes}
                 onChange={(e) =>
-                  handlePlayerChange(index + 1, 'notes', e.target.value)
+                  handlePlayerChange(i + 1, 'notes', e.target.value)
                 }
               />
             </div>
@@ -145,15 +145,15 @@ const GaaLineup = () => {
         </div>
 
         {/* Half Backs (positions 5-7) */}
-        <div className="position-row half-backs">
-          {players.slice(4, 7).map((player, index) => (
+        <div className="position-row">
+          {players.slice(4, 7).map((player, i) => (
             <div className="player" key={player.position}>
               <input
                 type="text"
                 className="player-number"
                 value={player.number}
                 onChange={(e) =>
-                  handlePlayerChange(index + 4, 'number', e.target.value)
+                  handlePlayerChange(i + 4, 'number', e.target.value)
                 }
               />
               <input
@@ -162,7 +162,7 @@ const GaaLineup = () => {
                 placeholder="Player Name"
                 value={player.name}
                 onChange={(e) =>
-                  handlePlayerChange(index + 4, 'name', e.target.value)
+                  handlePlayerChange(i + 4, 'name', e.target.value)
                 }
               />
               <input
@@ -171,7 +171,7 @@ const GaaLineup = () => {
                 placeholder="Notes"
                 value={player.notes}
                 onChange={(e) =>
-                  handlePlayerChange(index + 4, 'notes', e.target.value)
+                  handlePlayerChange(i + 4, 'notes', e.target.value)
                 }
               />
             </div>
@@ -179,15 +179,15 @@ const GaaLineup = () => {
         </div>
 
         {/* Midfielders (positions 8-9) */}
-        <div className="position-row midfielders">
-          {players.slice(7, 9).map((player, index) => (
+        <div className="position-row">
+          {players.slice(7, 9).map((player, i) => (
             <div className="player" key={player.position}>
               <input
                 type="text"
                 className="player-number"
                 value={player.number}
                 onChange={(e) =>
-                  handlePlayerChange(index + 7, 'number', e.target.value)
+                  handlePlayerChange(i + 7, 'number', e.target.value)
                 }
               />
               <input
@@ -196,7 +196,7 @@ const GaaLineup = () => {
                 placeholder="Player Name"
                 value={player.name}
                 onChange={(e) =>
-                  handlePlayerChange(index + 7, 'name', e.target.value)
+                  handlePlayerChange(i + 7, 'name', e.target.value)
                 }
               />
               <input
@@ -205,7 +205,7 @@ const GaaLineup = () => {
                 placeholder="Notes"
                 value={player.notes}
                 onChange={(e) =>
-                  handlePlayerChange(index + 7, 'notes', e.target.value)
+                  handlePlayerChange(i + 7, 'notes', e.target.value)
                 }
               />
             </div>
@@ -213,15 +213,15 @@ const GaaLineup = () => {
         </div>
 
         {/* Half Forwards (positions 10-12) */}
-        <div className="position-row half-forwards">
-          {players.slice(9, 12).map((player, index) => (
+        <div className="position-row">
+          {players.slice(9, 12).map((player, i) => (
             <div className="player" key={player.position}>
               <input
                 type="text"
                 className="player-number"
                 value={player.number}
                 onChange={(e) =>
-                  handlePlayerChange(index + 9, 'number', e.target.value)
+                  handlePlayerChange(i + 9, 'number', e.target.value)
                 }
               />
               <input
@@ -230,7 +230,7 @@ const GaaLineup = () => {
                 placeholder="Player Name"
                 value={player.name}
                 onChange={(e) =>
-                  handlePlayerChange(index + 9, 'name', e.target.value)
+                  handlePlayerChange(i + 9, 'name', e.target.value)
                 }
               />
               <input
@@ -239,7 +239,7 @@ const GaaLineup = () => {
                 placeholder="Notes"
                 value={player.notes}
                 onChange={(e) =>
-                  handlePlayerChange(index + 9, 'notes', e.target.value)
+                  handlePlayerChange(i + 9, 'notes', e.target.value)
                 }
               />
             </div>
@@ -247,15 +247,15 @@ const GaaLineup = () => {
         </div>
 
         {/* Full Forwards (positions 13-15) */}
-        <div className="position-row full-forwards">
-          {players.slice(12, 15).map((player, index) => (
+        <div className="position-row">
+          {players.slice(12, 15).map((player, i) => (
             <div className="player" key={player.position}>
               <input
                 type="text"
                 className="player-number"
                 value={player.number}
                 onChange={(e) =>
-                  handlePlayerChange(index + 12, 'number', e.target.value)
+                  handlePlayerChange(i + 12, 'number', e.target.value)
                 }
               />
               <input
@@ -264,7 +264,7 @@ const GaaLineup = () => {
                 placeholder="Player Name"
                 value={player.name}
                 onChange={(e) =>
-                  handlePlayerChange(index + 12, 'name', e.target.value)
+                  handlePlayerChange(i + 12, 'name', e.target.value)
                 }
               />
               <input
@@ -273,7 +273,7 @@ const GaaLineup = () => {
                 placeholder="Notes"
                 value={player.notes}
                 onChange={(e) =>
-                  handlePlayerChange(index + 12, 'notes', e.target.value)
+                  handlePlayerChange(i + 12, 'notes', e.target.value)
                 }
               />
             </div>
@@ -281,7 +281,6 @@ const GaaLineup = () => {
         </div>
       </div>
 
-      {/* Manager and Substitutes */}
       <div className="manager-and-subs">
         <div className="manager-section">
           <label>Manager:</label>
@@ -318,7 +317,6 @@ const GaaLineup = () => {
         </div>
       </div>
 
-      {/* Download Button */}
       <div className="download-button-container">
         <button onClick={handleDownload}>Download Lineup</button>
       </div>

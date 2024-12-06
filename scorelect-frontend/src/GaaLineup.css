@@ -37,64 +37,45 @@
     cursor: pointer;
   }
   
+  /* GAA pitch container now uses a vertical stack layout with spacing */
   .gaa-pitch {
     position: relative;
     width: 100%;
-    padding-top: 150%; /* For aspect ratio */
+    /* Some padding to space top and bottom, adjust as needed */
+    padding: 50px 0; 
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 100px; /* 100px vertical spacing between each row of players */
+    
+    /* Example background: Replace with your pitch image if desired */
     background-image: url('./images/gaa-pitch.png'); /* Replace with your pitch image */
     background-size: cover;
     background-position: center;
     margin-top: 20px;
   }
   
+  /* Each position row is centered horizontally, with players spaced apart */
   .position-row {
-    position: absolute;
-    width: 100%;
     display: flex;
     justify-content: center;
+    gap: 100px; /* Space between players in the same row horizontally */
   }
   
+  /* Player styling */
   .player {
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin: 5px;
   }
   
+  /* Increase widths and spacing as needed */
   .player-number,
   .player-name,
   .player-notes {
-    width: 80px;
+    width: 100px;
     text-align: center;
-    margin-bottom: 2px;
-  }
-  
-  .player-number {
-    font-weight: bold;
-  }
-  
-  .goalkeeper {
-    top: 85%;
-  }
-  
-  .full-backs {
-    top: 70%;
-  }
-  
-  .half-backs {
-    top: 60%;
-  }
-  
-  .midfielders {
-    top: 48%;
-  }
-  
-  .half-forwards {
-    top: 36%;
-  }
-  
-  .full-forwards {
-    top: 22%;
+    margin-bottom: 5px;
   }
   
   .manager-and-subs {
@@ -141,4 +122,6 @@
     font-size: 16px;
     cursor: pointer;
   }
+  
+  
   

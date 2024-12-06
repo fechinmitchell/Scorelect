@@ -86,6 +86,54 @@
     background-color: var(--hover-color);
 }
 
+/* Top Navigation Styles */
+.sessions-nav {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  
+  .sessions-nav-item {
+    position: relative;
+    padding: 10px 20px;
+    margin: 0 5px;
+    background: var(--primary-color);
+    color: var(--text-color);
+    cursor: pointer;
+    border-radius: 20px 20px 0 0; /* Rounded top corners */
+    font-weight: bold;
+    transition: background-color 0.3s;
+  }
+  
+  /* Add a pseudo-element to create a 'pile' effect, like overlapping shapes */
+  .sessions-nav-item::before {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80%;
+    height: 20px;
+    background: var(--primary-color);
+    border-radius: 10px;
+    z-index: -1;
+    opacity: 0.5;
+  }
+  
+  /* Hover effect */
+  .sessions-nav-item:hover {
+    background: var(--hover-color);
+  }
+  
+  /* Active tab styling */
+  .sessions-nav-item.active {
+    background: var(--secondary-color);
+  }
+  .sessions-nav-item.active::before {
+    background: var(--secondary-color);
+  }
+
 /* Pitch Container */
 .pitch-container {
     flex-grow: 1;

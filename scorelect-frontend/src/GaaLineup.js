@@ -1,14 +1,16 @@
 // src/GaaLineup.js
 import React, { useState } from 'react';
 import './GaaLineup.css';
-import defaultCrest from './images/gaa-logo.png'; // Ensure you have a default GAA logo image
+import defaultCrest from './images/gaa-logo.png'; 
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 const GaaLineup = () => {
   const [teamName, setTeamName] = useState('Team Name');
   const [managerName, setManagerName] = useState('');
   const [crest, setCrest] = useState(null);
 
-  // Initialize players 1-15
+  // Players: 15 total
   const initialPlayers = Array.from({ length: 15 }, (_, i) => ({
     number: i + 1,
     name: '',
@@ -17,7 +19,7 @@ const GaaLineup = () => {
   }));
   const [players, setPlayers] = useState(initialPlayers);
 
-  // Initialize substitutes 16-24
+  // Substitutes: 9 total
   const initialSubs = Array.from({ length: 9 }, (_, i) => ({
     number: i + 16,
     name: '',
@@ -43,8 +45,20 @@ const GaaLineup = () => {
     }
   };
 
-  const handleDownload = () => {
-    // Implement download functionality here (e.g., using html2canvas)
+  const handleDownload = async () => {
+    const container = document.querySelector('.gaa-lineup-container');
+    if (!container) return;
+
+    // Reduced scale for html2canvas
+    const canvas = await html2canvas(container, { scale: 2 });
+    const imgData = canvas.toDataURL('image/png');
+
+    const pdf = new jsPDF('l', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    pdf.save(`${teamName.replace(/\s+/g, '_')}_lineup.pdf`);
   };
 
   return (
@@ -74,246 +88,244 @@ const GaaLineup = () => {
         </div>
       </div>
 
-      {/* Main pitch area now acts as a vertical stack */}
-      <div className="gaa-pitch">
-        {/* Goalkeeper (position 1) */}
-        <div className="position-row">
-          {players.slice(0, 1).map((player, index) => (
-            <div className="player" key={player.position}>
-              <input
-                type="text"
-                className="player-number"
-                value={player.number}
-                onChange={(e) =>
-                  handlePlayerChange(index, 'number', e.target.value)
-                }
-              />
-              <input
-                type="text"
-                className="player-name"
-                placeholder="Player Name"
-                value={player.name}
-                onChange={(e) =>
-                  handlePlayerChange(index, 'name', e.target.value)
-                }
-              />
-              <input
-                type="text"
-                className="player-notes"
-                placeholder="Notes"
-                value={player.notes}
-                onChange={(e) =>
-                  handlePlayerChange(index, 'notes', e.target.value)
-                }
-              />
-            </div>
-          ))}
+      <div className="gaa-content">
+        <div className="gaa-pitch">
+          {/* One row per line: goalkeeper, full backs, half backs, midfield, half forwards, full forwards */}
+          <div className="position-row">
+            {players.slice(0, 1).map((player, index) => (
+              <div className="player" key={player.position}>
+                <input
+                  type="text"
+                  className="player-number"
+                  value={player.number}
+                  onChange={(e) =>
+                    handlePlayerChange(index, 'number', e.target.value)
+                  }
+                />
+                <input
+                  type="text"
+                  className="player-name"
+                  placeholder="Name"
+                  value={player.name}
+                  onChange={(e) =>
+                    handlePlayerChange(index, 'name', e.target.value)
+                  }
+                />
+                <input
+                  type="text"
+                  className="player-notes"
+                  placeholder="Notes"
+                  value={player.notes}
+                  onChange={(e) =>
+                    handlePlayerChange(index, 'notes', e.target.value)
+                  }
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="position-row">
+            {players.slice(1, 4).map((player, i) => (
+              <div className="player" key={player.position}>
+                <input
+                  type="text"
+                  className="player-number"
+                  value={player.number}
+                  onChange={(e) =>
+                    handlePlayerChange(i + 1, 'number', e.target.value)
+                  }
+                />
+                <input
+                  type="text"
+                  className="player-name"
+                  placeholder="Name"
+                  value={player.name}
+                  onChange={(e) =>
+                    handlePlayerChange(i + 1, 'name', e.target.value)
+                  }
+                />
+                <input
+                  type="text"
+                  className="player-notes"
+                  placeholder="Notes"
+                  value={player.notes}
+                  onChange={(e) =>
+                    handlePlayerChange(i + 1, 'notes', e.target.value)
+                  }
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="position-row">
+            {players.slice(4, 7).map((player, i) => (
+              <div className="player" key={player.position}>
+                <input
+                  type="text"
+                  className="player-number"
+                  value={player.number}
+                  onChange={(e) =>
+                    handlePlayerChange(i + 4, 'number', e.target.value)
+                  }
+                />
+                <input
+                  type="text"
+                  className="player-name"
+                  placeholder="Name"
+                  value={player.name}
+                  onChange={(e) =>
+                    handlePlayerChange(i + 4, 'name', e.target.value)
+                  }
+                />
+                <input
+                  type="text"
+                  className="player-notes"
+                  placeholder="Notes"
+                  value={player.notes}
+                  onChange={(e) =>
+                    handlePlayerChange(i + 4, 'notes', e.target.value)
+                  }
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="position-row">
+            {players.slice(7, 9).map((player, i) => (
+              <div className="player" key={player.position}>
+                <input
+                  type="text"
+                  className="player-number"
+                  value={player.number}
+                  onChange={(e) =>
+                    handlePlayerChange(i + 7, 'number', e.target.value)
+                  }
+                />
+                <input
+                  type="text"
+                  className="player-name"
+                  placeholder="Name"
+                  value={player.name}
+                  onChange={(e) =>
+                    handlePlayerChange(i + 7, 'name', e.target.value)
+                  }
+                />
+                <input
+                  type="text"
+                  className="player-notes"
+                  placeholder="Notes"
+                  value={player.notes}
+                  onChange={(e) =>
+                    handlePlayerChange(i + 7, 'notes', e.target.value)
+                  }
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="position-row">
+            {players.slice(9, 12).map((player, i) => (
+              <div className="player" key={player.position}>
+                <input
+                  type="text"
+                  className="player-number"
+                  value={player.number}
+                  onChange={(e) =>
+                    handlePlayerChange(i + 9, 'number', e.target.value)
+                  }
+                />
+                <input
+                  type="text"
+                  className="player-name"
+                  placeholder="Name"
+                  value={player.name}
+                  onChange={(e) =>
+                    handlePlayerChange(i + 9, 'name', e.target.value)
+                  }
+                />
+                <input
+                  type="text"
+                  className="player-notes"
+                  placeholder="Notes"
+                  value={player.notes}
+                  onChange={(e) =>
+                    handlePlayerChange(i + 9, 'notes', e.target.value)
+                  }
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="position-row">
+            {players.slice(12, 15).map((player, i) => (
+              <div className="player" key={player.position}>
+                <input
+                  type="text"
+                  className="player-number"
+                  value={player.number}
+                  onChange={(e) =>
+                    handlePlayerChange(i + 12, 'number', e.target.value)
+                  }
+                />
+                <input
+                  type="text"
+                  className="player-name"
+                  placeholder="Name"
+                  value={player.name}
+                  onChange={(e) =>
+                    handlePlayerChange(i + 12, 'name', e.target.value)
+                  }
+                />
+                <input
+                  type="text"
+                  className="player-notes"
+                  placeholder="Notes"
+                  value={player.notes}
+                  onChange={(e) =>
+                    handlePlayerChange(i + 12, 'notes', e.target.value)
+                  }
+                />
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Full Backs (positions 2-4) */}
-        <div className="position-row">
-          {players.slice(1, 4).map((player, i) => (
-            <div className="player" key={player.position}>
-              <input
-                type="text"
-                className="player-number"
-                value={player.number}
-                onChange={(e) =>
-                  handlePlayerChange(i + 1, 'number', e.target.value)
-                }
-              />
-              <input
-                type="text"
-                className="player-name"
-                placeholder="Player Name"
-                value={player.name}
-                onChange={(e) =>
-                  handlePlayerChange(i + 1, 'name', e.target.value)
-                }
-              />
-              <input
-                type="text"
-                className="player-notes"
-                placeholder="Notes"
-                value={player.notes}
-                onChange={(e) =>
-                  handlePlayerChange(i + 1, 'notes', e.target.value)
-                }
-              />
+        <div className="manager-and-subs">
+          <div className="manager-section">
+            <label>Manager:</label>
+            <input
+              type="text"
+              className="manager-name-input"
+              value={managerName}
+              onChange={(e) => setManagerName(e.target.value)}
+            />
+          </div>
+          <div className="subs-section">
+            <h3>Subs</h3>
+            <div className="subs-grid">
+              {subs.map((sub, index) => (
+                <div className="substitute" key={sub.position}>
+                  <input
+                    type="text"
+                    className="sub-number"
+                    value={sub.number}
+                    onChange={(e) =>
+                      handleSubChange(index, 'number', e.target.value)
+                    }
+                  />
+                  <input
+                    type="text"
+                    className="sub-name"
+                    placeholder="Name"
+                    value={sub.name}
+                    onChange={(e) =>
+                      handleSubChange(index, 'name', e.target.value)
+                    }
+                  />
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-
-        {/* Half Backs (positions 5-7) */}
-        <div className="position-row">
-          {players.slice(4, 7).map((player, i) => (
-            <div className="player" key={player.position}>
-              <input
-                type="text"
-                className="player-number"
-                value={player.number}
-                onChange={(e) =>
-                  handlePlayerChange(i + 4, 'number', e.target.value)
-                }
-              />
-              <input
-                type="text"
-                className="player-name"
-                placeholder="Player Name"
-                value={player.name}
-                onChange={(e) =>
-                  handlePlayerChange(i + 4, 'name', e.target.value)
-                }
-              />
-              <input
-                type="text"
-                className="player-notes"
-                placeholder="Notes"
-                value={player.notes}
-                onChange={(e) =>
-                  handlePlayerChange(i + 4, 'notes', e.target.value)
-                }
-              />
-            </div>
-          ))}
-        </div>
-
-        {/* Midfielders (positions 8-9) */}
-        <div className="position-row">
-          {players.slice(7, 9).map((player, i) => (
-            <div className="player" key={player.position}>
-              <input
-                type="text"
-                className="player-number"
-                value={player.number}
-                onChange={(e) =>
-                  handlePlayerChange(i + 7, 'number', e.target.value)
-                }
-              />
-              <input
-                type="text"
-                className="player-name"
-                placeholder="Player Name"
-                value={player.name}
-                onChange={(e) =>
-                  handlePlayerChange(i + 7, 'name', e.target.value)
-                }
-              />
-              <input
-                type="text"
-                className="player-notes"
-                placeholder="Notes"
-                value={player.notes}
-                onChange={(e) =>
-                  handlePlayerChange(i + 7, 'notes', e.target.value)
-                }
-              />
-            </div>
-          ))}
-        </div>
-
-        {/* Half Forwards (positions 10-12) */}
-        <div className="position-row">
-          {players.slice(9, 12).map((player, i) => (
-            <div className="player" key={player.position}>
-              <input
-                type="text"
-                className="player-number"
-                value={player.number}
-                onChange={(e) =>
-                  handlePlayerChange(i + 9, 'number', e.target.value)
-                }
-              />
-              <input
-                type="text"
-                className="player-name"
-                placeholder="Player Name"
-                value={player.name}
-                onChange={(e) =>
-                  handlePlayerChange(i + 9, 'name', e.target.value)
-                }
-              />
-              <input
-                type="text"
-                className="player-notes"
-                placeholder="Notes"
-                value={player.notes}
-                onChange={(e) =>
-                  handlePlayerChange(i + 9, 'notes', e.target.value)
-                }
-              />
-            </div>
-          ))}
-        </div>
-
-        {/* Full Forwards (positions 13-15) */}
-        <div className="position-row">
-          {players.slice(12, 15).map((player, i) => (
-            <div className="player" key={player.position}>
-              <input
-                type="text"
-                className="player-number"
-                value={player.number}
-                onChange={(e) =>
-                  handlePlayerChange(i + 12, 'number', e.target.value)
-                }
-              />
-              <input
-                type="text"
-                className="player-name"
-                placeholder="Player Name"
-                value={player.name}
-                onChange={(e) =>
-                  handlePlayerChange(i + 12, 'name', e.target.value)
-                }
-              />
-              <input
-                type="text"
-                className="player-notes"
-                placeholder="Notes"
-                value={player.notes}
-                onChange={(e) =>
-                  handlePlayerChange(i + 12, 'notes', e.target.value)
-                }
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="manager-and-subs">
-        <div className="manager-section">
-          <label>Manager:</label>
-          <input
-            type="text"
-            className="manager-name-input"
-            value={managerName}
-            onChange={(e) => setManagerName(e.target.value)}
-          />
-        </div>
-        <div className="subs-section">
-          <h3>Substitutes</h3>
-          {subs.map((sub, index) => (
-            <div className="substitute" key={sub.position}>
-              <input
-                type="text"
-                className="sub-number"
-                value={sub.number}
-                onChange={(e) =>
-                  handleSubChange(index, 'number', e.target.value)
-                }
-              />
-              <input
-                type="text"
-                className="sub-name"
-                placeholder="Substitute Name"
-                value={sub.name}
-                onChange={(e) =>
-                  handleSubChange(index, 'name', e.target.value)
-                }
-              />
-            </div>
-          ))}
+          </div>
         </div>
       </div>
 

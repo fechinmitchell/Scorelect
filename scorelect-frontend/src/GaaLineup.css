@@ -1,25 +1,32 @@
 /* src/GaaLineup.css */
 
 .gaa-lineup-container {
-    max-width: 900px;
+    max-width: 700px; /* Reduced from 1000px */
     margin: 0 auto;
     font-family: Arial, sans-serif;
+    background: #fff;
+    padding: 5px; /* Reduced from 10px */
+    border: 1px solid #ddd;
+    box-sizing: border-box;
   }
   
+  /* Header Section */
   .gaa-lineup-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-bottom: 5px; /* Reduced spacing */
   }
   
   .team-name-input {
-    font-size: 32px;
+    font-size: 14px; /* Reduced from 20px */
     font-weight: bold;
     border: none;
     border-bottom: 1px solid #ccc;
     text-align: center;
-    flex-grow: 1;
-    margin-right: 20px;
+    width: 180px; /* Reduced from 250px */
+    padding: 3px 0;
+    margin-right: 10px; /* Reduced */
   }
   
   .team-name-input:focus {
@@ -31,97 +38,144 @@
   }
   
   .team-crest {
-    width: 100px;
-    height: 100px;
+    width: 40px; /* Reduced from 60px */
+    height: 40px;
     object-fit: contain;
     cursor: pointer;
   }
   
-  /* GAA pitch container now uses a vertical stack layout with spacing */
-  .gaa-pitch {
-    position: relative;
-    width: 100%;
-    /* Some padding to space top and bottom, adjust as needed */
-    padding: 50px 0; 
+  /* Main Content Layout */
+  .gaa-content {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 100px; /* 100px vertical spacing between each row of players */
-    
-    /* Example background: Replace with your pitch image if desired */
-    background-image: url('./images/gaa-pitch.png'); /* Replace with your pitch image */
-    background-size: cover;
-    background-position: center;
-    margin-top: 20px;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px; /* Reduced from 15px */
   }
   
-  /* Each position row is centered horizontally, with players spaced apart */
+  /* Pitch styling */
+  .gaa-pitch {
+    flex: 2;
+    position: relative;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 5px; /* Reduced from 10px */
+    padding: 5px; /* Reduced from 10px */
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background: #f8f8f8;
+    background-image: url('./images/gaa-pitch.png');
+    background-size: cover;
+    background-position: center;
+  }
+  
   .position-row {
     display: flex;
     justify-content: center;
-    gap: 100px; /* Space between players in the same row horizontally */
+    gap: 10px; /* Reduced from 20px */
+    flex-wrap: wrap;
   }
   
-  /* Player styling */
   .player {
     display: flex;
     flex-direction: column;
     align-items: center;
   }
   
-  /* Increase widths and spacing as needed */
+  /* Smaller input fields */
   .player-number,
   .player-name,
   .player-notes {
-    width: 100px;
+    width: 50px; /* Reduced from 70px */
+    font-size: 10px; /* Reduced from 12px */
     text-align: center;
-    margin-bottom: 5px;
+    margin-bottom: 2px;
+    padding: 2px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    background: #fff;
   }
   
+  /* Manager & Subs Section */
   .manager-and-subs {
-    margin-top: 20px;
+    flex: 1;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 5px; /* Reduced from 10px */
+    background: #f8f8f8;
+    font-size: 10px; /* Reduced from 12px */
+    box-sizing: border-box;
   }
   
   .manager-section {
-    margin-bottom: 10px;
+    margin-bottom: 5px; /* Reduced */
+  }
+  
+  .manager-section label {
+    font-weight: bold;
+    display: inline-block;
+    margin-bottom: 3px; /* Reduced */
   }
   
   .manager-name-input {
     width: 100%;
-    padding: 5px;
+    font-size: 10px;
+    padding: 2px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
   }
   
-  .subs-section {
-    margin-top: 10px;
+  .subs-section h3 {
+    margin-bottom: 3px; /* Reduced */
+    font-size: 12px; /* Reduced from 16px */
+    border-bottom: 1px solid #333;
+    display: inline-block;
   }
   
   .substitute {
     display: flex;
     align-items: center;
-    margin-bottom: 5px;
+    margin-bottom: 3px; /* Reduced */
   }
   
   .sub-number {
-    width: 40px;
+    width: 30px; /* Reduced from 40px */
     text-align: center;
-    margin-right: 5px;
+    margin-right: 3px; /* Reduced */
+    padding: 2px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    background: #fff;
+    font-size: 10px;
   }
   
   .sub-name {
     flex: 1;
-    padding: 5px;
+    padding: 2px;
+    font-size: 10px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    background: #fff;
   }
   
+  /* Download Button */
   .download-button-container {
     text-align: center;
-    margin-top: 20px;
+    margin-top: 5px; /* Reduced */
   }
   
   .download-button-container button {
-    padding: 10px 20px;
-    font-size: 16px;
+    background: #28a745;
+    color: #fff;
+    padding: 3px 10px; /* Reduced */
+    font-size: 10px; /* Reduced */
+    border: none;
     cursor: pointer;
+    border-radius: 3px;
   }
   
-  
+  .download-button-container button:hover {
+    background: #218838;
+  }
   

@@ -83,7 +83,7 @@
   
   .player-slot,
   .player-locked-slot {
-    position: relative;
+    position: absolute;
     display: inline-flex;
     flex-direction: column;
     align-items: center;
@@ -96,6 +96,7 @@
   
   .sub-slot {
     height: 50px; 
+    position: static;
   }
   
   /* Action buttons */
@@ -293,3 +294,18 @@
   @keyframes spin {
     to { transform: rotate(360deg); }
   }
+  
+  /* Make subs name and notes text boxes wider */
+  .sub-slot .player-name,
+  .sub-slot .player-notes,
+  .sub-slot .player-number {
+    width: 100px; /* 100px more than the 50px for pitch players */
+  }
+
+  .sub-slot .action-buttons {
+    right: -30px;
+    top: 45%;  /* moves X and ✓ slightly to the right for subs */
+    left: auto;
+  }
+  
+  

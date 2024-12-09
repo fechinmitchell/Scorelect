@@ -100,7 +100,7 @@
   }
   
   /* Action buttons */
-  .action-buttons {
+  .player-action-buttons {
     position: absolute;
     top: 53%;
     right: 0px;
@@ -302,9 +302,9 @@
     width: 100px; /* 100px more than the 50px for pitch players */
   }
 
-  .sub-slot .action-buttons {
+  .sub-slot .player-action-buttons {
     right: -30px;
-    top: 45%;  /* moves X and ✓ slightly to the right for subs */
+    top: 40%;  /* moves X and ✓ slightly to the right for subs */
     left: auto;
   }
   

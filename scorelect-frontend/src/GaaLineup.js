@@ -17,7 +17,7 @@ const GaaLineup = () => {
   // Positioning parameters
   const centerX = 150; // Adjusted centerX for more central placement
   const startY = 5;
-  const ySpacing = 90;
+  const ySpacing = 80;
   // Increased xSpacing for more horizontal space between players
   const xSpacing = 120;
 
@@ -225,7 +225,7 @@ const GaaLineup = () => {
           : {})}
       >
         {isPlayer && <div className="drag-handle" title="Drag to move player">⋮⋮</div>}
-        <div className="action-buttons">
+        <div className="player-action-buttons">
           {xButton}
           {checkButton}
         </div>

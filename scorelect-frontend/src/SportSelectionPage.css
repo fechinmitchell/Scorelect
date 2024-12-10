@@ -23,6 +23,59 @@
   z-index: 1;
 }
 
+/* Loading Overlay */
+.loading-overlay {
+  position: fixed; /* Fixed to cover the entire viewport */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(80, 19, 135, 0.9); /* Semi-transparent background matching #501387 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 5; /* Higher than other elements */
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* Fade-Out Animation */
+.loading-overlay.fade-out {
+  animation: fadeOut 0.5s forwards;
+}
+
+/* Loading Spinner */
+.loading-spinner {
+  width: 80px;
+  height: 80px;
+  border: 8px solid #d3d3d3; /* Light grey */
+  border-top: 8px solid #ffffff; /* White */
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Loading Logo */
+.loading-logo {
+  width: 100px;
+  height: auto;
+  margin-bottom: 20px;
+  animation: fadeIn 1s ease-out;
+}
+
+/* Loading Text */
+.loading-text {
+  margin-top: 20px;
+  font-size: 1.5rem;
+  color: #ffffff;
+  font-weight: bold;
+  text-shadow:
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000;
+  animation: pulse 1.5s infinite;
+}
+
 /* Hero content (logo, tagline, subtext) */
 .hero-content {
   position: absolute;
@@ -42,22 +95,8 @@
   animation: fadeIn 2s ease-out;
 }
 
-
-.hero-tagline {
-  font-size: 2.5rem;
-  margin-bottom: 1rem;
-  font-weight: bold;
-  letter-spacing: 1px;
-  text-shadow:
-    -1px -1px 0 #000,
-    1px -1px 0 #000,
-    -1px 1px 0 #000,
-    1px 1px 0 #000;
-  animation: fadeInUp 1.5s ease-out;
-}
-
 .hero-subtext {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   margin-bottom: 2rem;
   text-shadow:
     -0.5px -0.5px 0 #000,
@@ -86,7 +125,7 @@
   font-size: 1.2rem;
   background: rgba(255, 255, 255, 0.85);
   color: #000;
-  border: 4px solid rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.7);
   border-radius: 8px;
   cursor: pointer;
   font-weight: bold;
@@ -122,6 +161,11 @@
   to { opacity: 1; }
 }
 
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -138,10 +182,15 @@
   to { transform: rotate(360deg); }
 }
 
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
 /* Responsive Adjustments */
 @media (max-width: 600px) {
   .hero-logo {
-    width: 200px; /* Reduced size for smaller screens */
+    width: 250px; /* Adjusted size for smaller screens */
   }
 
   .hero-tagline {
@@ -159,5 +208,19 @@
 
   .sports-grid button {
     font-size: 1.1rem;
+  }
+
+  .loading-spinner {
+    width: 60px;
+    height: 60px;
+    border-width: 6px;
+  }
+
+  .loading-text {
+    font-size: 1.2rem;
+  }
+
+  .loading-logo {
+    width: 80px;
   }
 }

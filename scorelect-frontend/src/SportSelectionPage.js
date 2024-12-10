@@ -1,8 +1,10 @@
+// src/SportSelectionPage.js
+
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import './SportSelectionPage.css'; // Style the page
-import logo from './assests/logo/scorelectlogo.jpeg';
-
+import './SportSelectionPage.css'; // Import the updated CSS
+import logo from './images/scorelectlogo-2.png';
+import backgroundImage from './images/scorlect-bg-2.jpg'; // Import the background image
 
 const SportSelectionPage = ({ onSportSelect }) => {
   const navigate = useNavigate();
@@ -13,24 +15,35 @@ const SportSelectionPage = ({ onSportSelect }) => {
   };
 
   return (
-    <div className="sport-selection-container">
+    <div
+      className="sport-selection-container"
+      style={{ backgroundImage: `url(${backgroundImage})` }} // Set background image inline
+    >
+      {/* Overlay to ensure readability */}
+      <div className="overlay"></div>
+
       {/* Hero Section */}
-      <div className="hero">
-      <img src={logo} alt="Scorelect Logo" className="logo" />
-        <h1 className="tagline">Elevate Your Game</h1>
-        <p className="subtext">
-          Choose a sport to start analyzing your tactics like never before.
+      <div className="hero-content">
+        <img src={logo} alt="Scorelect Logo" className="hero-logo" />
+        <p className="hero-subtext">
+          Select a sport to begin your professional analysis.
         </p>
       </div>
 
-      {/* Sport Selection Buttons */}
-      <div className="sport-buttons">
-        <button onClick={() => handleSportSelection('Soccer')}>Soccer</button>
-        <button onClick={() => handleSportSelection('GAA')}>GAA</button>
-        <button onClick={() => handleSportSelection('AmericanFootball')}>
+      {/* Sport Selection Grid */}
+      <div className="sports-grid">
+        <button onClick={() => handleSportSelection('Soccer')} aria-label="Select Soccer">
+          Soccer
+        </button>
+        <button onClick={() => handleSportSelection('GAA')} aria-label="Select GAA">
+          GAA
+        </button>
+        <button onClick={() => handleSportSelection('AmericanFootball')} aria-label="Select American Football">
           American Football
         </button>
-        <button onClick={() => handleSportSelection('Basketball')}>Basketball</button>
+        <button onClick={() => handleSportSelection('Basketball')} aria-label="Select Basketball">
+          Basketball
+        </button>
       </div>
 
       {/* Footer */}

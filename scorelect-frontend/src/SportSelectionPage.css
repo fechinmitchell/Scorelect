@@ -1,112 +1,163 @@
-/* SportSelectionPage.css */
+/* src/SportSelectionPage.css */
+
 .sport-selection-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    background: url('./images/texture-bg-2.jpg') no-repeat center center/cover;
-    color: #501387;
-    text-align: center;
-    font-family: 'Roboto', sans-serif;
-    position: relative;
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  font-family: 'Roboto', sans-serif;
+  color: #fff;
+  overflow: hidden;
+}
+
+/* Semi-transparent overlay to ensure readability */
+.overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.4); /* Adjust opacity as needed */
+  z-index: 1;
+}
+
+/* Hero content (logo, tagline, subtext) */
+.hero-content {
+  position: absolute;
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  padding: 20px;
+  z-index: 2;
+  animation: fadeIn 1s ease-out;
+}
+
+.hero-logo {
+  width: 575px;
+  height: auto;
+  margin-bottom: 20px;
+  animation: fadeIn 2s ease-out;
+}
+
+
+.hero-tagline {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  font-weight: bold;
+  letter-spacing: 1px;
+  text-shadow:
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000;
+  animation: fadeInUp 1.5s ease-out;
+}
+
+.hero-subtext {
+  font-size: 1.2rem;
+  margin-bottom: 2rem;
+  text-shadow:
+    -0.5px -0.5px 0 #000,
+    0.5px -0.5px 0 #000,
+    -0.5px 0.5px 0 #000,
+    0.5px 0.5px 0 #000;
+  animation: fadeInUp 2s ease-out;
+}
+
+/* Sports selection 2x2 grid */
+.sports-grid {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -10%);
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-gap: 20px;
+  width: 300px;
+  z-index: 2;
+  /* Removed animation to prevent movement on load */
+}
+
+.sports-grid button {
+  padding: 15px 20px;
+  font-size: 1.2rem;
+  background: rgba(255, 255, 255, 0.85);
+  color: #000;
+  border: 4px solid rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  transition: 
+    transform 0.3s ease, 
+    background 0.3s ease, 
+    color 0.3s ease, 
+    border-color 0.3s ease;
+}
+
+.sports-grid button:hover {
+  background: #fff;
+  transform: translateY(-5px);
+  color: #501387; /* Brand color on hover */
+  border-color: #501387; /* Add border color change */
+}
+
+/* Footer */
+.footer {
+  position: absolute;
+  bottom: 20px;
+  width: 100%;
+  text-align: center;
+  font-size: 0.9rem;
+  color: #ccc;
+  z-index: 2;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
   }
-  
-  /* Overlay for better contrast */
-  .sport-selection-container::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.1); /* Adjust opacity for contrast */
-    z-index: 1;
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
-  
-  .hero {
-    z-index: 2;
-    position: relative;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive Adjustments */
+@media (max-width: 600px) {
+  .hero-logo {
+    width: 200px; /* Reduced size for smaller screens */
   }
-  
-  .logo {
-    max-width: 800px;
-    margin-bottom: 20px;
-    animation: fadeIn 2s ease-out;
+
+  .hero-tagline {
+    font-size: 2rem;
   }
-  
-/* Tagline with white border */
-.tagline {
-    font-size: 2.5rem;
-    font-weight: bold;
-    margin-bottom: 1rem;
-    animation: fadeIn 2s ease-out 0.5s;
-    text-shadow: 
-      -1px -1px 0 white, /* Top left */
-      1px -1px 0 white,  /* Top right */
-      -1px 1px 0 white,  /* Bottom left */
-      1px 1px 0 white;   /* Bottom right */
+
+  .hero-subtext {
+    font-size: 1rem;
   }
-  
-  /* Subtext with white border */
-  .subtext {
-    font-size: 1.2rem;
-    margin-bottom: 2rem;
-    animation: fadeIn 2s ease-out 1s;
-    text-shadow: 
-      -0.5px -0.5px 0 white, 
-      0.5px -0.5px 0 white, 
-      -0.5px 0.5px 0 white, 
-      0.5px 0.5px 0 white;
+
+  .sports-grid {
+    width: 80%;
+    grid-gap: 15px;
   }
-  
-  
-  /* Buttons */
-  .sport-buttons {
-    z-index: 2;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 20px;
+
+  .sports-grid button {
+    font-size: 1.1rem;
   }
-  
-  .sport-buttons button {
-    padding: 15px 30px;
-    font-size: 1.5rem;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    background: white;
-    color: #501387;
-    font-weight: bold;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-    transition: transform 0.3s ease, background 0.3s ease;
-  }
-  
-  .sport-buttons button:hover {
-    background: #501387;
-    color: white;
-    transform: translateY(-5px);
-  }
-  
-  /* Footer */
-  .footer {
-    z-index: 2;
-    position: absolute;
-    bottom: 20px;
-    font-size: 0.9rem;
-    color: rgba(255, 255, 255, 0.7);
-  }
-  
-  /* Animations */
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  
+}

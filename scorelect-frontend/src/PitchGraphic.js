@@ -109,11 +109,11 @@ const PitchGraphic = () => {
     const [isInitialSetupModalOpen, setIsInitialSetupModalOpen] = useState(true); // Open on mount
     const [isNewGameSetupModalOpen, setIsNewGameSetupModalOpen] = useState(false);
 
-
     const handleStartNewGame = () => {
       setIsInitialSetupModalOpen(false);
-      setIsNewGameSetupModalOpen(true);
+      setIsSetupTeamModalOpen(true); // directly open the black setup team modal
     };
+    
     
     const handleSkipSetup = () => {
       setIsInitialSetupModalOpen(false);

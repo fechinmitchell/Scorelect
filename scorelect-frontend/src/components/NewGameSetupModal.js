@@ -54,60 +54,62 @@ const NewGameSetupModal = ({
         <h2 className="modal-title">New Game Setup</h2>
       </div>
 
-      <div className="modal-section">
-        <h3>Team 1</h3>
-        <input
-          type="text"
-          value={team1}
-          onChange={(e) => setTeam1(e.target.value)}
-          placeholder="Enter Team 1 Name"
-        />
-        <div className="form-group">
-          <label>Team 1 Main Color:</label>
+      <div className="teams-wrapper">
+        <div className="modal-section">
+          <h3>Team 1</h3>
           <input
-            type="color"
-            value={team1Color.main}
-            onChange={(e) => setTeam1Color({ ...team1Color, main: e.target.value })}
+            type="text"
+            value={team1}
+            onChange={(e) => setTeam1(e.target.value)}
+            placeholder="Enter Team 1 Name"
           />
+          <div className="form-group">
+            <label>Team 1 Main Color:</label>
+            <input
+              type="color"
+              value={team1Color.main}
+              onChange={(e) => setTeam1Color({ ...team1Color, main: e.target.value })}
+            />
+          </div>
+          <div className="form-group">
+            <label>Team 1 Secondary Color:</label>
+            <input
+              type="color"
+              value={team1Color.secondary}
+              onChange={(e) => setTeam1Color({ ...team1Color, secondary: e.target.value })}
+            />
+          </div>
+          <h4>Team 1 Players</h4>
+          <PlayerInput players={team1Players} setPlayers={setTeam1Players} teamNumber={1} />
         </div>
-        <div className="form-group">
-          <label>Team 1 Secondary Color:</label>
-          <input
-            type="color"
-            value={team1Color.secondary}
-            onChange={(e) => setTeam1Color({ ...team1Color, secondary: e.target.value })}
-          />
-        </div>
-        <h4>Team 1 Players</h4>
-        <PlayerInput players={team1Players} setPlayers={setTeam1Players} teamNumber={1} />
-      </div>
 
-      <div className="modal-section">
-        <h3>Team 2</h3>
-        <input
-          type="text"
-          value={team2}
-          onChange={(e) => setTeam2(e.target.value)}
-          placeholder="Enter Team 2 Name"
-        />
-        <div className="form-group">
-          <label>Team 2 Main Color:</label>
+        <div className="modal-section">
+          <h3>Team 2</h3>
           <input
-            type="color"
-            value={team2Color.main}
-            onChange={(e) => setTeam2Color({ ...team2Color, main: e.target.value })}
+            type="text"
+            value={team2}
+            onChange={(e) => setTeam2(e.target.value)}
+            placeholder="Enter Team 2 Name"
           />
+          <div className="form-group">
+            <label>Team 2 Main Color:</label>
+            <input
+              type="color"
+              value={team2Color.main}
+              onChange={(e) => setTeam2Color({ ...team2Color, main: e.target.value })}
+            />
+          </div>
+          <div className="form-group">
+            <label>Team 2 Secondary Color:</label>
+            <input
+              type="color"
+              value={team2Color.secondary}
+              onChange={(e) => setTeam2Color({ ...team2Color, secondary: e.target.value })}
+            />
+          </div>
+          <h4>Team 2 Players</h4>
+          <PlayerInput players={team2Players} setPlayers={setTeam2Players} teamNumber={2} />
         </div>
-        <div className="form-group">
-          <label>Team 2 Secondary Color:</label>
-          <input
-            type="color"
-            value={team2Color.secondary}
-            onChange={(e) => setTeam2Color({ ...team2Color, secondary: e.target.value })}
-          />
-        </div>
-        <h4>Team 2 Players</h4>
-        <PlayerInput players={team2Players} setPlayers={setTeam2Players} teamNumber={2} />
       </div>
 
       <div className="modal-section">

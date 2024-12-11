@@ -15,25 +15,50 @@
     background: #fff;
     padding: 20px;
     border-radius: 5px;
-    max-width: 600px;
+    /* Adjust max-width and max-height for better fit */
+    max-width: 90%;
     width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
     box-sizing: border-box;
   }
   
-  /* Existing styles remain below here */
+  /* Teams side by side */
+  .teams-wrapper {
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  
+  /* For smaller screens, stack teams vertically */
+  @media (max-width: 768px) {
+    .teams-wrapper {
+      flex-direction: column;
+    }
+  }
+  
+  /* General styling */
   .modal-header {
     margin-bottom: 20px;
+    text-align: center;
   }
+  
   .modal-title {
     color: #333;
+    font-size: 1.5rem;
   }
+  
   .modal-section {
     margin-bottom: 20px;
+    flex: 1 1 45%; /* allows for side-by-side fitting */
   }
+  
   .modal-section h3 {
     color: #333;
     margin-bottom: 10px;
   }
+  
   .modal-section input[type="text"],
   .modal-section input[type="date"],
   .modal-section input[type="color"],
@@ -44,15 +69,18 @@
     border: 1px solid #ccc;
     border-radius: 5px;
   }
+  
   .player-input {
     display: flex;
     align-items: center;
     margin-bottom: 10px;
   }
+  
   .player-input input[type="text"] {
     flex: 3;
     margin-right: 10px;
   }
+  
   .player-input button {
     flex: 1;
     padding: 10px;
@@ -63,9 +91,11 @@
     cursor: pointer;
     transition: background 0.3s;
   }
+  
   .player-input button:hover {
     background-color: #c82333;
   }
+  
   .add-player-button {
     padding: 10px 20px;
     background-color: #28a745;
@@ -75,13 +105,18 @@
     cursor: pointer;
     transition: background 0.3s;
   }
+  
   .add-player-button:hover {
     background-color: #218838;
   }
+  
+  /* Buttons at bottom */
   .modal-buttons {
     display: flex;
     justify-content: space-between;
+    margin-top: 20px;
   }
+  
   .submit-button {
     padding: 10px 20px;
     background-color: #007bff;
@@ -91,9 +126,11 @@
     cursor: pointer;
     transition: background 0.3s;
   }
+  
   .submit-button:hover {
     background-color: #0056b3;
   }
+  
   .cancel-button {
     padding: 10px 20px;
     background-color: #6c757d;
@@ -103,7 +140,27 @@
     cursor: pointer;
     transition: background 0.3s;
   }
+  
   .cancel-button:hover {
     background-color: #5a6268;
+  }
+  
+  /* Additional responsive considerations for smaller screens */
+  @media (max-width: 600px) {
+    .modal-title {
+      font-size: 1.2rem;
+    }
+  
+    .submit-button, .cancel-button {
+      padding: 8px 16px;
+      font-size: 0.9rem;
+    }
+  
+    .modal-section input[type="text"],
+    .modal-section input[type="date"],
+    .modal-section input[type="color"],
+    .modal-section select {
+      padding: 8px;
+    }
   }
   

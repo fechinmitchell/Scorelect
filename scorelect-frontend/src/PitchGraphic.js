@@ -14,6 +14,8 @@ import AggregatedData from './AggregatedData';
 import { onSnapshot } from 'firebase/firestore'; // Add this import
 import { GameContext } from './GameContext'; // Import GameContext
 import { Rnd } from 'react-rnd';
+import InitialSetupModal from './components/InitialSetupModal';
+import NewGameSetupModal from './components/NewGameSetupModal';
 
 
 const PitchGraphic = () => {
@@ -39,7 +41,7 @@ const PitchGraphic = () => {
     playerName: '',
     player: '',
     position: 'forward',
-    pressure: 'Yes',
+    pressure: '0',
     foot: 'Right',
     minute: '',
     from: null,
@@ -103,6 +105,37 @@ const PitchGraphic = () => {
     const [datasetsFetchError, setDatasetsFetchError] = useState(false);
     const [matchDate, setMatchDate] = useState('');
     const [duplicateDatasetError, setDuplicateDatasetError] = useState(false); // For duplicate dataset handling
+
+    const [isInitialSetupModalOpen, setIsInitialSetupModalOpen] = useState(true); // Open on mount
+    const [isNewGameSetupModalOpen, setIsNewGameSetupModalOpen] = useState(false);
+
+
+    const handleStartNewGame = () => {
+      setIsInitialSetupModalOpen(false);
+      setIsNewGameSetupModalOpen(true);
+    };
+    
+    const handleSkipSetup = () => {
+      setIsInitialSetupModalOpen(false);
+      // Proceed to main functionality, e.g., initializing default teams or leaving them empty
+    };
+    
+    const handleNewGameSetupSubmit = (gameSetupData) => {
+      // Validate or process gameSetupData if necessary
+      // You can set the team names, colors, match date, and players here
+      // For example:
+      setTeam1(gameSetupData.team1);
+      setTeam2(gameSetupData.team2);
+      setTeam1Color(gameSetupData.team1Color);
+      setTeam2Color(gameSetupData.team2Color);
+      setMatchDate(gameSetupData.matchDate);
+      setTeam1Players(gameSetupData.team1Players);
+      setTeam2Players(gameSetupData.team2Players);
+    
+      // Optionally, open the Setup Teams Modal if needed
+      setIsNewGameSetupModalOpen(false);
+      setIsSetupTeamModalOpen(true);
+    };
 
     // Fetch datasets when the modal opens
     useEffect(() => {
@@ -446,7 +479,7 @@ const handleSaveToDataset = async () => {
     'Sligo', 'Tipperary', 'Tyrone', 'Waterford', 'Westmeath', 'Wexford', 'Wicklow'
   ];
 
-  const pressures = ['Yes', 'No'];
+  const pressures = ['0', '1', '2'];
   const feet = ['Right', 'Left', 'Hand'];
 
   const [actionCodes, setActionCodes] = useState(initialActionCodes);
@@ -1188,8 +1221,27 @@ const handleSaveToDataset = async () => {
   };
 
   return (
-  <div class="scroll-container">
+  <div className="scroll-container">
     <div className="pitch-container">
+
+      {/* Initial Setup Modal */}
+      <InitialSetupModal
+        isOpen={isInitialSetupModalOpen}
+        onStartNewGame={handleStartNewGame}
+        onSkipSetup={handleSkipSetup}
+      />
+
+      {/* New Game Setup Modal */}
+      <NewGameSetupModal
+        isOpen={isNewGameSetupModalOpen}
+        onClose={() => setIsNewGameSetupModalOpen(false)}
+        onSubmit={handleNewGameSetupSubmit}
+        initialTeam1={team1}
+        initialTeam2={team2}
+        initialTeam1Color={team1Color}
+        initialTeam2Color={team2Color}
+      />
+
     {showSetupTeamsContainer && (
       <div className="setup-team-container">
         <h3>Setup Team</h3>
@@ -1262,7 +1314,7 @@ const handleSaveToDataset = async () => {
 
     <div className="pitch-and-data-container">
       <div className="stage-container"></div>
-          <Stage
+      <Stage
             width={canvasSize.width}
             height={canvasSize.height}
             onClick={handleClick}
@@ -1273,7 +1325,14 @@ const handleSaveToDataset = async () => {
             scaleY={zoomLevel}
             preventDefault={false}
             style={{
-              pointerEvents: openDialog || openLineDialog || isContextMenuOpen ? 'none' : 'auto',
+              pointerEvents:
+                openDialog ||
+                openLineDialog ||
+                isContextMenuOpen ||
+                isInitialSetupModalOpen ||
+                isNewGameSetupModalOpen
+                  ? 'none'
+                  : 'auto',
             }}
           >
           {renderGAAPitch()}

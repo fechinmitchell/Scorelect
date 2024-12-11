@@ -1,0 +1,109 @@
+.new-game-setup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+  }
+  
+  .new-game-setup-modal {
+    background: #fff;
+    padding: 20px;
+    border-radius: 5px;
+    max-width: 600px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  /* Existing styles remain below here */
+  .modal-header {
+    margin-bottom: 20px;
+  }
+  .modal-title {
+    color: #333;
+  }
+  .modal-section {
+    margin-bottom: 20px;
+  }
+  .modal-section h3 {
+    color: #333;
+    margin-bottom: 10px;
+  }
+  .modal-section input[type="text"],
+  .modal-section input[type="date"],
+  .modal-section input[type="color"],
+  .modal-section select {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+  }
+  .player-input {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .player-input input[type="text"] {
+    flex: 3;
+    margin-right: 10px;
+  }
+  .player-input button {
+    flex: 1;
+    padding: 10px;
+    background-color: #dc3545;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.3s;
+  }
+  .player-input button:hover {
+    background-color: #c82333;
+  }
+  .add-player-button {
+    padding: 10px 20px;
+    background-color: #28a745;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.3s;
+  }
+  .add-player-button:hover {
+    background-color: #218838;
+  }
+  .modal-buttons {
+    display: flex;
+    justify-content: space-between;
+  }
+  .submit-button {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.3s;
+  }
+  .submit-button:hover {
+    background-color: #0056b3;
+  }
+  .cancel-button {
+    padding: 10px 20px;
+    background-color: #6c757d;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.3s;
+  }
+  .cancel-button:hover {
+    background-color: #5a6268;
+  }
+  

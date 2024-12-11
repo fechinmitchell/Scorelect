@@ -31,7 +31,7 @@ const Sessions = ({ selectedSport, onSportChange }) => {
   }, [selectedSport]);
 
   // Define canvas size
-  const [canvasSize, setCanvasSize] = useState({ width: 1000, height: 531 });
+  const [canvasSize, setCanvasSize] = useState({ width: 960, height: 480 });
 
   // Define colors
   const pitchColor = '#006400';       

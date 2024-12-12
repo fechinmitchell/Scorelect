@@ -51,15 +51,15 @@ const DropzoneContainer = styled.div`
   background: ${(props) => {
     switch (props.selectedSport) {
       case 'Soccer':
-        return 'linear-gradient(135deg, #c7c3ca, #b486df)'; // Light blue gradient
+        return 'linear-gradient(135deg, #c7c3ca, #b486df)';
       case 'GAA':
-        return 'linear-gradient(135deg, #c7c3ca, #b486df)'; // Light pink gradient
+        return 'linear-gradient(135deg, #c7c3ca, #b486df)';
       case 'Basketball':
-        return 'linear-gradient(135deg, #c7c3ca, #b486df)'; // Light green gradient
+        return 'linear-gradient(135deg, #c7c3ca, #b486df)';
       case 'AmericanFootball':
-        return 'linear-gradient(135deg, #c7c3ca, #b486df)'; // Light yellow gradient
+        return 'linear-gradient(135deg, #c7c3ca, #b486df)';
       default:
-        return 'linear-gradient(135deg, #c7c3ca, #b486df)'; // Light gray gradient
+        return 'linear-gradient(135deg, #c7c3ca, #b486df)';
     }
   }};
   transition: background 0.3s, opacity 0.3s;
@@ -130,19 +130,25 @@ const UploadedFileText = styled.p`
   margin-top: 10px;
 `;
 
-const Analysis = ({ onSportSelect }) => {
-  const [selectedSport, setSelectedSport] = useState(null);
+const Analysis = ({ onSportChange, selectedSport }) => {
+  // State for selectedSport managed internally but synced with prop
+  const [currentSport, setCurrentSport] = useState(selectedSport || null);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [parsedData, setParsedData] = useState(null); // Store parsed JSON data
   const [datasetType, setDatasetType] = useState(null); // 'aggregated' or 'single'
   const navigate = useNavigate();
   const { currentUser, userData, loading } = useAuth(); // Get currentUser, userData, and loading from context
 
+  // Update currentSport if selectedSport prop changes
+  useEffect(() => {
+    setCurrentSport(selectedSport);
+  }, [selectedSport]);
+
   // Handle Sport Button Click
   const handleSportClick = (sport) => {
-    setSelectedSport(sport);
-    if (onSportSelect) {
-      onSportSelect(sport);
+    setCurrentSport(sport);
+    if (onSportChange) {
+      onSportChange(sport);
     }
   };
 
@@ -212,7 +218,7 @@ const Analysis = ({ onSportSelect }) => {
       return;
     }
 
-    if (!selectedSport) {
+    if (!currentSport) {
       Swal.fire({
         title: 'No Sport Selected',
         text: 'Please select a sport before continuing.',
@@ -234,13 +240,13 @@ const Analysis = ({ onSportSelect }) => {
 
     // Navigate to the filter page with the uploaded file and selected sport
     navigate('/analysis/filter', {
-      state: { file: uploadedFile, sport: selectedSport },
+      state: { file: uploadedFile, sport: currentSport },
     });
   };
 
   // Handle Reset Button Click
   const handleReset = () => {
-    setSelectedSport(null);
+    setCurrentSport(selectedSport || null);
     setUploadedFile(null);
     setParsedData(null);
     setDatasetType(null);
@@ -265,11 +271,10 @@ const Analysis = ({ onSportSelect }) => {
   // Check if user is logged in and if they are 'paid' user
   useEffect(() => {
     if (loading) {
-      // Still loading user data, do nothing
-      return;
+      return; // Still loading user data
     }
     if (!currentUser) {
-      // User not authenticated, redirect to sign-in page
+      // User not authenticated
       Swal.fire({
         title: 'Authentication Required',
         text: 'Please sign in to access this page.',
@@ -279,7 +284,7 @@ const Analysis = ({ onSportSelect }) => {
         navigate('/signin');
       });
     } else if (userData && userData.role !== 'paid') {
-      // User is authenticated but not a paid user
+      // User not a paid user
       Swal.fire({
         title: 'Upgrade Required',
         text: 'This feature is available for premium users only. Please upgrade your account.',
@@ -302,7 +307,7 @@ const Analysis = ({ onSportSelect }) => {
     return <div>Loading...</div>;
   }
 
-  // Render the component if the user is authenticated and has a 'paid' role
+  // Render the component if user is authenticated and 'paid'
   return (
     <Container>
       {/* Sport Selection Buttons */}
@@ -310,42 +315,42 @@ const Analysis = ({ onSportSelect }) => {
         <SportButton
           sport="Soccer"
           onClick={handleSportClick}
-          active={selectedSport === 'Soccer'}
+          active={currentSport === 'Soccer'}
         />
         <SportButton
           sport="GAA"
           onClick={handleSportClick}
-          active={selectedSport === 'GAA'}
+          active={currentSport === 'GAA'}
         />
         <SportButton
           sport="AmericanFootball"
           onClick={handleSportClick}
-          active={selectedSport === 'AmericanFootball'}
+          active={currentSport === 'AmericanFootball'}
         />
         <SportButton
           sport="Basketball"
           onClick={handleSportClick}
-          active={selectedSport === 'Basketball'}
+          active={currentSport === 'Basketball'}
         />
       </ButtonRow>
 
       {/* Dropzone */}
-      <DropzoneContainer {...getRootProps()} selectedSport={selectedSport}>
+      <DropzoneContainer {...getRootProps()} selectedSport={currentSport}>
         <input {...getInputProps()} />
         <DropzoneContent>
           {isDragActive ? (
             <p>Drop the dataset here...</p>
-          ) : selectedSport ? (
+          ) : currentSport ? (
             <p>
-              Drag and drop your {selectedSport} dataset here, or click to
+              Drag and drop your {currentSport} dataset here, or click to
               select a file
             </p>
           ) : (
             <p>Click on a Sport and drop a file in to analyze</p>
           )}
-          {!selectedSport && <FaUpload size={50} color="#501387" />}
-          {selectedSport && (
-            <IconWrapper>{getSportIcon(selectedSport)}</IconWrapper>
+          {!currentSport && <FaUpload size={50} color="#501387" />}
+          {currentSport && (
+            <IconWrapper>{getSportIcon(currentSport)}</IconWrapper>
           )}
         </DropzoneContent>
       </DropzoneContainer>
@@ -356,7 +361,7 @@ const Analysis = ({ onSportSelect }) => {
 
       {/* Continue and Reset Buttons */}
       <ContinueButton onClick={handleContinue}>Continue</ContinueButton>
-      {selectedSport && (
+      {currentSport && (
         <ResetButton onClick={handleReset}>Reset Selection</ResetButton>
       )}
     </Container>
@@ -364,7 +369,8 @@ const Analysis = ({ onSportSelect }) => {
 };
 
 Analysis.propTypes = {
-  onSportSelect: PropTypes.func.isRequired,
+  onSportChange: PropTypes.func.isRequired,
+  selectedSport: PropTypes.string,
 };
 
 export default Analysis;

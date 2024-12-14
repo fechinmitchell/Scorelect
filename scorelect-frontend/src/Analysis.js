@@ -24,7 +24,6 @@ const Container = styled.div`
   flex-direction: column;
   align-items: center;
   padding: 20px;
-
   @media (max-width: 850px) {
     width: 100%;
     padding: 10px;
@@ -58,7 +57,6 @@ const SavedDatasetsContainer = styled.div`
   max-width: 90%;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   margin-bottom: 40px;
-
   @media (max-width: 850px) {
     width: 100%;
   }
@@ -89,7 +87,6 @@ const DropzoneContainer = styled.div`
     }
   }};
   transition: background 0.3s, opacity 0.3s;
-
   @media (max-width: 850px) {
     width: 100%;
     height: 300px;
@@ -101,12 +98,10 @@ const DropzoneContent = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-
   & > p {
     margin-top: 20px;
     font-size: 1.2rem;
   }
-
   & > svg {
     margin-top: 10px;
   }
@@ -124,9 +119,8 @@ const ContinueButton = styled.button`
   border-radius: 10px;
   cursor: pointer;
   font-size: 1rem;
-  transition: background 0.3s;
   margin-right: 10px;
-
+  transition: background 0.3s;
   &:hover {
     background-color: #218838;
   }
@@ -140,7 +134,6 @@ const ResetButton = styled.button`
   border-radius: 5px;
   cursor: pointer;
   font-size: 1rem;
-
   &:hover {
     background-color: #c82333;
   }
@@ -185,7 +178,6 @@ const AnalyzeButton = styled.button`
   font-size: 1rem;
   font-weight: bold;
   transition: background 0.3s;
-
   &:hover {
     background: #3a0e66;
   }
@@ -193,13 +185,11 @@ const AnalyzeButton = styled.button`
 
 const Analysis = ({ onSportChange, selectedSport }) => {
   const [currentSport, setCurrentSport] = useState(selectedSport || null);
-  const [uploadedFile, setUploadedFile] = useState(null);
+  const [uploadedFile, setUploadedFile] = useState(null); 
   const [parsedData, setParsedData] = useState(null);
   const [datasetType, setDatasetType] = useState(null);
   const navigate = useNavigate();
   const { currentUser, userData, loading } = useAuth();
-
-  // From SavedGamesContext
   const { datasets, loading: savedLoading, fetchError } = useContext(SavedGamesContext);
 
   const [selectedUserDataset, setSelectedUserDataset] = useState('');
@@ -221,19 +211,21 @@ const Analysis = ({ onSportChange, selectedSport }) => {
     const file = acceptedFiles[0];
     setUploadedFile(file);
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const json = JSON.parse(reader.result);
-        setParsedData(json);
-        determineDatasetType(json);
-        Swal.fire('File Uploaded', `${file.name} has been uploaded and parsed successfully.`, 'success');
-      } catch (error) {
-        console.error('Parsing Error:', error);
-        Swal.fire('Invalid File', 'The uploaded file is not a valid JSON.', 'error');
-      }
-    };
-    reader.readAsText(file);
+    if (file instanceof Blob) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const json = JSON.parse(reader.result);
+          setParsedData(json);
+          determineDatasetType(json);
+          Swal.fire('File Uploaded', `${file.name} has been uploaded and parsed successfully.`, 'success');
+        } catch (error) {
+          console.error('Parsing Error:', error);
+          Swal.fire('Invalid File', 'The uploaded file is not a valid JSON.', 'error');
+        }
+      };
+      reader.readAsText(file);
+    }
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -243,7 +235,7 @@ const Analysis = ({ onSportChange, selectedSport }) => {
   });
 
   const determineDatasetType = (data) => {
-    if (data.games && Array.isArray(data.games)) {
+    if (data && data.games && Array.isArray(data.games)) {
       if (data.games.length > 1) setDatasetType('aggregated');
       else if (data.games.length === 1) setDatasetType('single');
       else setDatasetType(null);
@@ -253,8 +245,8 @@ const Analysis = ({ onSportChange, selectedSport }) => {
   };
 
   const handleContinue = () => {
-    if (!uploadedFile) {
-      Swal.fire('No File Uploaded', 'Please upload your dataset before continuing.', 'warning');
+    if (!uploadedFile && !parsedData) {
+      Swal.fire('No File Uploaded', 'Please upload your dataset or select one of your saved datasets before continuing.', 'warning');
       return;
     }
 
@@ -264,11 +256,18 @@ const Analysis = ({ onSportChange, selectedSport }) => {
     }
 
     if (!parsedData) {
-      Swal.fire('No Data Parsed', 'The uploaded dataset could not be parsed.', 'error');
+      Swal.fire('No Data Parsed', 'Please wait until file is parsed or ensure it is a valid JSON.', 'error');
       return;
     }
 
-    navigate('/analysis/filter', { state: { file: uploadedFile, sport: currentSport } });
+    // If current sport is Soccer, go to soccer-filterpage
+    if (currentSport === 'Soccer') {
+      navigate('/analysis/soccer-filter', { state: { file: parsedData, sport: currentSport } });
+    } else {
+      // For non-soccer sports, show a message or navigate somewhere else
+      Swal.fire('Unsupported Sport', 'Currently, advanced filtering is only available for Soccer.', 'info')
+        .then(() => navigate('/analysis'));
+    }
   };
 
   const handleReset = () => {
@@ -343,7 +342,12 @@ const Analysis = ({ onSportChange, selectedSport }) => {
         dataset: { name: selectedUserDataset },
         games: [game],
       };
-      navigate('/analysis/filter', { state: { file: jsonData, sport: game.sport || currentSport } });
+      if (currentSport === 'Soccer') {
+        navigate('/analysis/soccer-filter', { state: { file: jsonData, sport: currentSport } });
+      } else {
+        Swal.fire('Unsupported Sport', 'Currently, advanced filtering is only available for Soccer.', 'info')
+          .then(() => navigate('/analysis'));
+      }
     } else {
       // Analyze entire dataset
       if (datasetInfo.games.length === 0) {
@@ -354,9 +358,13 @@ const Analysis = ({ onSportChange, selectedSport }) => {
         dataset: { name: selectedUserDataset },
         games: datasetInfo.games,
       };
-      // Use the first game's sport as the dataset sport or fallback to currentSport
       const datasetSport = datasetInfo.games[0].sport || currentSport;
-      navigate('/analysis/filter', { state: { file: jsonData, sport: datasetSport } });
+      if (datasetSport === 'Soccer') {
+        navigate('/analysis/soccer-filter', { state: { file: jsonData, sport: datasetSport } });
+      } else {
+        Swal.fire('Unsupported Sport', 'Currently, advanced filtering is only available for Soccer.', 'info')
+          .then(() => navigate('/analysis'));
+      }
     }
   };
 
@@ -406,13 +414,11 @@ const Analysis = ({ onSportChange, selectedSport }) => {
                   </Select>
 
                   <AnalyzeButtonContainer>
-                    {/* If no game selected, analyze entire dataset */}
                     {!selectedUserGameId && (
                       <AnalyzeButton onClick={() => handleAnalyzeSavedDataset(false)}>
                         Analyze Entire Dataset
                       </AnalyzeButton>
                     )}
-                    {/* If a game is selected, option to analyze just that game */}
                     {selectedUserGameId && (
                       <AnalyzeButton onClick={() => handleAnalyzeSavedDataset(true)}>
                         Analyze Selected Game
@@ -471,4 +477,4 @@ Analysis.propTypes = {
   selectedSport: PropTypes.string,
 };
 
-export default Analysis;
+export default Analysis; 

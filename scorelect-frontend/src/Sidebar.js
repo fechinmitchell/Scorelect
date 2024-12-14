@@ -11,8 +11,8 @@ import {
   FaHome,
   FaSave,
   FaQuestionCircle,
-  FaDatabase,       // Imported FaDatabase
-  FaChartBar,       // Re-imported FaChartBar
+  FaDatabase,
+  FaChartBar,
   FaChalkboardTeacher,
   FaSignOutAlt,
   FaSignInAlt,
@@ -45,7 +45,7 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
     };
   }, []);
 
-  // Function to fetch user data and navigate to profile
+  // Fetch user data and go to profile
   const fetchUserData = async () => {
     const user = auth.currentUser;
     if (user) {
@@ -72,6 +72,7 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
         onNavigate('/profile');
       } catch (error) {
         console.error('Error fetching user data:', error);
+        Swal.fire('Error', 'Could not fetch user data. Please try again later.', 'error');
       } finally {
         setLoading(false);
       }
@@ -85,7 +86,7 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
     if (userRole === 'free') {
       Swal.fire({
         title: 'Upgrade Required',
-        text: 'Access to "Advanced Analysis" is a premium feature. Please upgrade to unlock this functionality.',
+        text: 'Access to "Advanced Analysis" is a premium feature. Please upgrade your account to unlock this functionality.',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'Upgrade Now',
@@ -96,11 +97,15 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
         }
       });
     } else {
-      onNavigate('/analysis');
+      // Only navigate to analysis if the selected sport is supported (Soccer)
+      if (selectedSport === 'Soccer') {
+        onNavigate('/analysis');
+      } else {
+        Swal.fire('Sport Not Supported', 'The advanced analysis dashboard is currently available only for Soccer. Please select "Soccer".', 'info');
+      }
     }
   };
 
-  // Function to handle "Coming Soon" popup for Training
   const handleTrainingClick = () => {
     Swal.fire({
       title: 'Coming Soon!',
@@ -110,7 +115,6 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
     });
   };
 
-  // Function to handle "Coming Soon" popup for Scouting
   const handleScoutingClick = () => {
     Swal.fire({
       title: 'Coming Soon!',
@@ -176,7 +180,7 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
           </li>
           <li className="separator">{!collapsed && 'Analytics'}</li>
           <li>
-            <button onClick={() => onNavigate('/training')}> {/* Updated */}
+            <button onClick={handleTrainingClick}>
               <FaChalkboardTeacher className="icon" size={16} />
               {!collapsed && 'Training'}
             </button>
@@ -197,13 +201,13 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
 
           <li>
             <button onClick={() => onNavigate('/sports-datahub')}>
-              <FaDatabase className="icon" size={16} /> {/* Using FaDatabase */}
+              <FaDatabase className="icon" size={16} />
               {!collapsed && 'Data Hub'}
             </button>
           </li>
           <li>
             <button onClick={handleAnalysisAccess}>
-              <FaChartBar className="icon" size={16} /> {/* FaChartBar used here */}
+              <FaChartBar className="icon" size={16} />
               {!collapsed && 'Analysis'}
             </button>
           </li>

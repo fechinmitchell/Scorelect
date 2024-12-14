@@ -1,4 +1,4 @@
-// src/components/FilterPage.js
+// src/components/SoccerFilterPage.js
 
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -75,10 +75,11 @@ const ContinueButton = styled.button`
   }
 `;
 
-const FilterPage = () => {
+const SoccerFilterPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { file, sport } = location.state || {};
+
   const [data, setData] = useState([]);
   const [teamOptions, setTeamOptions] = useState([]);
   const [actionOptions, setActionOptions] = useState([]);
@@ -92,30 +93,25 @@ const FilterPage = () => {
     teamPerformance: true,
     playsDistribution: true,
   });
-  const [selectedMatch, setSelectedMatch] = useState('all'); // New state for match selection
-  const { currentUser, userData, loading } = useAuth(); // Get currentUser, userData, and loading from context
+  const [selectedMatch, setSelectedMatch] = useState('all'); 
+  const { currentUser, userData, loading } = useAuth();
 
-  // Check if user is logged in and if they are 'paid' user
+  // Check authentication and user role
   useEffect(() => {
-    if (loading) {
-      // Still loading user data, do nothing
-      return;
-    }
+    if (loading) return;
     if (!currentUser) {
-      // User not authenticated, redirect to sign-in page
       Swal.fire({
         title: 'Authentication Required',
-        text: 'Please sign in to access this page.',
+        text: 'Please sign in to access the filtering page.',
         icon: 'warning',
         confirmButtonText: 'Sign In',
-      }).then(() => {
-        navigate('/signin');
-      });
-    } else if (userData && userData.role !== 'paid') {
-      // User is authenticated but not a paid user
+      }).then(() => navigate('/signin'));
+      return;
+    }
+    if (userData && userData.role !== 'paid') {
       Swal.fire({
         title: 'Upgrade Required',
-        text: 'This feature is available for premium users only. Please upgrade your account.',
+        text: 'This feature is available for premium (paid) users only. Please upgrade your account.',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'Upgrade Now',
@@ -134,7 +130,7 @@ const FilterPage = () => {
     if (!file || !sport) {
       Swal.fire({
         title: 'Missing Data',
-        text: 'No dataset found. Please upload a dataset first.',
+        text: 'No dataset or sport information found. Please return to the analysis page and select a dataset and sport.',
         icon: 'error',
         confirmButtonText: 'OK',
       });
@@ -142,55 +138,93 @@ const FilterPage = () => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const content = reader.result;
-      const fileExtension = file.name.split('.').pop().toLowerCase();
+    // Check if sport is Soccer, otherwise return to analysis with message
+    if (sport !== 'Soccer') {
+      Swal.fire({
+        title: 'Unsupported Sport',
+        text: 'The Soccer analysis dashboard is only available for the "Soccer" sport. Please select "Soccer" in the sidebar and try again.',
+        icon: 'info',
+        confirmButtonText: 'OK'
+      }).then(() => navigate('/analysis'));
+      return;
+    }
 
-      if (fileExtension === 'json') {
-        try {
-          const jsonData = JSON.parse(content);
-          if (!jsonData.dataset || !jsonData.games || !Array.isArray(jsonData.games)) {
-            throw new Error('Invalid dataset structure');
+    // Check if file is already a parsed JSON object or a File/Blob
+    if (typeof file === 'object' && file !== null && file.games && Array.isArray(file.games)) {
+      // Already parsed JSON (from saved datasets)
+      setData(file.games);
+      extractFilterOptions(file.games);
+      Swal.fire({
+        title: 'Data Ready',
+        text: 'Your dataset is ready for filtering.',
+        icon: 'success',
+        confirmButtonText: 'OK',
+      });
+    } else if (file instanceof Blob) {
+      // file is from user upload
+      const reader = new FileReader();
+      reader.onload = () => {
+        const content = reader.result;
+        const fileName = file.name || '';
+        const fileExtension = fileName.split('.').pop().toLowerCase();
+
+        if (fileExtension === 'json' || fileName === '') {
+          try {
+            const jsonData = JSON.parse(content);
+            if (!jsonData.dataset || !jsonData.games || !Array.isArray(jsonData.games)) {
+              throw new Error('Invalid dataset structure');
+            }
+            setData(jsonData.games);
+            extractFilterOptions(jsonData.games);
+            Swal.fire({
+              title: 'Data Parsed',
+              text: 'Your JSON dataset has been successfully parsed.',
+              icon: 'success',
+              confirmButtonText: 'OK',
+            });
+          } catch (error) {
+            console.error('JSON Parsing Error:', error);
+            Swal.fire({
+              title: 'Invalid JSON',
+              text: 'The file you uploaded does not have the correct JSON structure. Please ensure it includes a "dataset" and "games" array.',
+              icon: 'error',
+              confirmButtonText: 'OK',
+            });
+            navigate('/analysis');
           }
-          setData(jsonData.games);
-          extractFilterOptions(jsonData.games);
+        } else {
           Swal.fire({
-            title: 'Data Parsed',
-            text: 'Your dataset has been successfully parsed.',
-            icon: 'success',
+            title: 'Unsupported File Format',
+            text: 'Please upload a JSON file containing your soccer dataset.',
+            icon: 'warning',
             confirmButtonText: 'OK',
           });
-        } catch (error) {
-          console.error('JSON Parsing Error:', error);
-          Swal.fire({
-            title: 'Invalid JSON',
-            text: 'Failed to parse JSON file. Ensure it has the correct structure.',
-            icon: 'error',
-            confirmButtonText: 'OK',
-          });
+          navigate('/analysis');
         }
-      } else {
+      };
+
+      reader.onerror = () => {
+        console.error('File Reading Error:', reader.error);
         Swal.fire({
-          title: 'Unsupported Format',
-          text: 'Please upload a JSON file.',
-          icon: 'warning',
+          title: 'File Read Error',
+          text: 'There was an error reading the file you uploaded. Please try again.',
+          icon: 'error',
           confirmButtonText: 'OK',
         });
-      }
-    };
+        navigate('/analysis');
+      };
 
-    reader.onerror = () => {
-      console.error('File Reading Error:', reader.error);
+      reader.readAsText(file);
+    } else {
+      // Not a recognized file format or structure
       Swal.fire({
-        title: 'File Read Error',
-        text: 'An error occurred while reading the file.',
+        title: 'Invalid Input',
+        text: 'The provided dataset input is not recognized. Please go back and select your dataset again.',
         icon: 'error',
         confirmButtonText: 'OK',
       });
-    };
-
-    reader.readAsText(file);
+      navigate('/analysis');
+    }
   }, [file, navigate, sport]);
 
   const extractFilterOptions = (games) => {
@@ -233,7 +267,6 @@ const FilterPage = () => {
     let filteredData;
 
     if (selectedMatch === 'all') {
-      // Analyze all matches
       filteredData = data.filter((game) => {
         const filteredGameData = game.gameData.filter((entry) => {
           const teamMatch = filters.team ? entry.team === filters.team : true;
@@ -244,29 +277,29 @@ const FilterPage = () => {
         return filteredGameData.length > 0;
       });
     } else {
-      // Analyze selected match
       filteredData = data.filter((game) => game.gameName === selectedMatch);
     }
 
-    const heatmapPage = {
-      Soccer: '/analysis/heatmap',
-      GAA: '/analysis/heatmap-gaa',
-      AmericanFootball: '/analysis/heatmap-af',
-      Basketball: '/analysis/heatmap-bball',
-    }[sport] || '/analysis/heatmap';
-
-    navigate(heatmapPage, { state: { data: filteredData, filters, charts, sport } });
+    // Navigate to the Soccer Analysis Dashboard
+    navigate('/analysis/soccer-dashboard', {
+      state: {
+        data: { dataset: { name: 'Custom' }, games: filteredData },
+        filters,
+        charts,
+        sport
+      }
+    });
   };
 
-  // If loading, show a loading message or spinner
   if (loading) {
-    return <div>Loading...</div>;
+    return <div>Loading user and dataset information...</div>;
   }
 
   return (
     <Container>
       <FilterContainer>
-        <h2>Filter Your Data</h2>
+        <h2>Filter Your Soccer Data</h2>
+        <p>Select matches, teams, players, and actions to focus your analysis. Choose which charts to include in your dashboard.</p>
 
         {/* Match Selection */}
         <FilterGroup>
@@ -338,6 +371,7 @@ const FilterPage = () => {
 
         {/* Chart Selection */}
         <FilterGroup>
+          <p><strong>Select Charts to Include:</strong></p>
           <CheckboxGroup>
             <CheckboxLabel>
               <input
@@ -348,7 +382,7 @@ const FilterPage = () => {
               />{' '}
               Heatmap
             </CheckboxLabel>
-            {(sport === 'Soccer' || sport === 'Basketball') && (
+            {sport === 'Soccer' && (
               <CheckboxLabel>
                 <input
                   type="checkbox"
@@ -356,9 +390,27 @@ const FilterPage = () => {
                   checked={selectedCharts.xgChart}
                   onChange={handleChartSelection}
                 />{' '}
-                {sport === 'Soccer' ? 'Expected Goals (XG)' : 'Expected Points (xP)'}
+                Expected Goals (XG)
               </CheckboxLabel>
             )}
+            <CheckboxLabel>
+              <input
+                type="checkbox"
+                name="teamPerformance"
+                checked={selectedCharts.teamPerformance}
+                onChange={handleChartSelection}
+              />{' '}
+              Team Performance Metrics
+            </CheckboxLabel>
+            <CheckboxLabel>
+              <input
+                type="checkbox"
+                name="playsDistribution"
+                checked={selectedCharts.playsDistribution}
+                onChange={handleChartSelection}
+              />{' '}
+              Plays Distribution
+            </CheckboxLabel>
           </CheckboxGroup>
         </FilterGroup>
 
@@ -368,6 +420,6 @@ const FilterPage = () => {
   );
 };
 
-FilterPage.propTypes = {};
+SoccerFilterPage.propTypes = {};
 
-export default FilterPage;
+export default SoccerFilterPage;

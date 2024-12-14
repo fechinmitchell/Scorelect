@@ -19,7 +19,8 @@ import SavedGames from './SavedGames';
 import Success from './Success';
 import Cancel from './Cancel';
 import Analysis from './Analysis';
-import FilterPage from './pages/FilterPage';
+import SoccerFilterPage from './components/SoccerFilterPage';
+import SoccerAnalysisDashboard from './components/SoccerAnalysisDashboard';
 import HeatmapPage from './pages/HeatmapPage';
 import HeatmapGAA from './pages/HeatmapGAA';
 import HeatmapAF from './pages/HeatMapAF';
@@ -245,8 +246,9 @@ const App = () => {
                     />
                   }
                 />
-                <Route path="/analysis/filter" element={<FilterPage />} />
+                <Route path="/analysis/soccer-filter" element={<SoccerFilterPage />} />
                 <Route path="/analysis/heatmap" element={<HeatmapPage />} />
+                <Route path="/analysis/soccer-dashboard" element={<SoccerAnalysisDashboard />} />
                 <Route
                   path="/analysis/heatmap-gaa"
                   element={<HeatmapGAA />}

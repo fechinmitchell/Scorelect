@@ -107,13 +107,10 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
   };
 
   const handleTrainingClick = () => {
-    Swal.fire({
-      title: 'Coming Soon!',
-      text: 'The Training feature is under development and will be available soon.',
-      icon: 'info',
-      confirmButtonText: 'OK',
-    });
+    // Navigate directly to the training page
+    onNavigate('/training');
   };
+  
 
   const handleScoutingClick = () => {
     Swal.fire({

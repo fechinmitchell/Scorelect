@@ -19,8 +19,8 @@ import SavedGames from './SavedGames';
 import Success from './Success';
 import Cancel from './Cancel';
 import Analysis from './Analysis';
-import SoccerFilterPage from './components/SoccerFilterPage';
-import SoccerAnalysisDashboard from './components/SoccerAnalysisDashboard';
+import SoccerFilterPage from './components/SoccerFilterPage'; // Updated import for SoccerFilterPage
+import SoccerAnalysisDashboard from './components/SoccerAnalysisDashboard'; // Dashboard for Soccer
 import HeatmapPage from './pages/HeatmapPage';
 import HeatmapGAA from './pages/HeatmapGAA';
 import HeatmapAF from './pages/HeatMapAF';
@@ -55,7 +55,7 @@ const App = () => {
     return localStorage.getItem('selectedSport') || null;
   });
 
-  // Firebase auth state change listener
+  // Firebase auth state listener
   useEffect(() => {
     const auth = getAuth();
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
@@ -86,25 +86,25 @@ const App = () => {
   }, [selectedSport]);
 
   /**
-   * Loader function to set sport and game data
-   * @param {string} sport - The sport associated with the loaded game
-   * @param {Array} gameData - The coordinates/data of the loaded game
+   * Loader function for game data
+   * @param {string} sport - The sport of the loaded game
+   * @param {Array} gameData - The game data (coords)
    */
   const loadGame = (sport, gameData) => {
     setSelectedSport(sport);
     setLoadedCoords(gameData);
-    navigate('/'); // Navigate to root to render the selected sport's pitch
+    navigate('/'); // Navigate to root to display the selected sport's pitch
   };
 
   const handleSportChange = (sport) => {
     setSelectedSport(sport);
-    setLoadedCoords([]); // Reset loadedCoords to clear markers
-    navigate('/'); // Navigate to root path to display selected sport
+    setLoadedCoords([]);
+    navigate('/');
   };
 
   const handleNavigate = (path) => {
     if (path === '/') {
-      setLoadedCoords([]); // Reset loadedCoords when navigating Home
+      setLoadedCoords([]);
     }
     navigate(path);
   };
@@ -116,18 +116,17 @@ const App = () => {
       setUser(null);
       setUserRole('free');
       toast.success('Successfully logged out');
-      setLoadedCoords([]); // Reset loadedCoords on logout
+      setLoadedCoords([]);
       navigate('/signin');
     } else {
       toast.error('You are not logged in. Please sign in.');
       navigate('/signin');
     }
-    // Clear selectedSport on logout
     setSelectedSport(null);
     localStorage.removeItem('selectedSport');
   };
 
-  // Function to render the selected sport's component
+  // Render the selected sport's pitch
   const renderSelectedSport = () => {
     if (!selectedSport) return <Navigate replace to="/select-sport" />;
     switch (selectedSport) {
@@ -194,7 +193,7 @@ const App = () => {
                 <Route
                   path="/saved-games"
                   element={
-                    <SavedGames userType={userRole} onLoadGame={loadGame} />
+                    <SavedGames userType={userRole} onLoadGame={loadGame} selectedSport={selectedSport} />
                   }
                 />
                 <Route
@@ -243,40 +242,28 @@ const App = () => {
                   element={
                     <Analysis
                       onSportSelect={(sport) => setSelectedSport(sport)}
+                      selectedSport={selectedSport}
                     />
                   }
                 />
+                {/* For Soccer, we navigate to soccer-filter instead of a generic filter */}
                 <Route path="/analysis/soccer-filter" element={<SoccerFilterPage />} />
-                <Route path="/analysis/heatmap" element={<HeatmapPage />} />
+
+                {/* Soccer Analysis Dashboard */}
                 <Route path="/analysis/soccer-dashboard" element={<SoccerAnalysisDashboard />} />
-                <Route
-                  path="/analysis/heatmap-gaa"
-                  element={<HeatmapGAA />}
-                />
-                <Route
-                  path="/analysis/heatmap-af"
-                  element={<HeatmapAF />}
-                />
-                <Route
-                  path="/analysis/heatmap-bball"
-                  element={<HeatmapBBall />}
-                />
-                <Route
-                  path="/blog/basketball-statistics"
-                  element={<BballCollect />}
-                />
-                <Route
-                  path="/blog/soccercollect"
-                  element={<SoccerCollect />}
-                />
-                <Route
-                  path="/blog/gaacollect"
-                  element={<GAACollect />}
-                />
-                <Route
-                  path="/blog/americanfootballCollect"
-                  element={<AmericanFootballCollect />}
-                />
+
+                {/* Heatmap and other pages */}
+                <Route path="/analysis/heatmap" element={<HeatmapPage />} />
+                <Route path="/analysis/heatmap-gaa" element={<HeatmapGAA />} />
+                <Route path="/analysis/heatmap-af" element={<HeatmapAF />} />
+                <Route path="/analysis/heatmap-bball" element={<HeatmapBBall />} />
+
+                {/* Blog routes */}
+                <Route path="/blog/basketball-statistics" element={<BballCollect />} />
+                <Route path="/blog/soccercollect" element={<SoccerCollect />} />
+                <Route path="/blog/gaacollect" element={<GAACollect />} />
+                <Route path="/blog/americanfootballCollect" element={<AmericanFootballCollect />} />
+
                 <Route
                   path="/select-sport"
                   element={

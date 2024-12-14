@@ -5,40 +5,33 @@ import { getAuth } from 'firebase/auth';
 import Swal from 'sweetalert2';
 import './SavedGames.css';
 import { GameContext } from './GameContext';
-import { SavedGamesContext } from '../src/components/SavedGamesContext'; // Import the SavedGamesContext
+import { SavedGamesContext } from './components/SavedGamesContext'; // Ensure the correct relative path
 import PropTypes from 'prop-types';
 import PublishDataset from './PublishDataset';
-import UpdateDataset from './UpdateDataset'; // Import the UpdateDataset component
+import UpdateDataset from './UpdateDataset';
 
 /**
  * SavedGames Component
  *
  * This component displays the user's saved games, allowing them to load, delete, download, publish, or update datasets.
- * It consumes the saved games data from SavedGamesContext.
+ * It consumes the saved games data from SavedGamesContext and filters them by the selected sport.
  *
  * Props:
  * - userType (string): The type of user (e.g., 'free', 'premium').
  * - onLoadGame (function): Function to handle loading a game, provided by the parent component.
+ * - selectedSport (string): The sport currently selected in the sidebar dropdown.
  */
-const SavedGames = ({ userType, onLoadGame }) => {
-  const { datasets, loading, fetchError, fetchSavedGames } = useContext(SavedGamesContext); // Consume context
+const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
+  const { datasets, loading, fetchError, fetchSavedGames } = useContext(SavedGamesContext); 
   const auth = getAuth();
   const { setLoadedCoords } = useContext(GameContext);
   const [selectedDataset, setSelectedDataset] = useState(null);
 
-  // State for PublishDataset modal
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
-
-  // State for UpdateDataset modal
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
 
-  /**
-   * Handles loading a selected game.
-   *
-   * @param {Object} game - The game object to load.
-   */
   const handleLoadGame = async (game) => {
-    console.log('Attempting to load game:', game.gameName, 'for user:', auth.currentUser.uid);
+    console.log('Attempting to load game:', game.gameName, 'for user:', auth.currentUser?.uid);
     if (game.gameData && game.gameData.length > 0) {
       try {
         onLoadGame(game.sport, game.gameData);
@@ -52,12 +45,6 @@ const SavedGames = ({ userType, onLoadGame }) => {
     }
   };
 
-  /**
-   * Handles deleting a single game.
-   *
-   * @param {string} gameId - The unique identifier of the game to delete.
-   * @param {string} gameName - The name of the game to delete (for display purposes).
-   */
   const handleDeleteGame = async (gameId, gameName) => {
     const user = auth.currentUser;
     if (!user) {
@@ -92,7 +79,6 @@ const SavedGames = ({ userType, onLoadGame }) => {
 
           if (response.ok) {
             Swal.fire('Deleted!', `Game "${gameName}" has been deleted.`, 'success');
-            // Optionally, refetch the saved games if needed
             fetchSavedGames();
           } else {
             throw new Error(resultData.error || 'Failed to delete the game.');
@@ -105,11 +91,6 @@ const SavedGames = ({ userType, onLoadGame }) => {
     });
   };
 
-  /**
-   * Handles downloading a dataset as a JSON file.
-   *
-   * @param {string} datasetName - The name of the dataset to download.
-   */
   const handleDownloadDataset = async (datasetName) => {
     try {
       const user = auth.currentUser;
@@ -150,11 +131,6 @@ const SavedGames = ({ userType, onLoadGame }) => {
     }
   };
 
-  /**
-   * Handles deleting an entire dataset along with all its games.
-   *
-   * @param {string} datasetName - The name of the dataset to delete.
-   */
   const handleDeleteDataset = async (datasetName) => {
     const user = auth.currentUser;
     if (!user) {
@@ -189,7 +165,6 @@ const SavedGames = ({ userType, onLoadGame }) => {
 
           if (response.ok) {
             Swal.fire('Deleted!', `Dataset "${datasetName}" and all its games have been deleted.`, 'success');
-            // Optionally, refetch the saved games if needed
             fetchSavedGames();
           } else {
             throw new Error(resultData.error || 'Failed to delete the dataset.');
@@ -202,54 +177,32 @@ const SavedGames = ({ userType, onLoadGame }) => {
     });
   };
 
-  /**
-   * Handles opening the PublishDataset modal for a specific dataset.
-   *
-   * @param {string} datasetName - The name of the dataset to publish.
-   */
   const handlePublishDataset = (datasetName) => {
     setSelectedDataset(datasetName);
     setIsPublishModalOpen(true);
   };
 
-  /**
-   * Closes the PublishDataset modal.
-   */
   const closePublishModal = () => {
     setIsPublishModalOpen(false);
     setSelectedDataset(null);
   };
 
-  /**
-   * Callback function to handle successful dataset publication.
-   */
   const handlePublishSuccess = () => {
     Swal.fire('Published!', `Dataset "${selectedDataset}" has been published successfully.`, 'success');
     closePublishModal();
     fetchSavedGames(); // Refresh the saved games list
   };
 
-  /**
-   * Handles opening the UpdateDataset modal for a specific dataset.
-   *
-   * @param {string} datasetName - The name of the dataset to update.
-   */
   const handleUpdateDataset = (datasetName) => {
     setSelectedDataset(datasetName);
     setIsUpdateModalOpen(true);
   };
 
-  /**
-   * Closes the UpdateDataset modal.
-   */
   const closeUpdateModal = () => {
     setIsUpdateModalOpen(false);
     setSelectedDataset(null);
   };
 
-  /**
-   * Callback function to handle successful dataset update.
-   */
   const handleUpdateSuccess = () => {
     Swal.fire('Updated!', `Dataset "${selectedDataset}" has been updated successfully.`, 'success');
     closeUpdateModal();
@@ -272,9 +225,28 @@ const SavedGames = ({ userType, onLoadGame }) => {
     );
   }
 
+  // Filter datasets by selectedSport
+  const filteredDatasets = Object.entries(datasets).reduce((acc, [datasetName, datasetInfo]) => {
+    const { games, isPublished } = datasetInfo;
+    // Filter games by selectedSport
+    const sportFilteredGames = games.filter((game) => game.sport === selectedSport);
+
+    if (sportFilteredGames.length > 0) {
+      // Only include this dataset if it has games matching the selectedSport
+      acc[datasetName] = {
+        games: sportFilteredGames,
+        isPublished
+      };
+    }
+
+    return acc;
+  }, {});
+
+  const datasetKeys = Object.keys(filteredDatasets);
+
   return (
     <div className="saved-games-container">
-      <h2>Saved Games</h2>
+      <h2>Saved Games for {selectedSport}</h2>
 
       {/* Publish Dataset Modal */}
       {isPublishModalOpen && selectedDataset && (
@@ -304,11 +276,11 @@ const SavedGames = ({ userType, onLoadGame }) => {
         <p>Please upgrade to access saved games.</p>
       ) : (
         <>
-          {Object.keys(datasets).length === 0 ? (
-            <p>No saved games available.</p>
+          {datasetKeys.length === 0 ? (
+            <p>No saved games available for {selectedSport}.</p>
           ) : (
-            Object.entries(datasets).map(([datasetName, datasetInfo]) => {
-              const { games, isPublished } = datasetInfo;
+            datasetKeys.map((datasetName) => {
+              const { games, isPublished } = filteredDatasets[datasetName];
               return (
                 <div key={datasetName} className="dataset-section">
                   <div className="dataset-header">
@@ -344,11 +316,10 @@ const SavedGames = ({ userType, onLoadGame }) => {
                     </div>
                   </div>
                   {games.length === 0 ? (
-                    <p>No games in this dataset.</p>
+                    <p>No games in this dataset for {selectedSport}.</p>
                   ) : (
                     <ul className="saved-games-list">
                       {games.map((game) => {
-                        console.log('Rendering game:', game);
                         return (
                           <li key={game.gameId || game.gameName} className="saved-game-item">
                             <div className="game-info">
@@ -384,10 +355,10 @@ const SavedGames = ({ userType, onLoadGame }) => {
   );
 };
 
-// Define PropTypes for better type checking and to ensure required props are passed
 SavedGames.propTypes = {
-  userType: PropTypes.string.isRequired, // e.g., 'free', 'premium'
-  onLoadGame: PropTypes.func.isRequired, // Function to handle loading a game
+  userType: PropTypes.string.isRequired,
+  onLoadGame: PropTypes.func.isRequired,
+  selectedSport: PropTypes.string.isRequired,
 };
 
 export default SavedGames;

@@ -5,19 +5,24 @@ import Modal from 'react-modal';
 import PropTypes from 'prop-types';
 import './PublishDataset.css';
 import Swal from 'sweetalert2';
-import { getAuth } from 'firebase/auth'; // Import getAuth
+import { getAuth } from 'firebase/auth';
 
 /**
  * PublishDataset Component
  * 
- * This component renders a modal that allows users to publish a dataset by providing a name, description, preview snippet, image, category, and pricing options.
- * Currently, all datasets are published for free. Pricing options are commented out for future implementation.
+ * This component renders a modal that allows users to publish a dataset by providing a name, description,
+ * preview snippet, image, category, and pricing options. Currently, all datasets are published for free.
+ * Pricing options are commented out for potential future use.
  * 
+ * After successfully publishing, it calls the onPublishSuccess() callback, where the parent component
+ * should call fetchPublishedDatasets() to refresh the data and show the newly published dataset in the hub.
+ *
  * Props:
  * - isOpen (bool): Determines if the modal is open.
  * - onClose (function): Function to close the modal.
  * - datasetName (string): The name of the dataset being published.
- * - onPublishSuccess (function): Callback function upon successful publication.
+ * - onPublishSuccess (function): Callback function upon successful publication. The parent should call
+ *   fetchPublishedDatasets() inside this callback to update the displayed datasets.
  * - apiUrl (string): The base URL for API requests.
  * - userType (string): The type of user (e.g., 'free', 'premium').
  */
@@ -112,6 +117,7 @@ const PublishDataset = ({ isOpen, onClose, datasetName, onPublishSuccess, apiUrl
       console.log('Publish dataset response:', result);
 
       Swal.fire('Success', 'Dataset published successfully!', 'success');
+
       onPublishSuccess(); // Notify parent component of success
 
       // Optionally, reset the form fields

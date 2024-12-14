@@ -6,6 +6,7 @@ import Swal from 'sweetalert2';
 import './SavedGames.css';
 import { GameContext } from './GameContext';
 import { SavedGamesContext } from './components/SavedGamesContext'; // Ensure the correct relative path
+import { SportsDataHubContext } from './components/SportsDataHubContext'; // Import SportsDataHubContext
 import PropTypes from 'prop-types';
 import PublishDataset from './PublishDataset';
 import UpdateDataset from './UpdateDataset';
@@ -23,12 +24,25 @@ import UpdateDataset from './UpdateDataset';
  */
 const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
   const { datasets, loading, fetchError, fetchSavedGames } = useContext(SavedGamesContext); 
+  const { fetchPublishedDatasets } = useContext(SportsDataHubContext); // Access fetchPublishedDatasets from context
   const auth = getAuth();
   const { setLoadedCoords } = useContext(GameContext);
   const [selectedDataset, setSelectedDataset] = useState(null);
 
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+
+  /**
+   * Handles the successful publication of a dataset.
+   * This function will be passed to the PublishDataset component as a callback.
+   * It will refresh both saved games and published datasets.
+   */
+  const handlePublishSuccess = () => {
+    Swal.fire('Published!', 'Dataset has been published successfully.', 'success');
+    setIsPublishModalOpen(false);
+    fetchSavedGames(); // Refresh saved games if necessary
+    fetchPublishedDatasets(); // Refresh published datasets in SportsDataHub
+  };
 
   const handleLoadGame = async (game) => {
     console.log('Attempting to load game:', game.gameName, 'for user:', auth.currentUser?.uid);
@@ -166,6 +180,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
           if (response.ok) {
             Swal.fire('Deleted!', `Dataset "${datasetName}" and all its games have been deleted.`, 'success');
             fetchSavedGames();
+            fetchPublishedDatasets(); // Refresh published datasets after deletion
           } else {
             throw new Error(resultData.error || 'Failed to delete the dataset.');
           }
@@ -187,10 +202,10 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     setSelectedDataset(null);
   };
 
-  const handlePublishSuccess = () => {
-    Swal.fire('Published!', `Dataset "${selectedDataset}" has been published successfully.`, 'success');
-    closePublishModal();
-    fetchSavedGames(); // Refresh the saved games list
+  const handlePublishSuccessInternal = () => {
+    // This function is called after a successful publish
+    // It will call the parent component's handlePublishSuccess which includes fetchPublishedDatasets()
+    handlePublishSuccess();
   };
 
   const handleUpdateDataset = (datasetName) => {
@@ -207,6 +222,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     Swal.fire('Updated!', `Dataset "${selectedDataset}" has been updated successfully.`, 'success');
     closeUpdateModal();
     fetchSavedGames(); // Refresh the saved games list
+    fetchPublishedDatasets(); // Refresh published datasets in SportsDataHub
   };
 
   if (loading) {
@@ -232,7 +248,6 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     const sportFilteredGames = games.filter((game) => game.sport === selectedSport);
 
     if (sportFilteredGames.length > 0) {
-      // Only include this dataset if it has games matching the selectedSport
       acc[datasetName] = {
         games: sportFilteredGames,
         isPublished
@@ -254,7 +269,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
           isOpen={isPublishModalOpen}
           onClose={closePublishModal}
           datasetName={selectedDataset}
-          onPublishSuccess={handlePublishSuccess}
+          onPublishSuccess={handlePublishSuccessInternal} // Pass the internal handler
           apiUrl={process.env.REACT_APP_API_URL || 'http://localhost:5001'}
           userType={userType}
         />
@@ -319,30 +334,28 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
                     <p>No games in this dataset for {selectedSport}.</p>
                   ) : (
                     <ul className="saved-games-list">
-                      {games.map((game) => {
-                        return (
-                          <li key={game.gameId || game.gameName} className="saved-game-item">
-                            <div className="game-info">
-                              <span className="game-name">{game.gameName}</span>
-                              <span className="game-date">
-                                {game.sport ? `${game.sport} - ` : ''}
-                                {game.matchDate ? new Date(game.matchDate).toLocaleDateString() : 'N/A'}
-                              </span>
-                            </div>
-                            <div className="game-actions">
-                              <button className="load-button" onClick={() => handleLoadGame(game)}>
-                                Load
-                              </button>
-                              <button
-                                className="delete-button"
-                                onClick={() => handleDeleteGame(game.gameId || game.gameName, game.gameName)}
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </li>
-                        );
-                      })}
+                      {games.map((game) => (
+                        <li key={game.gameId || game.gameName} className="saved-game-item">
+                          <div className="game-info">
+                            <span className="game-name">{game.gameName}</span>
+                            <span className="game-date">
+                              {game.sport ? `${game.sport} - ` : ''}
+                              {game.matchDate ? new Date(game.matchDate).toLocaleDateString() : 'N/A'}
+                            </span>
+                          </div>
+                          <div className="game-actions">
+                            <button className="load-button" onClick={() => handleLoadGame(game)}>
+                              Load
+                            </button>
+                            <button
+                              className="delete-button"
+                              onClick={() => handleDeleteGame(game.gameId || game.gameName, game.gameName)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </li>
+                      ))}
                     </ul>
                   )}
                 </div>

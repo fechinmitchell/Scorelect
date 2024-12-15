@@ -2587,10 +2587,10 @@ const handleSaveToDataset = async () => {
           },
         }}
       >
-        <h2>Setup Teams</h2>
+        <h2 style={{ color: '#fff' }}>Setup Teams</h2>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px' }}>
           <div className="team-setup">
-            <h3>Team 1</h3>
+            <h3 style={{ color: '#fff' }}>Team 1</h3>
             <input
               type="text"
               value={team1}
@@ -2621,7 +2621,7 @@ const handleSaveToDataset = async () => {
                 onChange={(e) => setTeam1Color({ ...team1Color, secondary: e.target.value })}
               />
             </div>
-            <h4>Players</h4>
+            <h4 style={{ color: '#fff' }}>Players</h4>
             {team1Players.map((player, index) => (
               <div key={index} style={{ marginBottom: '10px', display: 'flex', alignItems: 'center' }}>
                 <input
@@ -2683,7 +2683,7 @@ const handleSaveToDataset = async () => {
           </div>
 
           <div className="team-setup">
-            <h3>Team 2</h3>
+            <h3 style={{ color: '#fff' }}>Team 2</h3>
             <input
               type="text"
               value={team2}
@@ -2714,7 +2714,7 @@ const handleSaveToDataset = async () => {
                 onChange={(e) => setTeam2Color({ ...team2Color, secondary: e.target.value })}
               />
             </div>
-            <h4>Players</h4>
+            <h4 style={{ color: '#fff' }}>Players</h4>
             {team2Players.map((player, index) => (
               <div key={index} style={{ marginBottom: '10px', display: 'flex', alignItems: 'center' }}>
                 <input

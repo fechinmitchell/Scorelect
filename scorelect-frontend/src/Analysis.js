@@ -30,6 +30,13 @@ const Container = styled.div`
   }
 `;
 
+// Add this new styled component
+const InstructionText = styled.p`
+  color: #000; /* Set text color to black */
+  font-size: 1rem; /* Adjust font size as needed */
+  margin-bottom: 15px; /* Add spacing below the paragraph */
+`;
+
 const ButtonRow = styled.div`
   display: flex;
   justify-content: center;
@@ -371,19 +378,12 @@ const Analysis = ({ onSportChange, selectedSport }) => {
   return (
     <div className="analysis-page">
       <Container>
-        {/* Sport Selection Buttons */}
-        <ButtonRow>
-          <SportButton sport="Soccer" onClick={handleSportClick} active={currentSport === 'Soccer'} />
-          <SportButton sport="GAA" onClick={handleSportClick} active={currentSport === 'GAA'} />
-          <SportButton sport="AmericanFootball" onClick={handleSportClick} active={currentSport === 'AmericanFootball'} />
-          <SportButton sport="Basketball" onClick={handleSportClick} active={currentSport === 'Basketball'} />
-        </ButtonRow>
 
         {userData && userData.role === 'paid' ? (
           Object.keys(datasets).length > 0 ? (
             <SavedDatasetsContainer>
               <SectionTitle>Analyze from Your Saved Datasets</SectionTitle>
-              <p>Select one of your saved datasets, then optionally select a single game.</p>
+              <InstructionText><p>Select one of your saved datasets, then optionally select a single game.</p></InstructionText>
               <Select
                 value={selectedUserDataset}
                 onChange={(e) => {
@@ -444,6 +444,15 @@ const Analysis = ({ onSportChange, selectedSport }) => {
         )}
 
         <SectionTitleUpload>Or Upload a New Dataset</SectionTitleUpload>
+
+        {/* Sport Selection Buttons */}
+        <ButtonRow>
+          <SportButton sport="Soccer" onClick={handleSportClick} active={currentSport === 'Soccer'} />
+          <SportButton sport="GAA" onClick={handleSportClick} active={currentSport === 'GAA'} />
+          <SportButton sport="AmericanFootball" onClick={handleSportClick} active={currentSport === 'AmericanFootball'} />
+          <SportButton sport="Basketball" onClick={handleSportClick} active={currentSport === 'Basketball'} />
+        </ButtonRow>
+
         <DropzoneContainer {...getRootProps()} selectedSport={currentSport}>
           <input {...getInputProps()} />
           <DropzoneContent>

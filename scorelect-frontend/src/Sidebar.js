@@ -183,17 +183,17 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
             </button>
           </li>
           <li>
-            {selectedSport === 'GAA' ? (
-              <button onClick={() => onNavigate('/player-data-gaa')}>
-                <FaChartLine className="icon" size={16} />
-                {!collapsed && 'Player Data'}
-              </button>
-            ) : (
-              <button onClick={handleScoutingClick}>
-                <FaChartLine className="icon" size={16} />
-                {!collapsed && 'Scouting'}
-              </button>
-            )}
+          {selectedSport === 'GAA' ? (
+            <button onClick={() => onNavigate('/player-data-gaa')}>
+              <FaChartLine className="icon" size={16} />
+              {!collapsed && 'Player Data'}
+            </button>
+          ) : (
+            <button onClick={handleScoutingClick}>
+              <FaChartLine className="icon" size={16} />
+              {!collapsed && 'Scouting'}
+            </button>
+          )}
           </li>
 
           <li>

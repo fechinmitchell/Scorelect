@@ -10,6 +10,8 @@ import { SportsDataHubContext } from './components/SportsDataHubContext'; // Imp
 import PropTypes from 'prop-types';
 import PublishDataset from './PublishDataset';
 import UpdateDataset from './UpdateDataset';
+import { getFirestore, collection, getDocs } from 'firebase/firestore';
+
 
 /**
  * SavedGames Component
@@ -218,6 +220,35 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     setSelectedDataset(null);
   };
 
+  const handleRefresh = async () => {
+    try {
+      const db = getFirestore(); // Initialize Firestore
+      const user = auth.currentUser;
+      if (!user) {
+        Swal.fire('Error', 'User not authenticated.', 'error');
+        return;
+      }
+  
+      const datasetsRef = collection(db, 'datasets'); // Replace 'datasets' with your actual collection name
+      const snapshot = await getDocs(datasetsRef);
+  
+      const newDatasets = {};
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        newDatasets[doc.id] = data; // Assuming datasets are stored by unique IDs
+      });
+  
+      // Update your context or state with the newly fetched datasets
+      fetchSavedGames(); // Refresh the context or call a function to update the local state
+      fetchPublishedDatasets(); // If you're also dealing with published datasets
+  
+      Swal.fire('Refreshed!', 'Saved games and datasets have been updated from Firebase.', 'success');
+    } catch (error) {
+      console.error('Error refreshing datasets from Firebase:', error);
+      Swal.fire('Error', 'Failed to refresh datasets from Firebase.', 'error');
+    }
+  };
+
   const handleUpdateSuccess = () => {
     Swal.fire('Updated!', `Dataset "${selectedDataset}" has been updated successfully.`, 'success');
     closeUpdateModal();
@@ -261,7 +292,11 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
 
   return (
     <div className="saved-games-container">
-      <h2>Saved Games for {selectedSport}</h2>
+      <div className="header-container">
+        <h2>Saved Games for {selectedSport}</h2>
+        <button className="refresh-button" onClick={handleRefresh}>Refresh</button>
+      </div>
+      
 
       {/* Publish Dataset Modal */}
       {isPublishModalOpen && selectedDataset && (

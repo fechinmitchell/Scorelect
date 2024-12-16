@@ -41,6 +41,8 @@ import { SavedGamesProvider } from './components/SavedGamesContext';
 import { SportsDataHubProvider } from './components/SportsDataHubContext';
 import Training from './Training';
 import SportSelectionPage from './SportSelectionPage';
+import PlayerDataGAA from './PlayerDataGAA';
+
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
@@ -251,6 +253,8 @@ const App = () => {
 
                 {/* Soccer Analysis Dashboard */}
                 <Route path="/analysis/soccer-dashboard" element={<SoccerAnalysisDashboard />} />
+
+                <Route path="/player-data-gaa" element={<PlayerDataGAA />} />
 
                 {/* Heatmap and other pages */}
                 <Route path="/analysis/heatmap" element={<HeatmapPage />} />

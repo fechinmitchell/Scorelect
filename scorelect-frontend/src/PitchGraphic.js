@@ -1211,6 +1211,46 @@ const handleSaveToDataset = async () => {
       </div>
     </div>
   );
+
+  const handleUploadRawData = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const jsonData = JSON.parse(e.target.result);
+          
+          // Validate the JSON structure
+          if (validateUploadedData(jsonData)) {
+            const gameData = jsonData.games?.[0]?.gameData || [];
+            setCoords(gameData); // Load the data onto the pitch
+            Swal.fire('Success', 'Raw data uploaded successfully!', 'success');
+          } else {
+            Swal.fire('Error', 'Invalid data format. Please upload a properly formatted JSON file.', 'error');
+          }
+        } catch (err) {
+          Swal.fire('Error', 'Unable to parse the file. Please upload a valid JSON file.', 'error');
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+  
+  const validateUploadedData = (data) => {
+    if (
+      data &&
+      typeof data === 'object' &&
+      data.dataset &&
+      Array.isArray(data.games) &&
+      data.games[0]?.gameData &&
+      Array.isArray(data.games[0].gameData)
+    ) {
+      return true;
+    }
+    return false;
+  };
+  
+  
   
   const handleAddAction = (newAction, newColor, newType) => {
     if (!actionCodes.includes(newAction)) {
@@ -1289,6 +1329,7 @@ const handleSaveToDataset = async () => {
           <button className="button" onClick={handleOpenSaveModal}>Save Game</button>
           <button className="button" onClick={() => setIsSettingsModalOpen(true)}>Settings</button> {/* Settings button */}
           <button className="button" onClick={() => setIsSetupTeamModalOpen(true)}>Setup Team</button>
+          <button className="button" onClick={() => document.getElementById('uploadRawDataInput').click()}>Upload Raw Data</button><input type="file" id="uploadRawDataInput"style={{ display: 'none' }} accept=".json" onChange={handleUploadRawData}/>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
             <button className="button" onClick={() => handleResize(375, 243.5)}>iPhone</button>
             <button className="button" onClick={() => handleResize(600, 389.6)}>iPad</button>

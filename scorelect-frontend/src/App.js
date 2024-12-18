@@ -42,7 +42,7 @@ import { SportsDataHubProvider } from './components/SportsDataHubContext';
 import Training from './Training';
 import SportSelectionPage from './SportSelectionPage';
 import PlayerDataGAA from './PlayerDataGAA';
-
+import ErrorBoundary from './components/ErrorBoundary'; // Import ErrorBoundary
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
@@ -186,101 +186,103 @@ const App = () => {
               />
             )}
             <div className="content-area">
-              <Routes>
-                <Route path="/" element={renderSelectedSport()} />
-                <Route
-                  path="/upgrade"
-                  element={<Upgrade setUserRole={setUserRole} />}
-                />
-                <Route
-                  path="/saved-games"
-                  element={
-                    <SavedGames userType={userRole} onLoadGame={loadGame} selectedSport={selectedSport} />
-                  }
-                />
-                <Route
-                  path="/profile"
-                  element={
-                    user ? (
-                      <Profile onLogout={handleLogout} apiUrl={API_BASE_URL} />
-                    ) : (
-                      <Navigate replace to="/signin" />
-                    )
-                  }
-                />
-                <Route
-                  path="/signin"
-                  element={<SignIn apiUrl={API_BASE_URL} />}
-                />
-                <Route
-                  path="/signup"
-                  element={<SignUp apiUrl={API_BASE_URL} />}
-                />
-                <Route
-                  path="/success"
-                  element={<Success setUserRole={setUserRole} />}
-                />
-                <Route path="/cancel" element={<Cancel />} />
-                <Route path="/howto" element={<HowTo />} />
-                <Route
-                  path="/sports-datahub"
-                  element={<SportsDataHub />}
-                />
-                <Route
-                  path="/publish-dataset"
-                  element={<PublishDataset />}
-                />
-                <Route
-                  path="/training/*"
-                  element={
-                    <Training
-                      selectedSport={selectedSport}
-                      onSportChange={handleSportChange}
-                    />
-                  }
-                />
-                <Route
-                  path="/analysis"
-                  element={
-                    <Analysis
-                      onSportSelect={(sport) => setSelectedSport(sport)}
-                      selectedSport={selectedSport}
-                    />
-                  }
-                />
-                {/* For Soccer, we navigate to soccer-filter instead of a generic filter */}
-                <Route path="/analysis/soccer-filter" element={<SoccerFilterPage />} />
+              <ErrorBoundary> {/* Wrap Routes with ErrorBoundary */}
+                <Routes>
+                  <Route path="/" element={renderSelectedSport()} />
+                  <Route
+                    path="/upgrade"
+                    element={<Upgrade setUserRole={setUserRole} />}
+                  />
+                  <Route
+                    path="/saved-games"
+                    element={
+                      <SavedGames userType={userRole} onLoadGame={loadGame} selectedSport={selectedSport} />
+                    }
+                  />
+                  <Route
+                    path="/profile"
+                    element={
+                      user ? (
+                        <Profile onLogout={handleLogout} apiUrl={API_BASE_URL} />
+                      ) : (
+                        <Navigate replace to="/signin" />
+                      )
+                    }
+                  />
+                  <Route
+                    path="/signin"
+                    element={<SignIn apiUrl={API_BASE_URL} />}
+                  />
+                  <Route
+                    path="/signup"
+                    element={<SignUp apiUrl={API_BASE_URL} />}
+                  />
+                  <Route
+                    path="/success"
+                    element={<Success setUserRole={setUserRole} />}
+                  />
+                  <Route path="/cancel" element={<Cancel />} />
+                  <Route path="/howto" element={<HowTo />} />
+                  <Route
+                    path="/sports-datahub"
+                    element={<SportsDataHub />}
+                  />
+                  <Route
+                    path="/publish-dataset"
+                    element={<PublishDataset />}
+                  />
+                  <Route
+                    path="/training/*"
+                    element={
+                      <Training
+                        selectedSport={selectedSport}
+                        onSportChange={handleSportChange}
+                      />
+                    }
+                  />
+                  <Route
+                    path="/analysis"
+                    element={
+                      <Analysis
+                        onSportSelect={(sport) => setSelectedSport(sport)}
+                        selectedSport={selectedSport}
+                      />
+                    }
+                  />
+                  {/* For Soccer, we navigate to soccer-filter instead of a generic filter */}
+                  <Route path="/analysis/soccer-filter" element={<SoccerFilterPage />} />
 
-                {/* Soccer Analysis Dashboard */}
-                <Route path="/analysis/soccer-dashboard" element={<SoccerAnalysisDashboard />} />
+                  {/* Soccer Analysis Dashboard */}
+                  <Route path="/analysis/soccer-dashboard" element={<SoccerAnalysisDashboard />} />
 
-                <Route path="/player-data-gaa" element={<PlayerDataGAA />} />
+                  <Route path="/player-data-gaa" element={<PlayerDataGAA />} />
 
-                {/* Heatmap and other pages */}
-                <Route path="/analysis/heatmap" element={<HeatmapPage />} />
-                <Route path="/analysis/heatmap-gaa" element={<HeatmapGAA />} />
-                <Route path="/analysis/heatmap-af" element={<HeatmapAF />} />
-                <Route path="/analysis/heatmap-bball" element={<HeatmapBBall />} />
+                  {/* Heatmap and other pages */}
+                  <Route path="/analysis/heatmap" element={<HeatmapPage />} />
+                  <Route path="/analysis/heatmap-gaa" element={<HeatmapGAA />} />
+                  <Route path="/analysis/heatmap-af" element={<HeatmapAF />} />
+                  <Route path="/analysis/heatmap-bball" element={<HeatmapBBall />} />
 
-                {/* Blog routes */}
-                <Route path="/blog/basketball-statistics" element={<BballCollect />} />
-                <Route path="/blog/soccercollect" element={<SoccerCollect />} />
-                <Route path="/blog/gaacollect" element={<GAACollect />} />
-                <Route path="/blog/americanfootballCollect" element={<AmericanFootballCollect />} />
+                  {/* Blog routes */}
+                  <Route path="/blog/basketball-statistics" element={<BballCollect />} />
+                  <Route path="/blog/soccercollect" element={<SoccerCollect />} />
+                  <Route path="/blog/gaacollect" element={<GAACollect />} />
+                  <Route path="/blog/americanfootballCollect" element={<AmericanFootballCollect />} />
 
-                <Route
-                  path="/select-sport"
-                  element={
-                    <SportSelectionPage
-                      onSportSelect={handleSportChange}
-                    />
-                  }
-                />
-                <Route
-                  path="*"
-                  element={<Navigate replace to="/select-sport" />}
-                />
-              </Routes>
+                  <Route
+                    path="/select-sport"
+                    element={
+                      <SportSelectionPage
+                        onSportSelect={handleSportChange}
+                      />
+                    }
+                  />
+                  <Route
+                    path="*"
+                    element={<Navigate replace to="/select-sport" />}
+                  />
+                </Routes>
+              </ErrorBoundary>
               <Analytics />
               <SpeedInsights />
             </div>

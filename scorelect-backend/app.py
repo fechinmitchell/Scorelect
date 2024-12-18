@@ -1660,6 +1660,247 @@ def sitemap():
     response.headers['Content-Type'] = 'application/xml'
     return response
 
+@app.route('/recalculate-xpoints', methods=['POST'])
+def recalculate_xpoints():
+    """
+    This endpoint:
+    1. Fetches all shots from the specified dataset (hard-coded for testing).
+    2. Performs logistic regression and KNN calculations to compute expected points.
+    3. Updates each shot in Firestore with the computed xPoints (and xP_adv if needed).
+    4. Writes the computed leaderboard back to Firestore under 'leaderboard/{datasetName}'.
+    """
+
+    # HARD-CODED VALUES FOR TESTING
+    USER_ID = "w9ZkqaYVM3dKSqqjWHLDVyh5sVg2"   # Replace with your actual user ID
+    DATASET_NAME = "GAA All Shots"           # Replace with your actual dataset name in Firestore
+
+    try:
+        logging.info(f"Recalculating xPoints for user: {USER_ID}, dataset: {DATASET_NAME}")
+
+        # Query Firestore for games matching the datasetName
+        games_ref = db.collection('savedGames').document(USER_ID).collection('games').where('datasetName', '==', DATASET_NAME)
+        games_snapshot = games_ref.stream()
+
+        original_games = []  # to store original data so we can write back xPoints
+        all_shots = []
+        game_count = 0
+
+        for doc in games_snapshot:
+            game_data = doc.to_dict()
+            shots = game_data.get('gameData', [])
+            if shots:
+                original_games.append({
+                    'doc_ref': doc.reference,
+                    'doc_id': doc.id,
+                    'game_data': shots
+                })
+                all_shots.extend(shots)
+                game_count += 1
+
+        logging.info(f"Found {game_count} games with datasetName '{DATASET_NAME}'. Total shots: {len(all_shots)}")
+
+        if not all_shots:
+            return jsonify({'error': f'No data found for dataset "{DATASET_NAME}".'}), 404
+
+        successfulOutcomes = ['score', 'made', 'hit']  # Consider adding more if necessary
+
+        indexed_shots = []
+        for g_i, g in enumerate(original_games):
+            for s_i, shot in enumerate(g['game_data']):
+                indexed_shots.append((g_i, s_i, shot))
+
+        import numpy as np
+        from collections import Counter  # Import here if not already imported
+
+        df = []
+        for (g_i, s_i, shot) in indexed_shots:
+            outcome = shot.get('Outcome', 'unknown').lower() if shot.get('Outcome') else 'unknown'
+            s = {
+                'g_i': g_i,    # game index
+                's_i': s_i,    # shot index in that game
+                'player': shot.get('playerName', 'Unknown Player'),
+                'team': shot.get('team', 'Unknown Team'),
+                'action': shot.get('action', 'unknown'),
+                'outcome': outcome,
+                'stand_x': float(shot.get('stand_x', 0)),
+                'stand_y': float(shot.get('stand_y', 0)),
+                'foot': shot.get('Foot', 'unknown').lower(),
+                'pressure': shot.get('Pressure', 'n').lower(),
+                'shotDistance': float(shot.get('Shot_Distance', 0)),
+                'position': shot.get('position', 'unknown'),
+            }
+            df.append(s)
+
+        # Add Score
+        for s in df:
+            s['Score'] = 1 if s['outcome'] in successfulOutcomes else 0
+
+        # Log Score distribution
+        score_counter = Counter([s['Score'] for s in df])
+        logging.info(f"Score distribution: {score_counter}")
+
+        def is_preferable_side(y, foot):
+            side = 'center'
+            if y < 44:
+                side = 'left'
+            elif y > 44:
+                side = 'right'
+            if (side == 'left' and foot in ['right', 'hand']) or (side == 'right' and foot in ['left', 'hand']):
+                return 1
+            return 0
+
+        for s in df:
+            s['Preferred_Side'] = is_preferable_side(s['stand_y'], s['foot'])
+
+        pressureMap = {'y': 1, 'n': 0}
+        positionMap = {'goalkeeper': 0, 'back': 1, 'midfielder': 2, 'forward': 3}
+        footMap = {'right': 0, 'left': 1, 'hand': 2}
+
+        for s in df:
+            s['Pressure_Value'] = pressureMap.get(s['pressure'], 0)
+            s['Position_Value'] = positionMap.get(s['position'], 0)
+            s['Foot_Value'] = footMap.get(s['foot'], 0)
+
+        # Calculate shot angle
+        goal_x, goal_y = 145, 44
+        for s in df:
+            dx = goal_x - s['stand_x']
+            dy = goal_y - s['stand_y']
+            angle_degrees = np.degrees(np.arctan2(dy, dx))
+            s['Shot_Angle'] = angle_degrees
+
+        placedBallActions = ['point', 'blocked', 'post', 'short', 'wide']
+        for s in df:
+            s['Placed_Ball'] = 0 if s['action'] in placedBallActions else 1
+
+        X_cols = [
+            'Preferred_Side', 'Pressure_Value', 'Position_Value',
+            'Foot_Value', 'Shot_Angle', 'shotDistance', 'Placed_Ball'
+        ]
+        X_array = [[shot[col] for col in X_cols] for shot in df]
+        yArray = [shot['Score'] for shot in df]
+
+        if all(v == 0 for v in yArray) or all(v == 1 for v in yArray):
+            logging.warning("All Score values are identical. Setting xP_adv to 0.5 for all shots.")
+            for s in df:
+                s['xP_adv'] = 0.5
+        else:
+            from sklearn.linear_model import LogisticRegression
+            model = LogisticRegression(max_iter=1000)
+            model.fit(X_array, yArray)
+            y_pred_proba = model.predict_proba(X_array)[:, 1]
+
+            for i, s in enumerate(df):
+                s['xP_adv'] = y_pred_proba[i]
+
+        # KNN for xPoints
+        coords = [(s['stand_x'], s['stand_y']) for s in df]
+        space_threshold = 2
+        k = 10
+
+        def knn_xpoints(data, coords, k):
+            results = []
+            for i, shot in enumerate(data):
+                distances = []
+                for j, c in enumerate(coords):
+                    if i == j:
+                        continue
+                    dx = shot['stand_x'] - c[0]
+                    dy = shot['stand_y'] - c[1]
+                    dist = np.sqrt(dx*dx + dy*dy)
+                    distances.append((dist, j))
+                neighbors = [idx for dist, idx in sorted(distances, key=lambda x: x[0]) if dist < space_threshold][:k]
+                neighbor_scores = [data[n]['Score'] for n in neighbors]
+                xPoints = sum(neighbor_scores)/len(neighbor_scores) if len(neighbor_scores) >= 3 else 0
+                shot['xPoints'] = xPoints
+                shot['Neighbour_Points'] = len(neighbor_scores)
+                results.append(shot)
+            return results
+
+        df = knn_xpoints(df, coords, k)
+
+        # Log xPoints distribution
+        xpoints_counter = Counter([s['xPoints'] for s in df])
+        logging.info(f"xPoints distribution: {xpoints_counter}")
+
+        # Aggregate data for leaderboard
+        summary = {}
+        for s in df:
+            player = s['player']
+            if player not in summary:
+                summary[player] = {
+                    'player': player,
+                    'team': s['team'],
+                    'points': 0,
+                    'goals': 0,
+                    'shots': 0,
+                    'successfulShots': 0,
+                    'xPoints': 0,
+                    'positionPerformance': {}
+                }
+
+            if s['action'] == 'point':
+                summary[player]['points'] += 1
+            if s['action'] == 'goal':
+                summary[player]['points'] += 3
+                summary[player]['goals'] += 1
+
+            summary[player]['shots'] += 1
+            if s['action'] in ['point', 'goal']:
+                summary[player]['successfulShots'] += 1
+            summary[player]['xPoints'] += s['xPoints']
+
+            pos = s['position']
+            if pos not in summary[player]['positionPerformance']:
+                summary[player]['positionPerformance'][pos] = {'shots': 0, 'points': 0, 'goals': 0}
+            summary[player]['positionPerformance'][pos]['shots'] += 1
+            if s['action'] == 'point':
+                summary[player]['positionPerformance'][pos]['points'] += 1
+            if s['action'] == 'goal':
+                summary[player]['positionPerformance'][pos]['goals'] += 1
+
+        finalLeaderboard = []
+        for p, val in summary.items():
+            shotEff = (val['successfulShots']/val['shots']*100) if val['shots'] > 0 else 0
+            performance = []
+            for position, stats in val['positionPerformance'].items():
+                eff = ((stats['points'] + stats['goals']*3)/stats['shots']*100) if stats['shots'] > 0 else 0
+                performance.append({
+                    'position': position,
+                    'shots': stats['shots'],
+                    'points': stats['points'],
+                    'goals': stats['goals'],
+                    'efficiency': eff
+                })
+            performance.sort(key=lambda x: x['efficiency'], reverse=True)
+            val['shotEfficiency'] = shotEff
+            val['positionPerformance'] = performance
+            finalLeaderboard.append(val)
+
+        # Update original shot data with computed xPoints and xP_adv
+        batch = db.batch()
+        for i, s in enumerate(df):
+            g_i = s['g_i']
+            s_i = s['s_i']
+            original_games[g_i]['game_data'][s_i]['xPoints'] = s['xPoints']
+            original_games[g_i]['game_data'][s_i]['xP_adv'] = s['xP_adv']
+
+        for g in original_games:
+            doc_ref = g['doc_ref']
+            batch.update(doc_ref, {'gameData': g['game_data']})
+        batch.commit()
+
+        # Store the final leaderboard data
+        leaderboard_ref = db.collection('savedGames').document(USER_ID).collection('leaderboard').document(DATASET_NAME)
+        leaderboard_ref.set({'leaderboardData': finalLeaderboard}, merge=True)
+
+        logging.info(f"Recalculation completed for {USER_ID}, dataset {DATASET_NAME}. Leaderboard and shots updated.")
+        return jsonify({'success': True, 'message': 'Recalculation completed.'}), 200
+
+    except Exception as e:
+        logging.error(f"Error recalculating xpoints: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 # Run the Flask app on port 5001 in debug mode
 if __name__ == '__main__':
     app.run(port=5001, debug=True)

@@ -13,6 +13,13 @@ import json  # Standard library for JSON operations
 import uuid  # For generating unique IDs
 from datetime import datetime  # For handling timestamps
 import random  # Add this line at the top with other imports
+from sklearn.linear_model import LogisticRegression
+from sklearn.impute import SimpleImputer
+from collections import Counter
+import numpy as np
+import pandas as pd
+from sklearn.neighbors import KDTree  # Correct import for KDTree
+
 
 # Load environment variables from the .env file into the application
 load_dotenv()
@@ -1664,10 +1671,11 @@ def sitemap():
 def recalculate_xpoints():
     """
     This endpoint:
-    1. Fetches all shots from the specified dataset (hard-coded for testing).
-    2. Performs logistic regression and KNN calculations to compute expected points.
-    3. Updates each shot in Firestore with the computed xPoints (and xP_adv if needed).
-    4. Writes the computed leaderboard back to Firestore under 'leaderboard/{datasetName}'.
+    1. Fetches all shots from the specified dataset.
+    2. Performs logistic regression to compute xP_adv.
+    3. Uses KNN to calculate xPoints based on spatial proximity.
+    4. Updates each shot in Firestore with the computed xPoints and xP_adv.
+    5. Writes the computed leaderboard back to Firestore.
     """
 
     # HARD-CODED VALUES FOR TESTING
@@ -1702,192 +1710,167 @@ def recalculate_xpoints():
         if not all_shots:
             return jsonify({'error': f'No data found for dataset "{DATASET_NAME}".'}), 404
 
-        successfulOutcomes = ['score', 'made', 'hit']  # Consider adding more if necessary
+        # Define successful outcomes based on 'type' field
+        successfulOutcomes = ['score']  # Only 'score' is considered successful
 
         indexed_shots = []
         for g_i, g in enumerate(original_games):
             for s_i, shot in enumerate(g['game_data']):
                 indexed_shots.append((g_i, s_i, shot))
 
-        import numpy as np
-        from collections import Counter  # Import here if not already imported
-
+        # Convert to DataFrame for easier processing
         df = []
         for (g_i, s_i, shot) in indexed_shots:
-            outcome = shot.get('Outcome', 'unknown').lower() if shot.get('Outcome') else 'unknown'
+            # Calculate shot distance using x, y coordinates
+            shot_x = float(shot.get('x', 0))
+            shot_y = float(shot.get('y', 0))
+            goal_x, goal_y = 145, 44
+            shot_distance = np.sqrt((goal_x - shot_x)**2 + (goal_y - shot_y)**2)
+            
             s = {
                 'g_i': g_i,    # game index
                 's_i': s_i,    # shot index in that game
                 'player': shot.get('playerName', 'Unknown Player'),
                 'team': shot.get('team', 'Unknown Team'),
                 'action': shot.get('action', 'unknown'),
-                'outcome': outcome,
-                'stand_x': float(shot.get('stand_x', 0)),
-                'stand_y': float(shot.get('stand_y', 0)),
-                'foot': shot.get('Foot', 'unknown').lower(),
-                'pressure': shot.get('Pressure', 'n').lower(),
-                'shotDistance': float(shot.get('Shot_Distance', 0)),
+                'outcome': shot.get('type', 'unknown').lower(),
+                'stand_x': shot_x,
+                'stand_y': shot_y,
+                'foot': shot.get('foot', 'unknown').lower(),
+                'pressure': shot.get('pressure', 'no').lower(),
+                'shotDistance': shot_distance,
                 'position': shot.get('position', 'unknown'),
             }
             df.append(s)
 
-        # Add Score
-        for s in df:
-            s['Score'] = 1 if s['outcome'] in successfulOutcomes else 0
+        df = pd.DataFrame(df)
+
+        # Log unique Outcome values
+        outcome_counter = Counter(df['outcome'])
+        logging.info(f"Outcome distribution: {outcome_counter}")
+
+        # Add Score based on type field
+        df['Score'] = df['outcome'].apply(lambda x: 1 if x in successfulOutcomes else 0)
 
         # Log Score distribution
-        score_counter = Counter([s['Score'] for s in df])
+        score_counter = Counter(df['Score'])
         logging.info(f"Score distribution: {score_counter}")
 
+        # Calculate Preferred_Side
         def is_preferable_side(y, foot):
             side = 'center'
             if y < 44:
                 side = 'left'
             elif y > 44:
                 side = 'right'
-            if (side == 'left' and foot in ['right', 'hand']) or (side == 'right' and foot in ['left', 'hand']):
+
+            if ((side == 'left' and foot in ['right', 'hand']) or 
+                (side == 'right' and foot in ['left', 'hand'])):
                 return 1
             return 0
 
-        for s in df:
-            s['Preferred_Side'] = is_preferable_side(s['stand_y'], s['foot'])
+        df['Preferred_Side'] = df.apply(lambda row: is_preferable_side(row['stand_y'], row['foot']), axis=1)
 
-        pressureMap = {'y': 1, 'n': 0}
+        # Map categorical variables to numerical values
+        pressureMap = {'yes': 1, 'no': 0}
         positionMap = {'goalkeeper': 0, 'back': 1, 'midfielder': 2, 'forward': 3}
         footMap = {'right': 0, 'left': 1, 'hand': 2}
 
-        for s in df:
-            s['Pressure_Value'] = pressureMap.get(s['pressure'], 0)
-            s['Position_Value'] = positionMap.get(s['position'], 0)
-            s['Foot_Value'] = footMap.get(s['foot'], 0)
+        df['Pressure_Value'] = df['pressure'].map(pressureMap).fillna(0).astype(int)
+        df['Position_Value'] = df['position'].map(positionMap).fillna(0).astype(int)
+        df['Foot_Value'] = df['foot'].map(footMap).fillna(0).astype(int)
 
-        # Calculate shot angle
-        goal_x, goal_y = 145, 44
-        for s in df:
-            dx = goal_x - s['stand_x']
-            dy = goal_y - s['stand_y']
-            angle_degrees = np.degrees(np.arctan2(dy, dx))
-            s['Shot_Angle'] = angle_degrees
+        # Calculate Shot Angle
+        def calculate_shot_angle(row):
+            goal_x, goal_y = 145, 44
+            delta_x = goal_x - row['stand_x']
+            delta_y = goal_y - row['stand_y']
+            angle_radians = np.arctan2(delta_y, delta_x)
+            return np.degrees(angle_radians) if delta_x != 0 else 90.0
 
-        placedBallActions = ['point', 'blocked', 'post', 'short', 'wide']
-        for s in df:
-            s['Placed_Ball'] = 0 if s['action'] in placedBallActions else 1
+        df['Shot_Angle'] = df.apply(calculate_shot_angle, axis=1)
 
+        # Determine Placed_Ball - considering point and free as placed balls
+        placedBallActions = ['point', 'free']
+        df['Placed_Ball'] = df['action'].apply(lambda x: 1 if x.lower() in placedBallActions else 0)
+
+        # Prepare features and target
         X_cols = [
             'Preferred_Side', 'Pressure_Value', 'Position_Value',
             'Foot_Value', 'Shot_Angle', 'shotDistance', 'Placed_Ball'
         ]
-        X_array = [[shot[col] for col in X_cols] for shot in df]
-        yArray = [shot['Score'] for shot in df]
+        X = df[X_cols].fillna(0).values
+        y = df['Score'].values
 
-        if all(v == 0 for v in yArray) or all(v == 1 for v in yArray):
+        # Check if y has both classes
+        if len(np.unique(y)) < 2:
             logging.warning("All Score values are identical. Setting xP_adv to 0.5 for all shots.")
-            for s in df:
-                s['xP_adv'] = 0.5
+            df['xP_adv'] = 0.5
         else:
-            from sklearn.linear_model import LogisticRegression
+            # Train logistic regression model
             model = LogisticRegression(max_iter=1000)
-            model.fit(X_array, yArray)
-            y_pred_proba = model.predict_proba(X_array)[:, 1]
+            model.fit(X, y)
+            df['xP_adv'] = model.predict_proba(X)[:, 1]
+            logging.info("Logistic regression model trained and xP_adv calculated.")
 
-            for i, s in enumerate(df):
-                s['xP_adv'] = y_pred_proba[i]
+        # KNN for xPoints - adjusted parameters
+        space_threshold = 10  # Increased threshold for more neighbors
+        min_neighbors = 2    # Reduced minimum neighbors requirement
 
-        # KNN for xPoints
-        coords = [(s['stand_x'], s['stand_y']) for s in df]
-        space_threshold = 2
-        k = 10
+        # Use KDTree for efficient neighbor search
+        coords = df[['stand_x', 'stand_y']].values
+        tree = KDTree(coords, leaf_size=2)
 
-        def knn_xpoints(data, coords, k):
-            results = []
-            for i, shot in enumerate(data):
-                distances = []
-                for j, c in enumerate(coords):
-                    if i == j:
-                        continue
-                    dx = shot['stand_x'] - c[0]
-                    dy = shot['stand_y'] - c[1]
-                    dist = np.sqrt(dx*dx + dy*dy)
-                    distances.append((dist, j))
-                neighbors = [idx for dist, idx in sorted(distances, key=lambda x: x[0]) if dist < space_threshold][:k]
-                neighbor_scores = [data[n]['Score'] for n in neighbors]
-                xPoints = sum(neighbor_scores)/len(neighbor_scores) if len(neighbor_scores) >= 3 else 0
-                shot['xPoints'] = xPoints
-                shot['Neighbour_Points'] = len(neighbor_scores)
-                results.append(shot)
-            return results
+        # Query for neighbors within space_threshold
+        indices = tree.query_radius(coords, r=space_threshold)
 
-        df = knn_xpoints(df, coords, k)
+        # Calculate xPoints
+        xPoints = []
+        for i, neighbors in enumerate(indices):
+            # Exclude the point itself
+            neighbors = neighbors[neighbors != i]
+            if len(neighbors) >= min_neighbors:
+                mean_score = df.iloc[neighbors]['Score'].mean()
+                xPoints.append(mean_score)
+            else:
+                # Use global mean if not enough neighbors
+                xPoints.append(df['Score'].mean())
+        df['xPoints'] = xPoints
+
+        logging.info("KNN xPoints calculated.")
 
         # Log xPoints distribution
-        xpoints_counter = Counter([s['xPoints'] for s in df])
+        xpoints_counter = Counter(df['xPoints'])
         logging.info(f"xPoints distribution: {xpoints_counter}")
 
         # Aggregate data for leaderboard
-        summary = {}
-        for s in df:
-            player = s['player']
-            if player not in summary:
-                summary[player] = {
-                    'player': player,
-                    'team': s['team'],
-                    'points': 0,
-                    'goals': 0,
-                    'shots': 0,
-                    'successfulShots': 0,
-                    'xPoints': 0,
-                    'positionPerformance': {}
-                }
+        player_stats = df.groupby('player').agg(
+            Shots=('player', 'count'),
+            Score=('Score', 'sum'),
+            xP_adv=('xP_adv', 'sum'),
+            xPoints=('xPoints', 'mean')
+        ).reset_index()
 
-            if s['action'] == 'point':
-                summary[player]['points'] += 1
-            if s['action'] == 'goal':
-                summary[player]['points'] += 3
-                summary[player]['goals'] += 1
+        player_stats['Difference'] = player_stats['Score'] - player_stats['xP_adv']
 
-            summary[player]['shots'] += 1
-            if s['action'] in ['point', 'goal']:
-                summary[player]['successfulShots'] += 1
-            summary[player]['xPoints'] += s['xPoints']
+        # Sort by Difference in descending order
+        player_stats_sorted = player_stats.sort_values(by='Difference', ascending=False)
 
-            pos = s['position']
-            if pos not in summary[player]['positionPerformance']:
-                summary[player]['positionPerformance'][pos] = {'shots': 0, 'points': 0, 'goals': 0}
-            summary[player]['positionPerformance'][pos]['shots'] += 1
-            if s['action'] == 'point':
-                summary[player]['positionPerformance'][pos]['points'] += 1
-            if s['action'] == 'goal':
-                summary[player]['positionPerformance'][pos]['goals'] += 1
-
-        finalLeaderboard = []
-        for p, val in summary.items():
-            shotEff = (val['successfulShots']/val['shots']*100) if val['shots'] > 0 else 0
-            performance = []
-            for position, stats in val['positionPerformance'].items():
-                eff = ((stats['points'] + stats['goals']*3)/stats['shots']*100) if stats['shots'] > 0 else 0
-                performance.append({
-                    'position': position,
-                    'shots': stats['shots'],
-                    'points': stats['points'],
-                    'goals': stats['goals'],
-                    'efficiency': eff
-                })
-            performance.sort(key=lambda x: x['efficiency'], reverse=True)
-            val['shotEfficiency'] = shotEff
-            val['positionPerformance'] = performance
-            finalLeaderboard.append(val)
+        # Prepare final leaderboard
+        finalLeaderboard = player_stats_sorted.to_dict(orient='records')
 
         # Update original shot data with computed xPoints and xP_adv
         batch = db.batch()
-        for i, s in enumerate(df):
-            g_i = s['g_i']
-            s_i = s['s_i']
-            original_games[g_i]['game_data'][s_i]['xPoints'] = s['xPoints']
-            original_games[g_i]['game_data'][s_i]['xP_adv'] = s['xP_adv']
+        for index, row in df.iterrows():
+            g_i = row['g_i']
+            s_i = row['s_i']
+            original_games[g_i]['game_data'][s_i]['xPoints'] = float(row['xPoints'])
+            original_games[g_i]['game_data'][s_i]['xP_adv'] = float(row['xP_adv'])
 
         for g in original_games:
             doc_ref = g['doc_ref']
             batch.update(doc_ref, {'gameData': g['game_data']})
+            logging.debug(f"Updated document {g['doc_id']} with new xPoints and xP_adv.")
         batch.commit()
 
         # Store the final leaderboard data

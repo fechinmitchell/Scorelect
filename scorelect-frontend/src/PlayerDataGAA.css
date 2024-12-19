@@ -1,11 +1,14 @@
 /* src/components/PlayerDataGAA.css */
 
+/* Container for the entire component */
 .player-data-container {
   width: 100%;
   padding: 20px;
   box-sizing: border-box;
+  font-family: Arial, sans-serif;
 }
 
+/* Loading and Error Containers */
 .loading-container,
 .error-container {
   display: flex;
@@ -23,7 +26,7 @@
   height: 60px;
   animation: spin 2s linear infinite;
   margin-bottom: 80px;
-  margin-left: 80px;
+  margin-left: 80px; /* Preserved original margin */
 }
 
 @keyframes spin {
@@ -36,6 +39,7 @@
   font-size: 18px;
 }
 
+/* Leaderboard Section */
 .leaderboard-container {
   width: 100%;
   padding: 20px 0;
@@ -47,12 +51,31 @@
   margin-bottom: 10px;
   box-sizing: border-box;
   font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.year-filter {
+  margin-bottom: 20px;
+}
+
+.year-filter label {
+  margin-right: 10px;
+  font-weight: bold;
+}
+
+.year-filter select {
+  padding: 5px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
 }
 
 .table-wrapper {
   overflow-y: auto;
   border: 1px solid #ddd;
   border-radius: 4px;
+  max-height: 500px;
 }
 
 .leaderboard {
@@ -93,24 +116,58 @@
   padding: 6px 10px;
   text-align: left;
   border: 1px solid #ccc;
+  font-size: 12px;
 }
 
 .nested-table th {
   background-color: #eaeaea;
 }
 
+/* Charts Section */
 .charts-container {
   display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
+  flex-direction: column; /* Stack charts vertically */
+  gap: 20px; /* Space between charts */
   margin-top: 40px;
 }
 
-.chart {
-  flex: 1 1 300px;
+.chart-wrapper {
+  width: 100%; /* Make charts as wide as the container */
+  height: 500px; /* Adjust height as needed */
+  background-color: #ffffff;
+  padding: 20px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
+.chart-wrapper canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Recalculate Button */
+.recalculate-button {
+  margin-top: 20px;
+  padding: 10px 20px;
+  font-size: 16px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.recalculate-button:hover {
+  background-color: #45a049;
+}
+
+/* Responsive Design */
 @media screen and (max-width: 768px) {
+  .chart-wrapper {
+    height: 400px;
+  }
+
   .leaderboard th,
   .leaderboard td {
     padding: 8px 10px;
@@ -122,10 +179,32 @@
   }
 
   .charts-container {
-    flex-direction: column;
+    gap: 15px;
   }
 }
 
+@media screen and (max-width: 480px) {
+  .chart-wrapper {
+    height: 300px;
+  }
+
+  .leaderboard th,
+  .leaderboard td {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .search-input {
+    font-size: 12px;
+  }
+
+  .recalculate-button {
+    font-size: 14px;
+    padding: 8px 16px;
+  }
+}
+
+/* Custom Scrollbar for Table */
 .table-wrapper::-webkit-scrollbar {
   width: 8px;
 }

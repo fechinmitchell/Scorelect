@@ -99,7 +99,7 @@ const LeaderboardTable = ({ data }) => {
   useEffect(() => {
     if (rowRef.current) {
       const rowHeight = rowRef.current.getBoundingClientRect().height;
-      setMaxHeight(rowHeight * 10);
+      setMaxHeight(rowHeight * 5);
     }
   }, [data]);
 
@@ -238,6 +238,18 @@ LeaderboardTable.propTypes = {
 
 // Charts Container Component
 const ChartsContainer = ({ data }) => {
+  // **Move all Hooks to the top before any conditional returns**
+  
+  // Calculate average xPoints
+  const averageXPoints = useMemo(() => {
+    if (data.length === 0) return 0;
+    const xPointsData = data.map(entry => entry.xPoints);
+    if (xPointsData.length === 0) return 0;
+    const total = xPointsData.reduce((sum, val) => sum + val, 0);
+    return total / xPointsData.length;
+  }, [data]);
+
+  // **Early return after Hooks**
   if (data.length === 0) {
     return (
       <div className="charts-container">
@@ -263,13 +275,6 @@ const ChartsContainer = ({ data }) => {
   const pointsData = data.map((entry) => entry.points);
   const goalsData = data.map((entry) => entry.goals);
   const xPReturnData = data.map((entry) => entry.xPReturn);
-
-  // Calculate average xPoints for annotation (optional)
-  const averageXPoints = useMemo(() => {
-    if (xPointsData.length === 0) return 0;
-    const total = xPointsData.reduce((sum, val) => sum + val, 0);
-    return total / xPointsData.length;
-  }, [xPointsData]);
 
   // Bar Chart: Expected Points vs Actual Points
   const barChartData = {
@@ -325,25 +330,6 @@ const ChartsContainer = ({ data }) => {
           weight: 'bold',
         },
       },
-      // Optional: Annotation plugin usage
-      /*
-      annotation: {
-        annotations: {
-          avgLine: {
-            type: 'line',
-            yMin: averageXPoints,
-            yMax: averageXPoints,
-            borderColor: 'rgba(54, 162, 235, 0.7)',
-            borderWidth: 2,
-            label: {
-              content: `Average xPoints (${averageXPoints.toFixed(2)})`,
-              enabled: true,
-              position: 'end',
-            },
-          },
-        },
-      },
-      */
     },
     scales: {
       y: {
@@ -651,7 +637,7 @@ const PlayerDataGAA = () => {
     }
   };
 
-  // **Important:** All Hooks are called before any early returns
+  // **Ensure all Hooks are called before any conditional returns**
   if (loading) return <LoadingIndicator />;
   if (error) return <ErrorMessage message={error} />;
   if (!data || !data.gameData || formattedLeaderboard.length === 0) {

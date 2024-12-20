@@ -239,7 +239,7 @@ LeaderboardTable.propTypes = {
 // Charts Container Component
 const ChartsContainer = ({ data }) => {
   // **Move all Hooks to the top before any conditional returns**
-  
+
   // Calculate average xPoints
   const averageXPoints = useMemo(() => {
     if (data.length === 0) return 0;
@@ -334,6 +334,10 @@ const ChartsContainer = ({ data }) => {
     scales: {
       y: {
         beginAtZero: true,
+        max: 40, // **Set maximum y-axis value to 40**
+        ticks: {
+          stepSize: 5, // **Set step size to 5 for tick intervals at 5, 10, ..., 40**
+        },
         title: { display: true, text: 'Points' },
       },
       x: {
@@ -445,7 +449,10 @@ const ChartsContainer = ({ data }) => {
     scales: {
       y: {
         beginAtZero: true,
-        max: 150, // Assuming xPReturn can go beyond 100%
+        max: 500, // **Set maximum y-axis value to 400**
+        ticks: {
+          stepSize: 50, // **Set step size to 50 for tick intervals at 50, 100, ..., 400**
+        },
         title: { display: true, text: 'xP Return (%)' },
       },
       x: {

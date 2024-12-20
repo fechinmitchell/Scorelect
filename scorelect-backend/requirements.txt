@@ -10,3 +10,4 @@ gunicorn==20.1.0
 numpy
 scikit-learn
 pandas
+imbalanced-learn

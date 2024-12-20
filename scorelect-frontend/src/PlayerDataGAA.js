@@ -150,7 +150,7 @@ const LeaderboardTable = ({ data }) => {
 
   return (
     <div className="leaderboard-container">
-      <h2>Leaderboard</h2>
+      <h2 style={{ color: "#fff"}}>Leaderboard</h2>
       <input
         type="text"
         placeholder="Search Players..."
@@ -449,7 +449,7 @@ const ChartsContainer = ({ data }) => {
     scales: {
       y: {
         beginAtZero: true,
-        max: 500, // **Set maximum y-axis value to 400**
+        max: 500, // **Set maximum y-axis value to 500**
         ticks: {
           stepSize: 50, // **Set step size to 50 for tick intervals at 50, 100, ..., 400**
         },
@@ -653,11 +653,11 @@ const PlayerDataGAA = () => {
 
   return (
     <div className="player-data-container">
-      <h1>Player Data GAA</h1>
+      <h1 style={{ color: "#fff"}}>Player Data GAA</h1>
       
       {/* Year Filter Dropdown */}
       <div className="year-filter">
-        <label htmlFor="year-select">Filter by Year: </label>
+        <label style={{ color: "#fff"}} htmlFor="year-select">Filter by Year: </label>
         <select
           id="year-select"
           value={selectedYear}

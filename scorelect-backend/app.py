@@ -1889,6 +1889,9 @@ def recalculate_xpoints():
                 # Predict probabilities on the entire dataset
                 df['xP_adv_Points'] = calibrated_model_points.predict_proba(X_points)[:, 1]
 
+                # Exclude goals from expected points by setting xP_adv_Points to 0 for goals
+                df.loc[df['category'] == 'goal', 'xP_adv_Points'] = 0
+
                 # Evaluate model
                 y_pred_p = calibrated_model_points.predict(X_test_p)
                 logging.info(f"Points Model Accuracy: {accuracy_score(y_test_p, y_pred_p) * 100:.2f}%")
@@ -1931,6 +1934,9 @@ def recalculate_xpoints():
 
                 # Predict probabilities on the entire dataset
                 df['xP_adv_Goals'] = calibrated_model_goals.predict_proba(X_goals)[:, 1]
+
+                # Exclude points from expected goals by setting xP_adv_Goals to 0 for points
+                df.loc[df['category'] == 'point', 'xP_adv_Goals'] = 0
 
                 # Evaluate model
                 y_pred_g = calibrated_model_goals.predict(X_test_g)
@@ -2015,10 +2021,10 @@ def recalculate_xpoints():
             Shots=('player', 'count'),
             Points=('Score_Points', 'sum'),
             Goals=('Score_Goals', 'sum'),
-            xP_adv_Points=('xP_adv_Points', 'sum'),
-            xP_adv_Goals=('xP_adv_Goals', 'sum'),
-            xPoints=('xPoints_Final', 'mean'),
-            xGoals=('xGoals_Final', 'mean')
+            xP_adv_Points=('xP_adv_Points', 'sum'),  # Only points and misses contribute
+            xP_adv_Goals=('xP_adv_Goals', 'sum'),    # Only goals and misses contribute
+            xPoints=('xPoints_Final', 'mean'),       # Optional
+            xGoals=('xGoals_Final', 'mean')          # Optional
         ).reset_index()
 
         player_stats['Difference_Points'] = player_stats['Points'] - player_stats['xP_adv_Points']
@@ -2068,11 +2074,10 @@ def recalculate_xpoints():
 
         logging.info(f"Recalculation completed for user: {USER_ID}, dataset: {DATASET_NAME}. Leaderboard and shots updated.")
         return jsonify({'success': True, 'message': 'Recalculation completed.'}), 200
-
     except Exception as e:
-        logging.error(f"Unexpected error during recalculation: {e}", exc_info=True)
+        logging.error(f"Error recalculating xpoints: {str(e)}")
         return jsonify({'error': str(e)}), 500
-    
+
 # Run the Flask app on port 5001 in debug mode
 if __name__ == '__main__':
     app.run(port=5001, debug=True)

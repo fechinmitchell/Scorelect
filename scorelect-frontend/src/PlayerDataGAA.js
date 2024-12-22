@@ -171,6 +171,9 @@ const LeaderboardTable = ({ data }) => {
               <th onClick={() => requestSort('xPoints')}>
                 Expected Points (xPoints) {getSortIndicator('xPoints')}
               </th>
+              <th onClick={() => requestSort('xGoals')}>
+                Expected Goals (xGoals) {getSortIndicator('xGoals')}
+              </th>
               <th onClick={() => requestSort('xPReturn')}>
                 xP Return (%) {getSortIndicator('xPReturn')}
               </th>
@@ -190,6 +193,7 @@ const LeaderboardTable = ({ data }) => {
                 <td>{entry.team}</td>
                 <td>{entry.Total_Points}</td>
                 <td>{entry.xPoints.toFixed(2)}</td>
+                <td>{entry.xGoals.toFixed(2)}</td>
                 <td>{entry.xPReturn.toFixed(2)}%</td>
                 <td>
                   <table className="nested-table">
@@ -229,24 +233,16 @@ LeaderboardTable.propTypes = {
 };
 
 const ChartsContainer = ({ data }) => {
-  const averageXPoints = useMemo(() => {
-    if (data.length === 0) return 0;
-    const xPointsData = data.map(entry => entry.xPoints);
-    if (xPointsData.length === 0) return 0;
-    const total = xPointsData.reduce((sum, val) => sum + val, 0);
-    return total / xPointsData.length;
-  }, [data]);
-
-  if (data.length === 0) {
-    return (
-      <div className="charts-container">
-        <p>No chart data available to display.</p>
-      </div>
-    );
-  }
+  const labels = data.map((entry) => entry.player);
+  const xPointsData = data.map((entry) => entry.xPoints);
+  const xGoalsData = data.map((entry) => entry.xGoals);
+  const actualPointsData = data.map((entry) => entry.Total_Points);
+  const goalsData = data.map((entry) => entry.goals);
+  const xPReturnData = data.map((entry) => entry.xPReturn);
 
   const chartColors = {
     xPoints: 'rgba(75, 192, 192, 0.6)',
+    xGoals: 'rgba(153, 102, 255, 0.6)',
     actualPoints: 'rgba(255, 159, 64, 0.6)',
     goals: [
       '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
@@ -256,12 +252,6 @@ const ChartsContainer = ({ data }) => {
     xPReturn: 'rgba(153, 102, 255, 0.6)',
   };
 
-  const labels = data.map((entry) => entry.player);
-  const xPointsData = data.map((entry) => entry.xPoints);
-  const actualPointsData = data.map((entry) => entry.Total_Points);
-  const goalsData = data.map((entry) => entry.goals);
-  const xPReturnData = data.map((entry) => entry.xPReturn);
-
   const barChartData = {
     labels,
     datasets: [
@@ -270,6 +260,13 @@ const ChartsContainer = ({ data }) => {
         data: xPointsData,
         backgroundColor: chartColors.xPoints,
         borderColor: 'rgba(75, 192, 192, 1)',
+        borderWidth: 1,
+      },
+      {
+        label: 'Expected Goals (xGoals)',
+        data: xGoalsData,
+        backgroundColor: chartColors.xGoals,
+        borderColor: 'rgba(153, 102, 255, 1)',
         borderWidth: 1,
       },
       {
@@ -296,7 +293,7 @@ const ChartsContainer = ({ data }) => {
           ci.update();
         },
       },
-      title: { display: true, text: 'Expected Points vs Actual Points (Top 5 Players)' },
+      title: { display: true, text: 'Expected Points & Goals vs Actual Points (Top 5 Players)' },
       tooltip: {
         mode: 'index',
         intersect: false,
@@ -319,7 +316,7 @@ const ChartsContainer = ({ data }) => {
     scales: {
       y: {
         beginAtZero: true,
-        max: 40,
+        max: 50,
         ticks: {
           stepSize: 5,
         },
@@ -515,6 +512,7 @@ const PlayerDataGAA = () => {
         shots: 1,
         successfulShots: isSuccess ? 1 : 0,
         xPoints: shot.xPoints ? Number(shot.xPoints) : 0,
+        xGoals: shot.xGoals ? Number(shot.xGoals) : 0,
         actionIsGoal: (shot.action === 'goal'),
         actionIsPoint: (shot.action === 'point'),
         year: shotYear,
@@ -532,6 +530,7 @@ const PlayerDataGAA = () => {
           shots: 0,
           successfulShots: 0,
           xPoints: 0,
+          xGoals: 0,
           positionPerformance: {},
         };
       }
@@ -547,6 +546,7 @@ const PlayerDataGAA = () => {
       acc[playerKey].shots += curr.shots;
       acc[playerKey].successfulShots += curr.successfulShots;
       acc[playerKey].xPoints += curr.xPoints;
+      acc[playerKey].xGoals += curr.xGoals;
 
       const position = curr.position;
       if (!acc[playerKey].positionPerformance[position]) {
@@ -564,7 +564,7 @@ const PlayerDataGAA = () => {
     }, {});
 
     const finalLeaderboard = Object.values(summary).map(player => {
-      const xPReturn = player.xPoints > 0 ? (player.points / player.xPoints) * 100 : 0;
+      const xPReturn = player.xPoints > 0 ? ((player.points) / player.xPoints) * 100 : 0;
 
       const positionPerformance = Object.entries(player.positionPerformance).map(([pos, stats]) => {
         const eff = stats.shots > 0 ? ((stats.points + stats.goals * 3) / stats.shots) * 100 : 0;
@@ -582,6 +582,8 @@ const PlayerDataGAA = () => {
         xPReturn,
         positionPerformance,
         Total_Points: player.points,
+        xPoints: player.xPoints,
+        xGoals: player.xGoals,
       };
     });
 

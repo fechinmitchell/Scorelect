@@ -1683,13 +1683,16 @@ def sitemap():
 @app.route('/recalculate-xpoints', methods=['POST'])
 def recalculate_xpoints():
     """
-    This endpoint performs the following steps:
-    1. Fetches all shots from the specified dataset in Firestore.
-    2. Categorizes shots into goals, points, and misses based on GAA scoring.
-    3. Performs Random Forest classification to compute xP_adv for points and goals separately.
-    4. Uses KNN to calculate xPoints and xGoals based on spatial proximity.
-    5. Updates each shot in Firestore with the computed xPoints and xGoals.
-    6. Writes the computed leaderboards back to Firestore.
+    Recalculates xPoints and xGoals for a specified user and dataset.
+    This function performs the following steps:
+    1. Fetches all games from Firestore for the given user and dataset.
+    2. Processes and categorizes each shot into goals, points, or misses.
+    3. Applies feature engineering to prepare the data for modeling.
+    4. Uses SMOTE to balance the classes in the dataset.
+    5. Trains Random Forest models for predicting points and goals.
+    6. Applies K-Nearest Neighbors for spatial analysis.
+    7. Updates Firestore with the computed xPoints and xGoals.
+    8. Aggregates and stores leaderboard data in Firestore.
     """
     # Parse JSON data from the request
     data = request.get_json()
@@ -1699,15 +1702,14 @@ def recalculate_xpoints():
     try:
         logging.info(f"Starting recalculation of xPoints and xGoals for user: {USER_ID}, dataset: {DATASET_NAME}")
         
-        # Step 1: Fetch data from Firestore using keyword arguments to avoid warnings
+        # Step 1: Fetch data from Firestore
         games_ref = db.collection('savedGames').document(USER_ID).collection('games').where('datasetName', '==', DATASET_NAME)
         games_snapshot = games_ref.stream()
         
-        original_games = []  # To store original data for updating Firestore
+        original_games = []
         all_shots = []
         game_count = 0
 
-        # Iterate through fetched games and collect shots
         for doc in games_snapshot:
             game_data = doc.to_dict()
             shots = game_data.get('gameData', [])
@@ -1737,7 +1739,6 @@ def recalculate_xpoints():
         indexed_shots = []
         for g_i, game in enumerate(original_games):
             for s_i, shot in enumerate(game['game_data']):
-                # Determine the outcome of the shot
                 outcome = (
                     shot.get('Outcome', '') or
                     shot.get('action', '') or
@@ -1749,7 +1750,7 @@ def recalculate_xpoints():
                 elif outcome in pointOutcomes:
                     category = 'point'
                 else:
-                    category = 'miss'  # Default to 'miss'
+                    category = 'miss'
 
                 # Extract and validate shot coordinates
                 try:
@@ -1786,15 +1787,6 @@ def recalculate_xpoints():
         df['Score_Points'] = df['category'].apply(lambda x: 1 if x == 'point' else 0)
         df['Score_Goals'] = df['category'].apply(lambda x: 1 if x == 'goal' else 0)
 
-        # Verify that Score_Points and Score_Goals are binary
-        if not set(df['Score_Points'].unique()).issubset({0, 1}):
-            logging.error("Score_Points values are not binary.")
-            return jsonify({'error': 'Invalid Score_Points values detected.'}), 500
-
-        if not set(df['Score_Goals'].unique()).issubset({0, 1}):
-            logging.error("Score_Goals values are not binary.")
-            return jsonify({'error': 'Invalid Score_Goals values detected.'}), 500
-
         # Step 4: Feature Engineering
         def is_preferable_side(y, foot):
             """
@@ -1813,7 +1805,6 @@ def recalculate_xpoints():
                 return 1
             return 0
 
-        # Apply the preferable side function
         df['Preferred_Side'] = df.apply(lambda row: is_preferable_side(row['y'], row['foot']), axis=1)
 
         # Additional Feature Engineering
@@ -1821,10 +1812,8 @@ def recalculate_xpoints():
         shot_type_map = {'open_play': 0, 'set_play': 1}
         df['Shot_Type_Value'] = df['shot_type'].map(shot_type_map).fillna(0).astype(int)
 
-        # Calculate pressure-adjusted shot distance
         df['pressure_shotDistance'] = df['pressure'].map({'y': 1, 'n': 0}).fillna(0).astype(int) * df['shotDistance']
 
-        # Map categorical variables to numerical values
         pressureMap = {'y': 1, 'n': 0}
         positionMap = {'goalkeeper': 0, 'back': 1, 'midfielder': 2, 'forward': 3}
         footMap = {'right': 0, 'left': 1, 'hand': 2}
@@ -1890,8 +1879,8 @@ def recalculate_xpoints():
                 )
                 logging.info(f"Before SMOTE Points Model: {Counter(y_train_p)}")
                 
-                # Initialize SMOTE with adjusted sampling_strategy to prevent removing minority samples
-                smote_p = SMOTE(random_state=42, sampling_strategy=0.5, k_neighbors=3)
+                # Initialize SMOTE with adjusted sampling_strategy to oversample minority class
+                smote_p = SMOTE(random_state=42, sampling_strategy='auto', k_neighbors=3)  # Changed to 'auto'
                 X_train_p_resampled, y_train_p_resampled = smote_p.fit_resample(X_train_p, y_train_p)
                 logging.info(f"After SMOTE Points Model Resampling: {Counter(y_train_p_resampled)}")
 
@@ -1943,8 +1932,8 @@ def recalculate_xpoints():
                 )
                 logging.info(f"Before SMOTE Goals Model: {Counter(y_train_g)}")
                 
-                # Initialize SMOTE with adjusted sampling_strategy to prevent removing minority samples
-                smote_g = SMOTE(random_state=42, sampling_strategy=0.5, k_neighbors=2)
+                # Initialize SMOTE with adjusted sampling_strategy to oversample minority class
+                smote_g = SMOTE(random_state=42, sampling_strategy='auto', k_neighbors=2)  # Changed to 'auto'
                 X_train_g_resampled, y_train_g_resampled = smote_g.fit_resample(X_train_g, y_train_g)
                 logging.info(f"After SMOTE Goals Model Resampling: {Counter(y_train_g_resampled)}")
 

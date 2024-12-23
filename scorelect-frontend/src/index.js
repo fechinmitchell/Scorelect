@@ -21,7 +21,7 @@ const root = createRoot(container);
 root.render(
   <React.StrictMode>
     <BrowserRouter>
-      <StripeSetup>
+      <StripeSetup> 
         <AuthProvider> {/* Wrap with AuthProvider */}
           <UserProvider> {/* Wrap with UserProvider */}
             <GameProvider> {/* Nested GameProvider */}

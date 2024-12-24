@@ -1732,7 +1732,7 @@ def recalculate_xpoints():
         # Step 2: Categorize shots into goals, points, or misses
         goalOutcomes = ['goal', 'scores goal', 'made goal', 'hit goal', 'penalty goal']
         pointOutcomes = ['point', 'over', 'scores point', 'made point', 'offensive mark', 'fortyfive', 'free']
-        missOutcomes = ['miss', 'blocked', 'post', 'short', 'wide', 'failed', 'free wide', 'free short', 
+        missOutcomes = ['miss', 'blocked', 'post', 'short', 'wide', 'failed', 'free wide', 'free short', 'free post', 
                        'offensive mark short', 'fortyfive short', 'fortyfive wide', 'offensive mark wide', 'offensive mark post', 
                        'goal miss', 'pen miss', 'sideline wide', 'fortyfive post']
 

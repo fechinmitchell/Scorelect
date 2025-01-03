@@ -7,13 +7,17 @@ import Swal from 'sweetalert2';
 export const SavedGamesContext = createContext();
 
 /**
- * SavedGamesProvider Component
- *
- * This component fetches and provides the user's saved games data to its children via context.
- *
- * Props:
- * - children (React.Node): The child components that will consume the saved games data.
+ * parseJSONNoNaN: same approach as in SavedGames.js
  */
+async function parseJSONNoNaN(response) {
+  const rawText = await response.text();
+  const safeText = rawText
+    .replace(/\bNaN\b/g, 'null')
+    .replace(/\bInfinity\b/g, '999999999')
+    .replace(/\b-Infinity\b/g, '-999999999');
+  return JSON.parse(safeText);
+}
+
 export const SavedGamesProvider = ({ children }) => {
   const [datasets, setDatasets] = useState({});
   const [loading, setLoading] = useState(true);
@@ -27,7 +31,6 @@ export const SavedGamesProvider = ({ children }) => {
    */
   const fetchSavedGames = async () => {
     const user = auth.currentUser;
-
     if (!user) {
       console.warn('User not authenticated, cannot fetch saved games.');
       setLoading(false);
@@ -37,7 +40,7 @@ export const SavedGamesProvider = ({ children }) => {
     try {
       const token = await user.getIdToken();
 
-      // Fetch saved games
+      // 1) Fetch saved games
       const response = await fetch(`${apiUrl}/load-games`, {
         method: 'POST',
         headers: {
@@ -51,10 +54,11 @@ export const SavedGamesProvider = ({ children }) => {
         throw new Error('Failed to fetch saved games.');
       }
 
-      const gamesList = await response.json();
+      // Safely parse
+      const gamesList = await parseJSONNoNaN(response);
       console.log('Fetched games list:', gamesList);
 
-      // Fetch all published datasets created by the user
+      // 2) Fetch all published datasets created by the user
       const datasetsResponse = await fetch(`${apiUrl}/list-published-datasets`, {
         method: 'POST',
         headers: {
@@ -68,16 +72,18 @@ export const SavedGamesProvider = ({ children }) => {
         throw new Error('Failed to fetch published datasets.');
       }
 
-      const publishedDatasetsData = await datasetsResponse.json();
+      // Safely parse
+      const publishedDatasetsData = await parseJSONNoNaN(datasetsResponse);
       const publishedDatasetNames = new Set(publishedDatasetsData.datasets);
 
-      // Group games by datasetName and include published status
+      // Group games by datasetName
       const groupedDatasets = gamesList.reduce((acc, game) => {
         const dataset = game.datasetName || 'Default';
         if (!acc[dataset]) {
           acc[dataset] = { games: [], isPublished: false };
         }
         acc[dataset].games.push(game);
+
         // Check if the dataset is published
         if (publishedDatasetNames.has(dataset)) {
           acc[dataset].isPublished = true;

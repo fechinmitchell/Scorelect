@@ -5,49 +5,48 @@ import { getAuth } from 'firebase/auth';
 import Swal from 'sweetalert2';
 import './SavedGames.css';
 import { GameContext } from './GameContext';
-import { SavedGamesContext } from './components/SavedGamesContext'; // Ensure the correct relative path
-import { SportsDataHubContext } from './components/SportsDataHubContext'; // Import SportsDataHubContext
+import { SavedGamesContext } from './components/SavedGamesContext';
+import { SportsDataHubContext } from './components/SportsDataHubContext';
 import PropTypes from 'prop-types';
 import PublishDataset from './PublishDataset';
 import UpdateDataset from './UpdateDataset';
 import { getFirestore, collection, getDocs } from 'firebase/firestore';
 
-
 /**
- * SavedGames Component
- *
- * This component displays the user's saved games, allowing them to load, delete, download, publish, or update datasets.
- * It consumes the saved games data from SavedGamesContext and filters them by the selected sport.
- *
- * Props:
- * - userType (string): The type of user (e.g., 'free', 'premium').
- * - onLoadGame (function): Function to handle loading a game, provided by the parent component.
- * - selectedSport (string): The sport currently selected in the sidebar dropdown.
+ * parseJSONNoNaN(response):
+ * 1) Reads raw text from the response.
+ * 2) Replaces NaN, Infinity, -Infinity with valid tokens.
+ * 3) Returns the JSON-parsed object.
  */
+async function parseJSONNoNaN(response) {
+  const rawText = await response.text();
+  const safeText = rawText
+    .replace(/\bNaN\b/g, 'null')
+    .replace(/\bInfinity\b/g, '999999999')
+    .replace(/\b-Infinity\b/g, '-999999999');
+  return JSON.parse(safeText);
+}
+
 const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
   const { datasets, loading, fetchError, fetchSavedGames } = useContext(SavedGamesContext); 
-  const { fetchPublishedDatasets } = useContext(SportsDataHubContext); // Access fetchPublishedDatasets from context
+  const { fetchPublishedDatasets } = useContext(SportsDataHubContext);
   const auth = getAuth();
   const { setLoadedCoords } = useContext(GameContext);
-  const [selectedDataset, setSelectedDataset] = useState(null);
 
+  const [selectedDataset, setSelectedDataset] = useState(null);
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
 
-  /**
-   * Handles the successful publication of a dataset.
-   * This function will be passed to the PublishDataset component as a callback.
-   * It will refresh both saved games and published datasets.
-   */
+  // Called after successful publication
   const handlePublishSuccess = () => {
     Swal.fire('Published!', 'Dataset has been published successfully.', 'success');
     setIsPublishModalOpen(false);
-    fetchSavedGames(); // Refresh saved games if necessary
-    fetchPublishedDatasets(); // Refresh published datasets in SportsDataHub
+    fetchSavedGames();
+    fetchPublishedDatasets();
   };
 
+  // Load a game
   const handleLoadGame = async (game) => {
-    console.log('Attempting to load game:', game.gameName, 'for user:', auth.currentUser?.uid);
     if (game.gameData && game.gameData.length > 0) {
       try {
         onLoadGame(game.sport, game.gameData);
@@ -61,6 +60,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     }
   };
 
+  // Delete a single game
   const handleDeleteGame = async (gameId, gameName) => {
     const user = auth.currentUser;
     if (!user) {
@@ -90,9 +90,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
             body: JSON.stringify({ uid: user.uid, gameId }),
           });
 
-          const resultData = await response.json();
-          console.log('Delete game response:', resultData);
-
+          const resultData = await parseJSONNoNaN(response);
           if (response.ok) {
             Swal.fire('Deleted!', `Game "${gameName}" has been deleted.`, 'success');
             fetchSavedGames();
@@ -107,6 +105,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     });
   };
 
+  // Download dataset
   const handleDownloadDataset = async (datasetName) => {
     try {
       const user = auth.currentUser;
@@ -127,7 +126,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await parseJSONNoNaN(response);
         throw new Error(errorData.error || 'Failed to download dataset.');
       }
 
@@ -140,6 +139,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
+
       Swal.fire('Downloaded!', `Dataset "${datasetName}" has been downloaded.`, 'success');
     } catch (error) {
       console.error('Error downloading dataset:', error);
@@ -147,6 +147,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     }
   };
 
+  // Delete entire dataset
   const handleDeleteDataset = async (datasetName) => {
     const user = auth.currentUser;
     if (!user) {
@@ -176,13 +177,11 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
             body: JSON.stringify({ uid: user.uid, datasetName }),
           });
 
-          const resultData = await response.json();
-          console.log('Delete dataset response:', resultData);
-
+          const resultData = await parseJSONNoNaN(response);
           if (response.ok) {
             Swal.fire('Deleted!', `Dataset "${datasetName}" and all its games have been deleted.`, 'success');
             fetchSavedGames();
-            fetchPublishedDatasets(); // Refresh published datasets after deletion
+            fetchPublishedDatasets();
           } else {
             throw new Error(resultData.error || 'Failed to delete the dataset.');
           }
@@ -194,68 +193,66 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     });
   };
 
+  // Publish dataset
   const handlePublishDataset = (datasetName) => {
     setSelectedDataset(datasetName);
     setIsPublishModalOpen(true);
   };
 
+  // Close publish modal
   const closePublishModal = () => {
     setIsPublishModalOpen(false);
     setSelectedDataset(null);
   };
 
   const handlePublishSuccessInternal = () => {
-    // This function is called after a successful publish
-    // It will call the parent component's handlePublishSuccess which includes fetchPublishedDatasets()
     handlePublishSuccess();
   };
 
+  // Update dataset
   const handleUpdateDataset = (datasetName) => {
     setSelectedDataset(datasetName);
     setIsUpdateModalOpen(true);
   };
 
+  // Close update modal
   const closeUpdateModal = () => {
     setIsUpdateModalOpen(false);
     setSelectedDataset(null);
   };
 
+  // Refresh from Firestore
   const handleRefresh = async () => {
     try {
-      const db = getFirestore(); // Initialize Firestore
+      const db = getFirestore();
       const user = auth.currentUser;
       if (!user) {
         Swal.fire('Error', 'User not authenticated.', 'error');
         return;
       }
-  
-      const datasetsRef = collection(db, 'datasets'); // Replace 'datasets' with your actual collection name
+      const datasetsRef = collection(db, 'datasets');
       const snapshot = await getDocs(datasetsRef);
-  
-      const newDatasets = {};
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        newDatasets[doc.id] = data; // Assuming datasets are stored by unique IDs
-      });
-  
-      // Update your context or state with the newly fetched datasets
-      fetchSavedGames(); // Refresh the context or call a function to update the local state
-      fetchPublishedDatasets(); // If you're also dealing with published datasets
-  
-      Swal.fire('Refreshed!', 'Saved games and datasets have been updated from Firebase.', 'success');
+      // Not specifically used here, but you can do something with newDatasets if needed
+      // or rely on fetchSavedGames/fetchPublishedDatasets below
+
+      fetchSavedGames();
+      fetchPublishedDatasets();
+
+      Swal.fire('Refreshed!', 'Saved games and datasets updated.', 'success');
     } catch (error) {
-      console.error('Error refreshing datasets from Firebase:', error);
-      Swal.fire('Error', 'Failed to refresh datasets from Firebase.', 'error');
+      console.error('Error refreshing from Firebase:', error);
+      Swal.fire('Error', 'Failed to refresh data from Firebase.', 'error');
     }
   };
 
   const handleUpdateSuccess = () => {
-    Swal.fire('Updated!', `Dataset "${selectedDataset}" has been updated successfully.`, 'success');
+    Swal.fire('Updated!', `Dataset "${selectedDataset}" updated successfully.`, 'success');
     closeUpdateModal();
-    fetchSavedGames(); // Refresh the saved games list
-    fetchPublishedDatasets(); // Refresh published datasets in SportsDataHub
+    fetchSavedGames();
+    fetchPublishedDatasets();
   };
 
+  // Loading?
   if (loading) {
     return (
       <div className="saved-games-container">
@@ -264,6 +261,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     );
   }
 
+  // Fetch error?
   if (fetchError) {
     return (
       <div className="saved-games-container">
@@ -272,11 +270,10 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     );
   }
 
-  // Filter datasets by selectedSport
+  // Filter to only datasets containing the selectedSport
   const filteredDatasets = Object.entries(datasets).reduce((acc, [datasetName, datasetInfo]) => {
     const { games, isPublished } = datasetInfo;
-    // Filter games by selectedSport
-    const sportFilteredGames = games.filter((game) => game.sport === selectedSport);
+    const sportFilteredGames = games.filter((g) => g.sport === selectedSport);
 
     if (sportFilteredGames.length > 0) {
       acc[datasetName] = {
@@ -284,7 +281,6 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
         isPublished
       };
     }
-
     return acc;
   }, {});
 
@@ -296,7 +292,6 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
         <h2>Saved Games for {selectedSport}</h2>
         <button className="refresh-button" onClick={handleRefresh}>Refresh</button>
       </div>
-      
 
       {/* Publish Dataset Modal */}
       {isPublishModalOpen && selectedDataset && (
@@ -304,7 +299,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
           isOpen={isPublishModalOpen}
           onClose={closePublishModal}
           datasetName={selectedDataset}
-          onPublishSuccess={handlePublishSuccessInternal} // Pass the internal handler
+          onPublishSuccess={handlePublishSuccessInternal}
           apiUrl={process.env.REACT_APP_API_URL || 'http://localhost:5001'}
           userType={userType}
         />
@@ -379,12 +374,17 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
                             </span>
                           </div>
                           <div className="game-actions">
-                            <button className="load-button" onClick={() => handleLoadGame(game)}>
+                            <button
+                              className="load-button"
+                              onClick={() => handleLoadGame(game)}
+                            >
                               Load
                             </button>
                             <button
                               className="delete-button"
-                              onClick={() => handleDeleteGame(game.gameId || game.gameName, game.gameName)}
+                              onClick={() =>
+                                handleDeleteGame(game.gameId || game.gameName, game.gameName)
+                              }
                             >
                               Delete
                             </button>

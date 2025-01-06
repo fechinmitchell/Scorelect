@@ -7,42 +7,23 @@ import Swal from 'sweetalert2';
 import PropTypes from 'prop-types';
 import './PlayerDataGAA.css';
 
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  ArcElement,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-} from 'chart.js';
+function parseJSONNoNaN(response) {
+  return response.text().then((rawText) => {
+    const safeText = rawText
+      .replace(/\bNaN\b/g, 'null')
+      .replace(/\bInfinity\b/g, '999999999')
+      .replace(/\b-Infinity\b/g, '-999999999');
+    return JSON.parse(safeText);
+  });
+}
 
-import ChartDataLabels from 'chartjs-plugin-datalabels';
-import { Bar, Pie, Line } from 'react-chartjs-2';
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  ArcElement,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  ChartDataLabels
-);
-
-const useFetchDataset = (collectionPath, documentPath) => {
+function useFetchDataset(collectionPath, documentPath) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchDataset = async () => {
+    async function fetchDataset() {
       setLoading(true);
       try {
         const docRef = doc(firestore, `${collectionPath}/${documentPath}`);
@@ -55,38 +36,148 @@ const useFetchDataset = (collectionPath, documentPath) => {
           throw new Error('No such document exists!');
         }
       } catch (err) {
-        console.error('Error fetching the dataset:', err);
         setError(err.message);
         Swal.fire('Error', err.message, 'error');
       } finally {
         setLoading(false);
       }
-    };
-
+    }
     fetchDataset();
   }, [collectionPath, documentPath]);
 
   return { data, loading, error };
-};
+}
 
-const LoadingIndicator = () => (
-  <div className="loading-container">
-    <div className="spinner"></div>
-    <p>Loading data...</p>
-  </div>
-);
+function LoadingIndicator() {
+  return (
+    <div className="loading-container">
+      <div className="spinner"></div>
+      <p>Loading data...</p>
+    </div>
+  );
+}
 
-const ErrorMessage = ({ message }) => (
-  <div className="error-container">
-    <p>{message}</p>
-  </div>
-);
+function ErrorMessage({ message }) {
+  return (
+    <div className="error-container">
+      <p>{message}</p>
+    </div>
+  );
+}
 
 ErrorMessage.propTypes = {
   message: PropTypes.string.isRequired,
 };
 
-const LeaderboardTable = ({ data }) => {
+/**
+ * A mini leaderboard that shows data in columns:
+ * - Player
+ * - Actual (actualKey)
+ * - Expected (expectedKey)
+ * - Ratio
+ * 
+ * Default sorts by actualKey (descending), but user can click on column headers
+ * to reorder the table by Player, Actual, Expected, or Ratio.
+ * 
+ * There's no "Show All" button; the entire list is scrollable.
+ */
+function MiniLeaderboard({ title, data, actualKey, expectedKey }) {
+  // Default to sorting by the actualKey descending
+  const [sortConfig, setSortConfig] = useState({ key: actualKey, direction: 'descending' });
+
+  // Perform sorting
+  const sortedData = useMemo(() => {
+    let list = [...data];
+    if (sortConfig) {
+      list.sort((a, b) => {
+        const aVal = getValue(a, sortConfig.key);
+        const bVal = getValue(b, sortConfig.key);
+        if (aVal < bVal) return sortConfig.direction === 'ascending' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'ascending' ? 1 : -1;
+        return 0;
+      });
+    }
+    return list;
+  }, [data, sortConfig]);
+
+  function getValue(item, key) {
+    if (key === 'ratio') {
+      // ratio = actual / expected
+      const actual = item[actualKey] || 0;
+      const expected = item[expectedKey] || 0;
+      const epsilon = 0.0001;
+      return expected > 0 ? actual / expected : actual / epsilon;
+    }
+    return item[key] || 0;
+  }
+
+  function requestSort(key) {
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  }
+
+  function getSortIndicator(key) {
+    if (sortConfig.key !== key) return null;
+    return sortConfig.direction === 'ascending' ? ' 🔼' : ' 🔽';
+  }
+
+  return (
+    <div className="mini-leaderboard">
+      <h3 className="mini-leaderboard-title">{title}</h3>
+      <div className="mini-leaderboard-table-wrapper">
+        <table className="mini-leaderboard-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th onClick={() => requestSort('player')}>
+                Player{getSortIndicator('player')}
+              </th>
+              <th onClick={() => requestSort(actualKey)}>
+                {actualKey}{getSortIndicator(actualKey)}
+              </th>
+              <th onClick={() => requestSort(expectedKey)}>
+                {expectedKey}{getSortIndicator(expectedKey)}
+              </th>
+              <th onClick={() => requestSort('ratio')}>
+                Ratio{getSortIndicator('ratio')}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedData.map((player, index) => {
+              const actualVal = player[actualKey] || 0;
+              const expectedVal = player[expectedKey] || 0;
+              const epsilon = 0.0001;
+              const ratio = expectedVal > 0 ? actualVal / expectedVal : actualVal / epsilon;
+
+              return (
+                <tr key={`${player.player}-${index}`}>
+                  <td>{index + 1}</td>
+                  <td>{player.player}</td>
+                  <td>{actualVal.toFixed(2)}</td>
+                  <td>{expectedVal.toFixed(2)}</td>
+                  <td>{ratio.toFixed(2)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+MiniLeaderboard.propTypes = {
+  title: PropTypes.string.isRequired,
+  data: PropTypes.array.isRequired,
+  actualKey: PropTypes.string.isRequired,
+  expectedKey: PropTypes.string.isRequired,
+};
+
+function LeaderboardTable({ data }) {
   const [sortConfig, setSortConfig] = useState({ key: 'Total_Points', direction: 'descending' });
   const [searchTerm, setSearchTerm] = useState('');
   const rowRef = useRef(null);
@@ -100,40 +191,36 @@ const LeaderboardTable = ({ data }) => {
   }, [data]);
 
   const sortedData = useMemo(() => {
-    let sortableData = [...data];
-
+    let list = [...data];
     if (searchTerm) {
-      sortableData = sortableData.filter((entry) =>
+      list = list.filter((entry) =>
         entry.player.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-
-    if (sortConfig !== null && sortConfig.key) {
-      sortableData.sort((a, b) => {
+    if (sortConfig && sortConfig.key) {
+      list.sort((a, b) => {
         const aVal = a[sortConfig.key];
         const bVal = b[sortConfig.key];
-
         if (aVal < bVal) return sortConfig.direction === 'ascending' ? -1 : 1;
         if (aVal > bVal) return sortConfig.direction === 'ascending' ? 1 : -1;
         return 0;
       });
     }
+    return list;
+  }, [data, searchTerm, sortConfig]);
 
-    return sortableData;
-  }, [data, sortConfig, searchTerm]);
-
-  const requestSort = (key) => {
+  function requestSort(key) {
     let direction = 'ascending';
     if (sortConfig.key === key && sortConfig.direction === 'ascending') {
       direction = 'descending';
     }
     setSortConfig({ key, direction });
-  };
+  }
 
-  const getSortIndicator = (key) => {
+  function getSortIndicator(key) {
     if (sortConfig.key !== key) return null;
     return sortConfig.direction === 'ascending' ? ' 🔼' : ' 🔽';
-  };
+  }
 
   if (data.length === 0) {
     return (
@@ -146,39 +233,38 @@ const LeaderboardTable = ({ data }) => {
 
   return (
     <div className="leaderboard-container">
-      <h2 style={{ color: "#fff"}}>Leaderboard</h2>
+      <h2 style={{ color: "#fff" }}>Leaderboard</h2>
       <input
         type="text"
         placeholder="Search Players..."
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
         className="search-input"
-        aria-label="Search Players"
       />
       <div className="table-wrapper" style={{ maxHeight: `${maxHeight}px` }}>
         <table className="leaderboard">
           <thead>
             <tr>
               <th onClick={() => requestSort('player')}>
-                Player {getSortIndicator('player')}
+                Player{getSortIndicator('player')}
               </th>
               <th onClick={() => requestSort('team')}>
-                Team {getSortIndicator('team')}
+                Team{getSortIndicator('team')}
               </th>
               <th onClick={() => requestSort('Total_Points')}>
-                Total Points {getSortIndicator('Total_Points')}
+                Total Points{getSortIndicator('Total_Points')}
               </th>
               <th onClick={() => requestSort('xPoints')}>
-                Expected Points (xPoints) {getSortIndicator('xPoints')}
+                Expected Points (xPoints){getSortIndicator('xPoints')}
               </th>
               <th onClick={() => requestSort('xGoals')}>
-                Expected Goals (xGoals) {getSortIndicator('xGoals')}
+                Expected Goals (xGoals){getSortIndicator('xGoals')}
               </th>
               <th onClick={() => requestSort('xPReturn')}>
-                xP Return (%) {getSortIndicator('xPReturn')}
+                xP Return (%){getSortIndicator('xPReturn')}
               </th>
               <th onClick={() => requestSort('positionPerformance')}>
-                Position Performance {getSortIndicator('positionPerformance')}
+                Position Performance{getSortIndicator('positionPerformance')}
               </th>
             </tr>
           </thead>
@@ -226,255 +312,26 @@ const LeaderboardTable = ({ data }) => {
       </div>
     </div>
   );
-};
+}
 
 LeaderboardTable.propTypes = {
   data: PropTypes.array.isRequired,
 };
 
-const ChartsContainer = ({ data }) => {
-  const labels = data.map((entry) => entry.player);
-  const xPointsData = data.map((entry) => entry.xPoints);
-  const xGoalsData = data.map((entry) => entry.xGoals);
-  const actualPointsData = data.map((entry) => entry.Total_Points);
-  const goalsData = data.map((entry) => entry.goals);
-  const xPReturnData = data.map((entry) => entry.xPReturn);
-
-  const chartColors = {
-    xPoints: 'rgba(75, 192, 192, 0.6)',
-    xGoals: 'rgba(153, 102, 255, 0.6)',
-    actualPoints: 'rgba(255, 159, 64, 0.6)',
-    goals: [
-      '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
-      '#9966FF', '#FF9F40', '#C9CBCF', '#FF6384',
-      '#36A2EB', '#FFCE56'
-    ],
-    xPReturn: 'rgba(153, 102, 255, 0.6)',
-  };
-
-  const barChartData = {
-    labels,
-    datasets: [
-      {
-        label: 'Expected Points (xPoints)',
-        data: xPointsData,
-        backgroundColor: chartColors.xPoints,
-        borderColor: 'rgba(75, 192, 192, 1)',
-        borderWidth: 1,
-      },
-      {
-        label: 'Expected Goals (xGoals)',
-        data: xGoalsData,
-        backgroundColor: chartColors.xGoals,
-        borderColor: 'rgba(153, 102, 255, 1)',
-        borderWidth: 1,
-      },
-      {
-        label: 'Actual Points',
-        data: actualPointsData,
-        backgroundColor: chartColors.actualPoints,
-        borderColor: 'rgba(255, 159, 64, 1)',
-        borderWidth: 1,
-      },
-    ],
-  };
-
-  const barChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { 
-        position: 'top',
-        onClick: (e, legendItem, legend) => {
-          const index = legendItem.datasetIndex;
-          const ci = legend.chart;
-          const meta = ci.getDatasetMeta(index);
-          meta.hidden = meta.hidden === null ? !ci.data.datasets[index].hidden : null;
-          ci.update();
-        },
-      },
-      title: { display: true, text: 'Expected Points & Goals vs Actual Points (Top 5 Players)' },
-      tooltip: {
-        mode: 'index',
-        intersect: false,
-        callbacks: {
-          label: function(context) {
-            return `${context.dataset.label}: ${context.parsed.y}`;
-          }
-        }
-      },
-      datalabels: {
-        anchor: 'end',
-        align: 'top',
-        formatter: (value) => value.toFixed(2),
-        color: '#000',
-        font: {
-          weight: 'bold',
-        },
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        max: 50,
-        ticks: {
-          stepSize: 5,
-        },
-        title: { display: true, text: 'Points' },
-      },
-      x: {
-        title: { display: true, text: 'Players' },
-      },
-    },
-    interaction: { mode: 'index', intersect: false },
-  };
-
-  const pieChartData = {
-    labels,
-    datasets: [
-      {
-        label: 'Goals Distribution',
-        data: goalsData,
-        backgroundColor: chartColors.goals,
-        borderColor: '#fff',
-        borderWidth: 1,
-      },
-    ],
-  };
-
-  const pieChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { 
-        position: 'right',
-        onClick: (e, legendItem, legend) => {
-          const index = legendItem.index;
-          const ci = legend.chart;
-          const meta = ci.getDatasetMeta(0);
-          meta.data[index].hidden = !meta.data[index].hidden;
-          ci.update();
-        },
-      },
-      title: { display: true, text: 'Goals Distribution among Top 5 Players' },
-      tooltip: {
-        callbacks: {
-          label: function(context) {
-            const label = context.label || '';
-            const value = context.parsed;
-            const total = context.chart._metasets[context.datasetIndex].total;
-            const percentage = ((value / total) * 100).toFixed(2);
-            return `${label}: ${value} (${percentage}%)`;
-          }
-        }
-      },
-      datalabels: {
-        formatter: (value, context) => `${value} (${((value / data.reduce((sum, entry) => sum + entry.goals, 0)) * 100).toFixed(2)}%)`,
-        color: '#fff',
-        font: {
-          weight: 'bold',
-        },
-      },
-    },
-  };
-
-  const lineChartData = {
-    labels,
-    datasets: [
-      {
-        label: 'xP Return (%)',
-        data: xPReturnData,
-        backgroundColor: chartColors.xPReturn,
-        borderColor: 'rgba(153, 102, 255, 1)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 5,
-        pointHoverRadius: 7,
-      },
-    ],
-  };
-
-  const lineChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { 
-        position: 'top',
-        onClick: (e, legendItem, legend) => {
-          const index = legendItem.datasetIndex;
-          const ci = legend.chart;
-          const meta = ci.getDatasetMeta(index);
-          meta.hidden = meta.hidden === null ? !ci.data.datasets[index].hidden : null;
-          ci.update();
-        },
-      },
-      title: { display: true, text: 'xP Return per Top 5 Player' },
-      tooltip: {
-        callbacks: {
-          label: function(context) {
-            return `xP Return: ${context.parsed.y.toFixed(2)}%`;
-          }
-        }
-      },
-      datalabels: {
-        anchor: 'end',
-        align: 'top',
-        formatter: (value) => value.toFixed(2),
-        color: '#000',
-        font: {
-          weight: 'bold',
-        },
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        max: 500,
-        ticks: {
-          stepSize: 50,
-        },
-        title: { display: true, text: 'xP Return (%)' },
-      },
-      x: {
-        title: { display: true, text: 'Players' },
-      },
-    },
-    interaction: { mode: 'nearest', intersect: true },
-  };
-
-  return (
-    <div className="charts-container">
-      <div className="chart-wrapper">
-        <Bar data={barChartData} options={barChartOptions} />
-      </div>
-      <div className="chart-wrapper">
-        <Pie data={pieChartData} options={pieChartOptions} />
-      </div>
-      <div className="chart-wrapper">
-        <Line data={lineChartData} options={lineChartOptions} />
-      </div>
-    </div>
-  );
-};
-
-ChartsContainer.propTypes = {
-  data: PropTypes.array.isRequired,
-};
-
-const PlayerDataGAA = () => {
+export default function PlayerDataGAA() {
   const USER_ID = 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2';
   const DATASET_NAME = 'All Shots GAA';
-
   const { data, loading, error } = useFetchDataset(
-    `savedGames/${USER_ID}/games`, 
+    `savedGames/${USER_ID}/games`,
     DATASET_NAME
   );
 
   const [selectedYear, setSelectedYear] = useState('All');
 
   const availableYears = useMemo(() => {
+    if (!data || !data.gameData) return [];
     const yearsSet = new Set();
-    data?.gameData?.forEach((shot) => {
+    data.gameData.forEach((shot) => {
       if (shot.matchDate) {
         const year = new Date(shot.matchDate).getFullYear();
         yearsSet.add(year);
@@ -486,88 +343,64 @@ const PlayerDataGAA = () => {
   const formattedLeaderboard = useMemo(() => {
     if (!data || !data.gameData) return [];
 
-    const filteredShots = data.gameData.filter((shot) => {
+    const shotsFiltered = data.gameData.filter((shot) => {
       if (selectedYear === 'All') return true;
       if (!shot.matchDate) return false;
-      const shotYear = new Date(shot.matchDate).getFullYear();
-      return shotYear.toString() === selectedYear;
+      const year = new Date(shot.matchDate).getFullYear();
+      return year.toString() === selectedYear;
     });
+    if (shotsFiltered.length === 0) return [];
 
-    if (filteredShots.length === 0) return [];
-
-    const leaderboard = filteredShots.map((shot) => {
-      const successfulOutcomes = ['score', 'made', 'hit'];
-      const outcome = shot.Outcome ? shot.Outcome.toLowerCase() : 'unknown';
-      const isSuccess = successfulOutcomes.includes(outcome);
-
-      const shotYear = shot.matchDate ? new Date(shot.matchDate).getFullYear() : 'Unknown';
-
-      return {
-        player: shot.playerName || 'Unknown Player',
-        team: shot.team || 'Unknown Team',
-        action: shot.action || 'unknown',
-        position: shot.position || 'unknown',
-        points: 0, 
-        goals: 0,
-        shots: 1,
-        successfulShots: isSuccess ? 1 : 0,
-        xPoints: shot.xPoints ? Number(shot.xPoints) : 0,
-        xGoals: shot.xGoals ? Number(shot.xGoals) : 0,
-        actionIsGoal: (shot.action === 'goal'),
-        actionIsPoint: (shot.action === 'point'),
-        year: shotYear,
-      };
-    });
-
-    const summary = leaderboard.reduce((acc, curr) => {
-      const playerKey = curr.player;
-      if (!acc[playerKey]) {
-        acc[playerKey] = {
-          player: curr.player,
-          team: curr.team,
+    const aggregator = shotsFiltered.reduce((acc, shot) => {
+      const name = shot.playerName || 'Unknown Player';
+      if (!acc[name]) {
+        acc[name] = {
+          player: name,
+          team: shot.team || 'Unknown Team',
           points: 0,
           goals: 0,
-          shots: 0,
-          successfulShots: 0,
           xPoints: 0,
           xGoals: 0,
+          setPlays: 0,
+          xSetPlays: 0,
           positionPerformance: {},
         };
       }
+      const p = acc[name];
 
-      if (curr.actionIsPoint) {
-        acc[playerKey].points += 1;
-      }
-      if (curr.actionIsGoal) {
-        acc[playerKey].points += 3;
-        acc[playerKey].goals += 1;
+      p.xPoints += shot.xPoints ? Number(shot.xPoints) : 0;
+      p.xGoals += shot.xGoals ? Number(shot.xGoals) : 0;
+
+      const setPlayActions = ['free', 'fortyfive', 'offensive mark'];
+
+      if (shot.action === 'point') {
+        p.points += 1;
+      } else if (shot.action === 'goal') {
+        p.points += 3;
+        p.goals += 1;
       }
 
-      acc[playerKey].shots += curr.shots;
-      acc[playerKey].successfulShots += curr.successfulShots;
-      acc[playerKey].xPoints += curr.xPoints;
-      acc[playerKey].xGoals += curr.xGoals;
-
-      const position = curr.position;
-      if (!acc[playerKey].positionPerformance[position]) {
-        acc[playerKey].positionPerformance[position] = {
-          shots: 0,
-          points: 0,
-          goals: 0
-        };
+      if (setPlayActions.includes((shot.action || '').toLowerCase())) {
+        p.setPlays += 1;
+        p.xSetPlays += shot.xPoints ? Number(shot.xPoints) : 0;
       }
-      acc[playerKey].positionPerformance[position].shots += curr.shots;
-      if (curr.actionIsPoint) acc[playerKey].positionPerformance[position].points += 1;
-      if (curr.actionIsGoal) acc[playerKey].positionPerformance[position].goals += 1;
+
+      const pos = shot.position || 'unknown';
+      if (!p.positionPerformance[pos]) {
+        p.positionPerformance[pos] = { shots: 0, points: 0, goals: 0 };
+      }
+      p.positionPerformance[pos].shots += 1;
+      if (shot.action === 'point') p.positionPerformance[pos].points += 1;
+      if (shot.action === 'goal') p.positionPerformance[pos].goals += 1;
 
       return acc;
     }, {});
 
-    const finalLeaderboard = Object.values(summary).map(player => {
-      const xPReturn = player.xPoints > 0 ? ((player.points) / player.xPoints) * 100 : 0;
-
-      const positionPerformance = Object.entries(player.positionPerformance).map(([pos, stats]) => {
-        const eff = stats.shots > 0 ? ((stats.points + stats.goals * 3) / stats.shots) * 100 : 0;
+    const finalArray = Object.values(aggregator).map((p) => {
+      const xPReturn = p.xPoints > 0 ? (p.points / p.xPoints) * 100 : 0;
+      const positionPerformance = Object.entries(p.positionPerformance).map(([pos, stats]) => {
+        const eff =
+          stats.shots > 0 ? ((stats.points + stats.goals * 3) / stats.shots) * 100 : 0;
         return {
           position: pos,
           shots: stats.shots,
@@ -575,41 +408,52 @@ const PlayerDataGAA = () => {
           goals: stats.goals,
           efficiency: eff,
         };
-      }).sort((a, b) => b.efficiency - a.efficiency);
-
+      });
       return {
-        ...player,
-        xPReturn,
+        ...p,
         positionPerformance,
-        Total_Points: player.points,
-        xPoints: player.xPoints,
-        xGoals: player.xGoals,
+        Total_Points: p.points,
+        xPReturn,
       };
     });
-
-    return finalLeaderboard;
+    return finalArray;
   }, [data, selectedYear]);
 
-  const top5Leaderboard = useMemo(() => {
-    if (!formattedLeaderboard || formattedLeaderboard.length === 0) return [];
-
-    const sortedByPoints = [...formattedLeaderboard].sort((a, b) => b.Total_Points - a.Total_Points);
-
-    return sortedByPoints.slice(0, 5);
+  const goalsData = useMemo(() => {
+    return formattedLeaderboard.map((p) => ({
+      player: p.player,
+      goals: p.goals,
+      xGoals: p.xGoals,
+    }));
   }, [formattedLeaderboard]);
 
-  const handleRecalculateXPoints = async () => {
+  const pointsData = useMemo(() => {
+    return formattedLeaderboard.map((p) => ({
+      player: p.player,
+      points: p.points,
+      xPoints: p.xPoints,
+    }));
+  }, [formattedLeaderboard]);
+
+  const setPlaysData = useMemo(() => {
+    return formattedLeaderboard.map((p) => ({
+      player: p.player,
+      setPlays: p.setPlays,
+      xSetPlays: p.xSetPlays,
+    }));
+  }, [formattedLeaderboard]);
+
+  async function handleRecalculateXPoints() {
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL}/recalculate-xpoints`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          uid: 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2', 
-          datasetName: 'All Shots GAA' 
-        })
+        body: JSON.stringify({
+          uid: USER_ID,
+          datasetName: DATASET_NAME,
+        }),
       });
-
-      const result = await response.json();
+      const result = await parseJSONNoNaN(response);
       if (!response.ok) {
         Swal.fire('Error', result.error || 'Failed to recalculate xpoints.', 'error');
       } else {
@@ -619,7 +463,7 @@ const PlayerDataGAA = () => {
     } catch (err) {
       Swal.fire('Error', 'Network error while recalculating xpoints.', 'error');
     }
-  };
+  }
 
   if (loading) return <LoadingIndicator />;
   if (error) return <ErrorMessage message={error} />;
@@ -629,10 +473,11 @@ const PlayerDataGAA = () => {
 
   return (
     <div className="player-data-container">
-      <h1 style={{ color: "#fff"}}>Player Data GAA</h1>
-      
+      <h1 style={{ color: '#fff' }}>Player Data GAA</h1>
       <div className="year-filter">
-        <label style={{ color: "#fff"}} htmlFor="year-select">Filter by Year: </label>
+        <label style={{ color: '#fff' }} htmlFor="year-select">
+          Filter by Year:
+        </label>
         <select
           id="year-select"
           value={selectedYear}
@@ -640,18 +485,39 @@ const PlayerDataGAA = () => {
         >
           <option value="All">All Years</option>
           {availableYears.map((year) => (
-            <option key={year} value={year.toString()}>{year}</option>
+            <option key={year} value={year.toString()}>
+              {year}
+            </option>
           ))}
         </select>
       </div>
 
+      <div className="mini-leaderboards-row">
+        <MiniLeaderboard
+          title="Goals Leaderboard"
+          data={goalsData}
+          actualKey="goals"
+          expectedKey="xGoals"
+        />
+        <MiniLeaderboard
+          title="Points Leaderboard"
+          data={pointsData}
+          actualKey="points"
+          expectedKey="xPoints"
+        />
+        <MiniLeaderboard
+          title="Set Plays Leaderboard"
+          data={setPlaysData}
+          actualKey="setPlays"
+          expectedKey="xSetPlays"
+        />
+      </div>
+
       <LeaderboardTable data={formattedLeaderboard} />
 
-      <ChartsContainer data={top5Leaderboard} />
-
-      <button onClick={handleRecalculateXPoints} className="recalculate-button">Recalculate xPoints</button>
+      <button onClick={handleRecalculateXPoints} className="recalculate-button">
+        Recalculate xPoints
+      </button>
     </div>
   );
-};
-
-export default PlayerDataGAA;
+}

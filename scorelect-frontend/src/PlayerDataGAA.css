@@ -1,6 +1,3 @@
-/* src/components/PlayerDataGAA.css */
-
-/* Container for the entire component */
 .player-data-container {
   width: 100%;
   padding: 20px;
@@ -8,7 +5,6 @@
   font-family: Arial, sans-serif;
 }
 
-/* Loading and Error Containers */
 .loading-container,
 .error-container {
   display: flex;
@@ -25,8 +21,7 @@
   width: 60px;
   height: 60px;
   animation: spin 2s linear infinite;
-  margin-bottom: 80px;
-  margin-left: 80px; /* Preserved original margin */
+  margin-bottom: 20px;
 }
 
 @keyframes spin {
@@ -37,22 +32,6 @@
 .error-container p {
   color: red;
   font-size: 18px;
-}
-
-/* Leaderboard Section */
-.leaderboard-container {
-  width: 100%;
-  padding: 20px 0;
-}
-
-.search-input {
-  width: 100%;
-  padding: 8px;
-  margin-bottom: 10px;
-  box-sizing: border-box;
-  font-size: 16px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
 }
 
 .year-filter {
@@ -66,6 +45,92 @@
 
 .year-filter select {
   padding: 5px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+/* 
+  Mini leaderboards row 
+*/
+.mini-leaderboards-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+/* Single mini leaderboard container */
+.mini-leaderboard {
+  flex: 1 1 0;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.mini-leaderboard-title {
+  margin: 0 0 10px 0;
+  text-align: center;
+  font-size: 1rem;
+}
+
+.mini-leaderboard-table-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 200px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.mini-leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.mini-leaderboard-table thead th {
+  background-color: #f4f4f4;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.mini-leaderboard-table th,
+.mini-leaderboard-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+}
+
+.mini-leaderboard-toggle {
+  margin-top: 5px;
+  background-color: #36a2eb;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 5px 10px;
+}
+.mini-leaderboard-toggle:hover {
+  background-color: #2396da;
+}
+
+/* 
+  Main leaderboard 
+*/
+.leaderboard-container {
+  width: 100%;
+  padding: 20px 0;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 10px;
+  box-sizing: border-box;
   font-size: 16px;
   border: 1px solid #ccc;
   border-radius: 4px;
@@ -92,10 +157,10 @@
 
 .leaderboard th {
   background-color: #f4f4f4;
-  cursor: pointer;
   position: sticky;
   top: 0;
   z-index: 1;
+  cursor: pointer;
 }
 
 .player-row.even {
@@ -109,6 +174,7 @@
 .nested-table {
   width: 100%;
   border-collapse: collapse;
+  font-size: 12px;
 }
 
 .nested-table th,
@@ -116,108 +182,95 @@
   padding: 6px 10px;
   text-align: left;
   border: 1px solid #ccc;
-  font-size: 12px;
 }
 
 .nested-table th {
   background-color: #eaeaea;
 }
 
-/* Charts Section */
 .charts-container {
-  display: flex;
-  flex-direction: column; /* Stack charts vertically */
-  gap: 20px; /* Space between charts */
-  margin-top: 40px;
+  display: none; /* hidden or not implemented */
 }
 
-.chart-wrapper {
-  width: 100%; /* Make charts as wide as the container */
-  height: 500px; /* Adjust height as needed */
-  background-color: #ffffff;
-  padding: 20px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-}
-
-.chart-wrapper canvas {
-  width: 100% !important;
-  height: 100% !important;
-}
-
-/* Recalculate Button */
 .recalculate-button {
   margin-top: 20px;
   padding: 10px 20px;
   font-size: 16px;
-  background-color: #4CAF50;
+  background-color: #4caf50;
   color: white;
   border: none;
   border-radius: 5px;
   cursor: pointer;
 }
-
 .recalculate-button:hover {
   background-color: #45a049;
 }
 
-/* Responsive Design */
 @media screen and (max-width: 768px) {
-  .chart-wrapper {
-    height: 400px;
+  .mini-leaderboard-title {
+    font-size: 0.85rem;
   }
-
+  .mini-leaderboard-table th,
+  .mini-leaderboard-table td {
+    font-size: 0.75rem;
+  }
   .leaderboard th,
   .leaderboard td {
     padding: 8px 10px;
     font-size: 14px;
   }
-
   .search-input {
     font-size: 14px;
-  }
-
-  .charts-container {
-    gap: 15px;
   }
 }
 
 @media screen and (max-width: 480px) {
-  .chart-wrapper {
-    height: 300px;
+  .mini-leaderboards-row {
+    flex-direction: column;
   }
-
   .leaderboard th,
   .leaderboard td {
     padding: 6px 8px;
     font-size: 12px;
   }
-
   .search-input {
     font-size: 12px;
   }
-
   .recalculate-button {
     font-size: 14px;
     padding: 8px 16px;
   }
 }
 
-/* Custom Scrollbar for Table */
 .table-wrapper::-webkit-scrollbar {
   width: 8px;
 }
-
 .table-wrapper::-webkit-scrollbar-track {
   background: #f1f1f1;
 }
-
 .table-wrapper::-webkit-scrollbar-thumb {
   background: #888;
   border-radius: 4px;
 }
-
 .table-wrapper::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+.mini-leaderboard-table-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+.mini-leaderboard-table-wrapper::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+.mini-leaderboard-table-wrapper::-webkit-scrollbar-thumb {
+  background: #aaa;
+  border-radius: 3px;
+}
+.mini-leaderboard-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #777;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }

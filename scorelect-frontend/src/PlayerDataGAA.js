@@ -65,10 +65,6 @@ ErrorMessage.propTypes = {
   message: PropTypes.string.isRequired,
 };
 
-/**
- * Translate a shot to reference one goal based on half-line.
- * Adds a 'distYards' property to the shot for distance from nearest goal.
- */
 function translateShotToOneSide(shot, halfLineX, goalX, goalY) {
   const targetGoal = (shot.x <= halfLineX) ? { x: 0, y: goalY } : { x: goalX, y: goalY };
   const dx = (shot.x || 0) - targetGoal.x;
@@ -115,20 +111,10 @@ function MiniLeaderboard({ title, data, actualKey, expectedKey, showRatio = true
           <thead>
             <tr>
               <th>Rank</th>
-              <th onClick={() => requestSort('player')}>
-                Player{getSortIndicator('player')}
-              </th>
-              <th onClick={() => requestSort(actualKey)}>
-                {actualKey}{getSortIndicator(actualKey)}
-              </th>
-              <th onClick={() => requestSort(expectedKey)}>
-                {expectedKey}{getSortIndicator(expectedKey)}
-              </th>
-              {showRatio && (
-                <th onClick={() => requestSort('ratio')}>
-                  Ratio{getSortIndicator('ratio')}
-                </th>
-              )}
+              <th onClick={() => requestSort('player')}>Player{getSortIndicator('player')}</th>
+              <th onClick={() => requestSort(actualKey)}>{actualKey}{getSortIndicator(actualKey)}</th>
+              <th onClick={() => requestSort(expectedKey)}>{expectedKey}{getSortIndicator(expectedKey)}</th>
+              {showRatio && <th onClick={() => requestSort('ratio')}>Ratio{getSortIndicator('ratio')}</th>}
             </tr>
           </thead>
           <tbody>
@@ -163,9 +149,9 @@ MiniLeaderboard.propTypes = {
 };
 
 function AvgDistanceLeaderboard({ title, data }) {
-  // Always sort by avgScoreDistance descending
   const sortedData = useMemo(() => {
     let list = [...data];
+    // Sort by avgScoreDistance descending
     list.sort((a, b) => (b.avgScoreDistance || 0) - (a.avgScoreDistance || 0));
     return list;
   }, [data]);
@@ -272,27 +258,13 @@ function LeaderboardTable({ data }) {
         <table className="leaderboard">
           <thead>
             <tr>
-              <th onClick={() => requestSort('player')}>
-                Player{getSortIndicator('player')}
-              </th>
-              <th onClick={() => requestSort('team')}>
-                Team{getSortIndicator('team')}
-              </th>
-              <th onClick={() => requestSort('Total_Points')}>
-                Total Points{getSortIndicator('Total_Points')}
-              </th>
-              <th onClick={() => requestSort('xPoints')}>
-                Expected Points (xPoints){getSortIndicator('xPoints')}
-              </th>
-              <th onClick={() => requestSort('xGoals')}>
-                Expected Goals (xGoals){getSortIndicator('xGoals')}
-              </th>
-              <th onClick={() => requestSort('xPReturn')}>
-                xP Return (%){getSortIndicator('xPReturn')}
-              </th>
-              <th onClick={() => requestSort('positionPerformance')}>
-                Position Performance{getSortIndicator('positionPerformance')}
-              </th>
+              <th onClick={() => requestSort('player')}>Player{getSortIndicator('player')}</th>
+              <th onClick={() => requestSort('team')}>Team{getSortIndicator('team')}</th>
+              <th onClick={() => requestSort('Total_Points')}>Total Points{getSortIndicator('Total_Points')}</th>
+              <th onClick={() => requestSort('xPoints')}>Expected Points (xPoints){getSortIndicator('xPoints')}</th>
+              <th onClick={() => requestSort('xGoals')}>Expected Goals (xGoals){getSortIndicator('xGoals')}</th>
+              <th onClick={() => requestSort('xPReturn')}>xP Return (%){getSortIndicator('xPReturn')}</th>
+              <th onClick={() => requestSort('positionPerformance')}>Position Performance{getSortIndicator('positionPerformance')}</th>
             </tr>
           </thead>
           <tbody>
@@ -354,6 +326,7 @@ export default function PlayerDataGAA() {
   );
 
   const [selectedYear, setSelectedYear] = useState('All');
+  const [selectedTeam, setSelectedTeam] = useState('All');
 
   const availableYears = useMemo(() => {
     if (!data || !data.gameData) return [];
@@ -367,13 +340,23 @@ export default function PlayerDataGAA() {
     return Array.from(yearsSet).sort((a, b) => b - a);
   }, [data]);
 
+  const availableTeams = useMemo(() => {
+    if (!data || !data.gameData) return [];
+    const teamSet = new Set();
+    data.gameData.forEach((shot) => {
+      if (shot.team) {
+        teamSet.add(shot.team);
+      }
+    });
+    return Array.from(teamSet).sort();
+  }, [data]);
+
   const formattedLeaderboard = useMemo(() => {
     if (!data || !data.gameData) return [];
     const shotsFiltered = data.gameData.filter((shot) => {
-      if (selectedYear === 'All') return true;
-      if (!shot.matchDate) return false;
-      const year = new Date(shot.matchDate).getFullYear();
-      return year.toString() === selectedYear;
+      const matchesYear = selectedYear === 'All' ? true : new Date(shot.matchDate).getFullYear().toString() === selectedYear;
+      const matchesTeam = selectedTeam === 'All' ? true : shot.team === selectedTeam;
+      return matchesYear && matchesTeam;
     });
     if (shotsFiltered.length === 0) return [];
 
@@ -488,7 +471,7 @@ export default function PlayerDataGAA() {
     });
 
     return finalArray;
-  }, [data, selectedYear]);
+  }, [data, selectedYear, selectedTeam]);
 
   const goalsData = useMemo(() => formattedLeaderboard.map(p => ({
     player: p.player,
@@ -570,6 +553,13 @@ export default function PlayerDataGAA() {
           <option value="All">All Years</option>
           {availableYears.map((year) => (
             <option key={year} value={year.toString()}>{year}</option>
+          ))}
+        </select>
+        <label style={{ color: '#fff', marginLeft: '10px' }} htmlFor="team-select">Filter by Team:</label>
+        <select id="team-select" value={selectedTeam} onChange={(e) => setSelectedTeam(e.target.value)}>
+          <option value="All">All Teams</option>
+          {availableTeams.map((team) => (
+            <option key={team} value={team}>{team}</option>
           ))}
         </select>
       </div>

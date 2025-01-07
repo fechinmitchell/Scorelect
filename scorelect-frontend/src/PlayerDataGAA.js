@@ -5,19 +5,6 @@ import Swal from 'sweetalert2';
 import PropTypes from 'prop-types';
 import './PlayerDataGAA.css';
 
-/**
- * If your dataset doesn't explicitly have 'shotDistance',
- * you might need to compute it. For example, if your pitch
- * has a known "goal mouth" coordinate, you can do:
- * 
- *    const dx = shot.x - goalMouthX;
- *    const dy = shot.y - goalMouthY;
- *    const distMeters = Math.sqrt(dx*dx + dy*dy);
- *    const distYards = distMeters * 1.09361; // convert meters to yards
- * 
- * Then check if distYards >= 40 for a 2-pointer.
- */
-
 function parseJSONNoNaN(response) {
   return response.text().then((rawText) => {
     const safeText = rawText
@@ -39,7 +26,6 @@ function useFetchDataset(collectionPath, documentPath) {
       try {
         const docRef = doc(firestore, `${collectionPath}/${documentPath}`);
         const docSnap = await getDoc(docRef);
-
         if (docSnap.exists()) {
           setData(docSnap.data());
         } else {
@@ -79,6 +65,18 @@ ErrorMessage.propTypes = {
   message: PropTypes.string.isRequired,
 };
 
+/**
+ * Translate a shot to reference one goal based on half-line.
+ * Adds a 'distYards' property to the shot for distance from nearest goal.
+ */
+function translateShotToOneSide(shot, halfLineX, goalX, goalY) {
+  const targetGoal = (shot.x <= halfLineX) ? { x: 0, y: goalY } : { x: goalX, y: goalY };
+  const dx = (shot.x || 0) - targetGoal.x;
+  const dy = (shot.y || 0) - targetGoal.y;
+  const distMeters = Math.sqrt(dx * dx + dy * dy);
+  return { ...shot, distYards: distMeters * 1.09361 };
+}
+
 function MiniLeaderboard({ title, data, actualKey, expectedKey, showRatio = true, initialDirection = 'descending' }) {
   const [sortConfig, setSortConfig] = useState({ key: actualKey, direction: initialDirection });
 
@@ -86,8 +84,8 @@ function MiniLeaderboard({ title, data, actualKey, expectedKey, showRatio = true
     let list = [...data];
     if (sortConfig) {
       list.sort((a, b) => {
-        const aVal = getValue(a, sortConfig.key);
-        const bVal = getValue(b, sortConfig.key);
+        const aVal = a[sortConfig.key] || 0;
+        const bVal = b[sortConfig.key] || 0;
         if (aVal < bVal) return sortConfig.direction === 'ascending' ? -1 : 1;
         if (aVal > bVal) return sortConfig.direction === 'ascending' ? 1 : -1;
         return 0;
@@ -95,16 +93,6 @@ function MiniLeaderboard({ title, data, actualKey, expectedKey, showRatio = true
     }
     return list;
   }, [data, sortConfig]);
-
-  function getValue(item, key) {
-    if (key === 'ratio') {
-      const actual = item[actualKey] || 0;
-      const expected = item[expectedKey] || 0;
-      const epsilon = 0.0001;
-      return expected > 0 ? actual / expected : actual / epsilon;
-    }
-    return item[key] || 0;
-  }
 
   function requestSort(key) {
     let direction = 'ascending';
@@ -149,7 +137,6 @@ function MiniLeaderboard({ title, data, actualKey, expectedKey, showRatio = true
               const expectedVal = item[expectedKey] || 0;
               const epsilon = 0.0001;
               const ratioVal = expectedVal > 0 ? actualVal / expectedVal : actualVal / epsilon;
-
               return (
                 <tr key={`${item.player}-${index}`}>
                   <td>{index + 1}</td>
@@ -173,6 +160,48 @@ MiniLeaderboard.propTypes = {
   actualKey: PropTypes.string.isRequired,
   expectedKey: PropTypes.string.isRequired,
   showRatio: PropTypes.bool,
+};
+
+function AvgDistanceLeaderboard({ title, data }) {
+  // Always sort by avgScoreDistance descending
+  const sortedData = useMemo(() => {
+    let list = [...data];
+    list.sort((a, b) => (b.avgScoreDistance || 0) - (a.avgScoreDistance || 0));
+    return list;
+  }, [data]);
+
+  return (
+    <div className="mini-leaderboard">
+      <h3 className="mini-leaderboard-title">{title}</h3>
+      <div className="mini-leaderboard-table-wrapper">
+        <table className="mini-leaderboard-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Player</th>
+              <th>Avg Distance</th>
+              <th>Avg Score Distance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedData.map((item, index) => (
+              <tr key={`${item.player}-${index}`}>
+                <td>{index + 1}</td>
+                <td>{item.player}</td>
+                <td>{!isNaN(Number(item.avgDistance)) ? Number(item.avgDistance).toFixed(2) : '0.00'}</td>
+                <td>{!isNaN(Number(item.avgScoreDistance)) ? Number(item.avgScoreDistance).toFixed(2) : '0.00'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+AvgDistanceLeaderboard.propTypes = {
+  title: PropTypes.string.isRequired,
+  data: PropTypes.array.isRequired,
 };
 
 function LeaderboardTable({ data }) {
@@ -340,7 +369,6 @@ export default function PlayerDataGAA() {
 
   const formattedLeaderboard = useMemo(() => {
     if (!data || !data.gameData) return [];
-
     const shotsFiltered = data.gameData.filter((shot) => {
       if (selectedYear === 'All') return true;
       if (!shot.matchDate) return false;
@@ -349,8 +377,8 @@ export default function PlayerDataGAA() {
     });
     if (shotsFiltered.length === 0) return [];
 
-    const goalX = 145;
     const goalY = 44;
+    const goalX = 145;
     const halfLineX = 72.5;
 
     const aggregator = shotsFiltered.reduce((acc, shot) => {
@@ -373,19 +401,19 @@ export default function PlayerDataGAA() {
           pressuredShots: 0,
           pressuredScores: 0,
           totalDistance: 0,
+          totalScoreDistance: 0,
         };
       }
       const p = acc[name];
 
-      // Determine nearest goal based on half-line
-      const targetGoal = (shot.x <= halfLineX) ? { x: 0, y: goalY } : { x: goalX, y: goalY };
-      const dx = (shot.x || 0) - targetGoal.x;
-      const dy = (shot.y || 0) - targetGoal.y;
-      const distMeters = Math.sqrt(dx * dx + dy * dy);
-      const distYards = distMeters * 1.09361;
+      const translatedShot = translateShotToOneSide(shot, halfLineX, goalX, goalY);
+      const distYards = translatedShot.distYards;
 
       p.totalDistance += distYards;
       p.shootingAttempts += 1;
+      if (shot.action === 'point' || shot.action === 'goal') {
+        p.totalScoreDistance += distYards;
+      }
 
       if (distYards >= 40) {
         p.twoPointerAttempts += 1;
@@ -436,6 +464,7 @@ export default function PlayerDataGAA() {
     const finalArray = Object.values(aggregator).map((p) => {
       const xPReturn = p.xPoints > 0 ? (p.points / p.xPoints) * 100 : 0;
       const avgDistance = p.shootingAttempts > 0 ? p.totalDistance / p.shootingAttempts : 0;
+      const avgScoreDistance = p.shootingScored > 0 ? p.totalScoreDistance / p.shootingScored : 0;
 
       const positionPerformance = Object.entries(p.positionPerformance).map(([pos, stats]) => {
         const eff = stats.shots > 0 ? ((stats.points + stats.goals * 3) / stats.shots) * 100 : 0;
@@ -454,6 +483,7 @@ export default function PlayerDataGAA() {
         Total_Points: p.points,
         xPReturn,
         avgDistance,
+        avgScoreDistance,
       };
     });
 
@@ -499,6 +529,7 @@ export default function PlayerDataGAA() {
   const distanceData = useMemo(() => formattedLeaderboard.map(p => ({
     player: p.player,
     avgDistance: !isNaN(p.avgDistance) ? Number(p.avgDistance).toFixed(2) : '0.00',
+    avgScoreDistance: !isNaN(p.avgScoreDistance) ? Number(p.avgScoreDistance).toFixed(2) : '0.00',
   })), [formattedLeaderboard]);
 
   async function handleRecalculateXPoints() {
@@ -534,19 +565,11 @@ export default function PlayerDataGAA() {
       <h1 style={{ color: '#fff' }}>Player Data GAA</h1>
 
       <div className="year-filter">
-        <label style={{ color: '#fff' }} htmlFor="year-select">
-          Filter by Year:
-        </label>
-        <select
-          id="year-select"
-          value={selectedYear}
-          onChange={(e) => setSelectedYear(e.target.value)}
-        >
+        <label style={{ color: '#fff' }} htmlFor="year-select">Filter by Year:</label>
+        <select id="year-select" value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}>
           <option value="All">All Years</option>
           {availableYears.map((year) => (
-            <option key={year} value={year.toString()}>
-              {year}
-            </option>
+            <option key={year} value={year.toString()}>{year}</option>
           ))}
         </select>
       </div>
@@ -600,13 +623,9 @@ export default function PlayerDataGAA() {
           expectedKey="pressuredShots"
           showRatio={true}
         />
-        <MiniLeaderboard
+        <AvgDistanceLeaderboard
           title="Avg Shooting Distance"
           data={distanceData}
-          actualKey="avgDistance"
-          expectedKey="ignored"
-          showRatio={false}
-          initialDirection="descending"
         />
       </div>
 

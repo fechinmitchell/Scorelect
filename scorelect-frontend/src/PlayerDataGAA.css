@@ -3,8 +3,10 @@
   padding: 20px;
   box-sizing: border-box;
   font-family: Arial, sans-serif;
+  background-color: #333; /* Subtle background */
 }
 
+/* Loading and Error Containers */
 .loading-container,
 .error-container {
   display: flex;
@@ -34,6 +36,7 @@
   font-size: 18px;
 }
 
+/* Year Filter */
 .year-filter {
   margin-bottom: 20px;
 }
@@ -41,6 +44,7 @@
 .year-filter label {
   margin-right: 10px;
   font-weight: bold;
+  color: #333;
 }
 
 .year-filter select {
@@ -50,9 +54,7 @@
   border-radius: 4px;
 }
 
-/* 
-  Mini leaderboards row 
-*/
+/* Mini leaderboards (top and second row) */
 .mini-leaderboards-row {
   display: flex;
   flex-wrap: nowrap;
@@ -71,20 +73,26 @@
   flex-direction: column;
 }
 
+/* Title with a nice blue color and slightly larger font */
 .mini-leaderboard-title {
   margin: 0 0 10px 0;
   text-align: center;
-  font-size: 1rem;
+  font-size: 1.05rem;
+  font-weight: bold;
+  color: #1e90ff; /* DodgerBlue color */
 }
 
+/* Scrollable table area */
 .mini-leaderboard-table-wrapper {
   flex: 1;
   overflow-y: auto;
   max-height: 200px;
   border: 1px solid #ccc;
   border-radius: 4px;
+  background-color: #fafafa;
 }
 
+/* Table styles for mini leaderboards */
 .mini-leaderboard-table {
   width: 100%;
   border-collapse: collapse;
@@ -105,6 +113,7 @@
   text-align: left;
 }
 
+/* We might not be using the toggle, but we keep styles for reference */
 .mini-leaderboard-toggle {
   margin-top: 5px;
   background-color: #36a2eb;
@@ -118,14 +127,13 @@
   background-color: #2396da;
 }
 
-/* 
-  Main leaderboard 
-*/
+/* Main leaderboard container */
 .leaderboard-container {
   width: 100%;
   padding: 20px 0;
 }
 
+/* Search bar */
 .search-input {
   width: 100%;
   padding: 8px;
@@ -136,13 +144,16 @@
   border-radius: 4px;
 }
 
+/* Scrollable main leaderboard */
 .table-wrapper {
   overflow-y: auto;
   border: 1px solid #ddd;
   border-radius: 4px;
   max-height: 500px;
+  background-color: #fff;
 }
 
+/* Main Leaderboard Table */
 .leaderboard {
   width: 100%;
   border-collapse: collapse;
@@ -163,6 +174,7 @@
   cursor: pointer;
 }
 
+/* Striped rows */
 .player-row.even {
   background-color: #f9f9f9;
 }
@@ -171,6 +183,7 @@
   background-color: #ffffff;
 }
 
+/* Nested table for position performance */
 .nested-table {
   width: 100%;
   border-collapse: collapse;
@@ -188,10 +201,12 @@
   background-color: #eaeaea;
 }
 
+/* Hide charts container if not in use */
 .charts-container {
-  display: none; /* hidden or not implemented */
+  display: none;
 }
 
+/* Recalculate button styling */
 .recalculate-button {
   margin-top: 20px;
   padding: 10px 20px;
@@ -206,6 +221,7 @@
   background-color: #45a049;
 }
 
+/* Responsive adjustments */
 @media screen and (max-width: 768px) {
   .mini-leaderboard-title {
     font-size: 0.85rem;
@@ -242,6 +258,7 @@
   }
 }
 
+/* Custom scrollbars for main table */
 .table-wrapper::-webkit-scrollbar {
   width: 8px;
 }
@@ -256,6 +273,7 @@
   background: #555;
 }
 
+/* Custom scrollbars for mini leaderboards */
 .mini-leaderboard-table-wrapper::-webkit-scrollbar {
   width: 6px;
 }
@@ -268,9 +286,4 @@
 }
 .mini-leaderboard-table-wrapper::-webkit-scrollbar-thumb:hover {
   background: #777;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
 }

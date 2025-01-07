@@ -1,11 +1,22 @@
-// PlayerDataGAA.js
-
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { firestore } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import Swal from 'sweetalert2';
 import PropTypes from 'prop-types';
 import './PlayerDataGAA.css';
+
+/**
+ * If your dataset doesn't explicitly have 'shotDistance',
+ * you might need to compute it. For example, if your pitch
+ * has a known "goal mouth" coordinate, you can do:
+ * 
+ *    const dx = shot.x - goalMouthX;
+ *    const dy = shot.y - goalMouthY;
+ *    const distMeters = Math.sqrt(dx*dx + dy*dy);
+ *    const distYards = distMeters * 1.09361; // convert meters to yards
+ * 
+ * Then check if distYards >= 40 for a 2-pointer.
+ */
 
 function parseJSONNoNaN(response) {
   return response.text().then((rawText) => {
@@ -30,8 +41,7 @@ function useFetchDataset(collectionPath, documentPath) {
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
-          const dataset = docSnap.data();
-          setData(dataset);
+          setData(docSnap.data());
         } else {
           throw new Error('No such document exists!');
         }
@@ -69,23 +79,9 @@ ErrorMessage.propTypes = {
   message: PropTypes.string.isRequired,
 };
 
-/**
- * A mini leaderboard that shows data in columns:
- * - Player
- * - Actual (actualKey)
- * - Expected (expectedKey)
- * - Ratio
- * 
- * Default sorts by actualKey (descending), but user can click on column headers
- * to reorder the table by Player, Actual, Expected, or Ratio.
- * 
- * There's no "Show All" button; the entire list is scrollable.
- */
-function MiniLeaderboard({ title, data, actualKey, expectedKey }) {
-  // Default to sorting by the actualKey descending
-  const [sortConfig, setSortConfig] = useState({ key: actualKey, direction: 'descending' });
+function MiniLeaderboard({ title, data, actualKey, expectedKey, showRatio = true, initialDirection = 'descending' }) {
+  const [sortConfig, setSortConfig] = useState({ key: actualKey, direction: initialDirection });
 
-  // Perform sorting
   const sortedData = useMemo(() => {
     let list = [...data];
     if (sortConfig) {
@@ -102,7 +98,6 @@ function MiniLeaderboard({ title, data, actualKey, expectedKey }) {
 
   function getValue(item, key) {
     if (key === 'ratio') {
-      // ratio = actual / expected
       const actual = item[actualKey] || 0;
       const expected = item[expectedKey] || 0;
       const epsilon = 0.0001;
@@ -141,25 +136,27 @@ function MiniLeaderboard({ title, data, actualKey, expectedKey }) {
               <th onClick={() => requestSort(expectedKey)}>
                 {expectedKey}{getSortIndicator(expectedKey)}
               </th>
-              <th onClick={() => requestSort('ratio')}>
-                Ratio{getSortIndicator('ratio')}
-              </th>
+              {showRatio && (
+                <th onClick={() => requestSort('ratio')}>
+                  Ratio{getSortIndicator('ratio')}
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
-            {sortedData.map((player, index) => {
-              const actualVal = player[actualKey] || 0;
-              const expectedVal = player[expectedKey] || 0;
+            {sortedData.map((item, index) => {
+              const actualVal = item[actualKey] || 0;
+              const expectedVal = item[expectedKey] || 0;
               const epsilon = 0.0001;
-              const ratio = expectedVal > 0 ? actualVal / expectedVal : actualVal / epsilon;
+              const ratioVal = expectedVal > 0 ? actualVal / expectedVal : actualVal / epsilon;
 
               return (
-                <tr key={`${player.player}-${index}`}>
+                <tr key={`${item.player}-${index}`}>
                   <td>{index + 1}</td>
-                  <td>{player.player}</td>
-                  <td>{actualVal.toFixed(2)}</td>
-                  <td>{expectedVal.toFixed(2)}</td>
-                  <td>{ratio.toFixed(2)}</td>
+                  <td>{item.player}</td>
+                  <td>{!isNaN(Number(actualVal)) ? Number(actualVal).toFixed(2) : '0.00'}</td>
+                  <td>{!isNaN(Number(expectedVal)) ? Number(expectedVal).toFixed(2) : '0.00'}</td>
+                  {showRatio && <td>{!isNaN(Number(ratioVal)) ? Number(ratioVal).toFixed(2) : '0.00'}</td>}
                 </tr>
               );
             })}
@@ -175,6 +172,7 @@ MiniLeaderboard.propTypes = {
   data: PropTypes.array.isRequired,
   actualKey: PropTypes.string.isRequired,
   expectedKey: PropTypes.string.isRequired,
+  showRatio: PropTypes.bool,
 };
 
 function LeaderboardTable({ data }) {
@@ -278,9 +276,9 @@ function LeaderboardTable({ data }) {
                 <td>{entry.player}</td>
                 <td>{entry.team}</td>
                 <td>{entry.Total_Points}</td>
-                <td>{entry.xPoints.toFixed(2)}</td>
-                <td>{entry.xGoals.toFixed(2)}</td>
-                <td>{entry.xPReturn.toFixed(2)}%</td>
+                <td>{!isNaN(Number(entry.xPoints)) ? Number(entry.xPoints).toFixed(2) : '0.00'}</td>
+                <td>{!isNaN(Number(entry.xGoals)) ? Number(entry.xGoals).toFixed(2) : '0.00'}</td>
+                <td>{!isNaN(Number(entry.xPReturn)) ? Number(entry.xPReturn).toFixed(2) + '%' : '0.00%'}</td>
                 <td>
                   <table className="nested-table">
                     <thead>
@@ -299,7 +297,7 @@ function LeaderboardTable({ data }) {
                           <td>{perf.shots}</td>
                           <td>{perf.points}</td>
                           <td>{perf.goals}</td>
-                          <td>{perf.efficiency.toFixed(2)}%</td>
+                          <td>{!isNaN(Number(perf.efficiency)) ? Number(perf.efficiency).toFixed(2) + '%' : '0.00%'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -351,6 +349,10 @@ export default function PlayerDataGAA() {
     });
     if (shotsFiltered.length === 0) return [];
 
+    const goalX = 145;
+    const goalY = 44;
+    const halfLineX = 72.5;
+
     const aggregator = shotsFiltered.reduce((acc, shot) => {
       const name = shot.playerName || 'Unknown Player';
       if (!acc[name]) {
@@ -364,14 +366,37 @@ export default function PlayerDataGAA() {
           setPlays: 0,
           xSetPlays: 0,
           positionPerformance: {},
+          shootingAttempts: 0,
+          shootingScored: 0,
+          twoPointerAttempts: 0,
+          twoPointerScores: 0,
+          pressuredShots: 0,
+          pressuredScores: 0,
+          totalDistance: 0,
         };
       }
       const p = acc[name];
 
-      p.xPoints += shot.xPoints ? Number(shot.xPoints) : 0;
-      p.xGoals += shot.xGoals ? Number(shot.xGoals) : 0;
+      // Determine nearest goal based on half-line
+      const targetGoal = (shot.x <= halfLineX) ? { x: 0, y: goalY } : { x: goalX, y: goalY };
+      const dx = (shot.x || 0) - targetGoal.x;
+      const dy = (shot.y || 0) - targetGoal.y;
+      const distMeters = Math.sqrt(dx * dx + dy * dy);
+      const distYards = distMeters * 1.09361;
 
-      const setPlayActions = ['free', 'fortyfive', 'offensive mark'];
+      p.totalDistance += distYards;
+      p.shootingAttempts += 1;
+
+      if (distYards >= 40) {
+        p.twoPointerAttempts += 1;
+        if (shot.action === 'point' || shot.action === 'goal') {
+          p.twoPointerScores += 1;
+        }
+      }
+
+      if (shot.action === 'point' || shot.action === 'goal') {
+        p.shootingScored += 1;
+      }
 
       if (shot.action === 'point') {
         p.points += 1;
@@ -380,9 +405,21 @@ export default function PlayerDataGAA() {
         p.goals += 1;
       }
 
+      p.xPoints += shot.xPoints ? Number(shot.xPoints) : 0;
+      p.xGoals += shot.xGoals ? Number(shot.xGoals) : 0;
+
+      const setPlayActions = ['free', 'fortyfive', 'offensive mark'];
       if (setPlayActions.includes((shot.action || '').toLowerCase())) {
         p.setPlays += 1;
         p.xSetPlays += shot.xPoints ? Number(shot.xPoints) : 0;
+      }
+
+      const isPressured = (shot.pressure || '').toLowerCase().startsWith('y');
+      if (isPressured) {
+        p.pressuredShots += 1;
+        if (shot.action === 'point' || shot.action === 'goal') {
+          p.pressuredScores += 1;
+        }
       }
 
       const pos = shot.position || 'unknown';
@@ -398,9 +435,10 @@ export default function PlayerDataGAA() {
 
     const finalArray = Object.values(aggregator).map((p) => {
       const xPReturn = p.xPoints > 0 ? (p.points / p.xPoints) * 100 : 0;
+      const avgDistance = p.shootingAttempts > 0 ? p.totalDistance / p.shootingAttempts : 0;
+
       const positionPerformance = Object.entries(p.positionPerformance).map(([pos, stats]) => {
-        const eff =
-          stats.shots > 0 ? ((stats.points + stats.goals * 3) / stats.shots) * 100 : 0;
+        const eff = stats.shots > 0 ? ((stats.points + stats.goals * 3) / stats.shots) * 100 : 0;
         return {
           position: pos,
           shots: stats.shots,
@@ -409,39 +447,59 @@ export default function PlayerDataGAA() {
           efficiency: eff,
         };
       });
+
       return {
         ...p,
         positionPerformance,
         Total_Points: p.points,
         xPReturn,
+        avgDistance,
       };
     });
+
     return finalArray;
   }, [data, selectedYear]);
 
-  const goalsData = useMemo(() => {
-    return formattedLeaderboard.map((p) => ({
-      player: p.player,
-      goals: p.goals,
-      xGoals: p.xGoals,
-    }));
-  }, [formattedLeaderboard]);
+  const goalsData = useMemo(() => formattedLeaderboard.map(p => ({
+    player: p.player,
+    goals: p.goals,
+    xGoals: p.xGoals,
+  })), [formattedLeaderboard]);
 
-  const pointsData = useMemo(() => {
-    return formattedLeaderboard.map((p) => ({
-      player: p.player,
-      points: p.points,
-      xPoints: p.xPoints,
-    }));
-  }, [formattedLeaderboard]);
+  const pointsData = useMemo(() => formattedLeaderboard.map(p => ({
+    player: p.player,
+    points: p.points,
+    xPoints: p.xPoints,
+  })), [formattedLeaderboard]);
 
-  const setPlaysData = useMemo(() => {
-    return formattedLeaderboard.map((p) => ({
-      player: p.player,
-      setPlays: p.setPlays,
-      xSetPlays: p.xSetPlays,
-    }));
-  }, [formattedLeaderboard]);
+  const setPlaysData = useMemo(() => formattedLeaderboard.map(p => ({
+    player: p.player,
+    setPlays: p.setPlays,
+    xSetPlays: p.xSetPlays,
+  })), [formattedLeaderboard]);
+
+  const accuracyData = useMemo(() => formattedLeaderboard.map(p => ({
+    player: p.player,
+    shootingScored: p.shootingScored,
+    shootingAttempts: p.shootingAttempts,
+  })), [formattedLeaderboard]);
+
+  const twoPointerData = useMemo(() => formattedLeaderboard.map(p => ({
+    player: p.player,
+    twoPointerScores: p.twoPointerScores,
+    twoPointerAttempts: p.twoPointerAttempts,
+  })), [formattedLeaderboard]);
+
+  const pressureData = useMemo(() => formattedLeaderboard.map(p => ({
+    player: p.player,
+    pressuredScores: p.pressuredScores,
+    pressuredShots: p.pressuredShots,
+  })), [formattedLeaderboard]);
+
+  const distanceData = useMemo(() => formattedLeaderboard.map(p => ({
+    player: p.player,
+    avgDistance: !isNaN(p.avgDistance) ? Number(p.avgDistance).toFixed(2) : '0.00',
+  })), [formattedLeaderboard]);
 
   async function handleRecalculateXPoints() {
     try {
@@ -474,6 +532,7 @@ export default function PlayerDataGAA() {
   return (
     <div className="player-data-container">
       <h1 style={{ color: '#fff' }}>Player Data GAA</h1>
+
       <div className="year-filter">
         <label style={{ color: '#fff' }} htmlFor="year-select">
           Filter by Year:
@@ -498,18 +557,56 @@ export default function PlayerDataGAA() {
           data={goalsData}
           actualKey="goals"
           expectedKey="xGoals"
+          showRatio={true}
         />
         <MiniLeaderboard
           title="Points Leaderboard"
           data={pointsData}
           actualKey="points"
           expectedKey="xPoints"
+          showRatio={true}
         />
         <MiniLeaderboard
           title="Set Plays Leaderboard"
           data={setPlaysData}
           actualKey="setPlays"
           expectedKey="xSetPlays"
+          showRatio={false}
+        />
+      </div>
+
+      <div className="mini-leaderboards-row">
+        <MiniLeaderboard
+          title="Shooting Accuracy"
+          data={accuracyData}
+          actualKey="shootingScored"
+          expectedKey="shootingAttempts"
+          showRatio={true}
+        />
+        <MiniLeaderboard
+          title="2 Pointer Leaderboard"
+          data={twoPointerData}
+          actualKey="twoPointerScores"
+          expectedKey="twoPointerAttempts"
+          showRatio={true}
+        />
+      </div>
+
+      <div className="mini-leaderboards-row">
+        <MiniLeaderboard
+          title="Under Pressure Shots"
+          data={pressureData}
+          actualKey="pressuredScores"
+          expectedKey="pressuredShots"
+          showRatio={true}
+        />
+        <MiniLeaderboard
+          title="Avg Shooting Distance"
+          data={distanceData}
+          actualKey="avgDistance"
+          expectedKey="ignored"
+          showRatio={false}
+          initialDirection="descending"
         />
       </div>
 

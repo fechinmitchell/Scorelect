@@ -43,6 +43,7 @@ import Training from './Training';
 import SportSelectionPage from './SportSelectionPage';
 import PlayerDataGAA from './PlayerDataGAA';
 import ErrorBoundary from './components/ErrorBoundary'; // Import ErrorBoundary
+import PlayerShotDataGAA from './components/PlayerShotDataGAA';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
@@ -256,6 +257,8 @@ const App = () => {
                   <Route path="/analysis/soccer-dashboard" element={<SoccerAnalysisDashboard />} />
 
                   <Route path="/player-data-gaa" element={<PlayerDataGAA />} />
+                  <Route path="/player/:playerName" element={<PlayerShotDataGAA />} />
+
 
                   {/* Heatmap and other pages */}
                   <Route path="/analysis/heatmap" element={<HeatmapPage />} />

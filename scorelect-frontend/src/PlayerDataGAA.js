@@ -1,6 +1,9 @@
+// src/components/PlayerDataGAA.js
+
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { firestore } from './firebase';
+import { Link } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
+import { firestore } from './firebase';
 import Swal from 'sweetalert2';
 import PropTypes from 'prop-types';
 import './PlayerDataGAA.css';
@@ -65,15 +68,26 @@ ErrorMessage.propTypes = {
   message: PropTypes.string.isRequired,
 };
 
+/**
+ * Translate a shot to reference one goal based on half-line.
+ * Adds a 'distMeters' property to the shot for distance from nearest goal.
+ */
 function translateShotToOneSide(shot, halfLineX, goalX, goalY) {
-  const targetGoal = (shot.x <= halfLineX) ? { x: 0, y: goalY } : { x: goalX, y: goalY };
+  const targetGoal = shot.x <= halfLineX ? { x: 0, y: goalY } : { x: goalX, y: goalY };
   const dx = (shot.x || 0) - targetGoal.x;
   const dy = (shot.y || 0) - targetGoal.y;
   const distMeters = Math.sqrt(dx * dx + dy * dy);
-  return { ...shot, distYards: distMeters * 1.09361 };
+  return { ...shot, distMeters };
 }
 
-function MiniLeaderboard({ title, data, actualKey, expectedKey, showRatio = true, initialDirection = 'descending' }) {
+function MiniLeaderboard({
+  title,
+  data,
+  actualKey,
+  expectedKey,
+  showRatio = true,
+  initialDirection = 'descending',
+}) {
   const [sortConfig, setSortConfig] = useState({ key: actualKey, direction: initialDirection });
 
   const sortedData = useMemo(() => {
@@ -111,10 +125,22 @@ function MiniLeaderboard({ title, data, actualKey, expectedKey, showRatio = true
           <thead>
             <tr>
               <th>Rank</th>
-              <th onClick={() => requestSort('player')}>Player{getSortIndicator('player')}</th>
-              <th onClick={() => requestSort(actualKey)}>{actualKey}{getSortIndicator(actualKey)}</th>
-              <th onClick={() => requestSort(expectedKey)}>{expectedKey}{getSortIndicator(expectedKey)}</th>
-              {showRatio && <th onClick={() => requestSort('ratio')}>Ratio{getSortIndicator('ratio')}</th>}
+              <th onClick={() => requestSort('player')}>
+                Player{getSortIndicator('player')}
+              </th>
+              <th onClick={() => requestSort(actualKey)}>
+                {actualKey}
+                {getSortIndicator(actualKey)}
+              </th>
+              <th onClick={() => requestSort(expectedKey)}>
+                {expectedKey}
+                {getSortIndicator(expectedKey)}
+              </th>
+              {showRatio && (
+                <th onClick={() => requestSort('ratio')}>
+                  Ratio{getSortIndicator('ratio')}
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -126,10 +152,30 @@ function MiniLeaderboard({ title, data, actualKey, expectedKey, showRatio = true
               return (
                 <tr key={`${item.player}-${index}`}>
                   <td>{index + 1}</td>
-                  <td>{item.player}</td>
-                  <td>{!isNaN(Number(actualVal)) ? Number(actualVal).toFixed(2) : '0.00'}</td>
-                  <td>{!isNaN(Number(expectedVal)) ? Number(expectedVal).toFixed(2) : '0.00'}</td>
-                  {showRatio && <td>{!isNaN(Number(ratioVal)) ? Number(ratioVal).toFixed(2) : '0.00'}</td>}
+                  <td>
+                    <Link
+                      to={`/player/${encodeURIComponent(item.player)}`}
+                      state={{ playerData: item }}
+                      style={{
+                        color: '#FFA500',
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {item.player}
+                    </Link>
+                  </td>
+                  <td>
+                    {!isNaN(Number(actualVal)) ? Number(actualVal).toFixed(2) : '0.00'}
+                  </td>
+                  <td>
+                    {!isNaN(Number(expectedVal)) ? Number(expectedVal).toFixed(2) : '0.00'}
+                  </td>
+                  {showRatio && (
+                    <td>
+                      {!isNaN(Number(ratioVal)) ? Number(ratioVal).toFixed(2) : '0.00'}
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -151,7 +197,6 @@ MiniLeaderboard.propTypes = {
 function AvgDistanceLeaderboard({ title, data }) {
   const sortedData = useMemo(() => {
     let list = [...data];
-    // Sort by avgScoreDistance descending
     list.sort((a, b) => (b.avgScoreDistance || 0) - (a.avgScoreDistance || 0));
     return list;
   }, [data]);
@@ -165,17 +210,35 @@ function AvgDistanceLeaderboard({ title, data }) {
             <tr>
               <th>Rank</th>
               <th>Player</th>
-              <th>Avg Distance</th>
-              <th>Avg Score Distance</th>
+              <th>Avg Distance (m)</th>
+              <th>Avg Score Distance (m)</th>
             </tr>
           </thead>
           <tbody>
             {sortedData.map((item, index) => (
               <tr key={`${item.player}-${index}`}>
                 <td>{index + 1}</td>
-                <td>{item.player}</td>
-                <td>{!isNaN(Number(item.avgDistance)) ? Number(item.avgDistance).toFixed(2) : '0.00'}</td>
-                <td>{!isNaN(Number(item.avgScoreDistance)) ? Number(item.avgScoreDistance).toFixed(2) : '0.00'}</td>
+                <td>
+                  <Link
+                    to={`/player/${encodeURIComponent(item.player)}`}
+                    state={{ playerData: item }}
+                    style={{
+                      color: '#FFA500',
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {item.player}
+                  </Link>
+                </td>
+                <td>
+                  {!isNaN(Number(item.avgDistance)) ? Number(item.avgDistance).toFixed(2) : '0.00'}
+                </td>
+                <td>
+                  {!isNaN(Number(item.avgScoreDistance))
+                    ? Number(item.avgScoreDistance).toFixed(2)
+                    : '0.00'}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -191,7 +254,10 @@ AvgDistanceLeaderboard.propTypes = {
 };
 
 function LeaderboardTable({ data }) {
-  const [sortConfig, setSortConfig] = useState({ key: 'Total_Points', direction: 'descending' });
+  const [sortConfig, setSortConfig] = useState({
+    key: 'Total_Points',
+    direction: 'descending',
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const rowRef = useRef(null);
   const [maxHeight, setMaxHeight] = useState(500);
@@ -246,7 +312,7 @@ function LeaderboardTable({ data }) {
 
   return (
     <div className="leaderboard-container">
-      <h2 style={{ color: "#fff" }}>Leaderboard</h2>
+      <h2 style={{ color: '#fff' }}>Leaderboard</h2>
       <input
         type="text"
         placeholder="Search Players..."
@@ -258,13 +324,27 @@ function LeaderboardTable({ data }) {
         <table className="leaderboard">
           <thead>
             <tr>
-              <th onClick={() => requestSort('player')}>Player{getSortIndicator('player')}</th>
-              <th onClick={() => requestSort('team')}>Team{getSortIndicator('team')}</th>
-              <th onClick={() => requestSort('Total_Points')}>Total Points{getSortIndicator('Total_Points')}</th>
-              <th onClick={() => requestSort('xPoints')}>Expected Points (xPoints){getSortIndicator('xPoints')}</th>
-              <th onClick={() => requestSort('xGoals')}>Expected Goals (xGoals){getSortIndicator('xGoals')}</th>
-              <th onClick={() => requestSort('xPReturn')}>xP Return (%){getSortIndicator('xPReturn')}</th>
-              <th onClick={() => requestSort('positionPerformance')}>Position Performance{getSortIndicator('positionPerformance')}</th>
+              <th onClick={() => requestSort('player')}>
+                Player{getSortIndicator('player')}
+              </th>
+              <th onClick={() => requestSort('team')}>
+                Team{getSortIndicator('team')}
+              </th>
+              <th onClick={() => requestSort('Total_Points')}>
+                Total Points{getSortIndicator('Total_Points')}
+              </th>
+              <th onClick={() => requestSort('xPoints')}>
+                Expected Points (xPoints){getSortIndicator('xPoints')}
+              </th>
+              <th onClick={() => requestSort('xGoals')}>
+                Expected Goals (xGoals){getSortIndicator('xGoals')}
+              </th>
+              <th onClick={() => requestSort('xPReturn')}>
+                xP Return (%){getSortIndicator('xPReturn')}
+              </th>
+              <th onClick={() => requestSort('positionPerformance')}>
+                Position Performance{getSortIndicator('positionPerformance')}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -274,12 +354,32 @@ function LeaderboardTable({ data }) {
                 className={`player-row ${index % 2 === 0 ? 'even' : 'odd'}`}
                 ref={index === 0 ? rowRef : null}
               >
-                <td>{entry.player}</td>
+                <td>
+                  <Link
+                    to={`/player/${encodeURIComponent(entry.player)}`}
+                    state={{ playerData: entry }}
+                    style={{
+                      color: '#FFA500',
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {entry.player}
+                  </Link>
+                </td>
                 <td>{entry.team}</td>
                 <td>{entry.Total_Points}</td>
-                <td>{!isNaN(Number(entry.xPoints)) ? Number(entry.xPoints).toFixed(2) : '0.00'}</td>
-                <td>{!isNaN(Number(entry.xGoals)) ? Number(entry.xGoals).toFixed(2) : '0.00'}</td>
-                <td>{!isNaN(Number(entry.xPReturn)) ? Number(entry.xPReturn).toFixed(2) + '%' : '0.00%'}</td>
+                <td>
+                  {!isNaN(Number(entry.xPoints)) ? Number(entry.xPoints).toFixed(2) : '0.00'}
+                </td>
+                <td>
+                  {!isNaN(Number(entry.xGoals)) ? Number(entry.xGoals).toFixed(2) : '0.00'}
+                </td>
+                <td>
+                  {!isNaN(Number(entry.xPReturn))
+                    ? Number(entry.xPReturn).toFixed(2) + '%'
+                    : '0.00%'}
+                </td>
                 <td>
                   <table className="nested-table">
                     <thead>
@@ -298,7 +398,11 @@ function LeaderboardTable({ data }) {
                           <td>{perf.shots}</td>
                           <td>{perf.points}</td>
                           <td>{perf.goals}</td>
-                          <td>{!isNaN(Number(perf.efficiency)) ? Number(perf.efficiency).toFixed(2) + '%' : '0.00%'}</td>
+                          <td>
+                            {!isNaN(Number(perf.efficiency))
+                              ? Number(perf.efficiency).toFixed(2) + '%'
+                              : '0.00%'}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -320,10 +424,7 @@ LeaderboardTable.propTypes = {
 export default function PlayerDataGAA() {
   const USER_ID = 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2';
   const DATASET_NAME = 'All Shots GAA';
-  const { data, loading, error } = useFetchDataset(
-    `savedGames/${USER_ID}/games`,
-    DATASET_NAME
-  );
+  const { data, loading, error } = useFetchDataset(`savedGames/${USER_ID}/games`, DATASET_NAME);
 
   const [selectedYear, setSelectedYear] = useState('All');
   const [selectedTeam, setSelectedTeam] = useState('All');
@@ -333,8 +434,7 @@ export default function PlayerDataGAA() {
     const yearsSet = new Set();
     data.gameData.forEach((shot) => {
       if (shot.matchDate) {
-        const year = new Date(shot.matchDate).getFullYear();
-        yearsSet.add(year);
+        yearsSet.add(new Date(shot.matchDate).getFullYear());
       }
     });
     return Array.from(yearsSet).sort((a, b) => b - a);
@@ -354,8 +454,12 @@ export default function PlayerDataGAA() {
   const formattedLeaderboard = useMemo(() => {
     if (!data || !data.gameData) return [];
     const shotsFiltered = data.gameData.filter((shot) => {
-      const matchesYear = selectedYear === 'All' ? true : new Date(shot.matchDate).getFullYear().toString() === selectedYear;
-      const matchesTeam = selectedTeam === 'All' ? true : shot.team === selectedTeam;
+      const matchesYear =
+        selectedYear === 'All'
+          ? true
+          : new Date(shot.matchDate).getFullYear().toString() === selectedYear;
+      const matchesTeam =
+        selectedTeam === 'All' ? true : shot.team === selectedTeam;
       return matchesYear && matchesTeam;
     });
     if (shotsFiltered.length === 0) return [];
@@ -390,15 +494,15 @@ export default function PlayerDataGAA() {
       const p = acc[name];
 
       const translatedShot = translateShotToOneSide(shot, halfLineX, goalX, goalY);
-      const distYards = translatedShot.distYards;
+      const distMeters = translatedShot.distMeters;
 
-      p.totalDistance += distYards;
+      p.totalDistance += distMeters;
       p.shootingAttempts += 1;
       if (shot.action === 'point' || shot.action === 'goal') {
-        p.totalScoreDistance += distYards;
+        p.totalScoreDistance += distMeters;
       }
 
-      if (distYards >= 40) {
+      if (distMeters >= 40) {
         p.twoPointerAttempts += 1;
         if (shot.action === 'point' || shot.action === 'goal') {
           p.twoPointerScores += 1;
@@ -446,19 +550,28 @@ export default function PlayerDataGAA() {
 
     const finalArray = Object.values(aggregator).map((p) => {
       const xPReturn = p.xPoints > 0 ? (p.points / p.xPoints) * 100 : 0;
-      const avgDistance = p.shootingAttempts > 0 ? p.totalDistance / p.shootingAttempts : 0;
-      const avgScoreDistance = p.shootingScored > 0 ? p.totalScoreDistance / p.shootingScored : 0;
+      const avgDistance =
+        p.shootingAttempts > 0 ? p.totalDistance / p.shootingAttempts : 0;
+      const avgScoreDistance =
+        p.shootingScored > 0
+          ? p.totalScoreDistance / p.shootingScored
+          : 0;
 
-      const positionPerformance = Object.entries(p.positionPerformance).map(([pos, stats]) => {
-        const eff = stats.shots > 0 ? ((stats.points + stats.goals * 3) / stats.shots) * 100 : 0;
-        return {
-          position: pos,
-          shots: stats.shots,
-          points: stats.points,
-          goals: stats.goals,
-          efficiency: eff,
-        };
-      });
+      const positionPerformance = Object.entries(p.positionPerformance).map(
+        ([pos, stats]) => {
+          const eff =
+            stats.shots > 0
+              ? ((stats.points + stats.goals * 3) / stats.shots) * 100
+              : 0;
+          return {
+            position: pos,
+            shots: stats.shots,
+            points: stats.points,
+            goals: stats.goals,
+            efficiency: eff,
+          };
+        }
+      );
 
       return {
         ...p,
@@ -473,47 +586,77 @@ export default function PlayerDataGAA() {
     return finalArray;
   }, [data, selectedYear, selectedTeam]);
 
-  const goalsData = useMemo(() => formattedLeaderboard.map(p => ({
-    player: p.player,
-    goals: p.goals,
-    xGoals: p.xGoals,
-  })), [formattedLeaderboard]);
+  const goalsData = useMemo(
+    () =>
+      formattedLeaderboard.map((p) => ({
+        player: p.player,
+        goals: p.goals,
+        xGoals: p.xGoals,
+      })),
+    [formattedLeaderboard]
+  );
 
-  const pointsData = useMemo(() => formattedLeaderboard.map(p => ({
-    player: p.player,
-    points: p.points,
-    xPoints: p.xPoints,
-  })), [formattedLeaderboard]);
+  const pointsData = useMemo(
+    () =>
+      formattedLeaderboard.map((p) => ({
+        player: p.player,
+        points: p.points,
+        xPoints: p.xPoints,
+      })),
+    [formattedLeaderboard]
+  );
 
-  const setPlaysData = useMemo(() => formattedLeaderboard.map(p => ({
-    player: p.player,
-    setPlays: p.setPlays,
-    xSetPlays: p.xSetPlays,
-  })), [formattedLeaderboard]);
+  const setPlaysData = useMemo(
+    () =>
+      formattedLeaderboard.map((p) => ({
+        player: p.player,
+        setPlays: p.setPlays,
+        xSetPlays: p.xSetPlays,
+      })),
+    [formattedLeaderboard]
+  );
 
-  const accuracyData = useMemo(() => formattedLeaderboard.map(p => ({
-    player: p.player,
-    shootingScored: p.shootingScored,
-    shootingAttempts: p.shootingAttempts,
-  })), [formattedLeaderboard]);
+  const accuracyData = useMemo(
+    () =>
+      formattedLeaderboard.map((p) => ({
+        player: p.player,
+        shootingScored: p.shootingScored,
+        shootingAttempts: p.shootingAttempts,
+      })),
+    [formattedLeaderboard]
+  );
 
-  const twoPointerData = useMemo(() => formattedLeaderboard.map(p => ({
-    player: p.player,
-    twoPointerScores: p.twoPointerScores,
-    twoPointerAttempts: p.twoPointerAttempts,
-  })), [formattedLeaderboard]);
+  const twoPointerData = useMemo(
+    () =>
+      formattedLeaderboard.map((p) => ({
+        player: p.player,
+        twoPointerScores: p.twoPointerScores,
+        twoPointerAttempts: p.twoPointerAttempts,
+      })),
+    [formattedLeaderboard]
+  );
 
-  const pressureData = useMemo(() => formattedLeaderboard.map(p => ({
-    player: p.player,
-    pressuredScores: p.pressuredScores,
-    pressuredShots: p.pressuredShots,
-  })), [formattedLeaderboard]);
+  const pressureData = useMemo(
+    () =>
+      formattedLeaderboard.map((p) => ({
+        player: p.player,
+        pressuredScores: p.pressuredScores,
+        pressuredShots: p.pressuredShots,
+      })),
+    [formattedLeaderboard]
+  );
 
-  const distanceData = useMemo(() => formattedLeaderboard.map(p => ({
-    player: p.player,
-    avgDistance: !isNaN(p.avgDistance) ? Number(p.avgDistance).toFixed(2) : '0.00',
-    avgScoreDistance: !isNaN(p.avgScoreDistance) ? Number(p.avgScoreDistance).toFixed(2) : '0.00',
-  })), [formattedLeaderboard]);
+  const distanceData = useMemo(
+    () =>
+      formattedLeaderboard.map((p) => ({
+        player: p.player,
+        avgDistance: !isNaN(p.avgDistance) ? Number(p.avgDistance).toFixed(2) : '0.00',
+        avgScoreDistance: !isNaN(p.avgScoreDistance)
+          ? Number(p.avgScoreDistance).toFixed(2)
+          : '0.00',
+      })),
+    [formattedLeaderboard]
+  );
 
   async function handleRecalculateXPoints() {
     try {
@@ -548,18 +691,34 @@ export default function PlayerDataGAA() {
       <h1 style={{ color: '#fff' }}>Player Data GAA</h1>
 
       <div className="year-filter">
-        <label style={{ color: '#fff' }} htmlFor="year-select">Filter by Year:</label>
-        <select id="year-select" value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}>
+        <label style={{ color: '#fff' }} htmlFor="year-select">
+          Filter by Year:
+        </label>
+        <select
+          id="year-select"
+          value={selectedYear}
+          onChange={(e) => setSelectedYear(e.target.value)}
+        >
           <option value="All">All Years</option>
           {availableYears.map((year) => (
-            <option key={year} value={year.toString()}>{year}</option>
+            <option key={year} value={year.toString()}>
+              {year}
+            </option>
           ))}
         </select>
-        <label style={{ color: '#fff', marginLeft: '10px' }} htmlFor="team-select">Filter by Team:</label>
-        <select id="team-select" value={selectedTeam} onChange={(e) => setSelectedTeam(e.target.value)}>
+        <label style={{ color: '#fff', marginLeft: '10px' }} htmlFor="team-select">
+          Filter by Team:
+        </label>
+        <select
+          id="team-select"
+          value={selectedTeam}
+          onChange={(e) => setSelectedTeam(e.target.value)}
+        >
           <option value="All">All Teams</option>
           {availableTeams.map((team) => (
-            <option key={team} value={team}>{team}</option>
+            <option key={team} value={team}>
+              {team}
+            </option>
           ))}
         </select>
       </div>
@@ -613,10 +772,7 @@ export default function PlayerDataGAA() {
           expectedKey="pressuredShots"
           showRatio={true}
         />
-        <AvgDistanceLeaderboard
-          title="Avg Shooting Distance"
-          data={distanceData}
-        />
+        <AvgDistanceLeaderboard title="Avg Shooting Distance" data={distanceData} />
       </div>
 
       <LeaderboardTable data={formattedLeaderboard} />

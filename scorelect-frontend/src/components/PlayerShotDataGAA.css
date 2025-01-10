@@ -1,0 +1,66 @@
+/* src/components/PlayerShotDataGAA.css */
+
+.player-shot-data-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #2e2e2e; /* Dark background for contrast */
+    min-height: 100vh;
+    padding: 20px;
+  }
+  
+  .back-button,
+  .export-button {
+    background-color: #007bff; /* Bootstrap primary color */
+    color: #fff;
+    border: none;
+    padding: 10px 15px;
+    margin: 0 5px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+  }
+  
+  .back-button:hover,
+  .export-button:hover {
+    background-color: #0056b3; /* Darker blue on hover */
+  }
+  
+  .loading-container,
+  .error-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    color: #fff;
+  }
+  
+  .spinner {
+    border: 8px solid #f3f3f3; /* Light grey */
+    border-top: 8px solid #3498db; /* Blue */
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    animation: spin 2s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  .tooltip {
+    /* Additional tooltip styles can go here if needed */
+  }
+  
+  .player-shot-data-container h1 {
+    margin-bottom: 20px;
+  }
+  
+  .back-button,
+  .export-button {
+    font-size: 16px;
+  }
+  
+  

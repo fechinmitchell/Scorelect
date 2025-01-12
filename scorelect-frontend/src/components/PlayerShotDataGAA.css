@@ -1,5 +1,12 @@
 /* src/components/PlayerShotDataGAA.css */
 
+
+.stage-container {
+    display: flex;
+    justify-content: center;
+    margin: 20px auto; /* or any other style you prefer */
+  }
+  
 .player-shot-data-container {
     display: flex;
     flex-direction: column;

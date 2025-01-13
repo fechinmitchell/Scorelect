@@ -1,4 +1,5 @@
 // src/components/PlayerShotDataGAA.js
+
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
@@ -11,9 +12,14 @@ import './PlayerShotDataGAA.css';
 // Make <Modal> accessible
 Modal.setAppElement('#root');
 
-/** 
- * If you want to keep the "translateShotToOneSide" logic:
- */
+ // Coloring the pitch
+ const pitchColor = '#006400';
+ const lineColor = '#FFFFFF';
+ const lightStripeColor = '#228B22';
+ const darkStripeColor = '#006400';
+
+
+// Translates the shot so it’s always relative to the nearest goal (optional).
 function translateShotToOneSide(shot, halfLineX, goalX, goalY) {
   const targetGoal = (shot.x || 0) <= halfLineX ? { x: 0, y: goalY } : { x: goalX, y: goalY };
   const dx = (shot.x || 0) - targetGoal.x;
@@ -22,89 +28,73 @@ function translateShotToOneSide(shot, halfLineX, goalX, goalY) {
   return { ...shot, distMeters };
 }
 
-/** 
- * We'll identify "setplay" vs. "goal/miss/point" vs. "setplay-score" or "setplay-miss"
- * 1) If it's a setplay action
- *    - If it was a "score," we say "setplay-score"
- *    - Else if it was a "miss," we say "setplay-miss"
- * 2) Otherwise fallback to your existing categories: goal / miss / point / other
- */
+// Distinguish categories (goal, miss, point, setplay, etc.)
 function getShotCategory(actionStr) {
   const a = (actionStr || '').toLowerCase().trim();
 
-  // We'll define a list of setplay actions
+  // Set-play actions
   const knownSetPlayActions = [
     'free', 'missed free', 'fortyfive', 'offensive mark', 'penalty goal',
     'pen miss', 'free short', 'free wide', 'fortyfive short', 'fortyfive wide',
     'offensive mark short', 'offensive mark wide', 'mark wide'
   ];
 
-  // Among set plays, define which ones ended in a "score" and which ended in a "miss."
-  // The simplest approach: if the action includes "wide", "short", "miss", we treat it as a miss.
-  // Otherwise we treat it as a "score."  Adjust as needed.
+  // Check if set play ended in 'score' or 'miss'
   function isSetPlayScore(a) {
-    // If it doesn't contain 'wide','short','miss' => treat as score
-    // You can refine your logic more specifically if you prefer
     if (a.includes('wide') || a.includes('short') || a.includes('miss')) return false;
     return true;
   }
 
-  // 1) If it's in setplay group:
+  // 1) If setplay
   if (knownSetPlayActions.some((sp) => a === sp)) {
     return isSetPlayScore(a) ? 'setplay-score' : 'setplay-miss';
   }
 
-  // 2) If not setplay, check standard categories:
-  // Goals
+  // 2) Goals
   if (a === 'goal' || a === 'penalty goal') return 'goal';
 
-  // Miss
+  // 3) Misses
   const knownMisses = ['wide', 'goal miss', 'miss', 'block', 'blocked', 'post', 'short', 'pen miss'];
   if (knownMisses.some((m) => a === m)) return 'miss';
 
-  // Points
+  // 4) Points
   if (a === 'point') return 'point';
 
-  // else fallback
+  // else
   return 'other';
 }
 
-/** 
- * Decide a color or shape style given the category.
- * We'll do:
- * - 'setplay-score' => green octagon
- * - 'setplay-miss'  => red octagon
- * - 'goal' => yellow circle
- * - 'point' => green circle
- * - 'miss' => red circle
- * - 'other' => orange circle
+/**
+ * Renders a shape for each shot:
+ * - setplay-score => green polygon
+ * - setplay-miss  => red polygon
+ * - goal => yellow circle
+ * - point => green circle
+ * - miss => red circle
+ * - other => orange circle
  */
-function renderShapeForShot(category, x, y, onMouseEnter, onMouseLeave) {
-  // If it's a setplay, we draw an octagon
+function renderShapeForShot(category, x, y, onMouseEnter, onMouseLeave, onClick) {
   if (category === 'setplay-score' || category === 'setplay-miss') {
-    // color depends on 'score' vs 'miss'
     const fillColor = category === 'setplay-score' ? 'green' : 'red';
-
     return (
       <RegularPolygon
         x={x}
         y={y}
-        sides={6}           // Octagon
-        radius={6}         // Adjust as you like for size
+        sides={6} // hex (or 8 for an octagon)
+        radius={6}
         fill={fillColor}
         opacity={0.85}
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
+        onClick={onClick}
       />
     );
   }
 
-  // Otherwise default circle logic
   let fillColor = 'orange';
   if (category === 'goal')  fillColor = 'yellow';
   if (category === 'point') fillColor = 'green';
   if (category === 'miss')  fillColor = 'red';
-  // 'other' => orange
 
   return (
     <Circle
@@ -115,9 +105,36 @@ function renderShapeForShot(category, x, y, onMouseEnter, onMouseLeave) {
       opacity={0.85}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
+      onClick={onClick}
     />
   );
 }
+
+// A small info icon that can be hovered or clicked to show a tooltip.
+const InfoIcon = ({ text }) => {
+  return (
+    <span style={{ marginLeft: '6px', position: 'relative' }}>
+      <span
+        style={{
+          display: 'inline-block',
+          width: '14px',
+          height: '14px',
+          borderRadius: '50%',
+          backgroundColor: '#666',
+          color: '#fff',
+          textAlign: 'center',
+          fontSize: '10px',
+          cursor: 'pointer',
+          fontWeight: 'bold',
+          lineHeight: '14px',
+        }}
+        title={text}
+      >
+        i
+      </span>
+    </span>
+  );
+};
 
 function LoadingIndicator() {
   return (
@@ -143,30 +160,49 @@ export default function PlayerShotDataGAA() {
   const [shotsData, setShotsData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
   const stageRef = useRef(null);
+
+  // Tooltip for hover
   const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, content: '' });
 
+  // Additional: Selected shot state => for the onClick details
+  const [selectedShot, setSelectedShot] = useState(null);
+
+  // Whether to show xPoints label
+  const [showXP, setShowXP] = useState(false);
+
+  // Canvas & pitch sizes
   const canvasSize = { width: 930, height: 530 };
-  const pitchWidth = 145;  
-  const pitchHeight = 88;  
+  const pitchWidth = 145;
+  const pitchHeight = 88;
   const xScale = canvasSize.width / pitchWidth;
   const yScale = canvasSize.height / pitchHeight;
 
+  // For "translateShotToOneSide"
   const halfLineX = pitchWidth / 2;
-  const goalXRight = pitchWidth;    
+  const goalXRight = pitchWidth;
   const goalY = pitchHeight / 2;
 
-  const pitchColor = '#006400';
-  const lineColor = '#FFFFFF';
-  const lightStripeColor = '#228B22';
-  const darkStripeColor = '#006400';
-
-  // Filter: 'All', 'goal', 'point', 'miss', 'setplay-score', 'setplay-miss'
-  // but let's keep it simpler: we can handle 'setplay' as a single filter, or 2 filters. 
-  // We'll do a single filter "setplay" if you like. 
+  // Filter states: All, goal, point, miss, setplay => (setplay-score or setplay-miss)
   const [shotFilter, setShotFilter] = useState('All');
 
+  // React Modal style
+  const customModalStyles = {
+    content: {
+      maxWidth: '500px',
+      margin: 'auto',
+      padding: '20px',
+      borderRadius: '8px',
+      backgroundColor: '#2e2e2e', // darker background
+      color: '#fff',              // white text
+    },
+    overlay: {
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      zIndex: 9999,
+    },
+  };
+
+  // Fetch shots from Firestore
   useEffect(() => {
     async function fetchShotsForPlayer() {
       try {
@@ -199,6 +235,7 @@ export default function PlayerShotDataGAA() {
           return;
         }
 
+        // Filter by this player
         const filtered = gameData.filter(
           (s) => (s.playerName || '').toLowerCase() === playerName.toLowerCase()
         );
@@ -214,11 +251,8 @@ export default function PlayerShotDataGAA() {
           return;
         }
 
-        // Translate if desired
-        const translated = filtered.map((shot) =>
-          translateShotToOneSide(shot, halfLineX, goalXRight, goalY)
-        );
-
+        // Optionally translate each shot
+        const translated = filtered.map((shot) => translateShotToOneSide(shot, halfLineX, goalXRight, goalY));
         setShotsData(translated);
       } catch (err) {
         setError(err.message);
@@ -227,10 +261,10 @@ export default function PlayerShotDataGAA() {
         setLoading(false);
       }
     }
-
     fetchShotsForPlayer();
   }, [playerName, navigate]);
 
+  // Export the pitch as a PNG
   function handleExport() {
     if (stageRef.current) {
       stageRef.current.toDataURL({
@@ -245,23 +279,93 @@ export default function PlayerShotDataGAA() {
     }
   }
 
-  // We’ll interpret the user’s filter choice 
-  // in the same function that obtains the category.
+  // Filter function
+  function getShotCategory(action) {
+    const a = (action || '').toLowerCase().trim();
+    const knownSetPlayActions = [
+      'free', 'missed free', 'fortyfive', 'offensive mark', 'penalty goal',
+      'pen miss', 'free short', 'free wide', 'fortyfive short', 'fortyfive wide',
+      'offensive mark short', 'offensive mark wide', 'mark wide'
+    ];
+    function isSetPlayScore(a) {
+      if (a.includes('wide') || a.includes('short') || a.includes('miss')) return false;
+      return true;
+    }
+    if (knownSetPlayActions.some((sp) => a === sp)) {
+      return isSetPlayScore(a) ? 'setplay-score' : 'setplay-miss';
+    }
+
+    const knownMisses = ['wide', 'goal miss', 'miss', 'block', 'blocked', 'post', 'short', 'pen miss'];
+    if (a === 'goal' || a === 'penalty goal') return 'goal';
+    if (knownMisses.some((m) => a === m)) return 'miss';
+    if (a === 'point') return 'point';
+    return 'other';
+  }
+
   function isShotVisible(shot) {
     const cat = getShotCategory(shot.action);
     if (shotFilter === 'All') return true;
-    // If shotFilter === 'setplay' => match 'setplay-score' or 'setplay-miss'
     if (shotFilter === 'setplay') {
-      return (cat === 'setplay-score' || cat === 'setplay-miss');
+      return cat === 'setplay-score' || cat === 'setplay-miss';
     }
     return cat === shotFilter;
   }
 
   const filteredShots = shotsData.filter(isShotVisible);
 
+  // On shape click => open a modal with shot info
+  function handleShotClick(shot) {
+    setSelectedShot(shot);
+  }
+
+  // Close the shot info modal
+  function closeModal() {
+    setSelectedShot(null);
+  }
+
+  // Decide shape & color
+  function renderShapeForShot(category, x, y, onMouseEnter, onMouseLeave, onClick) {
+    if (category === 'setplay-score' || category === 'setplay-miss') {
+      const fillColor = category === 'setplay-score' ? 'green' : 'red';
+      return (
+        <RegularPolygon
+          x={x}
+          y={y}
+          sides={6}
+          radius={6}
+          fill={fillColor}
+          opacity={0.85}
+          onMouseEnter={onMouseEnter}
+          onMouseLeave={onMouseLeave}
+          onClick={onClick}
+        />
+      );
+    }
+
+    let fillColor = 'orange';
+    if (category === 'goal')  fillColor = 'yellow';
+    if (category === 'point') fillColor = 'green';
+    if (category === 'miss')  fillColor = 'red';
+
+    return (
+      <Circle
+        x={x}
+        y={y}
+        radius={5}
+        fill={fillColor}
+        opacity={0.85}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
+        onClick={onClick}
+      />
+    );
+  }
+
+  // Render pitch lines
   function renderGAAPitch() {
     const numStripes = 10;
     const stripeWidth = canvasSize.width / numStripes;
+    
 
     return (
       <Layer>
@@ -341,6 +445,7 @@ export default function PlayerShotDataGAA() {
     );
   };
 
+  // Render the shots layer
   function renderShotsLayer() {
     return (
       <Layer>
@@ -359,6 +464,7 @@ export default function PlayerShotDataGAA() {
               content: `Action: ${shot.action}\nX: ${shot.x?.toFixed(1)}, Y: ${shot.y?.toFixed(1)}`,
             });
           };
+
           const handleMouseLeave = () => {
             if (stageRef.current) {
               stageRef.current.container().style.cursor = 'default';
@@ -366,9 +472,26 @@ export default function PlayerShotDataGAA() {
             setTooltip((t) => ({ ...t, visible: false }));
           };
 
+          // On click => show shot info
+          const handleClick = () => handleShotClick(shot);
+
           return (
             <Group key={i}>
-              {renderShapeForShot(cat, shotX, shotY, handleMouseEnter, handleMouseLeave)}
+              {renderShapeForShot(cat, shotX, shotY, handleMouseEnter, handleMouseLeave, handleClick)}
+
+              {/* If showXP is checked and shot.xPoints is a number => label xP */}
+              {showXP && typeof shot.xPoints === 'number' && (
+                <Text
+                  x={shotX}
+                  y={shotY - 14}
+                  text={`xP: ${shot.xPoints.toFixed(2)}`}
+                  fontSize={12}
+                  fill="#fff"
+                  offsetX={15}
+                  shadowColor="#000"
+                  shadowBlur={2}
+                />
+              )}
             </Group>
           );
         })}
@@ -376,6 +499,7 @@ export default function PlayerShotDataGAA() {
     );
   }
 
+  // Render tooltip for hovers
   function renderTooltip() {
     if (!tooltip.visible) return null;
     return (
@@ -399,10 +523,101 @@ export default function PlayerShotDataGAA() {
     );
   }
 
+  // If loading or no data
   if (loading) return <LoadingIndicator />;
   if (error) return <ErrorMessage message={error} />;
-  if (filteredShots.length === 0) {
+  if (!filteredShots.length) {
     return <ErrorMessage message="No shots found for this filter or player." />;
+  }
+
+  // Format shot details for the modal.
+  // We decide if this shot was a "goal" => xG, else => xP. 
+  // Also handle if shot has "xP_ADV" or "distMeters", etc.
+  function renderSelectedShotDetails() {
+    if (!selectedShot) return null;
+
+    // Decide if it's goal or point => show xG or xP
+    const shotCat = getShotCategory(selectedShot.action);
+    const isGoalShot = shotCat === 'goal' || shotCat === 'setplay-score' && selectedShot.action?.toLowerCase().includes('penalty goal');
+
+    // We'll do a simple fallback if isGoalShot => show xGoals,
+    // else show xPoints. You can refine the logic if you like.
+    let metricLabel = '';
+    let metricValue = '';
+    if (isGoalShot) {
+      metricLabel = 'xG';
+      metricValue = (typeof selectedShot.xGoals === 'number') 
+        ? selectedShot.xGoals.toFixed(2) 
+        : 'N/A';
+    } else {
+      metricLabel = 'xP';
+      metricValue = (typeof selectedShot.xPoints === 'number')
+        ? selectedShot.xPoints.toFixed(2)
+        : 'N/A';
+    }
+
+    // If shot.xP_ADV is available
+    const xPAdv = (typeof selectedShot.xP_adv === 'number')
+      ? selectedShot.xP_adv.toFixed(2)
+      : 'N/A';
+
+    // Distance in meters from center
+    const distMeters = (typeof selectedShot.distMeters === 'number')
+      ? selectedShot.distMeters.toFixed(1)
+      : 'N/A';
+
+    return (
+      <div style={{ lineHeight: '1.6' }}>
+        <p><strong>Action:</strong> {selectedShot.action}</p>
+        <p><strong>Position:</strong> {selectedShot.position || 'N/A'}</p>
+        <p><strong>Foot:</strong> {selectedShot.foot || 'N/A'}</p>
+        <p><strong>Pressure:</strong> {selectedShot.pressure || 'N/A'}</p>
+        <p><strong>Distance (m):</strong> {distMeters}</p>
+
+        <p>
+          <strong>{metricLabel}:</strong> {metricValue}
+          <InfoIcon text={`A brief explanation of ${metricLabel}. e.g., "Expected ${isGoalShot ? 'Goals' : 'Points'}..."`} />
+        </p>
+
+        <p>
+          <strong>xP_Adv:</strong> {xPAdv}
+          <InfoIcon text="xP_adv is an advanced measure of the shot's estimated contribution beyond baseline." />
+        </p>
+      </div>
+    );
+  }
+
+  // Render the shot detail modal
+  function renderShotDetailModal() {
+    return (
+      <Modal
+        isOpen={!!selectedShot}
+        onRequestClose={closeModal}
+        style={customModalStyles}
+        contentLabel="Shot Details"
+      >
+        <h2 style={{ marginTop: 0 }}>Shot Details</h2>
+        {renderSelectedShotDetails()}
+        <div style={{ marginTop: '1rem', textAlign: 'right' }}>
+          <button 
+            onClick={closeModal}
+            style={{
+              backgroundColor: '#607d8b',
+              color: '#fff',
+              border: 'none',
+              padding: '0.5rem 1rem',
+              borderRadius: '5px',
+              fontSize: '0.9rem',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+            }}
+          >
+            Close
+          </button>
+        </div>
+      </Modal>
+    );
   }
 
   return (
@@ -411,17 +626,87 @@ export default function PlayerShotDataGAA() {
         Shot Map for {playerName}
       </h1>
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '1rem' }}>
-        <button onClick={() => navigate(-1)}>&larr; Back</button>
-        <button onClick={handleExport}>Export Shot Map</button>
+      {/* Button row: back, export, filter, xp checkbox */}
+      <div 
+        style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          gap: '15px', 
+          marginBottom: '1rem' 
+        }}
+      >
+        <button 
+          onClick={() => navigate(-1)} 
+          style={{
+            backgroundColor: '#ff7043',
+            color: '#fff',
+            border: 'none',
+            padding: '0.2rem 0.7rem',
+            borderRadius: '5px',
+            fontSize: '1rem',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+            transition: 'background 0.3s ease'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f4511e'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ff7043'}
+        >
+          &larr; Back
+        </button>
+        
+        <button 
+          onClick={handleExport}
+          style={{
+            backgroundColor: '#42a5f5',
+            color: '#fff',
+            border: 'none',
+            padding: '0.2rem 0.7rem',
+            borderRadius: '5px',
+            fontSize: '1rem',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+            transition: 'background 0.3s ease'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1e88e5'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#42a5f5'}
+        >
+          Export Shot Map
+        </button>
 
-        {/* Filter Shots */}
-        <div>
-          <label style={{ color: '#fff', marginRight: '6px' }}>Filter Shots:</label>
+        {/* Filter Shots + xP Checkbox */}
+        <div
+          style={{
+            background: 'rgba(0, 0, 0, 0.3)', 
+            padding: '1rem', 
+            borderRadius: '8px',
+            display: 'inline-flex', 
+            alignItems: 'center'
+          }}
+        >
+          <label 
+            htmlFor="shotFilter" 
+            style={{ 
+              color: '#fff', 
+              marginRight: '0.5rem', 
+              fontWeight: 'bold',
+              fontSize: '1.0rem'
+            }}
+          >
+            Filter Shots:
+          </label>
           <select
+            id="shotFilter"
             value={shotFilter}
             onChange={(e) => setShotFilter(e.target.value)}
-            style={{ fontSize: '1rem' }}
+            style={{ 
+              fontSize: '1rem', 
+              padding: '0.1rem', 
+              borderRadius: '4px',
+              border: 'none',
+              outline: 'none'
+            }}
           >
             <option value="All">All</option>
             <option value="goal">Goals</option>
@@ -429,17 +714,42 @@ export default function PlayerShotDataGAA() {
             <option value="miss">Misses</option>
             <option value="setplay">SetPlays</option>
           </select>
+
+          <div style={{ marginLeft: '1rem', display: 'flex', alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              id="xpCheckbox"
+              checked={showXP}
+              onChange={() => setShowXP(!showXP)}
+              style={{ cursor: 'pointer' }}
+            />
+            <label 
+              htmlFor="xpCheckbox" 
+              style={{ 
+                color: '#fff', 
+                marginLeft: '4px', 
+                fontWeight: 'bold',
+                fontSize: '1.0rem',
+                cursor: 'pointer'
+              }}
+            >
+              xP
+            </label>
+            <InfoIcon text="xP stands for 'expected points' – the probability of scoring 1 point from this shot." />
+          </div>
         </div>
       </div>
 
+      {/* Canvas */}
       <div className="stage-container">
-    <Stage width={930} height={530} ref={stageRef}>
-      {renderGAAPitch()}
-      {renderShotsLayer()}
-    </Stage>
-  </div>
+        <Stage width={canvasSize.width} height={canvasSize.height} ref={stageRef}>
+          {renderGAAPitch()}
+          {renderShotsLayer()}
+        </Stage>
+      </div>
 
       {renderTooltip()}
+      {renderShotDetailModal()}
     </div>
   );
 }

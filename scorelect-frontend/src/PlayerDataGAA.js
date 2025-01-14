@@ -492,51 +492,74 @@ export default function PlayerDataGAA() {
         };
       }
       const p = acc[name];
-
+    
       const translatedShot = translateShotToOneSide(shot, halfLineX, goalX, goalY);
       const distMeters = translatedShot.distMeters;
-
+    
       p.totalDistance += distMeters;
-      p.shootingAttempts += 1;
-      if (shot.action === 'point' || shot.action === 'goal') {
+      p.shootingAttempts += 1; // Every shot counts as an attempt
+    
+      // Count total score distance for successful scoring actions, including free scores that are points
+      if (
+        shot.action === 'point' && shot.type === 'score'|| 
+        shot.action === 'goal' && shot.type === 'score'|| 
+        (shot.action === 'free' && shot.type === 'score')
+      ) {
         p.totalScoreDistance += distMeters;
       }
-
+    
+      // Two-pointer logic remains unchanged
       if (distMeters >= 40) {
         p.twoPointerAttempts += 1;
-        if (shot.action === 'point' || shot.action === 'goal') {
+        if (
+          shot.action === 'point' && shot.type === 'score'|| 
+          shot.action === 'goal' || 
+          (shot.action === 'free' && shot.type === 'score')
+        ) {
           p.twoPointerScores += 1;
         }
       }
-
-      if (shot.action === 'point' || shot.action === 'goal') {
+    
+      // Increase shootingScored for scoring actions including free scores
+      if (
+        shot.action === 'point' && shot.type === 'score'|| 
+        shot.action === 'goal' || 
+        (shot.action === 'free' && shot.type === 'score')
+      ) {
         p.shootingScored += 1;
       }
-
+    
       if (shot.action === 'point') {
         p.points += 1;
       } else if (shot.action === 'goal') {
         p.points += 3;
         p.goals += 1;
+      } else if (shot.action === 'free' && shot.type === 'score') {
+        // Treat free score as a point (adjust as needed)
+        p.points += 1;
       }
-
+    
       p.xPoints += shot.xPoints ? Number(shot.xPoints) : 0;
       p.xGoals += shot.xGoals ? Number(shot.xGoals) : 0;
-
+    
       const setPlayActions = ['free', 'fortyfive', 'offensive mark'];
       if (setPlayActions.includes((shot.action || '').toLowerCase())) {
         p.setPlays += 1;
         p.xSetPlays += shot.xPoints ? Number(shot.xPoints) : 0;
       }
-
+    
       const isPressured = (shot.pressure || '').toLowerCase().startsWith('y');
       if (isPressured) {
         p.pressuredShots += 1;
-        if (shot.action === 'point' || shot.action === 'goal') {
+        if (
+          shot.action === 'point' && shot.type === 'score'|| 
+          shot.action === 'goal' || 
+          (shot.action === 'free' && shot.type === 'score')
+        ) {
           p.pressuredScores += 1;
         }
       }
-
+    
       const pos = shot.position || 'unknown';
       if (!p.positionPerformance[pos]) {
         p.positionPerformance[pos] = { shots: 0, points: 0, goals: 0 };
@@ -544,9 +567,9 @@ export default function PlayerDataGAA() {
       p.positionPerformance[pos].shots += 1;
       if (shot.action === 'point') p.positionPerformance[pos].points += 1;
       if (shot.action === 'goal') p.positionPerformance[pos].goals += 1;
-
+    
       return acc;
-    }, {});
+    }, {});    
 
     const finalArray = Object.values(aggregator).map((p) => {
       const xPReturn = p.xPoints > 0 ? (p.points / p.xPoints) * 100 : 0;

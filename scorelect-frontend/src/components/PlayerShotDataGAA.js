@@ -23,6 +23,9 @@ const defaultPitchColor = '#006400';
 const defaultLineColor = '#FFFFFF';
 const defaultLightStripeColor = '#228B22';
 const defaultDarkStripeColor = '#006400';
+const canvasSize = { width: 930, height: 530 };
+
+
 
 const InfoIcon = ({ text }) => (
   <span style={{ marginLeft: '6px', position: 'relative' }}>
@@ -141,15 +144,26 @@ function translateShotToLeftSide(shot, halfLineX) {
     const pitchWidth = 145;
     const pitchHeight = 88;
     const halfLineX = pitchWidth / 2;
-    const goalX = 0; 
+    const goalX = 0;
     const goalY = pitchHeight / 2;
   
+    const numStripes = 10;
     const halfPitchWidthPx = xScale * halfLineX;
     const pitchHeightPx = yScale * pitchHeight;
+    const stripeWidthPx = halfPitchWidthPx / numStripes;
   
     return (
       <Layer>
-        <Rect x={0} y={0} width={halfPitchWidthPx} height={pitchHeightPx} fill="black" />
+        {/* Black background for half pitch */}
+        <Rect 
+          x={0} 
+          y={0} 
+          width={halfPitchWidthPx} 
+          height={pitchHeightPx} 
+          fill="black" 
+        />
+  
+        {/* White outer boundary and half-line markings */}
         <Rect 
           x={0} 
           y={0} 
@@ -165,20 +179,35 @@ function translateShotToLeftSide(shot, halfLineX) {
           strokeWidth={2} 
         />
   
+        <Line points={[xScale * 13, 0, xScale * 13, pitchHeightPx]} stroke="white" strokeWidth={2} />
+
+        <Line points={[xScale * 20, 0, xScale * 20, pitchHeightPx]} stroke="white" strokeWidth={2} />
+
+        <Line points={[xScale * 45, 0, xScale * 45, pitchHeightPx]} stroke="white" strokeWidth={2} />
+
+        <Line points={[xScale * 65, 0, xScale * 65, pitchHeightPx]} stroke="white" strokeWidth={2} />
+
+        {/* Outer boundary around half pitch */}
+        <Line 
+          points={[0, 0, halfPitchWidthPx, 0, halfPitchWidthPx, pitchHeightPx, 0, pitchHeightPx, 0, 0]} 
+          stroke={defaultLineColor} 
+          strokeWidth={2} 
+        />
+  
+        {/* Plot each translated shot on one side */}
         {shots.map((shot, i) => {
-          // Mirror shot to left side regardless of original half
           const mirroredShot = translateShotToLeftSide(shot, halfLineX);
           const translated = translateShotToOneSide(mirroredShot, halfLineX, goalX, goalY);
           const shotX = translated.x * xScale;
           const shotY = translated.y * yScale;
           const baseRadius = 5;
           const radius = baseRadius + (translated.xPoints ? translated.xPoints * 0.5 : 0);
-          
+  
           const category = getShotCategory(shot.action);
           let fillColor = 'black';
           let strokeColor = 'white';
           let strokeWidth = 2;
-    
+  
           if (category === 'goal') {
             fillColor = colors.goal || 'orange';
             strokeColor = null;
@@ -189,10 +218,8 @@ function translateShotToLeftSide(shot, halfLineX) {
             fillColor = colors.setPlayScore || 'green';
           } else if (category === 'setplay-miss') {
             fillColor = colors.setPlayMiss || 'red';
-          } else {
-            fillColor = 'black';
           }
-    
+  
           return (
             <Circle
               key={i}
@@ -209,6 +236,7 @@ function translateShotToLeftSide(shot, halfLineX) {
       </Layer>
     );
   }
+  
   
 
 function RadarChartGAA({ aggregatedData, selectedPlayers, primaryPlayer }) {

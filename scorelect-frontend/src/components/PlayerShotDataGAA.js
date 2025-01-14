@@ -1320,89 +1320,94 @@ export default function PlayerShotDataGAA() {
         </Modal>
       )}
 
-      <div style={{ marginTop:'3rem', padding:'1rem', background:'rgba(0,0,0,0.2)' }}>
-        <h2 style={{ color:'#fff', textAlign:'center' }}>Compare Players on Radar Chart</h2>
 
+<div style={{ display: 'flex', justifyContent: 'space-around', gap: '2rem' }}>
+  {/* Radar Chart Section */}
+  <div style={{ marginTop: '3rem', padding: '1rem', background: 'rgba(0,0,0,0.2)' }}>
+    <h4 style={{ color:'#fff', textAlign:'center' }}>Compare Players on Radar Chart</h4>
 
-        {/* Team Dropdown */}
-        <div style={{ display:'flex', justifyContent:'center', marginBottom:'1rem', gap:'1rem' }}>
-          <div>
-            <label htmlFor="teamSelect" style={{ color:'#fff', marginRight:'8px' }}>Select Team:</label>
-            <select
-              id="teamSelect"
-              value={selectedTeam}
-              onChange={(e)=> setSelectedTeam(e.target.value)}
-              style={{ padding:'6px', borderRadius:'4px' }}
-            >
-              <option value="">-- Choose a Team --</option>
-              {teams.map((tm,i)=>(
-                <option key={i} value={tm}>{tm}</option>
-              ))}
-            </select>
-          </div>
-
-          {selectedTeam && playersInTeam.length>0 && (
-            <div>
-              <label htmlFor="playerSelect" style={{ color:'#fff', marginRight:'8px' }}>Select Player:</label>
-              <select
-                id="playerSelect"
-                onChange={(e)=> {
-                  const pName=e.target.value;
-                  if(pName) togglePlayer(pName);
-                }}
-                style={{ padding:'6px', borderRadius:'4px' }}
-              >
-                <option value="">-- Choose Player --</option>
-                {playersInTeam.map((pName,i)=>(
-                  <option key={i} value={pName}>{pName}</option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-
-        <div style={{ textAlign:'center', marginBottom:'1rem' }}>
-          {selectedPlayers.map((pName)=>(
-            <span
-              key={pName}
-              style={{
-                display:'inline-block',
-                backgroundColor:'#f44336',
-                color:'#fff',
-                padding:'0.2rem 0.6rem',
-                borderRadius:'4px',
-                margin:'0 6px',
-                cursor:'pointer'
-              }}
-              onClick={()=> togglePlayer(pName)}
-            >
-              {pName} &times;
-            </span>
+    {/* Team Dropdown */}
+    <div style={{ display:'flex', justifyContent:'center', marginBottom:'1rem', gap:'1rem' }}>
+      <div>
+        <label htmlFor="teamSelect" style={{ color:'#fff', marginRight:'8px' }}>Select Team:</label>
+        <select
+          id="teamSelect"
+          value={selectedTeam}
+          onChange={(e)=> setSelectedTeam(e.target.value)}
+          style={{ padding:'6px', borderRadius:'4px' }}
+        >
+          <option value="">-- Choose a Team --</option>
+          {teams.map((tm,i)=>(
+            <option key={i} value={tm}>{tm}</option>
           ))}
+        </select>
+      </div>
+
+      {selectedTeam && playersInTeam.length>0 && (
+        <div>
+          <label htmlFor="playerSelect" style={{ color:'#fff', marginRight:'8px' }}>Select Player:</label>
+          <select
+            id="playerSelect"
+            onChange={(e)=> {
+              const pName = e.target.value;
+              if(pName) togglePlayer(pName);
+            }}
+            style={{ padding:'6px', borderRadius:'4px' }}
+          >
+            <option value="">-- Choose Player --</option>
+            {playersInTeam.map((pName,i)=>(
+              <option key={i} value={pName}>{pName}</option>
+            ))}
+          </select>
         </div>
+      )}
+    </div>
+
+    <div style={{ textAlign:'center', marginBottom:'1rem' }}>
+      {selectedPlayers.map((pName)=>(
+        <span
+          key={pName}
+          style={{
+            display:'inline-block',
+            backgroundColor:'#f44336',
+            color:'#fff',
+            padding:'0.2rem 0.6rem',
+            borderRadius:'4px',
+            margin:'0 6px',
+            cursor:'pointer'
+          }}
+          onClick={()=> togglePlayer(pName)}
+        >
+          {pName} &times;
+        </span>
+      ))}
+    </div>
+
+    <RadarChartGAA 
+      aggregatedData={aggregatedData}
+      selectedPlayers={selectedPlayers}
+      primaryPlayer={playerName}
+    />
+  </div>
+
+  {/* One-Sided Pitch Shots Section */}
+  <div style={{ marginTop: '3rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', textAlign: 'center' }}>
+    <h4 style={{ color: '#fff' }}>All Shots Translated</h4>
+    <div className="stage-container">
+      <Stage width={xScale * (pitchWidth / 2)} height={yScale * pitchHeight}>
+        {renderHalfPitch()}
+        {renderOneSidePitchShots(shotsData, {
+            goal: colorGoal,
+            point: colorPoint,
+            miss: colorMiss,
+            setPlayScore: colorSetPlayScore,
+            setPlayMiss: colorSetPlayMiss
+        }, xScale, yScale)}
+      </Stage>
+    </div>
+  </div>
 
 
-        <RadarChartGAA 
-          aggregatedData={aggregatedData}
-          selectedPlayers={selectedPlayers}
-          primaryPlayer={playerName}
-        />
-
-        <div style={{ marginTop: '2rem', textAlign: 'center' }}>
-        <h3 style={{ color: '#fff' }}>One-Sided Pitch Shots</h3>
-        <div className="stage-container">
-            <Stage width={xScale * (pitchWidth / 2)} height={yScale * pitchHeight}>
-            {renderHalfPitch()}
-            {renderOneSidePitchShots(shotsData, {
-                goal: colorGoal,
-                point: colorPoint,
-                miss: colorMiss,
-                setPlayScore: colorSetPlayScore,
-                setPlayMiss: colorSetPlayMiss
-            }, xScale, yScale)}
-            </Stage>
-        </div>
-        </div>
 
       </div>
     </div>

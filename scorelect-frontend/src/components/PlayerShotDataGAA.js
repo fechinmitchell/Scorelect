@@ -187,6 +187,27 @@ function translateShotToLeftSide(shot, halfLineX) {
 
         <Line points={[xScale * 65, 0, xScale * 65, pitchHeightPx]} stroke="white" strokeWidth={2} />
 
+        <Arc x={xScale * 20} y={yScale * 44} innerRadius={0} outerRadius={xScale * 13} angle={180} rotation={270} stroke="white" strokeWidth={2} />
+
+        <Line points={[xScale * 11, yScale * 43.5, xScale * 11, yScale * 44.5]} stroke="white" strokeWidth={2} />
+
+        <Line points={[0, yScale * 37, xScale * 4.5, yScale * 37, xScale * 4.5, yScale * 51, 0, yScale * 51]} stroke="white" strokeWidth={2} />
+
+        <Line points={[0, yScale * 34.5, xScale * 13, yScale * 34.5, xScale * 13, yScale * 53.5, 0, yScale * 53.5]} stroke="white" strokeWidth={2} />
+
+        <Arc
+        x={xScale * 0}
+        y={yScale * 44}
+        innerRadius={xScale * 40}    // Set equal to outerRadius
+        outerRadius={xScale * 40}
+        angle={120}
+        rotation={300}
+        stroke="white"
+        strokeWidth={2}
+        closed={false}
+        lineCap="round"
+        />
+
         {/* Outer boundary around half pitch */}
         <Line 
           points={[0, 0, halfPitchWidthPx, 0, halfPitchWidthPx, pitchHeightPx, 0, pitchHeightPx, 0, 0]} 

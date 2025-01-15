@@ -385,6 +385,9 @@ export default function PlayerShotDataGAA() {
 
   const [showColorModal, setShowColorModal] = useState(false);
 
+  const totalXP = shotsData.reduce((sum, shot) => sum + (shot.xPoints || 0), 0);
+  const totalXG = shotsData.reduce((sum, shot) => sum + (shot.xGoals || 0), 0);  
+
   const customModalStyles = {
     content: {
       maxWidth: '500px',
@@ -1390,11 +1393,12 @@ export default function PlayerShotDataGAA() {
     />
   </div>
 
+
   {/* One-Sided Pitch Shots Section */}
-  <div style={{ marginTop: '3rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', textAlign: 'center' }}>
+    <div style={{ marginTop: '3rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', textAlign: 'center' }}>
     <h4 style={{ color: '#fff' }}>All Shots Translated</h4>
     <div className="stage-container">
-      <Stage width={xScale * (pitchWidth / 2)} height={yScale * pitchHeight}>
+        <Stage width={xScale * (pitchWidth / 2)} height={yScale * pitchHeight}>
         {renderHalfPitch()}
         {renderOneSidePitchShots(shotsData, {
             goal: colorGoal,
@@ -1403,9 +1407,14 @@ export default function PlayerShotDataGAA() {
             setPlayScore: colorSetPlayScore,
             setPlayMiss: colorSetPlayMiss
         }, xScale, yScale)}
-      </Stage>
+        </Stage>
     </div>
-  </div>
+    {/* Display the totals below the graphic */}
+    <p style={{ color: '#fff', marginTop: '1rem' }}>
+        Total xP: {totalXP.toFixed(2)}, Total xG: {totalXG.toFixed(2)}
+    </p>
+    </div>
+
 
 
 

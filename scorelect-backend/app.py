@@ -1683,8 +1683,8 @@ def sitemap():
 @app.route('/recalculate-xpoints', methods=['POST'])
 def recalculate_xpoints():
     """
-    Recalculates xPoints and xGoals using Random Forest + isotonic calibration.
-    Removes the post-processing KNN step to rely directly on random forest
+    Recalculates xPoints and xGoals using Logistic Regression + isotonic calibration.
+    Removes the post-processing KNN step to rely directly on model
     predictions as final xP / xG values.
     """
     data = request.get_json()
@@ -1778,8 +1778,8 @@ def recalculate_xpoints():
         # ---------------------------
         # Step 3: Score columns
         # ---------------------------
-        df['Score_Points'] = df['category'].apply(lambda x: 1 if x=='point' else 0)
-        df['Score_Goals'] = df['category'].apply(lambda x: 1 if x=='goal' else 0)
+        df['Score_Points'] = df['category'].apply(lambda x: 1 if x == 'point' else 0)
+        df['Score_Goals'] = df['category'].apply(lambda x: 1 if x == 'goal' else 0)
 
         # ---------------------------
         # Step 4: Feature Engineering
@@ -1794,8 +1794,8 @@ def recalculate_xpoints():
                 side = 'right'
             else:
                 side = 'center'
-            if (side=='left' and foot in ['right','hand']) or \
-               (side=='right' and foot in ['left','hand']):
+            if (side == 'left' and foot in ['right','hand']) or \
+               (side == 'right' and foot in ['left','hand']):
                 return 1
             return 0
 
@@ -1804,7 +1804,6 @@ def recalculate_xpoints():
         # Let's define if it's a set-play or open-play
         def shot_type_func(act):
             act_lower = act.lower()
-            # You might want to check if "free","fortyfive","penalty" => set_play
             setplay_words = ['free','fortyfive','penalty','offensive mark']
             for w in setplay_words:
                 if w in act_lower:
@@ -1812,31 +1811,28 @@ def recalculate_xpoints():
             return 'open_play'
 
         df['shot_type'] = df['action'].apply(shot_type_func)
-        shot_type_map = {'open_play':0,'set_play':1}
+        shot_type_map = {'open_play': 0, 'set_play': 1}
         df['Shot_Type_Value'] = df['shot_type'].map(shot_type_map).fillna(0).astype(int)
 
         # Pressure * distance
-        pres_map = {'y':1,'n':0}
+        pres_map = {'y': 1, 'n': 0}
         df['Pressure_Value'] = df['pressure'].map(pres_map).fillna(0).astype(int)
         df['pressure_shotDistance'] = df['Pressure_Value'] * df['shotDistance']
 
-        pos_map = {'goalkeeper':0,'back':1,'midfielder':2,'forward':3}
-        foot_map = {'right':0,'left':1,'hand':2}
+        pos_map = {'goalkeeper': 0, 'back': 1, 'midfielder': 2, 'forward': 3}
+        foot_map = {'right': 0, 'left': 1, 'hand': 2}
         df['Position_Value'] = df['position'].map(pos_map).fillna(0).astype(int)
         df['Foot_Value'] = df['foot'].map(foot_map).fillna(0).astype(int)
 
         def calc_shot_angle(row):
-            # angle wrt the center goal
-            goal_x, goal_y = 145,44
+            goal_x, goal_y = 145, 44
             dx = goal_x - row['x']
             dy = goal_y - row['y']
             angle_rad = np.arctan2(dy, dx)
-            return np.degrees(angle_rad) if dx!=0 else 90.0
+            return np.degrees(angle_rad) if dx != 0 else 90.0
 
         df['Shot_Angle'] = df.apply(calc_shot_angle, axis=1)
-
-        # Optionally define "Placed_Ball" (1 if setplay)
-        df['Placed_Ball'] = df['shot_type'].apply(lambda x:1 if x=='set_play' else 0)
+        df['Placed_Ball'] = df['shot_type'].apply(lambda x: 1 if x == 'set_play' else 0)
 
         # ---------------------------
         # Step 5: Scale features
@@ -1860,42 +1856,36 @@ def recalculate_xpoints():
         # ---------------------------
         # Step 7: Train/Val/Test Splits
         # ---------------------------
-        # For classification with points
         X_trainval, X_test, y_points_trainval, y_points_test, y_goals_trainval, y_goals_test = \
             train_test_split(X, y_points, y_goals, test_size=0.2, random_state=42, stratify=y_points)
 
         X_train, X_calib, y_points_train, y_points_calib, y_goals_train, y_goals_calib = \
-            train_test_split(X_trainval, y_points_trainval, y_goals_trainval,
-                             test_size=0.3,
-                             random_state=42,
-                             stratify=y_points_trainval)
+            train_test_split(
+                X_trainval, y_points_trainval, y_goals_trainval,
+                test_size=0.3, random_state=42, stratify=y_points_trainval
+            )
 
         # ---------------------------
-        # Step 8: Model for Points
+        # Step 8: Model for Points (Logistic Regression)
         # ---------------------------
-        # If all the same outcome => fallback
-        if len(np.unique(y_points_train))<2:
+        if len(np.unique(y_points_train)) < 2:
             logging.warning("All Points = same outcome in train => fallback = 0.5")
             df['xPoints_Final'] = 0.5
         else:
-            # SMOTE
-            from imblearn.over_sampling import SMOTE
             smote_p = SMOTE(random_state=42, sampling_strategy='auto', k_neighbors=3)
             X_train_p, y_train_p = smote_p.fit_resample(X_train, y_points_train)
 
-            rf_points = RandomForestClassifier(
-                n_estimators=100,
-                class_weight='balanced',
+            # Logistic Regression (replace RandomForestClassifier)
+            logreg_points = LogisticRegression(
+                class_weight='balanced',  # or any class_weight you prefer
                 random_state=42,
-                max_depth=10,
-                min_samples_split=5,
-                min_samples_leaf=2
+                max_iter=1000
             )
-            rf_points.fit(X_train_p, y_train_p)
+            logreg_points.fit(X_train_p, y_train_p)
 
-            # Calibrate
+            # Calibrate with isotonic
             cal_points = CalibratedClassifierCV(
-                estimator=rf_points,
+                estimator=logreg_points,
                 method='isotonic',
                 cv='prefit'
             )
@@ -1907,86 +1897,76 @@ def recalculate_xpoints():
             logging.info(f"Points: test acc = {acc_points:.3f}")
 
             # Probability on entire dataset
-            df['xP_rf'] = cal_points.predict_proba(X)[:,1]
+            df['xP_lr'] = cal_points.predict_proba(X)[:, 1]
 
         # ---------------------------
-        # Step 9: Model for Goals
+        # Step 9: Model for Goals (Logistic Regression)
         # ---------------------------
-        if len(np.unique(y_goals_train))<2:
+        if len(np.unique(y_goals_train)) < 2:
             logging.warning("All Goals = same outcome => fallback = 0.5")
             df['xGoals_Final'] = 0.5
             df['xP_adv_Goals'] = 0.5
         else:
-            # SMOTE for goals
             smote_g = SMOTE(random_state=42, sampling_strategy=1.0, k_neighbors=3)
             X_train_g, y_train_g = smote_g.fit_resample(X_train, y_goals_train)
 
-            rf_goals = RandomForestClassifier(
-                n_estimators=100,
-                class_weight={0:1, 1:5},
+            # Logistic Regression (replace RandomForestClassifier)
+            logreg_goals = LogisticRegression(
+                class_weight={0: 1, 1: 5},  # mimic weighting used before
                 random_state=42,
-                max_depth=10,
-                min_samples_split=5,
-                min_samples_leaf=2
+                max_iter=1000
             )
-            rf_goals.fit(X_train_g, y_train_g)
+            logreg_goals.fit(X_train_g, y_train_g)
 
-            # calibrate
+            # Calibrate
             cal_goals = CalibratedClassifierCV(
-                estimator=rf_goals,
+                estimator=logreg_goals,
                 method='isotonic',
                 cv='prefit'
             )
             cal_goals.fit(X_calib, y_goals_calib)
 
             # Evaluate
-            y_goals_proba_test = cal_goals.predict_proba(X_test)[:,1]
-            y_goals_pred = (y_goals_proba_test>=0.3).astype(int)  # e.g. threshold=0.3
+            y_goals_proba_test = cal_goals.predict_proba(X_test)[:, 1]
+            y_goals_pred = (y_goals_proba_test >= 0.3).astype(int)  # threshold=0.3 example
             acc_goals = accuracy_score(y_goals_test, y_goals_pred)
             logging.info(f"Goals: test acc = {acc_goals:.3f}")
 
             # Probability on entire dataset
-            df['xG_rf'] = cal_goals.predict_proba(X)[:,1]
+            df['xG_lr'] = cal_goals.predict_proba(X)[:, 1]
 
         # ---------------------------
         # Step 10: Merge into xPoints_Final, xGoals_Final
         # ---------------------------
-        # Use the random-forest probabilities to fill xPoints / xGoals
-        # Category logic: if shot was 'goal' => xGoals, else 0 for xPoints
-        # or if shot was 'point' => xPoints, else 0 for xGoals, etc.
-        # If "miss", you could keep them as the raw probabilities or set them = 0.
-        # For example:
+        # If you used logistic regression, rename references to xP_lr / xG_lr
         df['xPoints_Final'] = 0.0
         df['xGoals_Final']  = 0.0
 
         for idx, row in df.iterrows():
             cat = row['category']
             if cat == 'goal':
-                # This shot is an actual goal => keep xGoals from rf, set xPoints=0
-                df.at[idx, 'xGoals_Final'] = row.get('xG_rf', 0.0)
+                # This shot is an actual goal => keep xGoals from lr, set xPoints=0
+                df.at[idx, 'xGoals_Final'] = row.get('xG_lr', 0.0)
             elif cat == 'point':
-                # This shot is an actual point => keep xPoints from rf, set xGoals=0
-                df.at[idx, 'xPoints_Final'] = row.get('xP_rf', 0.0)
+                # This shot is an actual point => keep xPoints from lr, set xGoals=0
+                df.at[idx, 'xPoints_Final'] = row.get('xP_lr', 0.0)
             else:
-                # For "miss" or other => up to you
-                # Let's store the random forest's predicted proba for both
-                # but you might prefer 0 or None. We'll do the raw rf for reference:
-                df.at[idx, 'xPoints_Final'] = row.get('xP_rf', 0.0)
-                df.at[idx, 'xGoals_Final']  = row.get('xG_rf', 0.0)
+                # For "miss" or other => store the logistic probabilities for reference
+                df.at[idx, 'xPoints_Final'] = row.get('xP_lr', 0.0)
+                df.at[idx, 'xGoals_Final']  = row.get('xG_lr', 0.0)
 
         # Validate: all final are in [0,1]
         if not df['xPoints_Final'].between(0,1).all():
             logging.error("Some xPoints_Final outside [0,1].")
-            return jsonify({'error':'xPoints outside [0,1].'}), 500
+            return jsonify({'error': 'xPoints outside [0,1].'}), 500
+
         if not df['xGoals_Final'].between(0,1).all():
             logging.error("Some xGoals_Final outside [0,1].")
-            return jsonify({'error':'xGoals outside [0,1].'}), 500
+            return jsonify({'error': 'xGoals outside [0,1].'}), 500
 
         # ---------------------------
         # Step 11: Aggregate for leaderboard
         # ---------------------------
-        # Optional advanced metrics: xPReturn etc. 
-        # or just store raw sums
         aggregator = df.groupby('player').agg(
             Shots=('player','count'),
             Points=('Score_Points','sum'),
@@ -1995,19 +1975,17 @@ def recalculate_xpoints():
             xGoals=('xGoals_Final','mean'),
         ).reset_index()
 
-        # Optionally difference columns
         aggregator['DiffPoints'] = aggregator['Points'] - aggregator['xPoints']
         aggregator['DiffGoals']  = aggregator['Goals']  - aggregator['xGoals']
 
         final_leaderboard = {
-            'Points_Leaderboard': aggregator.sort_values('DiffPoints',ascending=False).head(20).to_dict(orient='records'),
+            'Points_Leaderboard': aggregator.sort_values('DiffPoints', ascending=False).head(20).to_dict(orient='records'),
             'Goals_Leaderboard':  aggregator.sort_values('DiffGoals', ascending=False).head(20).to_dict(orient='records')
         }
 
         # ---------------------------
         # Step 12: Write back to Firestore
         # ---------------------------
-        # Update the original shots
         batch = db.batch()
         for idx, row in df.iterrows():
             g_i = row['g_i']
@@ -2022,7 +2000,7 @@ def recalculate_xpoints():
             batch.commit()
         except Exception as e:
             logging.error(f"Firestore batch update failed: {e}", exc_info=True)
-            return jsonify({'error':'Failed updating Firestore'}),500
+            return jsonify({'error': 'Failed updating Firestore'}), 500
 
         # Save the leaderboard
         try:
@@ -2032,15 +2010,14 @@ def recalculate_xpoints():
             logging.info("Leaderboard updated in Firestore.")
         except Exception as e:
             logging.error(f"Failed to save leaderboard: {e}", exc_info=True)
-            return jsonify({'error':'Failed to update leaderboard'}),500
+            return jsonify({'error': 'Failed to update leaderboard'}), 500
 
         logging.info(f"Recalculation completed for {USER_ID}, dataset: {DATASET_NAME}")
-        return jsonify({'success':True,'message':'Recalculation done'}),200
+        return jsonify({'success': True, 'message': 'Recalculation done'}), 200
 
     except Exception as e:
         logging.error(f"Error recalculating xpoints: {str(e)}", exc_info=True)
-        return jsonify({'error':str(e)}),500
+        return jsonify({'error': str(e)}), 500
     
-# Run the Flask app on port 5001 in debug mode
 if __name__ == '__main__':
     app.run(port=5001, debug=True)

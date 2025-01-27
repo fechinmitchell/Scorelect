@@ -14,6 +14,8 @@ import AggregatedData from './AggregatedData';
 import { onSnapshot } from 'firebase/firestore'; // Add this import
 import { GameContext } from './GameContext'; // Import GameContext
 import { Rnd } from 'react-rnd';
+import { utils, writeFile } from 'xlsx';
+import { saveAs } from 'file-saver';
 import InitialSetupModal from './components/InitialSetupModal';
 import NewGameSetupModal from './components/NewGameSetupModal';
 
@@ -108,6 +110,136 @@ const PitchGraphic = () => {
 
     const [isInitialSetupModalOpen, setIsInitialSetupModalOpen] = useState(true); // Open on mount
     const [isNewGameSetupModalOpen, setIsNewGameSetupModalOpen] = useState(false);
+
+    //Download Modal
+    const [isCustomDownloadModalOpen, setIsCustomDownloadModalOpen] = useState(false);
+    const [downloadFileName, setDownloadFileName] = useState('my_data');
+    const [downloadFormat, setDownloadFormat] = useState('json');
+
+    // For Download Filtered Data
+    const [filteredFileName, setFilteredFileName] = useState('filtered_data');
+    const [filteredFormat, setFilteredFormat] = useState('json');
+
+    const customDownloadModalStyle = {
+      content: {
+        top: '50%',
+        left: '50%',
+        right: 'auto',
+        bottom: 'auto',
+        marginRight: '-50%',
+        transform: 'translate(-50%, -50%)',
+        width: '50%',
+        maxHeight: '60%',
+        overflowY: 'auto',
+        background: '#2e2e2e',
+        padding: '20px',
+        borderRadius: '10px',
+        boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+      },
+    };
+
+    const renderActionButtons = () => (
+      <div className="action-buttons">
+        {actionButtons.map(action => (
+          <button
+            key={action.value}
+            className={`action-button ${action.value}`}
+            onClick={() => handleActionButtonClick(action)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              handleDeleteAction(action.value);
+            }}
+            style={{ borderColor: action.color, borderWidth: '2px', borderStyle: 'solid', backgroundColor: '#800080' }} 
+          >
+            {action.label}
+          </button>
+        ))}
+        <button className="action-button add-action" onClick={() => setIsAddActionModalOpen(true)}>Add Action</button>
+      </div>
+    );
+
+    const handleCustomDownload = async () => {
+      // 1) If user free + no downloads => prompt upgrade
+      if (userType === 'free' && downloadsRemaining <= 0) {
+        handlePremiumFeatureAccess('Download Data');
+        return;
+      }
+    
+      // 2) Decrement if free user
+      if (userType === 'free') {
+        setDownloadsRemaining(downloadsRemaining - 1);
+        // Also update Firestore or localStorage if needed
+      }
+    
+      // 3) Build the data object
+      const datasetName = selectedDataset || newDatasetName || 'My Dataset';
+      const finalData = {
+        dataset: {
+          name: datasetName,
+          description: '',
+          price: 0.0,
+          category: 'GAA',
+          created_at: null,
+          updated_at: null
+        },
+        games: [
+          {
+            gameName: gameName || 'Unnamed Game',
+            matchDate: matchDate || null,
+            sport: 'GAA',
+            gameData: coords
+          }
+        ]
+      };
+    
+      // 4) Define fileNameSafe BEFORE handling each format
+      const fileNameSafe = downloadFileName.replace(/\s+/g, '_');
+      let fileBlob;
+      let extension = downloadFormat; // 'json' | 'csv' | 'xlsx'
+    
+      if (downloadFormat === 'json') {
+        const jsonString = JSON.stringify(finalData, null, 2);
+        fileBlob = new Blob([jsonString], { type: 'application/json' });
+    
+      } else if (downloadFormat === 'csv') {
+        // Minimal CSV example
+        const header = ['team','playerName','action','x','y'].join(',');
+        const rows = coords.map(c => [c.team, c.playerName, c.action, c.x, c.y].join(','));
+        const csvOutput = [header, ...rows].join('\n');
+        fileBlob = new Blob([csvOutput], { type: 'text/csv' });
+    
+      } else if (downloadFormat === 'xlsx') {
+        // --------------- XLSX ---------------
+        const sheetData = [
+          ['team','playerName','action','x','y'],
+          ...coords.map(c => [c.team, c.playerName, c.action, c.x, c.y])
+        ];
+        const ws = utils.aoa_to_sheet(sheetData);
+        const wb = utils.book_new();
+        utils.book_append_sheet(wb, ws, 'Data');
+        
+        // This writes and triggers a save file for .xlsx
+        writeFile(wb, `${fileNameSafe}.xlsx`);
+        
+        // Then close the modal and return (skip the rest)
+        setIsCustomDownloadModalOpen(false);
+        return;
+      }
+    
+      // 5) For JSON or CSV, do the normal blob download
+      if (fileBlob) {
+        const url = URL.createObjectURL(fileBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${fileNameSafe}.${extension}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    
+      // 6) Close modal
+      setIsCustomDownloadModalOpen(false);
+    };
 
     const handleStartNewGame = () => {
       setIsInitialSetupModalOpen(false);
@@ -1099,22 +1231,22 @@ const handleSaveToDataset = async () => {
   
 
   const handleDownloadFilteredData = async () => {
+    // 1) If user is free but out of downloads => upgrade
     if (userType === 'free') {
       handlePremiumFeatureAccess('Download Filtered Data');
       return;
     }
   
-    // Proceed with downloading filtered data
+    // 2) Filter the coords
     const filteredCoords = coords.filter((coord) => {
-      return (
-        (downloadTeam ? coord.team === downloadTeam : true) &&
-        (downloadPlayer ? coord.playerName === downloadPlayer : true) &&
-        (downloadAction ? coord.action === downloadAction : true)
-      );
+      const matchTeam = downloadTeam ? coord.team === downloadTeam : true;
+      const matchPlayer = downloadPlayer ? coord.playerName === downloadPlayer : true;
+      const matchAction = downloadAction ? coord.action === downloadAction : true;
+      return matchTeam && matchPlayer && matchAction;
     });
   
+    // 3) Build data object
     const datasetName = selectedDataset || newDatasetName || 'My Dataset';
-  
     const downloadData = {
       dataset: {
         name: datasetName,
@@ -1134,38 +1266,57 @@ const handleSaveToDataset = async () => {
       ]
     };
   
-    const jsonData = JSON.stringify(downloadData, null, 2);
-    const blob = new Blob([jsonData], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${datasetName.replace(' ', '_')}_${(gameName || 'Unnamed_Game').replace(' ', '_')}_filtered.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    // 4) Figure out extension & safe filename
+    const fileNameSafe = filteredFileName.replace(/\s+/g, '_');
+    let extension = filteredFormat;  // 'json','csv','xlsx'
+    let fileBlob;
   
+    if (filteredFormat === 'json') {
+      // JSON approach
+      const jsonString = JSON.stringify(downloadData, null, 2);
+      fileBlob = new Blob([jsonString], { type: 'application/json' });
+    } 
+    else if (filteredFormat === 'csv') {
+      // Minimal CSV example
+      // Flatten just the "gameData" portion if you want
+      const header = ['team','playerName','action','x','y'].join(',');
+      const rows = filteredCoords.map(c =>
+        [c.team, c.playerName, c.action, c.x, c.y].join(',')
+      );
+      const csvOutput = [header, ...rows].join('\n');
+      fileBlob = new Blob([csvOutput], { type: 'text/csv' });
+    }
+    else if (filteredFormat === 'xlsx') {
+      // Build sheet via sheetjs
+      const sheetData = [
+        ['team','playerName','action','x','y'],
+        ...filteredCoords.map(c => [c.team, c.playerName, c.action, c.x, c.y]),
+      ];
+      const ws = utils.aoa_to_sheet(sheetData);
+      const wb = utils.book_new();
+      utils.book_append_sheet(wb, ws, 'FilteredData');
+      writeFile(wb, `${fileNameSafe}.xlsx`);
+      
+      // Close modal & return
+      setIsDownloadModalOpen(false);
+      return;
+    }
+  
+    // 5) For JSON/CSV, do normal blob download
+    if (fileBlob) {
+      const url = URL.createObjectURL(fileBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${fileNameSafe}.${extension}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  
+    // 6) Close the modal
     setIsDownloadModalOpen(false);
-  }; 
-
-  const renderActionButtons = () => (
-    <div className="action-buttons">
-      {actionButtons.map(action => (
-        <button
-          key={action.value}
-          className={`action-button ${action.value}`}
-          onClick={() => handleActionButtonClick(action)}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            handleDeleteAction(action.value);
-          }}
-          style={{ borderColor: action.color, borderWidth: '2px', borderStyle: 'solid', backgroundColor: '#800080' }} 
-        >
-          {action.label}
-        </button>
-      ))}
-      <button className="action-button add-action" onClick={() => setIsAddActionModalOpen(true)}>Add Action</button>
-    </div>
-  );
+  };
+  
 
   const renderContextMenu = () => (
     <div className="context-menu" style={{ top: contextMenuPosition.y, left: contextMenuPosition.x }}>
@@ -1348,7 +1499,7 @@ const handleSaveToDataset = async () => {
         <div className="button-container">
           <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
           <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
-          <button className="button" onClick={handleDownloadData}>{userType === 'free' ? `Download Data (${downloadsRemaining} left)` : 'Download Data (Unlimited)'}</button>
+          <button className="button" onClick={() => { if (userType === 'free' && downloadsRemaining <= 0) { handlePremiumFeatureAccess('Download Data'); return; } setIsCustomDownloadModalOpen(true); }} > {userType === 'free' ? `Download Data (${downloadsRemaining} left)` : 'Download Data (Unlimited)'} </button>
           <button className="button" onClick={toggleDownloadModal}>Download Filtered Data</button>
           <button className="button" onClick={toggleScreenshotModal}>Download Screenshot</button>
           <button className="button" onClick={toggleModal}>View Coordinates</button>
@@ -1579,20 +1730,29 @@ const handleSaveToDataset = async () => {
               )}
             </div>
             <div className="form-group">
-              <label>Team:</label>
+            <label>Team:</label>
               <select name="team" value={formData.team} onChange={handleChange}>
-                <option value="custom">Add New Team</option>
-                {recentTeams.map((team) => (
-                  <option key={team} value={team}>
-                    {team}
-                  </option>
-                ))}
-                {teams.map((team) => (
-                  <option key={team} value={team}>
-                    {team}
-                  </option>
-                ))}
+                {
+                  // IF user typed something in team1/team2, show only those.
+                  // IF they skipped, fallback to the entire county list (or any default).
+                  (team1 || team2)
+                    ? (
+                      <>
+                        {team1 && <option value={team1}>{team1}</option>}
+                        {team2 && <option value={team2}>{team2}</option>}
+                      </>
+                    )
+                    : (
+                      // fallback list of counties
+                      initialCounties.map(county => (
+                        <option key={county} value={county}>
+                          {county}
+                        </option>
+                      ))
+                    )
+                }
               </select>
+
               {formData.team === 'custom' && (
                 <div className="form-group">
                   <label>New Team Name:</label>
@@ -2326,6 +2486,7 @@ const handleSaveToDataset = async () => {
           </button>
         </div>
       </Modal>
+
       <Modal
   isOpen={isDownloadModalOpen}
   onRequestClose={() => setIsDownloadModalOpen(false)}
@@ -2348,19 +2509,20 @@ const handleSaveToDataset = async () => {
     },
   }}
 >
-  <h2>Download Filtered Data</h2>
-  <div className="form-group">
-    <label>Team:</label>
+  <h2 style={{ color: '#fff', marginBottom: '20px' }}>Download Filtered Data</h2>
+
+  {/* Filter by Team */}
+  <div className="form-group" style={{ marginBottom: '15px' }}>
+    <label style={{ color: '#fff' }}>Team:</label>
     <select
       value={downloadTeam}
       onChange={(e) => setDownloadTeam(e.target.value)}
       style={{
         width: '97%',
         padding: '10px',
-        margin: '5px',
+        marginTop: '5px',
         borderRadius: '5px',
         border: '1px solid #ccc',
-        marginRight: '20px',
       }}
     >
       <option value="">All Teams</option>
@@ -2371,8 +2533,10 @@ const handleSaveToDataset = async () => {
       ))}
     </select>
   </div>
-  <div className="form-group">
-    <label>Player:</label>
+
+  {/* Filter by Player */}
+  <div className="form-group" style={{ marginBottom: '15px' }}>
+    <label style={{ color: '#fff' }}>Player:</label>
     <input
       type="text"
       value={downloadPlayer}
@@ -2381,25 +2545,25 @@ const handleSaveToDataset = async () => {
       style={{
         width: '97%',
         padding: '10px',
-        margin: '5px',
+        marginTop: '5px',
         borderRadius: '5px',
         border: '1px solid #ccc',
-        marginRight: '20px',
       }}
     />
   </div>
-  <div className="form-group">
-    <label>Action:</label>
+
+  {/* Filter by Action */}
+  <div className="form-group" style={{ marginBottom: '15px' }}>
+    <label style={{ color: '#fff' }}>Action:</label>
     <select
       value={downloadAction}
       onChange={(e) => setDownloadAction(e.target.value)}
       style={{
         width: '97%',
         padding: '10px',
-        margin: '5px',
+        marginTop: '5px',
         borderRadius: '5px',
         border: '1px solid #ccc',
-        marginRight: '20px',
       }}
     >
       <option value="">All Actions</option>
@@ -2410,7 +2574,46 @@ const handleSaveToDataset = async () => {
       ))}
     </select>
   </div>
-  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+
+  {/* New: File name + File format */}
+  <div className="form-group" style={{ marginBottom: '15px' }}>
+    <label style={{ color: '#fff' }}>File Name:</label>
+    <input
+      type="text"
+      value={filteredFileName}
+      onChange={(e) => setFilteredFileName(e.target.value)}
+      placeholder="filtered_data"
+      style={{
+        width: '97%',
+        padding: '10px',
+        marginTop: '5px',
+        borderRadius: '5px',
+        border: '1px solid #ccc',
+      }}
+    />
+  </div>
+
+  <div className="form-group" style={{ marginBottom: '15px' }}>
+    <label style={{ color: '#fff' }}>File Format:</label>
+    <select
+      value={filteredFormat}
+      onChange={(e) => setFilteredFormat(e.target.value)}
+      style={{
+        width: '97%',
+        padding: '10px',
+        marginTop: '5px',
+        borderRadius: '5px',
+        border: '1px solid #ccc',
+      }}
+    >
+      <option value="json">JSON</option>
+      <option value="csv">CSV</option>
+      <option value="xlsx">Excel (.xlsx)</option>
+    </select>
+  </div>
+
+  {/* Buttons */}
+  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '25px' }}>
     <button
       onClick={handleDownloadFilteredData}
       style={{
@@ -2441,6 +2644,7 @@ const handleSaveToDataset = async () => {
     </button>
   </div>
 </Modal>
+
 
 <Modal
   isOpen={isScreenshotModalOpen}
@@ -2873,6 +3077,81 @@ const handleSaveToDataset = async () => {
         </button>
         </div>
       </Modal>
+
+      <Modal
+        isOpen={isCustomDownloadModalOpen}
+        onRequestClose={() => setIsCustomDownloadModalOpen(false)}
+        contentLabel="Custom Download"
+        style={customDownloadModalStyle}  // <-- Use the style object
+      >
+        <h2 style={{ color: '#fff' }}>Download Data</h2>
+        
+        <div className="form-group">
+          <label style={{ color: '#fff' }}>File Name:</label>
+          <input
+            type="text"
+            value={downloadFileName}
+            onChange={(e) => setDownloadFileName(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '8px',
+              margin: '5px 0',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+            }}
+          />
+        </div>
+
+        <div className="form-group">
+          <label style={{ color: '#fff' }}>File Format:</label>
+          <select
+            value={downloadFormat}
+            onChange={(e) => setDownloadFormat(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '8px',
+              margin: '5px 0',
+              borderRadius: '5px',
+              border: '1px solid #ccc',
+            }}
+          >
+            <option value="json">JSON</option>
+            <option value="csv">CSV</option>
+            <option value="xlsx">Excel (.xlsx)</option>
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+          <button
+            onClick={() => setIsCustomDownloadModalOpen(false)}
+            style={{
+              marginRight: '10px',
+              background: '#6c757d',
+              color: '#fff',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleCustomDownload}
+            style={{
+              background: '#007bff',
+              color: '#fff',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+            }}
+          >
+            Download
+          </button>
+        </div>
+      </Modal>
+
 
     </div>
   );

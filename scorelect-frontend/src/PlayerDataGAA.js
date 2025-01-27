@@ -1,13 +1,17 @@
 // src/components/PlayerDataGAA.js
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
+import Swal from 'sweetalert2';
 import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
-import Swal from 'sweetalert2';
-import PropTypes from 'prop-types';
+
 import './PlayerDataGAA.css';
 
+/*******************************************
+ * 1) HELPER: parseJSONNoNaN
+ *******************************************/
 function parseJSONNoNaN(response) {
   return response.text().then((rawText) => {
     const safeText = rawText
@@ -18,6 +22,9 @@ function parseJSONNoNaN(response) {
   });
 }
 
+/*******************************************
+ * 2) HELPER HOOK: useFetchDataset
+ *******************************************/
 function useFetchDataset(collectionPath, documentPath) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -47,6 +54,9 @@ function useFetchDataset(collectionPath, documentPath) {
   return { data, loading, error };
 }
 
+/*******************************************
+ * 3) LOADING & ERROR UI
+ *******************************************/
 function LoadingIndicator() {
   return (
     <div className="loading-container">
@@ -63,46 +73,77 @@ function ErrorMessage({ message }) {
     </div>
   );
 }
-
 ErrorMessage.propTypes = {
   message: PropTypes.string.isRequired,
 };
 
-/**
- * Translate a shot to reference one goal based on half-line.
- * Adds a 'distMeters' property to the shot for distance from nearest goal.
- */
+/*******************************************
+ * 4) HELPER: translateShotToOneSide
+ *    (distance from nearest goal)
+ *******************************************/
 function translateShotToOneSide(shot, halfLineX, goalX, goalY) {
-  const targetGoal = shot.x <= halfLineX ? { x: 0, y: goalY } : { x: goalX, y: goalY };
+  const targetGoal =
+    shot.x <= halfLineX ? { x: 0, y: goalY } : { x: goalX, y: goalY };
   const dx = (shot.x || 0) - targetGoal.x;
   const dy = (shot.y || 0) - targetGoal.y;
   const distMeters = Math.sqrt(dx * dx + dy * dy);
   return { ...shot, distMeters };
 }
 
+/*******************************************
+ * 5) MiniLeaderboard (Difference or %)
+ *******************************************/
 function MiniLeaderboard({
   title,
   data,
   actualKey,
   expectedKey,
-  showRatio = true,
+  useDifference = false,
+  differenceLabel = 'Difference (actual - expected)',
   initialDirection = 'descending',
-}) {
-  const [sortConfig, setSortConfig] = useState({ key: actualKey, direction: initialDirection });
 
+  // NEW PROP:
+  hideCalcColumn = false,
+}) {
+  const [sortConfig, setSortConfig] = useState({
+    key: '_calcVal',
+    direction: initialDirection,
+  });
+
+  // Compute `_calcVal` as before:
   const sortedData = useMemo(() => {
     let list = [...data];
-    if (sortConfig) {
+
+    // Only compute _calcVal if we’re not hiding that column
+    if (!hideCalcColumn) {
+      list = list.map((item) => {
+        const actualVal = Number(item[actualKey] || 0);
+        const expectedVal = Number(item[expectedKey] || 0);
+        if (useDifference) {
+          item._calcVal = actualVal - expectedVal;
+        } else {
+          const safeExpected = expectedVal === 0 ? 1e-6 : expectedVal;
+          item._calcVal = (actualVal / safeExpected) * 100;
+        }
+        return item;
+      });
+    }
+
+    // Sort logic:
+    if (sortConfig?.key && !hideCalcColumn) {
       list.sort((a, b) => {
-        const aVal = a[sortConfig.key] || 0;
-        const bVal = b[sortConfig.key] || 0;
+        const aVal = a[sortConfig.key] ?? 0;
+        const bVal = b[sortConfig.key] ?? 0;
         if (aVal < bVal) return sortConfig.direction === 'ascending' ? -1 : 1;
         if (aVal > bVal) return sortConfig.direction === 'ascending' ? 1 : -1;
         return 0;
       });
+    } else {
+      // If hideCalcColumn is true, we can sort by actualKey by default if you want
+      // or skip sorting entirely.
     }
     return list;
-  }, [data, sortConfig]);
+  }, [data, actualKey, expectedKey, useDifference, sortConfig, hideCalcColumn]);
 
   function requestSort(key) {
     let direction = 'ascending';
@@ -129,53 +170,57 @@ function MiniLeaderboard({
                 Player{getSortIndicator('player')}
               </th>
               <th onClick={() => requestSort(actualKey)}>
-                {actualKey}
-                {getSortIndicator(actualKey)}
+                {actualKey}{getSortIndicator(actualKey)}
               </th>
               <th onClick={() => requestSort(expectedKey)}>
-                {expectedKey}
-                {getSortIndicator(expectedKey)}
+                {expectedKey}{getSortIndicator(expectedKey)}
               </th>
-              {showRatio && (
-                <th onClick={() => requestSort('ratio')}>
-                  Ratio{getSortIndicator('ratio')}
+
+              {/* Conditionally render the difference/ratio column */}
+              {!hideCalcColumn && (
+                <th onClick={() => requestSort('_calcVal')}>
+                  {useDifference ? differenceLabel : 'Percentage (%)'}
+                  {getSortIndicator('_calcVal')}
                 </th>
               )}
             </tr>
           </thead>
+
           <tbody>
             {sortedData.map((item, index) => {
-              const actualVal = item[actualKey] || 0;
-              const expectedVal = item[expectedKey] || 0;
-              const epsilon = 0.0001;
-              const ratioVal = expectedVal > 0 ? actualVal / expectedVal : actualVal / epsilon;
+              const actualVal = Number(item[actualKey] || 0);
+              const expectedVal = Number(item[expectedKey] || 0);
+
+              // If hiding column, skip computing
+              let lastColumnValue = '';
+              if (!hideCalcColumn) {
+                if (useDifference) {
+                  lastColumnValue = (actualVal - expectedVal).toFixed(2);
+                } else {
+                  const safeExpected = expectedVal === 0 ? 1e-6 : expectedVal;
+                  const pct = (actualVal / safeExpected) * 100;
+                  lastColumnValue = pct.toFixed(2) + '%';
+                }
+              }
+
               return (
                 <tr key={`${item.player}-${index}`}>
                   <td>{index + 1}</td>
                   <td>
                     <Link
                       to={`/player/${encodeURIComponent(item.player)}`}
-                      state={{ playerData: item }}
                       style={{
                         color: '#FFA500',
                         textDecoration: 'underline',
-                        cursor: 'pointer',
                       }}
                     >
                       {item.player}
                     </Link>
                   </td>
-                  <td>
-                    {!isNaN(Number(actualVal)) ? Number(actualVal).toFixed(2) : '0.00'}
-                  </td>
-                  <td>
-                    {!isNaN(Number(expectedVal)) ? Number(expectedVal).toFixed(2) : '0.00'}
-                  </td>
-                  {showRatio && (
-                    <td>
-                      {!isNaN(Number(ratioVal)) ? Number(ratioVal).toFixed(2) : '0.00'}
-                    </td>
-                  )}
+                  <td>{actualVal.toFixed(2)}</td>
+                  <td>{expectedVal.toFixed(2)}</td>
+
+                  {!hideCalcColumn && <td>{lastColumnValue}</td>}
                 </tr>
               );
             })}
@@ -186,17 +231,14 @@ function MiniLeaderboard({
   );
 }
 
-MiniLeaderboard.propTypes = {
-  title: PropTypes.string.isRequired,
-  data: PropTypes.array.isRequired,
-  actualKey: PropTypes.string.isRequired,
-  expectedKey: PropTypes.string.isRequired,
-  showRatio: PropTypes.bool,
-};
 
+/*******************************************
+ * 6) AvgDistanceLeaderboard
+ *******************************************/
 function AvgDistanceLeaderboard({ title, data }) {
   const sortedData = useMemo(() => {
     let list = [...data];
+    // Sort descending by "avgScoreDistance"
     list.sort((a, b) => (b.avgScoreDistance || 0) - (a.avgScoreDistance || 0));
     return list;
   }, [data]);
@@ -222,17 +264,15 @@ function AvgDistanceLeaderboard({ title, data }) {
                   <Link
                     to={`/player/${encodeURIComponent(item.player)}`}
                     state={{ playerData: item }}
-                    style={{
-                      color: '#FFA500',
-                      textDecoration: 'underline',
-                      cursor: 'pointer',
-                    }}
+                    style={{ color: '#FFA500', textDecoration: 'underline' }}
                   >
                     {item.player}
                   </Link>
                 </td>
                 <td>
-                  {!isNaN(Number(item.avgDistance)) ? Number(item.avgDistance).toFixed(2) : '0.00'}
+                  {!isNaN(Number(item.avgDistance))
+                    ? Number(item.avgDistance).toFixed(2)
+                    : '0.00'}
                 </td>
                 <td>
                   {!isNaN(Number(item.avgScoreDistance))
@@ -247,12 +287,14 @@ function AvgDistanceLeaderboard({ title, data }) {
     </div>
   );
 }
-
 AvgDistanceLeaderboard.propTypes = {
   title: PropTypes.string.isRequired,
   data: PropTypes.array.isRequired,
 };
 
+/*******************************************
+ * 7) Main big Leaderboard Table
+ *******************************************/
 function LeaderboardTable({ data }) {
   const [sortConfig, setSortConfig] = useState({
     key: 'Total_Points',
@@ -262,6 +304,7 @@ function LeaderboardTable({ data }) {
   const rowRef = useRef(null);
   const [maxHeight, setMaxHeight] = useState(500);
 
+  // Calculate a maximum table height for scrolling
   useEffect(() => {
     if (rowRef.current) {
       const rowHeight = rowRef.current.getBoundingClientRect().height;
@@ -269,13 +312,18 @@ function LeaderboardTable({ data }) {
     }
   }, [data]);
 
+  // Sort & filter by searchTerm
   const sortedData = useMemo(() => {
     let list = [...data];
+
+    // Filter if we have a searchTerm
     if (searchTerm) {
       list = list.filter((entry) =>
         entry.player.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
+
+    // Then sort
     if (sortConfig && sortConfig.key) {
       list.sort((a, b) => {
         const aVal = a[sortConfig.key];
@@ -288,6 +336,7 @@ function LeaderboardTable({ data }) {
     return list;
   }, [data, searchTerm, sortConfig]);
 
+  // For changing the sorting key/direction
   function requestSort(key) {
     let direction = 'ascending';
     if (sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -296,6 +345,7 @@ function LeaderboardTable({ data }) {
     setSortConfig({ key, direction });
   }
 
+  // Show an arrow next to sorted columns
   function getSortIndicator(key) {
     if (sortConfig.key !== key) return null;
     return sortConfig.direction === 'ascending' ? ' 🔼' : ' 🔽';
@@ -313,6 +363,8 @@ function LeaderboardTable({ data }) {
   return (
     <div className="leaderboard-container">
       <h2 style={{ color: '#fff' }}>Leaderboard</h2>
+
+      {/* Search box */}
       <input
         type="text"
         placeholder="Search Players..."
@@ -320,6 +372,8 @@ function LeaderboardTable({ data }) {
         onChange={(e) => setSearchTerm(e.target.value)}
         className="search-input"
       />
+
+      {/* Scrollable container */}
       <div className="table-wrapper" style={{ maxHeight: `${maxHeight}px` }}>
         <table className="leaderboard">
           <thead>
@@ -331,7 +385,7 @@ function LeaderboardTable({ data }) {
                 Team{getSortIndicator('team')}
               </th>
               <th onClick={() => requestSort('Total_Points')}>
-                Total Points{getSortIndicator('Total_Points')}
+                Total Points (Ex. Goals){getSortIndicator('Total_Points')}
               </th>
               <th onClick={() => requestSort('xPoints')}>
                 Expected Points (xPoints){getSortIndicator('xPoints')}
@@ -340,13 +394,14 @@ function LeaderboardTable({ data }) {
                 Expected Goals (xGoals){getSortIndicator('xGoals')}
               </th>
               <th onClick={() => requestSort('xPReturn')}>
-                xP Return (%){getSortIndicator('xPReturn')}
+                xP Return (%) {getSortIndicator('xPReturn')}
               </th>
               <th onClick={() => requestSort('positionPerformance')}>
                 Position Performance{getSortIndicator('positionPerformance')}
               </th>
             </tr>
           </thead>
+
           <tbody>
             {sortedData.map((entry, index) => (
               <tr
@@ -370,10 +425,14 @@ function LeaderboardTable({ data }) {
                 <td>{entry.team}</td>
                 <td>{entry.Total_Points}</td>
                 <td>
-                  {!isNaN(Number(entry.xPoints)) ? Number(entry.xPoints).toFixed(2) : '0.00'}
+                  {!isNaN(Number(entry.xPoints))
+                    ? Number(entry.xPoints).toFixed(2)
+                    : '0.00'}
                 </td>
                 <td>
-                  {!isNaN(Number(entry.xGoals)) ? Number(entry.xGoals).toFixed(2) : '0.00'}
+                  {!isNaN(Number(entry.xGoals))
+                    ? Number(entry.xGoals).toFixed(2)
+                    : '0.00'}
                 </td>
                 <td>
                   {!isNaN(Number(entry.xPReturn))
@@ -386,7 +445,7 @@ function LeaderboardTable({ data }) {
                       <tr>
                         <th>Position</th>
                         <th>Shots</th>
-                        <th>Points</th>
+                        <th>Points (No Deadball)</th>
                         <th>Goals</th>
                         <th>Efficiency (%)</th>
                       </tr>
@@ -416,19 +475,28 @@ function LeaderboardTable({ data }) {
     </div>
   );
 }
-
 LeaderboardTable.propTypes = {
   data: PropTypes.array.isRequired,
 };
 
+/*******************************************
+ * 8) FINAL: PlayerDataGAA Component
+ *******************************************/
 export default function PlayerDataGAA() {
+  // Replace with your own user/dataset
   const USER_ID = 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2';
   const DATASET_NAME = 'All Shots GAA';
-  const { data, loading, error } = useFetchDataset(`savedGames/${USER_ID}/games`, DATASET_NAME);
+
+  // Fetch from Firestore
+  const { data, loading, error } = useFetchDataset(
+    `savedGames/${USER_ID}/games`,
+    DATASET_NAME
+  );
 
   const [selectedYear, setSelectedYear] = useState('All');
   const [selectedTeam, setSelectedTeam] = useState('All');
 
+  // Collect unique years
   const availableYears = useMemo(() => {
     if (!data || !data.gameData) return [];
     const yearsSet = new Set();
@@ -440,6 +508,7 @@ export default function PlayerDataGAA() {
     return Array.from(yearsSet).sort((a, b) => b - a);
   }, [data]);
 
+  // Collect unique teams
   const availableTeams = useMemo(() => {
     if (!data || !data.gameData) return [];
     const teamSet = new Set();
@@ -451,8 +520,11 @@ export default function PlayerDataGAA() {
     return Array.from(teamSet).sort();
   }, [data]);
 
+  // Build a final "leaderboard" array
   const formattedLeaderboard = useMemo(() => {
     if (!data || !data.gameData) return [];
+
+    // Filter by chosen year & team
     const shotsFiltered = data.gameData.filter((shot) => {
       const matchesYear =
         selectedYear === 'All'
@@ -464,17 +536,19 @@ export default function PlayerDataGAA() {
     });
     if (shotsFiltered.length === 0) return [];
 
+    // Distances reference
     const goalY = 44;
     const goalX = 145;
     const halfLineX = 72.5;
 
+    // Aggregate
     const aggregator = shotsFiltered.reduce((acc, shot) => {
       const name = shot.playerName || 'Unknown Player';
       if (!acc[name]) {
         acc[name] = {
           player: name,
           team: shot.team || 'Unknown Team',
-          points: 0,
+          points: 0, // counting only points
           goals: 0,
           xPoints: 0,
           xGoals: 0,
@@ -492,94 +566,97 @@ export default function PlayerDataGAA() {
         };
       }
       const p = acc[name];
-    
-      const translatedShot = translateShotToOneSide(shot, halfLineX, goalX, goalY);
-      const distMeters = translatedShot.distMeters;
-    
-      p.totalDistance += distMeters;
-      p.shootingAttempts += 1; // Every shot counts as an attempt
-    
-      // Count total score distance for successful scoring actions, including free scores that are points
-      if (
-        shot.action === 'point' && shot.type === 'score'|| 
-        shot.action === 'goal' && shot.type === 'score'|| 
-        (shot.action === 'free' && shot.type === 'score')
-      ) {
-        p.totalScoreDistance += distMeters;
+
+      // Distance measure
+      const translated = translateShotToOneSide(
+        shot,
+        halfLineX,
+        goalX,
+        goalY
+      );
+      p.totalDistance += translated.distMeters;
+      p.shootingAttempts += 1;
+
+      // If the shot was a score, add to totalScoreDistance
+      const isScore =
+        (shot.action === 'point' && shot.type === 'score') ||
+        (shot.action === 'goal' && shot.type === 'score') ||
+        (shot.action === 'free' && shot.type === 'score');
+      if (isScore) {
+        p.totalScoreDistance += translated.distMeters;
+        p.shootingScored += 1;
       }
-    
-      // Two-pointer logic remains unchanged
-      if (distMeters >= 40) {
+
+      // 2-point territory (>= 40m)
+      if (translated.distMeters >= 40) {
         p.twoPointerAttempts += 1;
-        if (
-          shot.action === 'point' && shot.type === 'score'|| 
-          shot.action === 'goal' || 
-          (shot.action === 'free' && shot.type === 'score')
-        ) {
+        if (isScore) {
           p.twoPointerScores += 1;
         }
       }
-    
-      // Increase shootingScored for scoring actions including free scores
-      if (
-        shot.action === 'point' && shot.type === 'score'|| 
-        shot.action === 'goal' || 
-        (shot.action === 'free' && shot.type === 'score')
-      ) {
-        p.shootingScored += 1;
-      }
-    
+
+      // For "points" we do NOT add goals
       if (shot.action === 'point') {
         p.points += 1;
       } else if (shot.action === 'goal') {
-        p.points += 3;
         p.goals += 1;
       } else if (shot.action === 'free' && shot.type === 'score') {
-        // Treat free score as a point (adjust as needed)
+        // free point
         p.points += 1;
       }
-    
-      p.xPoints += shot.xPoints ? Number(shot.xPoints) : 0;
-      p.xGoals += shot.xGoals ? Number(shot.xGoals) : 0;
-    
+
+      // Expected values
+      if (shot.xPoints) p.xPoints += Number(shot.xPoints);
+      if (shot.xGoals) p.xGoals += Number(shot.xGoals);
+
+      // set plays
       const setPlayActions = ['free', 'fortyfive', 'offensive mark'];
       if (setPlayActions.includes((shot.action || '').toLowerCase())) {
         p.setPlays += 1;
-        p.xSetPlays += shot.xPoints ? Number(shot.xPoints) : 0;
+        if (shot.xPoints) p.xSetPlays += Number(shot.xPoints);
       }
-    
+
+      // pressured?
       const isPressured = (shot.pressure || '').toLowerCase().startsWith('y');
       if (isPressured) {
         p.pressuredShots += 1;
-        if (
-          shot.action === 'point' && shot.type === 'score'|| 
-          shot.action === 'goal' || 
-          (shot.action === 'free' && shot.type === 'score')
-        ) {
+        if (isScore) {
           p.pressuredScores += 1;
         }
       }
-    
+
+      // positionPerformance
       const pos = shot.position || 'unknown';
       if (!p.positionPerformance[pos]) {
         p.positionPerformance[pos] = { shots: 0, points: 0, goals: 0 };
       }
       p.positionPerformance[pos].shots += 1;
-      if (shot.action === 'point') p.positionPerformance[pos].points += 1;
-      if (shot.action === 'goal') p.positionPerformance[pos].goals += 1;
-    
-      return acc;
-    }, {});    
+      if (shot.action === 'point') {
+        p.positionPerformance[pos].points += 1;
+      }
+      if (shot.action === 'goal') {
+        p.positionPerformance[pos].goals += 1;
+      }
 
+      return acc;
+    }, {});
+
+    // Turn aggregator object into array
     const finalArray = Object.values(aggregator).map((p) => {
+      // xPReturn => ratio of actualPoints / xPoints * 100
       const xPReturn = p.xPoints > 0 ? (p.points / p.xPoints) * 100 : 0;
+
+      // average distances
       const avgDistance =
-        p.shootingAttempts > 0 ? p.totalDistance / p.shootingAttempts : 0;
+        p.shootingAttempts > 0
+          ? p.totalDistance / p.shootingAttempts
+          : 0;
       const avgScoreDistance =
         p.shootingScored > 0
           ? p.totalScoreDistance / p.shootingScored
           : 0;
 
+      // positionPerformance => efficiency
       const positionPerformance = Object.entries(p.positionPerformance).map(
         ([pos, stats]) => {
           const eff =
@@ -599,7 +676,7 @@ export default function PlayerDataGAA() {
       return {
         ...p,
         positionPerformance,
-        Total_Points: p.points,
+        Total_Points: p.points, // rename for the main Leaderboard
         xPReturn,
         avgDistance,
         avgScoreDistance,
@@ -609,6 +686,9 @@ export default function PlayerDataGAA() {
     return finalArray;
   }, [data, selectedYear, selectedTeam]);
 
+  // Sub-data for the mini-leaderboards:
+
+  // 1) Goals
   const goalsData = useMemo(
     () =>
       formattedLeaderboard.map((p) => ({
@@ -619,6 +699,7 @@ export default function PlayerDataGAA() {
     [formattedLeaderboard]
   );
 
+  // 2) Points
   const pointsData = useMemo(
     () =>
       formattedLeaderboard.map((p) => ({
@@ -629,6 +710,7 @@ export default function PlayerDataGAA() {
     [formattedLeaderboard]
   );
 
+  // 3) SetPlays
   const setPlaysData = useMemo(
     () =>
       formattedLeaderboard.map((p) => ({
@@ -639,6 +721,7 @@ export default function PlayerDataGAA() {
     [formattedLeaderboard]
   );
 
+  // 4) Shooting Accuracy
   const accuracyData = useMemo(
     () =>
       formattedLeaderboard.map((p) => ({
@@ -649,6 +732,7 @@ export default function PlayerDataGAA() {
     [formattedLeaderboard]
   );
 
+  // 5) Two-Pointer
   const twoPointerData = useMemo(
     () =>
       formattedLeaderboard.map((p) => ({
@@ -659,6 +743,7 @@ export default function PlayerDataGAA() {
     [formattedLeaderboard]
   );
 
+  // 6) Under Pressure
   const pressureData = useMemo(
     () =>
       formattedLeaderboard.map((p) => ({
@@ -669,31 +754,42 @@ export default function PlayerDataGAA() {
     [formattedLeaderboard]
   );
 
+  // 7) Distance info
   const distanceData = useMemo(
     () =>
       formattedLeaderboard.map((p) => ({
         player: p.player,
-        avgDistance: !isNaN(p.avgDistance) ? Number(p.avgDistance).toFixed(2) : '0.00',
+        avgDistance: !isNaN(p.avgDistance)
+          ? p.avgDistance.toFixed(2)
+          : '0.00',
         avgScoreDistance: !isNaN(p.avgScoreDistance)
-          ? Number(p.avgScoreDistance).toFixed(2)
+          ? p.avgScoreDistance.toFixed(2)
           : '0.00',
       })),
     [formattedLeaderboard]
   );
 
+  // Recalculate xPoints if needed
   async function handleRecalculateXPoints() {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/recalculate-xpoints`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uid: USER_ID,
-          datasetName: DATASET_NAME,
-        }),
-      });
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL}/recalculate-xpoints`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uid: USER_ID,
+            datasetName: DATASET_NAME,
+          }),
+        }
+      );
       const result = await parseJSONNoNaN(response);
       if (!response.ok) {
-        Swal.fire('Error', result.error || 'Failed to recalculate xpoints.', 'error');
+        Swal.fire(
+          'Error',
+          result.error || 'Failed to recalculate xpoints.',
+          'error'
+        );
       } else {
         Swal.fire('Success', 'xPoints recalculated successfully!', 'success');
         window.location.reload();
@@ -703,16 +799,21 @@ export default function PlayerDataGAA() {
     }
   }
 
+  // Loading or error or no data
   if (loading) return <LoadingIndicator />;
   if (error) return <ErrorMessage message={error} />;
   if (!data || !data.gameData || formattedLeaderboard.length === 0) {
     return <ErrorMessage message="No data available to display." />;
   }
 
+  /*****************************************
+   * RENDER
+   *****************************************/
   return (
     <div className="player-data-container">
       <h1 style={{ color: '#fff' }}>Player Data GAA</h1>
 
+      {/* Filter: Year, Team */}
       <div className="year-filter">
         <label style={{ color: '#fff' }} htmlFor="year-select">
           Filter by Year:
@@ -729,6 +830,7 @@ export default function PlayerDataGAA() {
             </option>
           ))}
         </select>
+
         <label style={{ color: '#fff', marginLeft: '10px' }} htmlFor="team-select">
           Filter by Team:
         </label>
@@ -746,60 +848,86 @@ export default function PlayerDataGAA() {
         </select>
       </div>
 
+      {/* MINI-LEADERBOARDS: Goals & Points => difference; others => percentage */}
       <div className="mini-leaderboards-row">
+        {/* Goals LB => difference */}
         <MiniLeaderboard
           title="Goals Leaderboard"
           data={goalsData}
           actualKey="goals"
           expectedKey="xGoals"
-          showRatio={true}
+          useDifference={true}
+          differenceLabel="Difference"
         />
+
+        {/* Points LB => difference */}
         <MiniLeaderboard
           title="Points Leaderboard"
           data={pointsData}
           actualKey="points"
           expectedKey="xPoints"
-          showRatio={true}
+          useDifference={true}
+          differenceLabel="Difference"
         />
+
+        {/* Set Plays => let's do difference or ratio? 
+            If you want difference, do: */}
         <MiniLeaderboard
           title="Set Plays Leaderboard"
           data={setPlaysData}
           actualKey="setPlays"
           expectedKey="xSetPlays"
-          showRatio={false}
+
+          // Turn OFF the difference/ratio column
+          hideCalcColumn={true}
+          
+          // (these two lines no longer matter if the column is hidden)
+          // useDifference={true}
+          // differenceLabel="SetPlays - xSetPlays"
         />
       </div>
 
       <div className="mini-leaderboards-row">
+        {/* Shooting Accuracy => ratio as a percent */}
         <MiniLeaderboard
           title="Shooting Accuracy"
           data={accuracyData}
           actualKey="shootingScored"
           expectedKey="shootingAttempts"
-          showRatio={true}
+          useDifference={false} // ratio => % 
         />
+
+        {/* 2 Pointer Leaderboard => ratio as a percent */}
         <MiniLeaderboard
-          title="2 Pointer Leaderboard"
+          title="2-Pointer Leaderboard"
           data={twoPointerData}
           actualKey="twoPointerScores"
           expectedKey="twoPointerAttempts"
-          showRatio={true}
+          useDifference={false}
         />
       </div>
 
       <div className="mini-leaderboards-row">
+        {/* Under Pressure => ratio as a percent */}
         <MiniLeaderboard
           title="Under Pressure Shots"
           data={pressureData}
           actualKey="pressuredScores"
           expectedKey="pressuredShots"
-          showRatio={true}
+          useDifference={false}
         />
-        <AvgDistanceLeaderboard title="Avg Shooting Distance" data={distanceData} />
+
+        {/* Distance => custom component */}
+        <AvgDistanceLeaderboard
+          title="Avg Shooting Distance"
+          data={distanceData}
+        />
       </div>
 
+      {/* MAIN LEADERBOARD */}
       <LeaderboardTable data={formattedLeaderboard} />
 
+      {/* Recalculate button */}
       <button onClick={handleRecalculateXPoints} className="recalculate-button">
         Recalculate xPoints
       </button>

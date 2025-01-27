@@ -1469,11 +1469,11 @@ const handleSaveToDataset = async () => {
 
 {openDialog && (
       <Rnd
-        default={{
-          x: window.innerWidth / 2 - 200,
-          y: window.innerHeight / 2 - 200,
+      default={{
+          x: Math.max( (window.innerWidth - 330) / 2, 0 ),
+          y: Math.max( (window.innerHeight - 385) / 2, 0 ),
           width: 400,
-          height: 500,
+          height: 500
         }}
         minWidth={300}
         minHeight={400}

@@ -25,8 +25,6 @@ const defaultLightStripeColor = '#228B22';
 const defaultDarkStripeColor = '#006400';
 const canvasSize = { width: 930, height: 530 };
 
-
-
 const InfoIcon = ({ text }) => (
   <span style={{ marginLeft: '6px', position: 'relative' }}>
     <span
@@ -96,10 +94,12 @@ function renderShapeForShot(category, x, y, onMouseEnter, onMouseLeave, onClick,
       />
     );
   }
+  
   let fillColor = 'orange';
-  if (category==='goal')  fillColor = colors.goal;
-  if (category==='point') fillColor = colors.point;
-  if (category==='miss')  fillColor = colors.miss;
+  if (category === 'goal') fillColor = colors.goal;
+  if (category === 'point') fillColor = colors.point;
+  if (category === 'miss') fillColor = colors.miss;
+  
   return (
     <Circle
       x={x}
@@ -132,73 +132,69 @@ function ErrorMessage({ message }) {
 }
 
 function translateShotToLeftSide(shot, halfLineX) {
-    // If shot is on the right half, mirror it to the left half
-    let newX = shot.x;
-    if (shot.x > halfLineX) {
-      newX = 2 * halfLineX - shot.x;
-    }
-    return { ...shot, x: newX };
-  }  
+  // If shot is on the right half, mirror it to the left half
+  let newX = shot.x;
+  if (shot.x > halfLineX) {
+    newX = 2 * halfLineX - shot.x;
+  }
+  return { ...shot, x: newX };
+}  
 
-  function renderOneSidePitchShots(shots, colors, xScale, yScale) {
-    const pitchWidth = 145;
-    const pitchHeight = 88;
-    const halfLineX = pitchWidth / 2;
-    const goalX = 0;
-    const goalY = pitchHeight / 2;
-  
-    const numStripes = 10;
-    const halfPitchWidthPx = xScale * halfLineX;
-    const pitchHeightPx = yScale * pitchHeight;
-    const stripeWidthPx = halfPitchWidthPx / numStripes;
-  
-    return (
-      <Layer>
-        {/* Black background for half pitch */}
-        <Rect 
-          x={0} 
-          y={0} 
-          width={halfPitchWidthPx} 
-          height={pitchHeightPx} 
-          fill="black" 
-        />
-  
-        {/* White outer boundary and half-line markings */}
-        <Rect 
-          x={0} 
-          y={0} 
-          width={halfPitchWidthPx} 
-          height={pitchHeightPx} 
-          stroke="white" 
-          strokeWidth={2} 
-          fill="transparent" 
-        />
-        <Line 
-          points={[halfPitchWidthPx, 0, halfPitchWidthPx, pitchHeightPx]} 
-          stroke="white" 
-          strokeWidth={2} 
-        />
-  
-        <Line points={[xScale * 13, 0, xScale * 13, pitchHeightPx]} stroke="white" strokeWidth={2} />
+/**
+ * Renders shots on a half-pitch, allowing onClick for each shot
+ */
+function renderOneSidePitchShots(shots, colors, xScale, yScale, onShotClick) {
+  const pitchWidth = 145;
+  const pitchHeight = 88;
+  const halfLineX = pitchWidth / 2;
+  const goalX = 0;
+  const goalY = pitchHeight / 2;
 
-        <Line points={[xScale * 20, 0, xScale * 20, pitchHeightPx]} stroke="white" strokeWidth={2} />
+  const numStripes = 10;
+  const halfPitchWidthPx = xScale * halfLineX;
+  const pitchHeightPx = yScale * pitchHeight;
+  const stripeWidthPx = halfPitchWidthPx / numStripes;
 
-        <Line points={[xScale * 45, 0, xScale * 45, pitchHeightPx]} stroke="white" strokeWidth={2} />
+  return (
+    <Layer>
+      {/* Black background for half pitch */}
+      <Rect 
+        x={0} 
+        y={0} 
+        width={halfPitchWidthPx} 
+        height={pitchHeightPx} 
+        fill="black" 
+      />
 
-        <Line points={[xScale * 65, 0, xScale * 65, pitchHeightPx]} stroke="white" strokeWidth={2} />
+      {/* White outer boundary and half-line markings */}
+      <Rect 
+        x={0} 
+        y={0} 
+        width={halfPitchWidthPx} 
+        height={pitchHeightPx} 
+        stroke="white" 
+        strokeWidth={2} 
+        fill="transparent" 
+      />
+      <Line 
+        points={[halfPitchWidthPx, 0, halfPitchWidthPx, pitchHeightPx]} 
+        stroke="white" 
+        strokeWidth={2} 
+      />
 
-        <Arc x={xScale * 20} y={yScale * 44} innerRadius={0} outerRadius={xScale * 13} angle={180} rotation={270} stroke="white" strokeWidth={2} />
+      <Line points={[xScale * 13, 0, xScale * 13, pitchHeightPx]} stroke="white" strokeWidth={2} />
+      <Line points={[xScale * 20, 0, xScale * 20, pitchHeightPx]} stroke="white" strokeWidth={2} />
+      <Line points={[xScale * 45, 0, xScale * 45, pitchHeightPx]} stroke="white" strokeWidth={2} />
+      <Line points={[xScale * 65, 0, xScale * 65, pitchHeightPx]} stroke="white" strokeWidth={2} />
+      <Arc x={xScale * 20} y={yScale * 44} innerRadius={0} outerRadius={xScale * 13} angle={180} rotation={270} stroke="white" strokeWidth={2} />
+      <Line points={[xScale * 11, yScale * 43.5, xScale * 11, yScale * 44.5]} stroke="white" strokeWidth={2} />
+      <Line points={[0, yScale * 37, xScale * 4.5, yScale * 37, xScale * 4.5, yScale * 51, 0, yScale * 51]} stroke="white" strokeWidth={2} />
+      <Line points={[0, yScale * 34.5, xScale * 13, yScale * 34.5, xScale * 13, yScale * 53.5, 0, yScale * 53.5]} stroke="white" strokeWidth={2} />
 
-        <Line points={[xScale * 11, yScale * 43.5, xScale * 11, yScale * 44.5]} stroke="white" strokeWidth={2} />
-
-        <Line points={[0, yScale * 37, xScale * 4.5, yScale * 37, xScale * 4.5, yScale * 51, 0, yScale * 51]} stroke="white" strokeWidth={2} />
-
-        <Line points={[0, yScale * 34.5, xScale * 13, yScale * 34.5, xScale * 13, yScale * 53.5, 0, yScale * 53.5]} stroke="white" strokeWidth={2} />
-
-        <Arc
+      <Arc
         x={xScale * 0}
         y={yScale * 44}
-        innerRadius={xScale * 40}    // Set equal to outerRadius
+        innerRadius={xScale * 40}    
         outerRadius={xScale * 40}
         angle={120}
         rotation={300}
@@ -206,59 +202,61 @@ function translateShotToLeftSide(shot, halfLineX) {
         strokeWidth={2}
         closed={false}
         lineCap="round"
-        />
+      />
 
-        {/* Outer boundary around half pitch */}
-        <Line 
-          points={[0, 0, halfPitchWidthPx, 0, halfPitchWidthPx, pitchHeightPx, 0, pitchHeightPx, 0, 0]} 
-          stroke={defaultLineColor} 
-          strokeWidth={2} 
-        />
-  
-        {/* Plot each translated shot on one side */}
-        {shots.map((shot, i) => {
-          const mirroredShot = translateShotToLeftSide(shot, halfLineX);
-          const translated = translateShotToOneSide(mirroredShot, halfLineX, goalX, goalY);
-          const shotX = translated.x * xScale;
-          const shotY = translated.y * yScale;
-          const baseRadius = 5;
-          const radius = baseRadius + (translated.xPoints ? translated.xPoints * 0.5 : 0);
-  
-          const category = getShotCategory(shot.action);
-          let fillColor = 'black';
-          let strokeColor = 'white';
-          let strokeWidth = 2;
-  
-          if (category === 'goal') {
-            fillColor = colors.goal || 'orange';
-            strokeColor = null;
-          } else if (category === 'point') {
-            fillColor = colors.point || 'green';
-            strokeColor = null;
-          } else if (category === 'setplay-score') {
-            fillColor = colors.setPlayScore || 'green';
-          } else if (category === 'setplay-miss') {
-            fillColor = colors.setPlayMiss || 'red';
-          }
-  
-          return (
-            <Circle
-              key={i}
-              x={shotX}
-              y={shotY}
-              radius={radius}
-              fill={fillColor}
-              stroke={strokeColor}
-              strokeWidth={strokeColor ? strokeWidth : 0}
-              opacity={0.85}
-            />
-          );
-        })}
-      </Layer>
-    );
-  }
-  
-  
+      {/* Outer boundary around half pitch */}
+      <Line 
+        points={[0, 0, halfPitchWidthPx, 0, halfPitchWidthPx, pitchHeightPx, 0, pitchHeightPx, 0, 0]} 
+        stroke="white" 
+        strokeWidth={2} 
+      />
+
+      {/* Plot each translated shot on one side, now clickable */}
+      {shots.map((shot, i) => {
+        const mirroredShot = translateShotToLeftSide(shot, halfLineX);
+        const translated = translateShotToOneSide(mirroredShot, halfLineX, goalX, goalY);
+        const shotX = translated.x * xScale;
+        const shotY = translated.y * yScale;
+        const baseRadius = 5;
+        const radius = baseRadius + (translated.xPoints ? translated.xPoints * 0.5 : 0);
+
+        const category = getShotCategory(shot.action);
+        let fillColor = 'black';
+        let strokeColor = 'white';
+        let strokeWidth = 2;
+
+        if (category === 'goal') {
+          fillColor = colors.goal || 'orange';
+          strokeColor = null;
+        } else if (category === 'point') {
+          fillColor = colors.point || 'green';
+          strokeColor = null;
+        } else if (category === 'setplay-score') {
+          fillColor = colors.setPlayScore || 'green';
+        } else if (category === 'setplay-miss') {
+          fillColor = colors.setPlayMiss || 'red';
+        } else if (category === 'miss') {
+          fillColor = colors.miss || 'red';
+        }
+
+        return (
+          <Circle
+            key={i}
+            x={shotX}
+            y={shotY}
+            radius={radius}
+            fill={fillColor}
+            stroke={strokeColor}
+            strokeWidth={strokeColor ? strokeWidth : 0}
+            opacity={0.85}
+            // Handle click to open the same modal as the main pitch
+            onClick={() => onShotClick(shot)}
+          />
+        );
+      })}
+    </Layer>
+  );
+}
 
 function RadarChartGAA({ aggregatedData, selectedPlayers, primaryPlayer }) {
   const labels = ['Points','2 Pointers','Goals','Offensive Marks','Frees','45s'];
@@ -304,24 +302,39 @@ function RadarChartGAA({ aggregatedData, selectedPlayers, primaryPlayer }) {
   const chartData = { labels, datasets };
 
   const chartOptions = {
-    scale: {
-      ticks: {
-        beginAtZero: true,
-        stepSize: 30,
-        callback: function(value) {
-          const allData = this.chart.data.datasets.flatMap(ds => ds.data);
-          const max = Math.max(...allData);
-          return value === max ? value : '';
-        }
+    // Replace 'scale' with 'scales' and 'r'
+    scales: {
+      r: {
+        // The numeric radial ticks
+        ticks: {
+          beginAtZero: true,
+          stepSize: 30,
+          color: '#fff',  // turn tick numbers white
+          callback: function(value) {
+            const allData = this.chart.data.datasets.flatMap(ds => ds.data);
+            const max = Math.max(...allData);
+            return value === max ? value : '';
+          },
+        },
+        // The category labels around the chart
+        pointLabels: {
+          color: '#fff',  // turn "45s", "Points", etc. white
+          font: {
+            size: 14      // font size in Chart.js 3/4
+          },
+        },
       },
-      pointLabels: { fontSize: 14, fontColor: '#fff' }
     },
     plugins: {
-      legend: { labels: { color: '#fff' } }
+      legend: {
+        labels: {
+          color: '#fff', // legend label color
+        },
+      },
     },
     responsive: true,
     maintainAspectRatio: false,
-  };
+  };  
 
   return (
     <div style={{ width: '500px', height: '450px', margin: '1rem auto', backgroundColor:'rgba(0,0,0,0.2)', borderRadius:'8px', padding:'1rem' }}>
@@ -336,6 +349,67 @@ function RadarChartGAA({ aggregatedData, selectedPlayers, primaryPlayer }) {
         <p style={{ color:'#ddd', textAlign:'center' }}>No players selected yet.</p>
       )}
     </div>
+  );
+}
+
+/**
+ * Legend for the half-pitch shot map, positioned at bottom-right corner
+ */
+function renderLegendOneSideShots(colors, stageWidth, stageHeight) {
+  const legendItems = [
+    { label: 'Goal', color: colors.goal },
+    { label: 'Point', color: colors.point },
+    { label: 'Miss', color: colors.miss },
+    { label: 'SetPlay Score', color: colors.setPlayScore },
+    { label: 'SetPlay Miss', color: colors.setPlayMiss },
+  ];
+
+  const itemHeight = 20;
+  const legendWidth = 140;
+  const legendHeight = legendItems.length * itemHeight + 10;
+
+  return (
+    <Layer>
+      <Group x={stageWidth - legendWidth - 10} y={stageHeight - legendHeight - 10}>
+        {/* Background for the legend box */}
+        <Rect
+          x={0}
+          y={0}
+          width={legendWidth}
+          height={legendHeight}
+          fill="rgba(0, 0, 0, 0.5)" 
+          cornerRadius={5}
+        />
+{legendItems.map((item, i) => {
+  const yPos = i * itemHeight + 10;
+
+  // Only give stroke if it's one of the SetPlay labels
+      const hasWhiteBorder =
+        item.label === 'SetPlay Score' || item.label === 'SetPlay Miss';
+
+      return (
+        <Group key={i}>
+          <Circle
+            x={15}
+            y={yPos}
+            radius={5}
+            fill={item.color}
+            stroke={hasWhiteBorder ? '#fff' : null}  // <-- white border only if SetPlay
+            strokeWidth={hasWhiteBorder ? 2 : 0}
+          />
+          <Text
+            x={30}
+            y={yPos - 6}
+            text={item.label}
+            fontSize={12}
+            fill="#fff"
+          />
+        </Group>
+      );
+    })}
+
+      </Group>
+    </Layer>
   );
 }
 
@@ -365,15 +439,15 @@ export default function PlayerShotDataGAA() {
   const [shotFilter, setShotFilter] = useState('All');
   const [showXP, setShowXP] = useState(false);
 
-  const canvasSize = { width: 930, height: 530 };
+  const canvasSizeMain = { width: 930, height: 530 };
   const pitchWidth = 145;
   const pitchHeight = 88;
-  const xScale = canvasSize.width / pitchWidth;
-  const yScale = canvasSize.height / pitchHeight;
+  const xScale = canvasSizeMain.width / pitchWidth;
+  const yScale = canvasSizeMain.height / pitchHeight;
 
-  const halfLineX = pitchWidth/2;
+  const halfLineX = pitchWidth / 2;
   const goalXRight = pitchWidth;
-  const goalY = pitchHeight/2;
+  const goalY = pitchHeight / 2;
 
   const [allShots, setAllShots] = useState([]);
   const [teams, setTeams] = useState([]);
@@ -560,7 +634,7 @@ export default function PlayerShotDataGAA() {
   
   function renderHalfPitch() {
     const numStripes = 10;
-    const halfWidth = canvasSize.width / 2;
+    const halfWidth = canvasSizeMain.width / 2;
     const stripeWidth = halfWidth / numStripes;
     
     return (
@@ -569,7 +643,7 @@ export default function PlayerShotDataGAA() {
           x={0}
           y={0}
           width={halfWidth}
-          height={canvasSize.height}
+          height={canvasSizeMain.height}
           fill={pitchColorState}
         />
         {Array.from({ length: numStripes }, (_, i) => (
@@ -578,13 +652,13 @@ export default function PlayerShotDataGAA() {
             x={i * stripeWidth}
             y={0}
             width={stripeWidth}
-            height={canvasSize.height}
+            height={canvasSizeMain.height}
             fill={i % 2 === 0 ? lightStripeColorState : darkStripeColorState}
             opacity={0.3}
           />
         ))}
         <Line 
-          points={[0, 0, halfWidth, 0, halfWidth, canvasSize.height, 0, canvasSize.height, 0, 0]} 
+          points={[0, 0, halfWidth, 0, halfWidth, canvasSizeMain.height, 0, canvasSizeMain.height, 0, 0]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
@@ -667,42 +741,42 @@ export default function PlayerShotDataGAA() {
           strokeWidth={2} 
         />
         <Line 
-          points={[xScale * 13, 0, xScale * 13, canvasSize.height]} 
+          points={[xScale * 13, 0, xScale * 13, canvasSizeMain.height]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
         <Line 
-          points={[Math.min(xScale * 132, halfWidth), 0, Math.min(xScale * 132, halfWidth), canvasSize.height]} 
+          points={[Math.min(xScale * 132, halfWidth), 0, Math.min(xScale * 132, halfWidth), canvasSizeMain.height]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
         <Line 
-          points={[Math.min(xScale * 20, halfWidth), 0, Math.min(xScale * 20, halfWidth), canvasSize.height]} 
+          points={[Math.min(xScale * 20, halfWidth), 0, Math.min(xScale * 20, halfWidth), canvasSizeMain.height]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
         <Line 
-          points={[Math.min(xScale * 125, halfWidth), 0, Math.min(xScale * 125, halfWidth), canvasSize.height]} 
+          points={[Math.min(xScale * 125, halfWidth), 0, Math.min(xScale * 125, halfWidth), canvasSizeMain.height]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
         <Line 
-          points={[Math.min(xScale * 45, halfWidth), 0, Math.min(xScale * 45, halfWidth), canvasSize.height]} 
+          points={[Math.min(xScale * 45, halfWidth), 0, Math.min(xScale * 45, halfWidth), canvasSizeMain.height]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
         <Line 
-          points={[Math.min(xScale * 100, halfWidth), 0, Math.min(xScale * 100, halfWidth), canvasSize.height]} 
+          points={[Math.min(xScale * 100, halfWidth), 0, Math.min(xScale * 100, halfWidth), canvasSizeMain.height]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
         <Line 
-          points={[Math.min(xScale * 65, halfWidth), 0, Math.min(xScale * 65, halfWidth), canvasSize.height]} 
+          points={[Math.min(xScale * 65, halfWidth), 0, Math.min(xScale * 65, halfWidth), canvasSizeMain.height]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
         <Line 
-          points={[Math.min(xScale * 80, halfWidth), 0, Math.min(xScale * 80, halfWidth), canvasSize.height]} 
+          points={[Math.min(xScale * 80, halfWidth), 0, Math.min(xScale * 80, halfWidth), canvasSizeMain.height]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
@@ -733,8 +807,8 @@ export default function PlayerShotDataGAA() {
         <Text 
           text="SCORELECT.COM" 
           x={xScale * 22.5} 
-          y={canvasSize.height / 40.25} 
-          fontSize={canvasSize.width / 60} 
+          y={canvasSizeMain.height / 40.25} 
+          fontSize={canvasSizeMain.width / 60} 
           fill="#D3D3D3" 
           opacity={0.7} 
           rotation={0} 
@@ -743,8 +817,8 @@ export default function PlayerShotDataGAA() {
         <Text 
           text="SCORELECT.COM" 
           x={halfWidth - xScale * 22.5} 
-          y={canvasSize.height / 1.02} 
-          fontSize={canvasSize.width / 60} 
+          y={canvasSizeMain.height / 1.02} 
+          fontSize={canvasSizeMain.width / 60} 
           fill="#D3D3D3" 
           opacity={0.7} 
           rotation={180} 
@@ -753,41 +827,40 @@ export default function PlayerShotDataGAA() {
       </Layer>
     );
   }
-  
 
   function renderGAAPitch() {
     const numStripes = 10;
-    const stripeWidth = canvasSize.width / numStripes;
+    const stripeWidth = canvasSizeMain.width / numStripes;
   
     return (
       <Layer>
         <Rect
           x={0}
           y={0}
-          width={canvasSize.width}
-          height={canvasSize.height}
+          width={canvasSizeMain.width}
+          height={canvasSizeMain.height}
           fill={pitchColorState}
         />
-  
+
         {Array.from({ length: numStripes }, (_, i) => (
           <Rect
             key={i}
             x={i * stripeWidth}
             y={0}
             width={stripeWidth}
-            height={canvasSize.height}
+            height={canvasSizeMain.height}
             fill={i % 2 === 0 ? lightStripeColorState : darkStripeColorState}
             opacity={0.3}
           />
         ))}
-  
+
         <Line 
-          points={[0, 0, canvasSize.width, 0, canvasSize.width, canvasSize.height, 0, canvasSize.height, 0, 0]} 
+          points={[0, 0, canvasSizeMain.width, 0, canvasSizeMain.width, canvasSizeMain.height, 0, canvasSizeMain.height, 0, 0]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
         <Line 
-          points={[canvasSize.width, yScale * 40.75, xScale * 145.2, yScale * 40.75, xScale * 145.2, yScale * 47.25, canvasSize.width, yScale * 47.25]} 
+          points={[canvasSizeMain.width, yScale * 40.75, xScale * 145.2, yScale * 40.75, xScale * 145.2, yScale * 47.25, canvasSizeMain.width, yScale * 47.25]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
@@ -797,7 +870,7 @@ export default function PlayerShotDataGAA() {
           strokeWidth={2} 
         />
         <Line 
-          points={[canvasSize.width, yScale * 37, xScale * 140.5, yScale * 37, xScale * 140.5, yScale * 51, canvasSize.width, yScale * 51]} 
+          points={[canvasSizeMain.width, yScale * 37, xScale * 140.5, yScale * 37, xScale * 140.5, yScale * 51, canvasSizeMain.width, yScale * 51]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
@@ -812,7 +885,7 @@ export default function PlayerShotDataGAA() {
           strokeWidth={2} 
         />
         <Line 
-          points={[canvasSize.width, yScale * 34.5, xScale * 132, yScale * 34.5, xScale * 132, yScale * 53.5, canvasSize.width, yScale * 53.5]} 
+          points={[canvasSizeMain.width, yScale * 34.5, xScale * 132, yScale * 34.5, xScale * 132, yScale * 53.5, canvasSizeMain.width, yScale * 53.5]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
@@ -852,42 +925,42 @@ export default function PlayerShotDataGAA() {
           strokeWidth={2} 
         />
         <Line 
-          points={[xScale * 13, 0, xScale * 13, canvasSize.height]} 
+          points={[xScale * 13, 0, xScale * 13, canvasSizeMain.height]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
         <Line 
-          points={[xScale * 132, 0, xScale * 132, canvasSize.height]} 
+          points={[xScale * 132, 0, xScale * 132, canvasSizeMain.height]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
         <Line 
-          points={[xScale * 20, 0, xScale * 20, canvasSize.height]} 
+          points={[xScale * 20, 0, xScale * 20, canvasSizeMain.height]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
         <Line 
-          points={[xScale * 125, 0, xScale * 125, canvasSize.height]} 
+          points={[xScale * 125, 0, xScale * 125, canvasSizeMain.height]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
         <Line 
-          points={[xScale * 45, 0, xScale * 45, canvasSize.height]} 
+          points={[xScale * 45, 0, xScale * 45, canvasSizeMain.height]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
         <Line 
-          points={[xScale * 100, 0, xScale * 100, canvasSize.height]} 
+          points={[xScale * 100, 0, xScale * 100, canvasSizeMain.height]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
         <Line 
-          points={[xScale * 65, 0, xScale * 65, canvasSize.height]} 
+          points={[xScale * 65, 0, xScale * 65, canvasSizeMain.height]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
         <Line 
-          points={[xScale * 80, 0, xScale * 80, canvasSize.height]} 
+          points={[xScale * 80, 0, xScale * 80, canvasSizeMain.height]} 
           stroke={lineColorState} 
           strokeWidth={2} 
         />
@@ -921,8 +994,8 @@ export default function PlayerShotDataGAA() {
         <Text 
           text="SCORELECT.COM" 
           x={xScale * 22.5} 
-          y={canvasSize.height / 40.25} 
-          fontSize={canvasSize.width / 60} 
+          y={canvasSizeMain.height / 40.25} 
+          fontSize={canvasSizeMain.width / 60} 
           fill="#D3D3D3" 
           opacity={0.7} 
           rotation={0} 
@@ -930,9 +1003,9 @@ export default function PlayerShotDataGAA() {
         />
         <Text 
           text="SCORELECT.COM" 
-          x={canvasSize.width - xScale * 22.5} 
-          y={canvasSize.height / 1.02} 
-          fontSize={canvasSize.width / 60} 
+          x={canvasSizeMain.width - xScale * 22.5} 
+          y={canvasSizeMain.height / 1.02} 
+          fontSize={canvasSizeMain.width / 60} 
           fill="#D3D3D3" 
           opacity={0.7} 
           rotation={180} 
@@ -941,32 +1014,54 @@ export default function PlayerShotDataGAA() {
       </Layer>
     );
   }
-  
 
   function renderShotsLayer() {
     return (
       <Layer>
         {filteredShots.map((shot, i) => {
-          const cat = getShotCategory(shot.action);
-          const shotX = (shot.x || 0) * xScale;
-          const shotY = (shot.y || 0) * yScale;
 
           const handleMouseEnter = (e) => {
             const stage = e.target.getStage();
             if (stage) stage.container().style.cursor = 'pointer';
+
+            // Decide xG or xP:
+            const cat = getShotCategory(shot.action);
+            const isGoal = cat === 'goal';
+            const label = isGoal ? 'xG' : 'xP';
+            const xpOrXg = isGoal
+              ? (typeof shot.xGoals === 'number' ? shot.xGoals.toFixed(2) : 'N/A')
+              : (typeof shot.xPoints === 'number' ? shot.xPoints.toFixed(2) : 'N/A');
+          
+            // Distance:
+            const distVal = (typeof shot.distMeters === 'number')
+              ? `${shot.distMeters.toFixed(1)}m`
+              : 'N/A';
+          
+            // Pressure:
+            const pressureVal = shot.pressure || 'N/A';
+          
+            // Show tooltip with multiline info:
             setTooltip({
               visible: true,
               x: e.evt.layerX,
               y: e.evt.layerY,
-              content: `Action: ${shot.action}\nX:${shot.x?.toFixed(1)}, Y:${shot.y?.toFixed(1)}`
+              content: `${label}: ${xpOrXg}\nDistance: ${distVal}\nPressure: ${pressureVal}`,
             });
           };
+  
           const handleMouseLeave = () => {
             if (stageRef.current) stageRef.current.container().style.cursor = 'default';
-            setTooltip(t => ({ ...t, visible: false }));
+            setTooltip(prev => ({ ...prev, visible: false }));
           };
-          const handleClick = () => handleShotClick(shot);
-
+  
+          const handleClick = () => {
+            handleShotClick(shot);
+          };
+  
+          const cat = getShotCategory(shot.action);
+          const shotX = (shot.x || 0) * xScale;
+          const shotY = (shot.y || 0) * yScale;
+          
           return (
             <Group key={i}>
               {renderShapeForShot(cat, shotX, shotY, handleMouseEnter, handleMouseLeave, handleClick, {
@@ -975,8 +1070,8 @@ export default function PlayerShotDataGAA() {
                 miss: colorMiss,
                 setPlayScore: colorSetPlayScore,
                 setPlayMiss: colorSetPlayMiss
-                })}
-
+              })}
+              
               {showXP && typeof shot.xPoints === 'number' && (
                 <Text
                   x={shotX}
@@ -1022,7 +1117,7 @@ export default function PlayerShotDataGAA() {
   function renderSelectedShotDetails() {
     if (!selectedShot) return null;
     const cat = getShotCategory(selectedShot.action);
-    const isGoal = (cat === 'goal');
+    const isGoal = cat === 'goal';
     const distMeters = typeof selectedShot.distMeters === 'number' ? selectedShot.distMeters.toFixed(1) : 'N/A';
     const foot = selectedShot.foot || 'N/A';
     const pressure = selectedShot.pressure || 'N/A';
@@ -1084,6 +1179,189 @@ export default function PlayerShotDataGAA() {
   return (
     <div style={{ position:'relative', color:'#fff' }}>
       <h1 style={{ textAlign:'center', color:'#fff' }}>Shot Map for {playerName}</h1>
+
+        {/* Color Modal */}
+        {showColorModal && (
+          <Modal
+            isOpen={showColorModal}
+            onRequestClose={() => setShowColorModal(false)}
+            style={customModalStyles}
+            contentLabel="Customize Colors"
+          >
+            <h2 className="color-modal-header">Customize Colors</h2>
+            <div className="color-modal-grid">
+                <div>
+                    <label style={{ color: '#fff' }}>Pitch Color:</label>
+                    <input type="color" value={pitchColorState} onChange={(e) => setPitchColorState(e.target.value)} />
+                </div>
+                <div>
+                    <label style={{ color: '#fff' }}>Line Color:</label>
+                    <input type="color" value={lineColorState} onChange={(e) => setLineColorState(e.target.value)} />
+                </div>
+                <div>
+                    <label style={{ color: '#fff' }}>Light Stripe Color:</label>
+                    <input type="color" value={lightStripeColorState} onChange={(e) => setLightStripeColorState(e.target.value)} />
+                </div>
+                <div>
+                    <label style={{ color: '#fff' }}>Dark Stripe Color:</label>
+                    <input type="color" value={darkStripeColorState} onChange={(e) => setDarkStripeColorState(e.target.value)} />
+                </div>
+                <div>
+                    <label style={{ color: '#fff' }}>Goal Color:</label>
+                    <input type="color" value={colorGoal} onChange={(e) => setColorGoal(e.target.value)} />
+                </div>
+                <div>
+                    <label style={{ color: '#fff' }}>Point Color:</label>
+                    <input type="color" value={colorPoint} onChange={(e) => setColorPoint(e.target.value)} />
+                </div>
+                <div>
+                    <label style={{ color: '#fff' }}>Miss Color:</label>
+                    <input type="color" value={colorMiss} onChange={(e) => setColorMiss(e.target.value)} />
+                </div>
+                <div>
+                    <label style={{ color: '#fff' }}>SetPlay Score Color:</label>
+                    <input type="color" value={colorSetPlayScore} onChange={(e) => setColorSetPlayScore(e.target.value)} />
+                </div>
+                <div>
+                    <label style={{ color: '#fff' }}>SetPlay Miss Color:</label>
+                    <input type="color" value={colorSetPlayMiss} onChange={(e) => setColorSetPlayMiss(e.target.value)} />
+                </div>
+            </div>
+            <div style={{ marginTop: '1rem', textAlign: 'right' }}>
+              <button 
+                  onClick={() => setShowColorModal(false)}
+                  style={{
+                  backgroundColor:'#607d8b',
+                  color:'#fff',
+                  border:'none',
+                  padding:'0.5rem 1rem',
+                  borderRadius:'5px',
+                  fontSize:'0.9rem',
+                  fontWeight:'bold',
+                  cursor:'pointer'
+                  }}
+              >
+                  Set as Default
+              </button>
+            </div>
+          </Modal>
+        )}
+      
+
+      {/* One-Sided Pitch Shots Section */}
+      <div style={{ marginTop: '3rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', textAlign: 'center' }}>
+        <h4 style={{ color: '#fff' }}>All Shots Translated</h4>
+        <div className="stage-container">
+          {/* The half-pitch Stage */}
+          <Stage
+            width={xScale * (pitchWidth / 2)}
+            height={yScale * pitchHeight}
+          >
+            {renderHalfPitch()}
+
+            {renderOneSidePitchShots(
+              shotsData,
+              {
+                goal: colorGoal,
+                point: colorPoint,
+                miss: colorMiss,
+                setPlayScore: colorSetPlayScore,
+                setPlayMiss: colorSetPlayMiss
+              },
+              xScale,
+              yScale,
+              handleShotClick // <--- pass the same shot-click handler
+            )}
+
+            {/* Moved legend to bottom-right corner */}
+            {renderLegendOneSideShots(
+              {
+                goal: colorGoal,
+                point: colorPoint,
+                miss: colorMiss,
+                setPlayScore: colorSetPlayScore,
+                setPlayMiss: colorSetPlayMiss
+              },
+              xScale * (pitchWidth / 2),
+              yScale * pitchHeight
+            )}
+          </Stage>
+        </div>
+        {/* Display the totals below the graphic */}
+        <p style={{ color: '#fff', marginTop: '1rem' }}>
+          Total xP: {totalXP.toFixed(2)}, Total xG: {totalXG.toFixed(2)}
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-around', gap: '2rem' }}>
+        {/* Radar Chart Section */}
+        <div style={{ marginTop: '3rem', padding: '1rem', background: 'rgba(0,0,0,0.2)' }}>
+          <h4 style={{ color:'#fff', textAlign:'center' }}>Compare Players on Radar Chart</h4>
+
+          {/* Team Dropdown */}
+          <div style={{ display:'flex', justifyContent:'center', marginBottom:'1rem', gap:'1rem' }}>
+            <div>
+              <label htmlFor="teamSelect" style={{ color:'#fff', marginRight:'8px' }}>Select Team:</label>
+              <select
+                id="teamSelect"
+                value={selectedTeam}
+                onChange={(e)=> setSelectedTeam(e.target.value)}
+                style={{ padding:'6px', borderRadius:'4px' }}
+              >
+                <option value="">-- Choose a Team --</option>
+                {teams.map((tm,i)=>(
+                  <option key={i} value={tm}>{tm}</option>
+                ))}
+              </select>
+            </div>
+
+            {selectedTeam && playersInTeam.length > 0 && (
+              <div>
+                <label htmlFor="playerSelect" style={{ color:'#fff', marginRight:'8px' }}>Select Player:</label>
+                <select
+                  id="playerSelect"
+                  onChange={(e)=> {
+                    const pName = e.target.value;
+                    if(pName) togglePlayer(pName);
+                  }}
+                  style={{ padding:'6px', borderRadius:'4px' }}
+                >
+                  <option value="">-- Choose Player --</option>
+                  {playersInTeam.map((pName,i)=>(
+                    <option key={i} value={pName}>{pName}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          <div style={{ textAlign:'center', marginBottom:'1rem' }}>
+            {selectedPlayers.map((pName)=>(
+              <span
+                key={pName}
+                style={{
+                  display:'inline-block',
+                  backgroundColor:'#f44336',
+                  color:'#fff',
+                  padding:'0.2rem 0.6rem',
+                  borderRadius:'4px',
+                  margin:'0 6px',
+                  cursor:'pointer'
+                }}
+                onClick={()=> togglePlayer(pName)}
+              >
+                {pName} &times;
+              </span>
+            ))}
+          </div>
+
+          <RadarChartGAA 
+            aggregatedData={aggregatedData}
+            selectedPlayers={selectedPlayers}
+            primaryPlayer={playerName}
+          />
+        </div>
+      </div>
 
       {/* Buttons */}
       <div style={{ display:'flex', justifyContent:'center', gap:'15px', marginBottom:'1rem' }}>
@@ -1193,106 +1471,38 @@ export default function PlayerShotDataGAA() {
 
         {/* Custom Color Button */}
         <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
-        <button 
-            onClick={() => setShowColorModal(true)}
-            style={{
-            backgroundColor: '#333',
-            color: '#fff',
-            border: 'none',
-            padding: '0.75rem 1.5rem',    // increased padding
-            borderRadius: '5px',
-            cursor: 'pointer',
-            fontSize: '1rem',
-            fontWeight: 'bold',
-            boxShadow: '0 4px 6px rgba(0,0,0,0.2)',
-            transition: 'background 0.3s ease'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#444'} 
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#333'}
-        >
-            Custom Color
-        </button>
+          <button 
+              onClick={() => setShowColorModal(true)}
+              style={{
+              backgroundColor: '#333',
+              color: '#fff',
+              border: 'none',
+              padding: '0.75rem 1.5rem',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              fontSize: '1rem',
+              fontWeight: 'bold',
+              boxShadow: '0 4px 6px rgba(0,0,0,0.2)',
+              transition: 'background 0.3s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#444'} 
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#333'}
+          >
+              Custom Color
+          </button>
+        </div>
         </div>
 
-
-      {/* Color Modal */}
-      {showColorModal && (
-        <Modal
-        isOpen={showColorModal}
-        onRequestClose={() => setShowColorModal(false)}
-        style={customModalStyles}
-        contentLabel="Customize Colors"
-      >
-        <h2 className="color-modal-header">Customize Colors</h2>
-        <div className="color-modal-grid">
-            <div>
-                <label style={{ color: '#fff' }}>Pitch Color:</label>
-                <input type="color" value={pitchColorState} onChange={(e) => setPitchColorState(e.target.value)} />
-            </div>
-            <div>
-                <label style={{ color: '#fff' }}>Line Color:</label>
-                <input type="color" value={lineColorState} onChange={(e) => setLineColorState(e.target.value)} />
-            </div>
-            <div>
-                <label style={{ color: '#fff' }}>Light Stripe Color:</label>
-                <input type="color" value={lightStripeColorState} onChange={(e) => setLightStripeColorState(e.target.value)} />
-            </div>
-            <div>
-                <label style={{ color: '#fff' }}>Dark Stripe Color:</label>
-                <input type="color" value={darkStripeColorState} onChange={(e) => setDarkStripeColorState(e.target.value)} />
-            </div>
-            <div>
-                <label style={{ color: '#fff' }}>Goal Color:</label>
-                <input type="color" value={colorGoal} onChange={(e) => setColorGoal(e.target.value)} />
-            </div>
-            <div>
-                <label style={{ color: '#fff' }}>Point Color:</label>
-                <input type="color" value={colorPoint} onChange={(e) => setColorPoint(e.target.value)} />
-            </div>
-            <div>
-                <label style={{ color: '#fff' }}>Miss Color:</label>
-                <input type="color" value={colorMiss} onChange={(e) => setColorMiss(e.target.value)} />
-            </div>
-            <div>
-                <label style={{ color: '#fff' }}>SetPlay Score Color:</label>
-                <input type="color" value={colorSetPlayScore} onChange={(e) => setColorSetPlayScore(e.target.value)} />
-            </div>
-            <div>
-                <label style={{ color: '#fff' }}>SetPlay Miss Color:</label>
-                <input type="color" value={colorSetPlayMiss} onChange={(e) => setColorSetPlayMiss(e.target.value)} />
-            </div>
-            </div>
-            <div style={{ marginTop: '1rem', textAlign: 'right' }}>
-            <button 
-                onClick={() => setShowColorModal(false)}
-                style={{
-                backgroundColor:'#607d8b',
-                color:'#fff',
-                border:'none',
-                padding:'0.5rem 1rem',
-                borderRadius:'5px',
-                fontSize:'0.9rem',
-                fontWeight:'bold',
-                cursor:'pointer'
-                }}
-            >
-                Set as Default
-            </button>
-            </div>
-        </Modal>
-        )}
-
-      </div>
-
-
-      {/* The Pitch */}
+      {/* The Main Full Pitch */}
       <div className="stage-container">
-        <Stage width={canvasSize.width} height={canvasSize.height} ref={stageRef}>
+        <Stage width={canvasSizeMain.width} height={canvasSizeMain.height} ref={stageRef}>
           {renderGAAPitch()}
           {renderShotsLayer()}
         </Stage>
       </div>
+
       {renderTooltip()}
+
       {selectedShot && (
         <Modal
           isOpen={!!selectedShot}
@@ -1322,103 +1532,6 @@ export default function PlayerShotDataGAA() {
           </div>
         </Modal>
       )}
-
-
-<div style={{ display: 'flex', justifyContent: 'space-around', gap: '2rem' }}>
-  {/* Radar Chart Section */}
-  <div style={{ marginTop: '3rem', padding: '1rem', background: 'rgba(0,0,0,0.2)' }}>
-    <h4 style={{ color:'#fff', textAlign:'center' }}>Compare Players on Radar Chart</h4>
-
-    {/* Team Dropdown */}
-    <div style={{ display:'flex', justifyContent:'center', marginBottom:'1rem', gap:'1rem' }}>
-      <div>
-        <label htmlFor="teamSelect" style={{ color:'#fff', marginRight:'8px' }}>Select Team:</label>
-        <select
-          id="teamSelect"
-          value={selectedTeam}
-          onChange={(e)=> setSelectedTeam(e.target.value)}
-          style={{ padding:'6px', borderRadius:'4px' }}
-        >
-          <option value="">-- Choose a Team --</option>
-          {teams.map((tm,i)=>(
-            <option key={i} value={tm}>{tm}</option>
-          ))}
-        </select>
-      </div>
-
-      {selectedTeam && playersInTeam.length>0 && (
-        <div>
-          <label htmlFor="playerSelect" style={{ color:'#fff', marginRight:'8px' }}>Select Player:</label>
-          <select
-            id="playerSelect"
-            onChange={(e)=> {
-              const pName = e.target.value;
-              if(pName) togglePlayer(pName);
-            }}
-            style={{ padding:'6px', borderRadius:'4px' }}
-          >
-            <option value="">-- Choose Player --</option>
-            {playersInTeam.map((pName,i)=>(
-              <option key={i} value={pName}>{pName}</option>
-            ))}
-          </select>
-        </div>
-      )}
-    </div>
-
-    <div style={{ textAlign:'center', marginBottom:'1rem' }}>
-      {selectedPlayers.map((pName)=>(
-        <span
-          key={pName}
-          style={{
-            display:'inline-block',
-            backgroundColor:'#f44336',
-            color:'#fff',
-            padding:'0.2rem 0.6rem',
-            borderRadius:'4px',
-            margin:'0 6px',
-            cursor:'pointer'
-          }}
-          onClick={()=> togglePlayer(pName)}
-        >
-          {pName} &times;
-        </span>
-      ))}
-    </div>
-
-    <RadarChartGAA 
-      aggregatedData={aggregatedData}
-      selectedPlayers={selectedPlayers}
-      primaryPlayer={playerName}
-    />
-  </div>
-
-
-  {/* One-Sided Pitch Shots Section */}
-    <div style={{ marginTop: '3rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', textAlign: 'center' }}>
-    <h4 style={{ color: '#fff' }}>All Shots Translated</h4>
-    <div className="stage-container">
-        <Stage width={xScale * (pitchWidth / 2)} height={yScale * pitchHeight}>
-        {renderHalfPitch()}
-        {renderOneSidePitchShots(shotsData, {
-            goal: colorGoal,
-            point: colorPoint,
-            miss: colorMiss,
-            setPlayScore: colorSetPlayScore,
-            setPlayMiss: colorSetPlayMiss
-        }, xScale, yScale)}
-        </Stage>
-    </div>
-    {/* Display the totals below the graphic */}
-    <p style={{ color: '#fff', marginTop: '1rem' }}>
-        Total xP: {totalXP.toFixed(2)}, Total xG: {totalXG.toFixed(2)}
-    </p>
-    </div>
-
-
-
-
-      </div>
     </div>
   );
 }

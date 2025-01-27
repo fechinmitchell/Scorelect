@@ -857,7 +857,7 @@ export default function PlayerDataGAA() {
           actualKey="goals"
           expectedKey="xGoals"
           useDifference={true}
-          differenceLabel="Difference"
+          differenceLabel="Diff"
         />
 
         {/* Points LB => difference */}
@@ -867,7 +867,7 @@ export default function PlayerDataGAA() {
           actualKey="points"
           expectedKey="xPoints"
           useDifference={true}
-          differenceLabel="Difference"
+          differenceLabel="Diff"
         />
 
         {/* Set Plays => let's do difference or ratio? 

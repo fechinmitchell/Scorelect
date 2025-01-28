@@ -1,0 +1,79 @@
+/* src/components/TeamShotDataGAA.css */
+
+.team-shot-data-container {
+    position: relative;
+    color: #fff;
+    font-family: Arial, sans-serif;
+  }
+  
+  .stage-container {
+    border: 2px solid #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  }
+  
+  .loading-container, .error-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background-color: #222;
+  }
+  
+  .spinner {
+    border: 8px solid #f3f3f3;
+    border-top: 8px solid #36a2eb;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    animation: spin 2s linear infinite;
+    margin: 20px auto;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  .tooltip {
+    /* Already styled inline in the component */
+  }
+  
+  .color-modal-header {
+    color: #fff;
+    text-align: center;
+  }
+  
+  .color-modal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+  
+  .color-modal-grid div {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .color-modal-grid label {
+    margin-bottom: 0.5rem;
+  }
+  
+  .back-button {
+    padding: 8px 16px;
+    background-color: #ff7043;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  
+  .back-button:hover {
+    background-color: #f4511e;
+  }
+  
+  /* Add more styles as needed */
+  

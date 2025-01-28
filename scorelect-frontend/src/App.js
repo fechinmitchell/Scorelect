@@ -44,6 +44,10 @@ import SportSelectionPage from './SportSelectionPage';
 import PlayerDataGAA from './PlayerDataGAA';
 import ErrorBoundary from './components/ErrorBoundary'; // Import ErrorBoundary
 import PlayerShotDataGAA from './components/PlayerShotDataGAA';
+import TeamDataGAA from './TeamDataGAA';
+import TeamDetails from './components/TeamDetails';
+
+
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
@@ -271,6 +275,9 @@ const App = () => {
                   <Route path="/blog/soccercollect" element={<SoccerCollect />} />
                   <Route path="/blog/gaacollect" element={<GAACollect />} />
                   <Route path="/blog/americanfootballCollect" element={<AmericanFootballCollect />} />
+
+                  <Route path="/team/:teamName" element={<TeamDetails />} /> {/* Detailed team page */}
+                  <Route path="/team-data-gaa" element={<TeamDataGAA />} />
 
                   <Route
                     path="/select-sport"

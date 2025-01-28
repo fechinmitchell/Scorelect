@@ -195,13 +195,21 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
             </button>
           )}
           </li>
-
+          
           <li>
+            <button onClick={() => onNavigate('/team-data-gaa')}>
+              <FaDatabase className="icon" size={16} />
+              {!collapsed && 'Team Data'}
+            </button>
+          </li>
+
+          {/* <li>
             <button onClick={() => onNavigate('/sports-datahub')}>
               <FaDatabase className="icon" size={16} />
               {!collapsed && 'Data Hub'}
             </button>
-          </li>
+          </li> */}
+          
           <li>
             <button onClick={handleAnalysisAccess}>
               <FaChartBar className="icon" size={16} />

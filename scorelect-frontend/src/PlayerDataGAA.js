@@ -79,7 +79,6 @@ ErrorMessage.propTypes = {
 
 /*******************************************
  * 4) HELPER: translateShotToOneSide
- *    (distance from nearest goal)
  *******************************************/
 function translateShotToOneSide(shot, halfLineX, goalX, goalY) {
   const targetGoal =
@@ -91,7 +90,7 @@ function translateShotToOneSide(shot, halfLineX, goalX, goalY) {
 }
 
 /*******************************************
- * 5) MiniLeaderboard (Difference or %)
+ * 5) MiniLeaderboard
  *******************************************/
 function MiniLeaderboard({
   title,
@@ -100,53 +99,58 @@ function MiniLeaderboard({
   expectedKey,
   useDifference = false,
   differenceLabel = 'Difference (actual - expected)',
-  initialDirection = 'descending',
-
-  // NEW PROP:
   hideCalcColumn = false,
+
+  // New props to set default sorting by main stat in ascending order
+  initialSortKey = null,         // e.g. 'points' or 'goals'
+  initialDirection = 'descending' // default ascending
 }) {
+  // By default, we’ll sort by `initialSortKey` if provided
   const [sortConfig, setSortConfig] = useState({
-    key: '_calcVal',
+    key: initialSortKey || '_calcVal',
     direction: initialDirection,
   });
 
-  // Compute `_calcVal` as before:
+  // Compute `_calcVal` if not hidden
   const sortedData = useMemo(() => {
     let list = [...data];
 
-    // Only compute _calcVal if we’re not hiding that column
+    // If not hiding the difference/ratio column, compute _calcVal
     if (!hideCalcColumn) {
       list = list.map((item) => {
         const actualVal = Number(item[actualKey] || 0);
         const expectedVal = Number(item[expectedKey] || 0);
         if (useDifference) {
-          item._calcVal = actualVal - expectedVal;
+          item._calcVal = actualVal - expectedVal; // difference
         } else {
           const safeExpected = expectedVal === 0 ? 1e-6 : expectedVal;
-          item._calcVal = (actualVal / safeExpected) * 100;
+          item._calcVal = (actualVal / safeExpected) * 100; // ratio -> %
         }
         return item;
       });
     }
 
-    // Sort logic:
-    if (sortConfig?.key && !hideCalcColumn) {
+    // Sort logic
+    if (sortConfig?.key) {
       list.sort((a, b) => {
         const aVal = a[sortConfig.key] ?? 0;
         const bVal = b[sortConfig.key] ?? 0;
-        if (aVal < bVal) return sortConfig.direction === 'ascending' ? -1 : 1;
-        if (aVal > bVal) return sortConfig.direction === 'ascending' ? 1 : -1;
+
+        if (aVal < bVal) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (aVal > bVal) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
         return 0;
       });
-    } else {
-      // If hideCalcColumn is true, we can sort by actualKey by default if you want
-      // or skip sorting entirely.
     }
     return list;
   }, [data, actualKey, expectedKey, useDifference, sortConfig, hideCalcColumn]);
 
   function requestSort(key) {
     let direction = 'ascending';
+    // If we're clicking the same column, toggle
     if (sortConfig.key === key && sortConfig.direction === 'ascending') {
       direction = 'descending';
     }
@@ -170,10 +174,12 @@ function MiniLeaderboard({
                 Player{getSortIndicator('player')}
               </th>
               <th onClick={() => requestSort(actualKey)}>
-                {actualKey}{getSortIndicator(actualKey)}
+                {actualKey}
+                {getSortIndicator(actualKey)}
               </th>
               <th onClick={() => requestSort(expectedKey)}>
-                {expectedKey}{getSortIndicator(expectedKey)}
+                {expectedKey}
+                {getSortIndicator(expectedKey)}
               </th>
 
               {/* Conditionally render the difference/ratio column */}
@@ -191,7 +197,6 @@ function MiniLeaderboard({
               const actualVal = Number(item[actualKey] || 0);
               const expectedVal = Number(item[expectedKey] || 0);
 
-              // If hiding column, skip computing
               let lastColumnValue = '';
               if (!hideCalcColumn) {
                 if (useDifference) {
@@ -219,7 +224,6 @@ function MiniLeaderboard({
                   </td>
                   <td>{actualVal.toFixed(2)}</td>
                   <td>{expectedVal.toFixed(2)}</td>
-
                   {!hideCalcColumn && <td>{lastColumnValue}</td>}
                 </tr>
               );
@@ -230,7 +234,17 @@ function MiniLeaderboard({
     </div>
   );
 }
-
+MiniLeaderboard.propTypes = {
+  title: PropTypes.string.isRequired,
+  data: PropTypes.array.isRequired,
+  actualKey: PropTypes.string.isRequired,
+  expectedKey: PropTypes.string.isRequired,
+  useDifference: PropTypes.bool,
+  differenceLabel: PropTypes.string,
+  hideCalcColumn: PropTypes.bool,
+  initialSortKey: PropTypes.string,
+  initialDirection: PropTypes.oneOf(['ascending', 'descending']),
+};
 
 /*******************************************
  * 6) AvgDistanceLeaderboard
@@ -238,7 +252,7 @@ function MiniLeaderboard({
 function AvgDistanceLeaderboard({ title, data }) {
   const sortedData = useMemo(() => {
     let list = [...data];
-    // Sort descending by "avgScoreDistance"
+    // Sort descending by "avgScoreDistance" just as example
     list.sort((a, b) => (b.avgScoreDistance || 0) - (a.avgScoreDistance || 0));
     return list;
   }, [data]);
@@ -298,7 +312,7 @@ AvgDistanceLeaderboard.propTypes = {
 function LeaderboardTable({ data }) {
   const [sortConfig, setSortConfig] = useState({
     key: 'Total_Points',
-    direction: 'descending',
+    direction: 'descending', // Keep main LB descending by default
   });
   const [searchTerm, setSearchTerm] = useState('');
   const rowRef = useRef(null);
@@ -445,7 +459,7 @@ function LeaderboardTable({ data }) {
                       <tr>
                         <th>Position</th>
                         <th>Shots</th>
-                        <th>Points (No Deadball)</th>
+                        <th>Points (No SetPlays)</th>
                         <th>Goals</th>
                         <th>Efficiency (%)</th>
                       </tr>
@@ -548,7 +562,7 @@ export default function PlayerDataGAA() {
         acc[name] = {
           player: name,
           team: shot.team || 'Unknown Team',
-          points: 0, // counting only points
+          points: 0,
           goals: 0,
           xPoints: 0,
           xGoals: 0,
@@ -568,12 +582,7 @@ export default function PlayerDataGAA() {
       const p = acc[name];
 
       // Distance measure
-      const translated = translateShotToOneSide(
-        shot,
-        halfLineX,
-        goalX,
-        goalY
-      );
+      const translated = translateShotToOneSide(shot, halfLineX, goalX, goalY);
       p.totalDistance += translated.distMeters;
       p.shootingAttempts += 1;
 
@@ -590,9 +599,7 @@ export default function PlayerDataGAA() {
       // 2-point territory (>= 40m)
       if (translated.distMeters >= 40) {
         p.twoPointerAttempts += 1;
-        if (isScore) {
-          p.twoPointerScores += 1;
-        }
+        if (isScore) p.twoPointerScores += 1;
       }
 
       // For "points" we do NOT add goals
@@ -620,9 +627,7 @@ export default function PlayerDataGAA() {
       const isPressured = (shot.pressure || '').toLowerCase().startsWith('y');
       if (isPressured) {
         p.pressuredShots += 1;
-        if (isScore) {
-          p.pressuredScores += 1;
-        }
+        if (isScore) p.pressuredScores += 1;
       }
 
       // positionPerformance
@@ -656,7 +661,7 @@ export default function PlayerDataGAA() {
           ? p.totalScoreDistance / p.shootingScored
           : 0;
 
-      // positionPerformance => efficiency
+      // positionPerformance => array with efficiency
       const positionPerformance = Object.entries(p.positionPerformance).map(
         ([pos, stats]) => {
           const eff =
@@ -686,9 +691,7 @@ export default function PlayerDataGAA() {
     return finalArray;
   }, [data, selectedYear, selectedTeam]);
 
-  // Sub-data for the mini-leaderboards:
-
-  // 1) Goals
+  // Sub-data for mini leaderboards:
   const goalsData = useMemo(
     () =>
       formattedLeaderboard.map((p) => ({
@@ -699,7 +702,6 @@ export default function PlayerDataGAA() {
     [formattedLeaderboard]
   );
 
-  // 2) Points
   const pointsData = useMemo(
     () =>
       formattedLeaderboard.map((p) => ({
@@ -710,7 +712,6 @@ export default function PlayerDataGAA() {
     [formattedLeaderboard]
   );
 
-  // 3) SetPlays
   const setPlaysData = useMemo(
     () =>
       formattedLeaderboard.map((p) => ({
@@ -721,7 +722,6 @@ export default function PlayerDataGAA() {
     [formattedLeaderboard]
   );
 
-  // 4) Shooting Accuracy
   const accuracyData = useMemo(
     () =>
       formattedLeaderboard.map((p) => ({
@@ -732,7 +732,6 @@ export default function PlayerDataGAA() {
     [formattedLeaderboard]
   );
 
-  // 5) Two-Pointer
   const twoPointerData = useMemo(
     () =>
       formattedLeaderboard.map((p) => ({
@@ -743,7 +742,6 @@ export default function PlayerDataGAA() {
     [formattedLeaderboard]
   );
 
-  // 6) Under Pressure
   const pressureData = useMemo(
     () =>
       formattedLeaderboard.map((p) => ({
@@ -754,7 +752,6 @@ export default function PlayerDataGAA() {
     [formattedLeaderboard]
   );
 
-  // 7) Distance info
   const distanceData = useMemo(
     () =>
       formattedLeaderboard.map((p) => ({
@@ -769,7 +766,6 @@ export default function PlayerDataGAA() {
     [formattedLeaderboard]
   );
 
-  // Recalculate xPoints if needed
   async function handleRecalculateXPoints() {
     try {
       const response = await fetch(
@@ -806,9 +802,6 @@ export default function PlayerDataGAA() {
     return <ErrorMessage message="No data available to display." />;
   }
 
-  /*****************************************
-   * RENDER
-   *****************************************/
   return (
     <div className="player-data-container">
       <h1 style={{ color: '#fff' }}>Player Data GAA</h1>
@@ -848,19 +841,19 @@ export default function PlayerDataGAA() {
         </select>
       </div>
 
-      {/* MINI-LEADERBOARDS: Goals & Points => difference; others => percentage */}
+      {/* MINI-LEADERBOARDS */}
       <div className="mini-leaderboards-row">
-        {/* Goals LB => difference */}
         <MiniLeaderboard
           title="Goals Leaderboard"
           data={goalsData}
           actualKey="goals"
           expectedKey="xGoals"
-          useDifference={true}
+          useDifference={true}         // diff column
           differenceLabel="Diff"
+          initialSortKey="goals"       // <--- sort by actual goals ascending by default
+          initialDirection="descending"
         />
 
-        {/* Points LB => difference */}
         <MiniLeaderboard
           title="Points Leaderboard"
           data={pointsData}
@@ -868,56 +861,54 @@ export default function PlayerDataGAA() {
           expectedKey="xPoints"
           useDifference={true}
           differenceLabel="Diff"
+          initialSortKey="points"      // <--- sort by actual points ascending
+          initialDirection="descending"
         />
 
-        {/* Set Plays => let's do difference or ratio? 
-            If you want difference, do: */}
         <MiniLeaderboard
           title="Set Plays Leaderboard"
           data={setPlaysData}
           actualKey="setPlays"
           expectedKey="xSetPlays"
-
-          // Turn OFF the difference/ratio column
-          hideCalcColumn={true}
-          
-          // (these two lines no longer matter if the column is hidden)
-          // useDifference={true}
-          // differenceLabel="SetPlays - xSetPlays"
+          hideCalcColumn={true}        // no difference/percentage column
+          initialSortKey="setPlays"    // <--- sort by setPlays ascending
+          initialDirection="descending"
         />
       </div>
 
       <div className="mini-leaderboards-row">
-        {/* Shooting Accuracy => ratio as a percent */}
         <MiniLeaderboard
           title="Shooting Accuracy"
           data={accuracyData}
           actualKey="shootingScored"
           expectedKey="shootingAttempts"
-          useDifference={false} // ratio => % 
+          useDifference={false}        // show ratio => %
+          initialSortKey="shootingScored" // <--- default ascending
+          initialDirection="descending"
         />
 
-        {/* 2 Pointer Leaderboard => ratio as a percent */}
         <MiniLeaderboard
           title="2-Pointer Leaderboard"
           data={twoPointerData}
           actualKey="twoPointerScores"
           expectedKey="twoPointerAttempts"
           useDifference={false}
+          initialSortKey="twoPointerScores"
+          initialDirection="descending"
         />
       </div>
 
       <div className="mini-leaderboards-row">
-        {/* Under Pressure => ratio as a percent */}
         <MiniLeaderboard
           title="Under Pressure Shots"
           data={pressureData}
           actualKey="pressuredScores"
           expectedKey="pressuredShots"
           useDifference={false}
+          initialSortKey="pressuredScores"
+          initialDirection="descending"
         />
 
-        {/* Distance => custom component */}
         <AvgDistanceLeaderboard
           title="Avg Shooting Distance"
           data={distanceData}

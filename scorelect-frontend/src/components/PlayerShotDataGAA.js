@@ -540,43 +540,87 @@ export default function PlayerShotDataGAA() {
     
     const aggregator = {};
     const uniqueTeams = new Set();
-
+  
     allShots.forEach((s) => {
       const pName = s.playerName || 'Unknown';
       const teamName = s.team || 'Unknown';
       uniqueTeams.add(teamName);
-
+  
+      // If not defined yet, initialize all fields you need
       if (!aggregator[pName]) {
         aggregator[pName] = {
           team: teamName,
+  
+          // Already existing from your code
           points: 0,
           twoPointers: 0,
           goals: 0,
           offensiveMarks: 0,
           frees: 0,
           fortyFives: 0,
+  
+          // New fields for Shots/Frees/45s success vs. total
+          totalShots: 0,
+          successfulShots: 0,
+  
+          totalFrees: 0,
+          successfulFrees: 0,
+  
+          total45s: 0,
+          successful45s: 0,
+  
+          misses: 0, // optional if you want to store misses here
         };
       }
-
+  
       const entry = aggregator[pName];
       const act = (s.action || '').toLowerCase().trim();
-
+  
+      // 1) Every record is a "shot"
+      entry.totalShots += 1;
+  
+      // 2) If it's a point => +1 point, +1 successfulShots
       if (act === 'point') {
         entry.points += 1;
-        const translatedShot = translateShotToOneSide(s, halfLineX, goalXRight, goalY);
+        entry.successfulShots += 1;
+  
+        // Count 2p if >=40m
+        const translatedShot = translateShotToOneSide(
+          s,
+          145 / 2,  // halfLineX
+          145,      // goalX
+          88 / 2    // goalY
+        );
         if (
-          typeof translatedShot.x === 'number' &&
-          typeof translatedShot.y === 'number' &&
+          typeof translatedShot.distMeters === 'number' &&
           translatedShot.distMeters >= 40
         ) {
           entry.twoPointers += 1;
         }
       }
-
+  
+      // 3) If it's a goal => +1 goal, +1 successfulShots
       if (act === 'goal' || act === 'penalty goal') {
         entry.goals += 1;
+        entry.successfulShots += 1;
       }
-
+  
+      // 4) Miss logic (wide, post, short, blocked, etc.)
+      if (
+        act === 'miss' ||
+        act === 'wide' ||
+        act === 'short' ||
+        act.includes('miss') ||
+        act.includes('wide') ||
+        act.includes('short') ||
+        act.includes('post') ||
+        act === 'goal miss' ||
+        act === 'pen miss'
+      ) {
+        entry.misses += 1;
+      }
+  
+      // 5) Offensive Mark (if not missed)
       if (
         act.includes('offensive mark') &&
         !act.includes('wide') &&
@@ -584,25 +628,53 @@ export default function PlayerShotDataGAA() {
         !act.includes('miss')
       ) {
         entry.offensiveMarks += 1;
+        // If it scored from that mark, also +1 successfulShots.
+        // Some data might show "offensive mark" as a point or not.
+        // If your data means "offensive mark" always = point, then do:
+        entry.successfulShots += 1;
       }
-
+  
+      // 6) Count frees => totalFrees++ for all free attempts
       if (
         act === 'free' ||
         act === 'missed free' ||
         act === 'free wide' ||
-        act === 'free short'
+        act === 'free short' ||
+        act === 'free post'
       ) {
-        entry.frees += 1;
+        entry.frees += 1;        // from your existing logic
+        entry.totalFrees += 1;   // new
+        // If exactly "free" => that usually means a successful free
+        if (act === 'free') {
+          entry.successfulShots += 1;
+          entry.successfulFrees += 1;
+        }
       }
-
-      if (act.includes('fortyfive')) {
-        entry.fortyFives += 1;
+  
+      // 7) Count 45s => total45s++ for all 45 attempts
+      // If exactly "fortyfive" => that typically means a successful 45 (scored a point)
+      if (
+        act.includes('fortyfive') ||
+        act.includes('45')
+      ) {
+        entry.fortyFives += 1;   // from your existing logic
+        entry.total45s += 1;     // new
+        // Check if it’s exactly "fortyfive"
+        // or "45" with no "wide"/"short"/"miss"
+        if (
+          act === 'fortyfive' ||
+          act === '45'
+        ) {
+          entry.successfulShots += 1;
+          entry.successful45s += 1;
+        }
       }
     });
-
+  
     setAggregatedData(aggregator);
     setTeams([...uniqueTeams]);
-  }, [allShots, halfLineX, goalXRight, goalY]);
+  }, [allShots]);
+  
 
   useEffect(() => {
     if (!selectedTeam || !aggregatedData) {
@@ -1091,6 +1163,18 @@ export default function PlayerShotDataGAA() {
     );
   }
 
+  const playerStats = aggregatedData[playerName] || {};
+  // e.g. { team: "Team1", points: X, goals: Y, ... }
+
+  const missesCount = shotsData.filter(
+    (shot) => getShotCategory(shot.action) === 'miss'
+  ).length;
+
+  // Average shooting distance for this player
+  const avgDistance = shotsData.length
+    ? shotsData.reduce((acc, s) => acc + (s.distMeters || 0), 0) / shotsData.length
+    : 0;
+
   function renderTooltip() {
     if (!tooltip.visible) return null;
     return (
@@ -1178,7 +1262,8 @@ export default function PlayerShotDataGAA() {
 
   return (
     <div style={{ position:'relative', color:'#fff' }}>
-      <h1 style={{ textAlign:'center', color:'#fff' }}>Shot Map for {playerName}</h1>
+        {/* Top Heading */}
+
 
         {/* Color Modal */}
         {showColorModal && (
@@ -1249,16 +1334,40 @@ export default function PlayerShotDataGAA() {
       
 
       {/* One-Sided Pitch Shots Section */}
-      <div style={{ marginTop: '3rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', textAlign: 'center' }}>
-        <h4 style={{ color: '#fff' }}>All Shots Translated</h4>
-        <div className="stage-container">
-          {/* The half-pitch Stage */}
-          <Stage
-            width={xScale * (pitchWidth / 2)}
-            height={yScale * pitchHeight}
-          >
-            {renderHalfPitch()}
+      
+      <div style={{ position:'relative', color:'#fff' }}>
+    <h1
+      style={{
+        textAlign: 'center',
+        color: '#fff',
+        fontFamily: 'Poppins, sans-serif',
+        fontWeight: 600,
+        fontSize: '2rem',
+        marginBottom: '1.5rem',
+        letterSpacing: '1px',
+        textShadow: '1px 1px 3px rgba(0,0,0,0.4)'
+      }}
+    >
+      Shot Map for {playerName}
+    </h1>
 
+    {/* One-Sided Pitch Shots Section */}
+    <div 
+      style={{ 
+        marginTop: '3rem',
+        padding: '1rem',
+        background: 'rgba(0,0,0,0.2)',
+        display: 'flex',
+        gap: '2rem',
+        justifyContent: 'center', 
+        alignItems: 'flex-start'
+      }}
+    >
+      {/* Column 1: The pitch */}
+      <div style={{ textAlign: 'center' }}>
+        <div className="stage-container">
+          <Stage width={xScale * (pitchWidth / 2)} height={yScale * pitchHeight}>
+            {renderHalfPitch()}
             {renderOneSidePitchShots(
               shotsData,
               {
@@ -1270,10 +1379,8 @@ export default function PlayerShotDataGAA() {
               },
               xScale,
               yScale,
-              handleShotClick // <--- pass the same shot-click handler
+              handleShotClick
             )}
-
-            {/* Moved legend to bottom-right corner */}
             {renderLegendOneSideShots(
               {
                 goal: colorGoal,
@@ -1287,11 +1394,66 @@ export default function PlayerShotDataGAA() {
             )}
           </Stage>
         </div>
-        {/* Display the totals below the graphic */}
-        <p style={{ color: '#fff', marginTop: '1rem' }}>
-          Total xP: {totalXP.toFixed(2)}, Total xG: {totalXG.toFixed(2)}
-        </p>
       </div>
+
+      {/* Column 2: Stats */}
+      <div 
+        style={{
+          background: 'rgba(0,0,0,0.3)',
+          padding: '1rem',
+          borderRadius: '8px',
+          marginTop: '20px',
+          minWidth: '200px',
+          color: '#fff'
+        }}
+      >
+        <h3 style={{ marginTop: 0, marginBottom: '1rem' }}>
+          {playerName}'s Stats
+        </h3>
+
+        <p><strong>Team:</strong> {playerStats.team || 'N/A'}</p>
+        
+        {/* Shots */}
+        <p>
+          <strong>Shots:</strong>{' '}
+          {playerStats.totalShots > 0
+            ? `${playerStats.successfulShots}/${playerStats.totalShots}`
+            : '0 – 0/0'
+          }
+        </p>
+
+        <p><strong>Points:</strong> {playerStats.points || 0}</p>
+        <p><strong>Goals:</strong> {playerStats.goals || 0}</p>
+        <p><strong>Misses:</strong> {playerStats.misses || 0}</p>
+        <p><strong>Off. Marks:</strong> {playerStats.offensiveMarks || 0}</p>
+
+        {/* Frees */}
+        <p>
+          <strong>Frees:</strong>{' '}
+          {playerStats.totalFrees > 0
+            ? `${playerStats.successfulFrees}/${playerStats.totalFrees}`
+            : '0 – 0/0'
+          }
+        </p>
+
+        {/* 45s */}
+        <p>
+          <strong>45s:</strong>{' '}
+          {playerStats.total45s > 0
+            ? `${playerStats.successful45s}/${playerStats.total45s}`
+            : '0 – 0/0'
+          }
+        </p>
+
+
+        <p><strong>Total xP:</strong> {totalXP.toFixed(2)}</p>
+        <p><strong>Total xG:</strong> {totalXG.toFixed(2)}</p>
+        <p><strong>Avg Dist:</strong> {avgDistance.toFixed(2)}m</p>
+      </div>
+    </div>
+
+    </div>
+
 
       <div style={{ display: 'flex', justifyContent: 'space-around', gap: '2rem' }}>
         {/* Radar Chart Section */}
@@ -1364,7 +1526,7 @@ export default function PlayerShotDataGAA() {
       </div>
 
       {/* Buttons */}
-      <div style={{ display:'flex', justifyContent:'center', gap:'15px', marginBottom:'1rem' }}>
+      <div style={{ display:'flex', justifyContent:'center', gap:'15px', marginTop: '20px', marginBottom:'1rem' }}>
         <button 
           onClick={()=>navigate(-1)}
           style={{

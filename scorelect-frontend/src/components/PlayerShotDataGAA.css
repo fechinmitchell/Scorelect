@@ -1,4 +1,6 @@
 /* src/components/PlayerShotDataGAA.css */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+
 
 .stage-container {
     display: flex;
@@ -6,14 +8,16 @@
     margin: 20px auto; /* or any other style you prefer */
   }
   
-.player-shot-data-container {
+  .player-shot-data-container {
+    font-family: 'Poppins', sans-serif; /* or whichever font you imported */
     display: flex;
     flex-direction: column;
     align-items: center;
-    background-color: #2e2e2e; /* Dark background for contrast */
+    background-color: #2e2e2e;
     min-height: 100vh;
     padding: 20px;
   }
+  
   
   .back-button,
   .export-button {

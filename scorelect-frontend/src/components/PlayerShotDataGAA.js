@@ -58,24 +58,39 @@ function translateShotToOneSide(shot, halfLineX, goalX, goalY) {
 
 function getShotCategory(actionStr) {
   const a = (actionStr || '').toLowerCase().trim();
+
+  // 1) Special-case penalty goal
+  if (a === 'penalty goal') {
+    return 'penaltyGoal';
+  }
+  if (a === 'pen miss') {
+    return 'penaltyMiss'; // if you want to treat a missed penalty differently
+  }
+
+  // Then your normal logic...
   const knownSetPlayActions = [
     'free', 'missed free', 'fortyfive', 'offensive mark', 'penalty goal',
-    'pen miss', 'free short', 'free wide', 'fortyfive short', 'fortyfive wide', 'fortyfive post', 'free post',
-    'offensive mark short', 'offensive mark wide', 'mark wide'
+    'pen miss', 'free short', 'free wide', 'fortyfive short', 'fortyfive wide',
+    'fortyfive post', 'free post', 'offensive mark short', 'offensive mark wide', 'mark wide'
   ];
+
   function isSetPlayScore(a) {
     if (a.includes('wide') || a.includes('short') || a.includes('miss') || a.includes('post')) return false;
     return true;
   }
-  if (knownSetPlayActions.some((sp) => a === sp)) {
+
+  if (knownSetPlayActions.some(sp => a === sp)) {
     return isSetPlayScore(a) ? 'setplay-score' : 'setplay-miss';
   }
-  if (a === 'goal' || a === 'penalty goal') return 'goal';
+  if (a === 'goal') return 'goal';
+  
   const knownMisses = ['wide','goal miss','miss','block','blocked','post','short','pen miss'];
-  if (knownMisses.some((m) => a === m)) return 'miss';
+  if (knownMisses.some(m => a === m)) return 'miss';
   if (a === 'point') return 'point';
+
   return 'other';
 }
+
 
 function renderShapeForShot(category, x, y, onMouseEnter, onMouseLeave, onClick, colors) {
   if (category === 'setplay-score' || category === 'setplay-miss') {
@@ -225,6 +240,13 @@ function renderOneSidePitchShots(shots, colors, xScale, yScale, onShotClick) {
         let strokeColor = 'white';
         let strokeWidth = 2;
 
+        if (category === 'penaltyGoal') {
+          fillColor = 'yellow';      // 
+          strokeColor = '#ffffff';    // white ring
+          strokeWidth = 2;
+        }
+        
+
         if (category === 'goal') {
           fillColor = colors.goal || 'orange';
           strokeColor = null;
@@ -357,15 +379,16 @@ function RadarChartGAA({ aggregatedData, selectedPlayers, primaryPlayer }) {
  */
 function renderLegendOneSideShots(colors, stageWidth, stageHeight) {
   const legendItems = [
-    { label: 'Goal', color: colors.goal },
-    { label: 'Point', color: colors.point },
-    { label: 'Miss', color: colors.miss },
-    { label: 'SetPlay Score', color: colors.setPlayScore },
-    { label: 'SetPlay Miss', color: colors.setPlayMiss },
+    { label: 'Penalty Goal', color: '#FFFF00', hasWhiteBorder: true },
+    { label: 'Goal', color: colors.goal, hasWhiteBorder: false },
+    { label: 'Point', color: colors.point, hasWhiteBorder: false },
+    { label: 'Miss', color: colors.miss, hasWhiteBorder: false },
+    { label: 'SetPlay Score', color: colors.setPlayScore, hasWhiteBorder: true },
+    { label: 'SetPlay Miss', color: colors.setPlayMiss, hasWhiteBorder: true },
   ];
 
   const itemHeight = 20;
-  const legendWidth = 140;
+  const legendWidth = 160; // Increased width to accommodate "Penalty Goal"
   const legendHeight = legendItems.length * itemHeight + 10;
 
   return (
@@ -380,34 +403,29 @@ function renderLegendOneSideShots(colors, stageWidth, stageHeight) {
           fill="rgba(0, 0, 0, 0.5)" 
           cornerRadius={5}
         />
-{legendItems.map((item, i) => {
-  const yPos = i * itemHeight + 10;
+        {legendItems.map((item, i) => {
+          const yPos = i * itemHeight + 10;
 
-  // Only give stroke if it's one of the SetPlay labels
-      const hasWhiteBorder =
-        item.label === 'SetPlay Score' || item.label === 'SetPlay Miss';
-
-      return (
-        <Group key={i}>
-          <Circle
-            x={15}
-            y={yPos}
-            radius={5}
-            fill={item.color}
-            stroke={hasWhiteBorder ? '#fff' : null}  // <-- white border only if SetPlay
-            strokeWidth={hasWhiteBorder ? 2 : 0}
-          />
-          <Text
-            x={30}
-            y={yPos - 6}
-            text={item.label}
-            fontSize={12}
-            fill="#fff"
-          />
-        </Group>
-      );
-    })}
-
+          return (
+            <Group key={i}>
+              <Circle
+                x={15}
+                y={yPos}
+                radius={5}
+                fill={item.color}
+                stroke={item.hasWhiteBorder ? '#fff' : null}  // <-- Apply white border if specified
+                strokeWidth={item.hasWhiteBorder ? 2 : 0}
+              />
+              <Text
+                x={30}
+                y={yPos - 6}
+                text={item.label}
+                fontSize={12}
+                fill="#fff"
+              />
+            </Group>
+          );
+        })}
       </Group>
     </Layer>
   );
@@ -1336,7 +1354,7 @@ export default function PlayerShotDataGAA() {
       {/* One-Sided Pitch Shots Section */}
       
       <div style={{ position:'relative', color:'#fff' }}>
-    <h1
+    {/* <h1
       style={{
         textAlign: 'center',
         color: '#fff',
@@ -1349,7 +1367,7 @@ export default function PlayerShotDataGAA() {
       }}
     >
       Shot Map for {playerName}
-    </h1>
+    </h1> */}
 
     {/* One-Sided Pitch Shots Section */}
     <div 
@@ -1430,18 +1448,14 @@ export default function PlayerShotDataGAA() {
         {/* Frees */}
         <p>
           <strong>Frees:</strong>{' '}
-          {playerStats.totalFrees > 0
-            ? `${playerStats.successfulFrees}/${playerStats.totalFrees}`
-            : '0 – 0/0'
+          {`${playerStats.successfulFrees}/${playerStats.totalFrees}`
           }
         </p>
 
         {/* 45s */}
         <p>
           <strong>45s:</strong>{' '}
-          {playerStats.total45s > 0
-            ? `${playerStats.successful45s}/${playerStats.total45s}`
-            : '0 – 0/0'
+          {`${playerStats.successful45s}/${playerStats.total45s}`
           }
         </p>
 

@@ -7,7 +7,7 @@ import Swal from 'sweetalert2';
 import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
 
-import './TeamDataGAA.css'; // Create this CSS file for styling
+import './TeamDataGAA.css'; // Ensure this CSS file exists and is correctly styled
 
 /*******************************************
  * 1) HELPER: parseJSONNoNaN
@@ -30,7 +30,7 @@ function translateShotToOneSide(shot, halfLineX, goalX, goalY) {
   const dx = (shot.x || 0) - targetGoal.x;
   const dy = (shot.y || 0) - targetGoal.y;
   const distMeters = Math.sqrt(dx * dx + dy * dy);
-  return { ...shot, distMeters };
+  return { ...shot, distMeters: Math.max(0, distMeters) }; // Ensure non-negative distance
 }
 
 /*******************************************
@@ -251,7 +251,7 @@ MiniLeaderboard.propTypes = {
 function AvgDistanceLeaderboard({ title, data }) {
   const sortedData = useMemo(() => {
     let list = [...data];
-    // Sort descending by "avgScoreDistance" as an example
+    // Sort descending by "avgScoreDistance"
     list.sort((a, b) => (b.avgScoreDistance || 0) - (a.avgScoreDistance || 0));
     return list;
   }, [data]);
@@ -481,6 +481,13 @@ export default function TeamDataGAA() {
   const USER_ID = 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2';
   const DATASET_NAME = 'All Shots GAA';
 
+  // Define pitch dimensions (adjust if necessary)
+  const pitchWidth = 145;  // Example value in meters
+  const pitchHeight = 88;  // Example value in meters
+  const halfLineX = pitchWidth / 2;
+  const goalXRight = pitchWidth;
+  const goalY = pitchHeight / 2;
+
   // Fetch from Firestore
   const { data, loading, error } = useFetchDataset(
     `savedGames/${USER_ID}/games`,
@@ -528,12 +535,8 @@ export default function TeamDataGAA() {
         selectedTeam === 'All' ? true : shot.team === selectedTeam;
       return matchesYear && matchesTeam;
     });
-    if (shotsFiltered.length === 0) return [];
 
-    // Distances reference
-    const goalY = 44;
-    const goalX = 145;
-    const halfLineX = 72.5;
+    if (shotsFiltered.length === 0) return [];
 
     // Aggregate
     const aggregator = shotsFiltered.reduce((acc, shot) => {
@@ -564,52 +567,68 @@ export default function TeamDataGAA() {
       const entry = acc[teamName];
       const act = (shot.action || '').toLowerCase().trim();
 
-      if (act === 'point') {
-        entry.points += 1;
-        const translatedShot = translateShotToOneSide(shot, halfLineX, goalX, goalY);
-        if (
-          typeof translatedShot.x === 'number' &&
-          typeof translatedShot.y === 'number' &&
-          translatedShot.distMeters >= 40
-        ) {
-          entry.twoPointerAttempts += 1;
-          entry.twoPointerScores += 1; // Assuming points are scored
+      // Translate shot to get distance
+      const translatedShot = translateShotToOneSide(shot, halfLineX, goalXRight, goalY);
+      const isTwoPointer = translatedShot.distMeters >= 40;
+
+      // Two-Pointer Attempts
+      if (isTwoPointer) {
+        entry.twoPointerAttempts += 1;
+
+        // Two-Pointer Scores: Only increment if 'point' action
+        if (act === 'point') {
+          entry.twoPointerScores += 1;
         }
       }
 
-      if (act === 'goal' || act === 'penalty goal') {
-        entry.goals += 1;
-        entry.shootingScored += 1;
+      // Handle different actions
+      switch (act) {
+        case 'point':
+          entry.points += 1;
+          entry.shootingScored += 1;
+          break;
+        case 'goal':
+        case 'penalty goal':
+          entry.goals += 1;
+          entry.shootingScored += 1;
+          break;
+        case 'offensive mark':
+          entry.offensiveMarks += 1;
+          entry.shootingScored += 1;
+          break;
+        case 'free':
+          entry.frees += 1;
+          entry.shootingScored += 1; // Assuming 'free' is successful
+          break;
+        case 'fortyfive':
+        case '45':
+          entry.setPlays += 1;
+          entry.shootingScored += 1; // Assuming 'fortyfive' is successful
+          break;
+        // Add more cases as necessary
+        default:
+          // Handle miss types or other actions
+          if (
+            act === 'miss' ||
+            act === 'wide' ||
+            act === 'short' ||
+            act.includes('miss') ||
+            act.includes('wide') ||
+            act.includes('short') ||
+            act.includes('post') ||
+            act === 'goal miss' ||
+            act === 'pen miss'
+          ) {
+            // No increment to shootingScored
+          }
+          break;
       }
 
-      if (
-        act.includes('offensive mark') &&
-        !act.includes('wide') &&
-        !act.includes('short') &&
-        !act.includes('miss')
-      ) {
-        entry.offensiveMarks += 1;
-      }
-
-      if (
-        act === 'free' ||
-        act === 'missed free' ||
-        act === 'free wide' ||
-        act === 'free short'
-      ) {
-        entry.frees += 1;
-      }
-
-      if (act.includes('fortyfive')) {
-        entry.setPlays += 1;
-        if (shot.xPoints) entry.xSetPlays += Number(shot.xPoints);
-      }
-
-      // Expected values
+      // Handle expected values
       if (shot.xPoints) entry.xPoints += Number(shot.xPoints);
       if (shot.xGoals) entry.xGoals += Number(shot.xGoals);
 
-      // Pressured shots
+      // Handle pressured shots
       const isPressured = (shot.pressure || '').toLowerCase().startsWith('y');
       if (isPressured) {
         entry.pressuredShots += 1;
@@ -618,12 +637,11 @@ export default function TeamDataGAA() {
         }
       }
 
-      // Shooting attempts and distances
-      const translated = translateShotToOneSide(shot, halfLineX, goalX, goalY);
-      entry.totalDistance += translated.distMeters;
+      // Handle shooting attempts and distances
+      entry.totalDistance += translatedShot.distMeters;
       entry.shootingAttempts += 1;
       if (act === 'goal' || act === 'point') {
-        entry.totalScoreDistance += translated.distMeters;
+        entry.totalScoreDistance += translatedShot.distMeters;
       }
 
       return acc;

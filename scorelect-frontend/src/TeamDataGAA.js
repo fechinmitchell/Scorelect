@@ -5,7 +5,7 @@ import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { doc, getDoc } from 'firebase/firestore';
-import { firestore } from './firebase';
+import { firestore } from './firebase'; // Ensure Firebase is correctly initialized
 
 import './TeamDataGAA.css'; // Ensure this CSS file exists and is correctly styled
 
@@ -97,39 +97,39 @@ function MiniLeaderboard({
   actualKey,
   expectedKey,
   useDifference = false,
-  differenceLabel = 'Difference (actual - expected)',
+  differenceLabel = 'Difference (Actual - Expected)',
   hideCalcColumn = false,
 
-  // New props to set default sorting by main stat in ascending order
-  initialSortKey = null,         // e.g. 'points' or 'goals'
-  initialDirection = 'descending' // default ascending
+  // Props to set default sorting
+  initialSortKey = null,         // e.g., 'points' or 'goals'
+  initialDirection = 'descending' // default descending
 }) {
-  // By default, we’ll sort by `initialSortKey` if provided
+  // Initialize sorting configuration
   const [sortConfig, setSortConfig] = useState({
     key: initialSortKey || '_calcVal',
     direction: initialDirection,
   });
 
-  // Compute `_calcVal` if not hidden
+  // Sort and compute difference or ratio
   const sortedData = useMemo(() => {
     let list = [...data];
 
-    // If not hiding the difference/ratio column, compute _calcVal
+    // Compute _calcVal if difference or ratio is needed
     if (!hideCalcColumn) {
       list = list.map((item) => {
         const actualVal = Number(item[actualKey] || 0);
         const expectedVal = Number(item[expectedKey] || 0);
         if (useDifference) {
-          item._calcVal = actualVal - expectedVal; // difference
+          item._calcVal = actualVal - expectedVal; // Difference
         } else {
           const safeExpected = expectedVal === 0 ? 1e-6 : expectedVal;
-          item._calcVal = (actualVal / safeExpected) * 100; // ratio -> %
+          item._calcVal = (actualVal / safeExpected) * 100; // Ratio (%)
         }
         return item;
       });
     }
 
-    // Sort logic
+    // Sort based on sortConfig
     if (sortConfig?.key) {
       list.sort((a, b) => {
         const aVal = a[sortConfig.key] ?? 0;
@@ -147,15 +147,16 @@ function MiniLeaderboard({
     return list;
   }, [data, actualKey, expectedKey, useDifference, sortConfig, hideCalcColumn]);
 
+  // Handle sorting requests
   function requestSort(key) {
     let direction = 'ascending';
-    // If we're clicking the same column, toggle
     if (sortConfig.key === key && sortConfig.direction === 'ascending') {
       direction = 'descending';
     }
     setSortConfig({ key, direction });
   }
 
+  // Display sort indicators
   function getSortIndicator(key) {
     if (sortConfig.key !== key) return null;
     return sortConfig.direction === 'ascending' ? ' 🔼' : ' 🔽';
@@ -246,7 +247,131 @@ MiniLeaderboard.propTypes = {
 };
 
 /*******************************************
- * 6) AvgDistanceLeaderboard Component
+ * 6) SetPlaysLeaderboard Component
+ *******************************************/
+function SetPlaysLeaderboard({ title, data }) {
+  const [sortConfig, setSortConfig] = useState({
+    key: 'totalSetPlays',
+    direction: 'descending',
+  });
+
+  // Sort data based on sortConfig
+  const sortedData = useMemo(() => {
+    let list = [...data];
+
+    if (sortConfig?.key) {
+      list.sort((a, b) => {
+        const aVal = a[sortConfig.key] ?? 0;
+        const bVal = b[sortConfig.key] ?? 0;
+
+        if (aVal < bVal) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (aVal > bVal) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return list;
+  }, [data, sortConfig]);
+
+  // Handle sorting requests
+  function requestSort(key) {
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  }
+
+  // Display sort indicators
+  function getSortIndicator(key) {
+    if (sortConfig.key !== key) return null;
+    return sortConfig.direction === 'ascending' ? ' 🔼' : ' 🔽';
+  }
+
+  return (
+    <div className="mini-leaderboard">
+      <h3 className="mini-leaderboard-title">{title}</h3>
+      <div className="mini-leaderboard-table-wrapper">
+        <table className="mini-leaderboard-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th onClick={() => requestSort('team')}>
+                Team{getSortIndicator('team')}
+              </th>
+              {/* Offensive Marks Columns */}
+              <th onClick={() => requestSort('offensiveMarks')}>
+                Offensive Marks{getSortIndicator('offensiveMarks')}
+              </th>
+              {/* 45s Columns */}
+              <th onClick={() => requestSort('setPlays45')}>
+                45s{getSortIndicator('setPlays45')}
+              </th>
+              {/* Frees Columns */}
+              <th onClick={() => requestSort('frees')}>
+                Frees{getSortIndicator('frees')}
+              </th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {sortedData.map((item, index) => {
+              const diffOffensiveMarks = (item.offensiveMarks - item.xOffensiveMarks).toFixed(2);
+              const diffSetPlays45 = (item.setPlays45 - item.xSetPlays45).toFixed(2);
+              const diffFrees = (item.frees - item.xFrees).toFixed(2);
+
+              return (
+                <tr key={`${item.team}-${index}`}>
+                  <td>{index + 1}</td>
+                  <td>
+                    <Link
+                      to={`/team/${encodeURIComponent(item.team)}`}
+                      style={{
+                        color: '#FFA500',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      {item.team}
+                    </Link>
+                  </td>
+                  {/* Offensive Marks */}
+                  <td>{item.offensiveMarks.toFixed(2)}</td>
+                  {/* 45s */}
+                  <td>{item.setPlays45.toFixed(2)}</td>
+   
+                  {/* Frees */}
+                  <td>{item.frees.toFixed(2)}</td>
+
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+SetPlaysLeaderboard.propTypes = {
+  title: PropTypes.string.isRequired,
+  data: PropTypes.arrayOf(
+    PropTypes.shape({
+      team: PropTypes.string.isRequired,
+      offensiveMarks: PropTypes.number.isRequired,
+      xOffensiveMarks: PropTypes.number.isRequired,
+      setPlays45: PropTypes.number.isRequired,
+      xSetPlays45: PropTypes.number.isRequired,
+      frees: PropTypes.number.isRequired,
+      xFrees: PropTypes.number.isRequired,
+    })
+  ).isRequired,
+};
+
+/*******************************************
+ * 7) AvgDistanceLeaderboard Component
  *******************************************/
 function AvgDistanceLeaderboard({ title, data }) {
   const sortedData = useMemo(() => {
@@ -300,13 +425,14 @@ function AvgDistanceLeaderboard({ title, data }) {
     </div>
   );
 }
+
 AvgDistanceLeaderboard.propTypes = {
   title: PropTypes.string.isRequired,
   data: PropTypes.array.isRequired,
 };
 
 /*******************************************
- * 7) Main Leaderboard Table Component
+ * 8) Main Leaderboard Table Component
  *******************************************/
 function LeaderboardTable({ data }) {
   const [sortConfig, setSortConfig] = useState({
@@ -469,12 +595,13 @@ function LeaderboardTable({ data }) {
     </div>
   );
 }
+
 LeaderboardTable.propTypes = {
   data: PropTypes.array.isRequired,
 };
 
 /*******************************************
- * 8) Main TeamDataGAA Component
+ * 9) Main TeamDataGAA Component
  *******************************************/
 export default function TeamDataGAA() {
   // Replace with your own user/dataset
@@ -551,7 +678,11 @@ export default function TeamDataGAA() {
           setPlays: 0,
           xSetPlays: 0,
           offensiveMarks: 0,
+          xOffensiveMarks: 0,      // New property
           frees: 0,
+          xFrees: 0,               // New property
+          setPlays45: 0,           // New property for 45s
+          xSetPlays45: 0,          // Expected 45s
           pressureShots: 0,
           shootingAttempts: 0,
           shootingScored: 0,
@@ -594,16 +725,22 @@ export default function TeamDataGAA() {
           break;
         case 'offensive mark':
           entry.offensiveMarks += 1;
+          entry.setPlays += 1;        // Total set plays
+          entry.xOffensiveMarks += Number(shot.xSetPlaysOffensiveMark) || 0; // Expected
           entry.shootingScored += 1;
           break;
         case 'free':
           entry.frees += 1;
-          entry.shootingScored += 1; // Assuming 'free' is successful
+          entry.setPlays += 1;        // Total set plays
+          entry.xFrees += Number(shot.xSetPlaysFree) || 0; // Expected
+          entry.shootingScored += 1;  // Assuming 'free' is successful
           break;
         case 'fortyfive':
         case '45':
-          entry.setPlays += 1;
-          entry.shootingScored += 1; // Assuming 'fortyfive' is successful
+          entry.setPlays45 += 1;
+          entry.setPlays += 1;        // Total set plays
+          entry.xSetPlays45 += Number(shot.xSetPlays45) || 0; // Expected
+          entry.shootingScored += 1;  // Assuming 'fortyfive' is successful
           break;
         // Add more cases as necessary
         default:
@@ -619,7 +756,7 @@ export default function TeamDataGAA() {
             act === 'goal miss' ||
             act === 'pen miss'
           ) {
-            // No increment to shootingScored
+            // No increment to shootingScored or setPlays
           }
           break;
       }
@@ -627,6 +764,9 @@ export default function TeamDataGAA() {
       // Handle expected values
       if (shot.xPoints) entry.xPoints += Number(shot.xPoints);
       if (shot.xGoals) entry.xGoals += Number(shot.xGoals);
+      entry.xOffensiveMarks += Number(shot.xSetPlaysOffensiveMark) || 0;
+      entry.xFrees += Number(shot.xSetPlaysFree) || 0;
+      entry.xSetPlays45 += Number(shot.xSetPlays45) || 0;
 
       // Handle pressured shots
       const isPressured = (shot.pressure || '').toLowerCase().startsWith('y');
@@ -699,8 +839,12 @@ export default function TeamDataGAA() {
     () =>
       formattedLeaderboard.map((team) => ({
         team: team.team,
-        setPlays: team.setPlays,
-        xSetPlays: team.xSetPlays,
+        offensiveMarks: team.offensiveMarks,
+        xOffensiveMarks: team.xOffensiveMarks,
+        setPlays45: team.setPlays45,
+        xSetPlays45: team.xSetPlays45,
+        frees: team.frees,
+        xFrees: team.xFrees,
       })),
     [formattedLeaderboard]
   );
@@ -834,7 +978,7 @@ export default function TeamDataGAA() {
           data={goalsData}
           actualKey="goals"
           expectedKey="xGoals"
-          useDifference={true}         // diff column
+          useDifference={true}         // Display Difference column
           differenceLabel="Diff"
           initialSortKey="goals"       // Sort by actual goals descending by default
           initialDirection="descending"
@@ -845,23 +989,20 @@ export default function TeamDataGAA() {
           data={pointsData}
           actualKey="points"
           expectedKey="xPoints"
-          useDifference={true}
+          useDifference={true}         // Display Difference column
           differenceLabel="Diff"
           initialSortKey="points"      // Sort by actual points descending
           initialDirection="descending"
         />
 
-        <MiniLeaderboard
+        {/* Consolidated Set Plays Leaderboard */}
+        <SetPlaysLeaderboard
           title="Set Plays Leaderboard"
           data={setPlaysData}
-          actualKey="setPlays"
-          expectedKey="xSetPlays"
-          hideCalcColumn={true}        // No difference/percentage column
-          initialSortKey="setPlays"    // Sort by setPlays descending
-          initialDirection="descending"
         />
       </div>
 
+      {/* Additional Leaderboards */}
       <div className="mini-leaderboards-row">
         <MiniLeaderboard
           title="Shooting Accuracy"
@@ -869,6 +1010,7 @@ export default function TeamDataGAA() {
           actualKey="shootingScored"
           expectedKey="shootingAttempts"
           useDifference={false}        // Show ratio => %
+          differenceLabel="Accuracy (%)"
           initialSortKey="shootingScored" // Sort by shootingScored descending
           initialDirection="descending"
         />
@@ -878,7 +1020,8 @@ export default function TeamDataGAA() {
           data={twoPointerData}
           actualKey="twoPointerScores"
           expectedKey="twoPointerAttempts"
-          useDifference={false}
+          useDifference={false}        // Show ratio => %
+          differenceLabel="2-Pointer Accuracy (%)"
           initialSortKey="twoPointerScores"
           initialDirection="descending"
         />
@@ -890,7 +1033,8 @@ export default function TeamDataGAA() {
           data={pressureData}
           actualKey="pressuredScores"
           expectedKey="pressuredShots"
-          useDifference={false}
+          useDifference={false}        // Show ratio => %
+          differenceLabel="Under Pressure Accuracy (%)"
           initialSortKey="pressuredScores"
           initialDirection="descending"
         />

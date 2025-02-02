@@ -1439,7 +1439,7 @@ const handleSaveToDataset = async () => {
 
   return (
   <div className="scroll-container">
-    <div className="pitch-container">
+    <div className="pitch-graphic-container">
 
       {/* Initial Setup Modal */}
       <InitialSetupModal

@@ -975,7 +975,7 @@ export default function TeamShotDataGAA() {
       </Layer>
     );
   }
-  
+
   /**
    * Render shots on the pitch
    */
@@ -1259,7 +1259,7 @@ export default function TeamShotDataGAA() {
       >
         {/* Column 1: The pitch */}
         <div style={{ textAlign: 'center' }}>
-          <div className="stage-container">
+          <div className="stage-pitch-container">
             <Stage width={xScale * (pitchWidth / 2)} height={yScale * pitchHeight}>
               {renderGAAPitch()}
               {renderOneSidePitchShots(
@@ -1452,7 +1452,7 @@ export default function TeamShotDataGAA() {
       </div>
 
       {/* The Main Full Pitch */}
-      <div className="stage-container">
+      <div className="stage-pitch-container">
         <Stage width={canvasSizeMain.width} height={canvasSizeMain.height} ref={stageRef}>
           {renderGAAPitch()}
           {renderShotsLayer()}

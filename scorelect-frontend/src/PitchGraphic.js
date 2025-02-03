@@ -73,8 +73,8 @@ const PitchGraphic = () => {
   const [displayPlayerNumber, setDisplayPlayerNumber] = useState(false);
   const [displayPlayerName, setDisplayPlayerName] = useState(false);
   const [isSetupTeamsModalOpen, setIsSetupTeamsModalOpen] = useState(false);
-  const [team1Players, setTeam1Players] = useState(Array(11).fill({ name: '' }));
-  const [team2Players, setTeam2Players] = useState(Array(11).fill({ name: '' }));
+  const [team1Players, setTeam1Players] = useState(Array(30).fill({ name: '' }));
+  const [team2Players, setTeam2Players] = useState(Array(30).fill({ name: '' }));
   const [team1Color, setTeam1Color] = useState({ main: '#581830', secondary: '#FFFFFF' }); // Galway 
   const [team2Color, setTeam2Color] = useState({ main: '#008000', secondary: '#FF0000' }); // Mayo 
   const [isSetupTeamModalOpen, setIsSetupTeamModalOpen] = useState(false); // State for Setup Team modal
@@ -120,6 +120,30 @@ const PitchGraphic = () => {
     const [filteredFileName, setFilteredFileName] = useState('filtered_data');
     const [filteredFormat, setFilteredFormat] = useState('json');
 
+    //View Coordinate Functions
+    // New state for review/editing
+    const [reviewData, setReviewData] = useState([]);
+
+    // Handler to update an individual field in the review data
+    const handleReviewChange = (index, field, value) => {
+      const newData = [...reviewData];
+      newData[index] = { ...newData[index], [field]: value };
+      setReviewData(newData);
+    };
+
+    // Handler to remove a coordinate row from reviewData
+    const handleDeleteCoordinate = (index) => {
+      const newData = reviewData.filter((_, i) => i !== index);
+      setReviewData(newData);
+    };
+
+    // When the user clicks "Save Changes", update the main coords state and close the modal
+    const handleSaveReviewChanges = () => {
+      setCoords(reviewData);
+      setIsModalOpen(false);
+    };
+
+
     const customDownloadModalStyle = {
       content: {
         top: '50%',
@@ -159,19 +183,19 @@ const PitchGraphic = () => {
     );
 
     const handleCustomDownload = async () => {
-      // 1) If user free + no downloads => prompt upgrade
+      // 1) If user is free and no downloads remain, prompt for upgrade
       if (userType === 'free' && downloadsRemaining <= 0) {
         handlePremiumFeatureAccess('Download Data');
         return;
       }
     
-      // 2) Decrement if free user
+      // 2) Decrement downloads remaining if user is free
       if (userType === 'free') {
         setDownloadsRemaining(downloadsRemaining - 1);
         // Also update Firestore or localStorage if needed
       }
     
-      // 3) Build the data object
+      // 3) Build the data object (this is used only for the JSON export)
       const datasetName = selectedDataset || newDatasetName || 'My Dataset';
       const finalData = {
         dataset: {
@@ -192,41 +216,72 @@ const PitchGraphic = () => {
         ]
       };
     
-      // 4) Define fileNameSafe BEFORE handling each format
+      // 4) Create a safe file name by replacing spaces with underscores
       const fileNameSafe = downloadFileName.replace(/\s+/g, '_');
       let fileBlob;
       let extension = downloadFormat; // 'json' | 'csv' | 'xlsx'
     
       if (downloadFormat === 'json') {
+        // Create JSON file
         const jsonString = JSON.stringify(finalData, null, 2);
         fileBlob = new Blob([jsonString], { type: 'application/json' });
-    
       } else if (downloadFormat === 'csv') {
-        // Minimal CSV example
-        const header = ['team','playerName','action','x','y'].join(',');
+        // Create a minimal CSV file using only a few fields (adjust if needed)
+        const header = ['team', 'playerName', 'action', 'x', 'y'].join(',');
         const rows = coords.map(c => [c.team, c.playerName, c.action, c.x, c.y].join(','));
         const csvOutput = [header, ...rows].join('\n');
         fileBlob = new Blob([csvOutput], { type: 'text/csv' });
-    
       } else if (downloadFormat === 'xlsx') {
         // --------------- XLSX ---------------
-        const sheetData = [
-          ['team','playerName','action','x','y'],
-          ...coords.map(c => [c.team, c.playerName, c.action, c.x, c.y])
+        // Define the header row with all desired fields
+        const header = [
+          'action',
+          'foot',
+          'from',
+          'minute',
+          'player',
+          'playerName',
+          'position',
+          'pressure',
+          'team',
+          'to',
+          'type',
+          'x',
+          'y'
         ];
+        // Map the coords to rows
+        const dataRows = coords.map(c => [
+          c.action,
+          c.foot,
+          c.from ? JSON.stringify(c.from) : '',
+          c.minute,
+          c.player,
+          c.playerName,
+          c.position,
+          c.pressure,
+          c.team,
+          c.to ? JSON.stringify(c.to) : '',
+          c.type,
+          c.x,
+          c.y
+        ]);
+        // Combine header and rows
+        const sheetData = [header, ...dataRows];
+    
+        // Create a worksheet and workbook using SheetJS
         const ws = utils.aoa_to_sheet(sheetData);
         const wb = utils.book_new();
         utils.book_append_sheet(wb, ws, 'Data');
-        
-        // This writes and triggers a save file for .xlsx
+    
+        // Write the workbook and trigger the download
         writeFile(wb, `${fileNameSafe}.xlsx`);
-        
-        // Then close the modal and return (skip the rest)
+    
+        // Close the modal and exit the function (skip the blob download code below)
         setIsCustomDownloadModalOpen(false);
         return;
       }
     
-      // 5) For JSON or CSV, do the normal blob download
+      // 5) For JSON or CSV, trigger a download from the Blob
       if (fileBlob) {
         const url = URL.createObjectURL(fileBlob);
         const a = document.createElement('a');
@@ -237,9 +292,9 @@ const PitchGraphic = () => {
         document.body.removeChild(a);
       }
     
-      // 6) Close modal
+      // 6) Close the modal
       setIsCustomDownloadModalOpen(false);
-    };
+    };    
 
     const handleStartNewGame = () => {
       setIsInitialSetupModalOpen(false);
@@ -1502,7 +1557,7 @@ const handleSaveToDataset = async () => {
           <button className="button" onClick={() => { if (userType === 'free' && downloadsRemaining <= 0) { handlePremiumFeatureAccess('Download Data'); return; } setIsCustomDownloadModalOpen(true); }} > {userType === 'free' ? `Download Data (${downloadsRemaining} left)` : 'Download Data (Unlimited)'} </button>
           <button className="button" onClick={toggleDownloadModal}>Download Filtered Data</button>
           <button className="button" onClick={toggleScreenshotModal}>Download Screenshot</button>
-          <button className="button" onClick={toggleModal}>View Coordinates</button>
+          <button className="button" onClick={toggleModal}>Review Data</button>
           <button className="button" onClick={handleOpenSaveModal}>Save Game</button>
           <button className="button" onClick={() => setIsSettingsModalOpen(true)}>Settings</button> {/* Settings button */}
           <button className="button" onClick={() => setIsSetupTeamModalOpen(true)}>Setup Team</button>
@@ -2056,53 +2111,140 @@ const handleSaveToDataset = async () => {
         </div>
       </Rnd>
     )}
-      <Modal
-        isOpen={isModalOpen}
-        onRequestClose={toggleModal}
-        contentLabel="Coordinates Data"
-        style={{
-          content: {
-            top: '50%',
-            left: '50%',
-            right: 'auto',
-            bottom: 'auto',
-            marginRight: '-50%',
-            transform: 'translate(-50%, -50%)',
-            width: '80%',
-            maxHeight: '60%',
-            overflowY: 'auto'
-          }
-        }}
-      >
-        <h2>Coordinates Data</h2>
-        <button onClick={toggleModal}>Close</button>
-        <div style={{ marginTop: '10px', backgroundColor: 'Grey', padding: '10px', border: '1px solid #ccc' }}>
-          <ul style={{ listStyleType: 'none', padding: '0' }}>
-            {coords.map((coord, index) => (
-              <li key={index}>
-                <strong>Action:</strong> {coord.action}<br />
-                <strong>Team:</strong> {coord.team}<br />
-                <strong>Player Number:</strong> {coord.player}<br />
-                <strong>Player Name:</strong> {coord.playerName}<br />
-                <strong>Position:</strong> {coord.position}<br />
-                <strong>Pressure:</strong> {coord.pressure}<br />
-                <strong>Foot:</strong> {coord.foot}<br />
-                <strong>Minute:</strong> {coord.minute}<br />
-                {coord.from && coord.to ? (
-                  <>
-                    <strong>From X:</strong> {coord.from.x.toFixed(2)}, <strong>From Y:</strong> {coord.from.y.toFixed(2)}<br />
-                    <strong>To X:</strong> {coord.to.x.toFixed(2)}, <strong>To Y:</strong> {coord.to.y.toFixed(2)}
-                  </>
-                ) : (
-                  <>
-                    <strong>X:</strong> {coord.x.toFixed(2)}, <strong>Y:</strong> {coord.y.toFixed(2)}
-                  </>
-                )}
-              </li>
+
+    <Modal
+      isOpen={isModalOpen}
+      onRequestClose={toggleModal}
+      contentLabel="Review Data"
+      style={{
+        content: {
+          top: '50%',
+          left: '50%',
+          right: 'auto',
+          bottom: 'auto',
+          transform: 'translate(-50%, -50%)',
+          border: 'none',
+          background: 'none',
+          padding: 0,
+        }
+      }}
+    >
+      <div className="review-modal-container">
+        <h2 className="review-modal-header">Review Data</h2>
+        <table className="review-table">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Team</th>
+              <th>Player #</th>
+              <th>Player Name</th>
+              <th>Position</th>
+              <th>Pressure</th>
+              <th>Foot</th>
+              <th>Minute</th>
+              <th>X</th>
+              <th>Y</th>
+              <th>Delete</th>
+            </tr>
+          </thead>
+          <tbody>
+            {reviewData.map((coord, index) => (
+              <tr key={index}>
+                <td>
+                  <input
+                    type="text"
+                    value={coord.action}
+                    onChange={(e) => handleReviewChange(index, 'action', e.target.value)}
+                    style={{ width: '100%' }}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    value={coord.team}
+                    onChange={(e) => handleReviewChange(index, 'team', e.target.value)}
+                    style={{ width: '100%' }}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    value={coord.player}
+                    onChange={(e) => handleReviewChange(index, 'player', e.target.value)}
+                    style={{ width: '100%' }}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    value={coord.playerName}
+                    onChange={(e) => handleReviewChange(index, 'playerName', e.target.value)}
+                    style={{ width: '100%' }}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    value={coord.position}
+                    onChange={(e) => handleReviewChange(index, 'position', e.target.value)}
+                    style={{ width: '100%' }}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    value={coord.pressure}
+                    onChange={(e) => handleReviewChange(index, 'pressure', e.target.value)}
+                    style={{ width: '100%' }}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    value={coord.foot}
+                    onChange={(e) => handleReviewChange(index, 'foot', e.target.value)}
+                    style={{ width: '100%' }}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    value={coord.minute}
+                    onChange={(e) => handleReviewChange(index, 'minute', e.target.value)}
+                    style={{ width: '100%' }}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    value={coord.x}
+                    onChange={(e) => handleReviewChange(index, 'x', parseFloat(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    value={coord.y}
+                    onChange={(e) => handleReviewChange(index, 'y', parseFloat(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                </td>
+                <td style={{ textAlign: 'center' }}>
+                  <button className="review-modal-btn" onClick={() => handleDeleteCoordinate(index)}>Delete</button>
+                </td>
+              </tr>
             ))}
-          </ul>
+          </tbody>
+        </table>
+        <div style={{ textAlign: 'right' }}>
+          <button className="review-modal-btn" onClick={handleSaveReviewChanges}>Save Changes</button>
+          <button className="review-modal-btn" onClick={toggleModal}>Cancel</button>
         </div>
-      </Modal>
+      </div>
+    </Modal>
+
+
       {/* Save Game Modal */}
       <Modal
         isOpen={isSaveModalOpen}

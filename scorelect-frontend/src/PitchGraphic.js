@@ -124,20 +124,30 @@ const PitchGraphic = () => {
     // New state for review/editing
     const [reviewData, setReviewData] = useState([]);
 
-    // Handler to update an individual field in the review data
+    // When opening the review modal, copy the current coordinates:
+    const toggleReviewModal = () => {
+      // If opening (i.e. modal currently closed) then copy coords into reviewData
+      if (!isModalOpen) {
+        setReviewData([...coords]);
+      }
+      setIsModalOpen(!isModalOpen);
+    };
+
+    // Handler to update a field in reviewData (for dynamic editing)
     const handleReviewChange = (index, field, value) => {
       const newData = [...reviewData];
       newData[index] = { ...newData[index], [field]: value };
       setReviewData(newData);
     };
 
-    // Handler to remove a coordinate row from reviewData
+    // Handler to delete a row from reviewData
     const handleDeleteCoordinate = (index) => {
       const newData = reviewData.filter((_, i) => i !== index);
       setReviewData(newData);
     };
 
-    // When the user clicks "Save Changes", update the main coords state and close the modal
+    // When the user clicks "Save Changes" in the review modal,
+    // update the main coords state and close the modal.
     const handleSaveReviewChanges = () => {
       setCoords(reviewData);
       setIsModalOpen(false);
@@ -945,8 +955,13 @@ const handleSaveToDataset = async () => {
   
 
   const toggleModal = () => {
+    // If opening the modal (i.e. isModalOpen is false), copy current coords into reviewData.
+    if (!isModalOpen) {
+      setReviewData([...coords]);
+    }
     setIsModalOpen(!isModalOpen);
   };
+  
 
   // Update toggleDownloadModal
   const toggleDownloadModal = () => {
@@ -2112,139 +2127,6 @@ const handleSaveToDataset = async () => {
       </Rnd>
     )}
 
-    <Modal
-      isOpen={isModalOpen}
-      onRequestClose={toggleModal}
-      contentLabel="Review Data"
-      style={{
-        content: {
-          top: '50%',
-          left: '50%',
-          right: 'auto',
-          bottom: 'auto',
-          transform: 'translate(-50%, -50%)',
-          border: 'none',
-          background: 'none',
-          padding: 0,
-        }
-      }}
-    >
-      <div className="review-modal-container">
-        <h2 className="review-modal-header">Review Data</h2>
-        <table className="review-table">
-          <thead>
-            <tr>
-              <th>Action</th>
-              <th>Team</th>
-              <th>Player #</th>
-              <th>Player Name</th>
-              <th>Position</th>
-              <th>Pressure</th>
-              <th>Foot</th>
-              <th>Minute</th>
-              <th>X</th>
-              <th>Y</th>
-              <th>Delete</th>
-            </tr>
-          </thead>
-          <tbody>
-            {reviewData.map((coord, index) => (
-              <tr key={index}>
-                <td>
-                  <input
-                    type="text"
-                    value={coord.action}
-                    onChange={(e) => handleReviewChange(index, 'action', e.target.value)}
-                    style={{ width: '100%' }}
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    value={coord.team}
-                    onChange={(e) => handleReviewChange(index, 'team', e.target.value)}
-                    style={{ width: '100%' }}
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    value={coord.player}
-                    onChange={(e) => handleReviewChange(index, 'player', e.target.value)}
-                    style={{ width: '100%' }}
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    value={coord.playerName}
-                    onChange={(e) => handleReviewChange(index, 'playerName', e.target.value)}
-                    style={{ width: '100%' }}
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    value={coord.position}
-                    onChange={(e) => handleReviewChange(index, 'position', e.target.value)}
-                    style={{ width: '100%' }}
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    value={coord.pressure}
-                    onChange={(e) => handleReviewChange(index, 'pressure', e.target.value)}
-                    style={{ width: '100%' }}
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    value={coord.foot}
-                    onChange={(e) => handleReviewChange(index, 'foot', e.target.value)}
-                    style={{ width: '100%' }}
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    value={coord.minute}
-                    onChange={(e) => handleReviewChange(index, 'minute', e.target.value)}
-                    style={{ width: '100%' }}
-                  />
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    value={coord.x}
-                    onChange={(e) => handleReviewChange(index, 'x', parseFloat(e.target.value))}
-                    style={{ width: '100%' }}
-                  />
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    value={coord.y}
-                    onChange={(e) => handleReviewChange(index, 'y', parseFloat(e.target.value))}
-                    style={{ width: '100%' }}
-                  />
-                </td>
-                <td style={{ textAlign: 'center' }}>
-                  <button className="review-modal-btn" onClick={() => handleDeleteCoordinate(index)}>Delete</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div style={{ textAlign: 'right' }}>
-          <button className="review-modal-btn" onClick={handleSaveReviewChanges}>Save Changes</button>
-          <button className="review-modal-btn" onClick={toggleModal}>Cancel</button>
-        </div>
-      </div>
-    </Modal>
-
-
       {/* Save Game Modal */}
       <Modal
         isOpen={isSaveModalOpen}
@@ -2268,7 +2150,7 @@ const handleSaveToDataset = async () => {
           },
           overlay: {
             backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            zIndex: 1000, // Ensure it appears above other elements
+            zIndex: 1000,
           },
         }}
       >
@@ -2373,7 +2255,6 @@ const handleSaveToDataset = async () => {
             <option value="new">Create New Dataset</option>
           </select>
 
-          {/* New Dataset Name Input */}
           {saveToDataset && selectedDataset === 'new' && (
             <div style={{ marginTop: '15px' }}>
               <label
@@ -2395,7 +2276,6 @@ const handleSaveToDataset = async () => {
                   border: '1px solid #ccc',
                 }}
               />
-              {/* Duplicate Dataset Warning */}
               {duplicateDatasetError && (
                 <div
                   style={{
@@ -2423,7 +2303,20 @@ const handleSaveToDataset = async () => {
             marginTop: '30px',
           }}
         >
-          {/* Save Game Button */}
+          {/* New: Review Data Button */}
+          <button
+            onClick={toggleReviewModal}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#007bff',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+            }}
+          >
+            Review Data
+          </button>
           <button
             onClick={handleSaveGame}
             disabled={saveButtonStatus === 'loading'}
@@ -2460,48 +2353,6 @@ const handleSaveToDataset = async () => {
               'Save Game'
             )}
           </button>
-
-          {/* Save to Dataset Button */}
-          {/* {saveToDataset && (
-            <button
-              onClick={handleSaveToDataset}
-              disabled={saveDatasetButtonStatus === 'loading'}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: '#17a2b8',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '5px',
-                cursor: saveDatasetButtonStatus === 'loading' ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-              }}
-            >
-              {saveDatasetButtonStatus === 'loading' && (
-                <span
-                  className="spinner"
-                  style={{
-                    width: '16px',
-                    height: '16px',
-                    border: '2px solid #f3f3f3',
-                    borderTop: '2px solid #fff',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite',
-                  }}
-                ></span>
-              )}
-              {saveDatasetButtonStatus === 'success' ? (
-                <span>&#10004; Saved!</span>
-              ) : saveDatasetButtonStatus === 'error' ? (
-                <span>&#10008; Error</span>
-              ) : (
-                'Save to Dataset'
-              )}
-            </button>
-          )} */}
-
-          {/* Exit Button */}
           <button
             onClick={() => setIsSaveModalOpen(false)}
             style={{
@@ -2516,8 +2367,6 @@ const handleSaveToDataset = async () => {
             Exit
           </button>
         </div>
-
-        {/* Spinner Animation */}
         <style>
           {`
             @keyframes spin {
@@ -2527,6 +2376,8 @@ const handleSaveToDataset = async () => {
           `}
         </style>
       </Modal>
+
+
       <Modal
         isOpen={isAddActionModalOpen}
         onRequestClose={() => setIsAddActionModalOpen(false)}
@@ -3293,6 +3144,189 @@ const handleSaveToDataset = async () => {
           </button>
         </div>
       </Modal>
+
+
+      <Modal
+      isOpen={isModalOpen}
+      onRequestClose={toggleReviewModal}
+      contentLabel="Review Data"
+      style={{
+        overlay: {
+          zIndex: 2000,  // Higher than Save Game modal's 1000
+          backgroundColor: 'rgba(0, 0, 0, 0.5)'
+        },
+        content: {
+          top: '50%',
+          left: '50%',
+          right: 'auto',
+          bottom: 'auto',
+          transform: 'translate(-50%, -50%)',
+          backgroundColor: '#2e2e2e',
+          padding: '20px',
+          borderRadius: '10px',
+          maxHeight: '80vh',
+          overflowY: 'auto',
+          border: 'none'
+        }
+      }}
+    >
+      <div className="review-modal-container">
+        <h2 className="review-modal-header" style={{ color: '#fff', textAlign: 'center', marginBottom: '15px' }}>
+          Review Data
+        </h2>
+        <table className="review-table" style={{ width: '100%', borderCollapse: 'collapse', color: '#fff' }}>
+          <thead>
+            <tr>
+              <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>Action</th>
+              <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>Team</th>
+              <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>Player #</th>
+              <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>Player Name</th>
+              <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>Position</th>
+              <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>Pressure</th>
+              <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>Foot</th>
+              <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>Minute</th>
+              <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>X</th>
+              <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>Y</th>
+              <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>Delete</th>
+            </tr>
+          </thead>
+          <tbody>
+            {reviewData.map((coord, index) => (
+              <tr key={index}>
+                <td style={{ padding: '8px' }}>
+                  <input
+                    type="text"
+                    value={coord.action}
+                    onChange={(e) => handleReviewChange(index, 'action', e.target.value)}
+                    style={{ width: '100%', backgroundColor: '#2e2e2e', color: '#fff', border: '1px solid #555', borderRadius: '3px', padding: '4px' }}
+                  />
+                </td>
+                <td style={{ padding: '8px' }}>
+                  <input
+                    type="text"
+                    value={coord.team}
+                    onChange={(e) => handleReviewChange(index, 'team', e.target.value)}
+                    style={{ width: '100%', backgroundColor: '#2e2e2e', color: '#fff', border: '1px solid #555', borderRadius: '3px', padding: '4px' }}
+                  />
+                </td>
+                <td style={{ padding: '8px' }}>
+                  <input
+                    type="text"
+                    value={coord.player}
+                    onChange={(e) => handleReviewChange(index, 'player', e.target.value)}
+                    style={{ width: '100%', backgroundColor: '#2e2e2e', color: '#fff', border: '1px solid #555', borderRadius: '3px', padding: '4px' }}
+                  />
+                </td>
+                <td style={{ padding: '8px' }}>
+                  <input
+                    type="text"
+                    value={coord.playerName}
+                    onChange={(e) => handleReviewChange(index, 'playerName', e.target.value)}
+                    style={{ width: '100%', backgroundColor: '#2e2e2e', color: '#fff', border: '1px solid #555', borderRadius: '3px', padding: '4px' }}
+                  />
+                </td>
+                <td style={{ padding: '8px' }}>
+                  <input
+                    type="text"
+                    value={coord.position}
+                    onChange={(e) => handleReviewChange(index, 'position', e.target.value)}
+                    style={{ width: '100%', backgroundColor: '#2e2e2e', color: '#fff', border: '1px solid #555', borderRadius: '3px', padding: '4px' }}
+                  />
+                </td>
+                <td style={{ padding: '8px' }}>
+                  <input
+                    type="text"
+                    value={coord.pressure}
+                    onChange={(e) => handleReviewChange(index, 'pressure', e.target.value)}
+                    style={{ width: '100%', backgroundColor: '#2e2e2e', color: '#fff', border: '1px solid #555', borderRadius: '3px', padding: '4px' }}
+                  />
+                </td>
+                <td style={{ padding: '8px' }}>
+                  <input
+                    type="text"
+                    value={coord.foot}
+                    onChange={(e) => handleReviewChange(index, 'foot', e.target.value)}
+                    style={{ width: '100%', backgroundColor: '#2e2e2e', color: '#fff', border: '1px solid #555', borderRadius: '3px', padding: '4px' }}
+                  />
+                </td>
+                <td style={{ padding: '8px' }}>
+                  <input
+                    type="text"
+                    value={coord.minute}
+                    onChange={(e) => handleReviewChange(index, 'minute', e.target.value)}
+                    style={{ width: '100%', backgroundColor: '#2e2e2e', color: '#fff', border: '1px solid #555', borderRadius: '3px', padding: '4px' }}
+                  />
+                </td>
+                <td style={{ padding: '8px' }}>
+                  <input
+                    type="number"
+                    value={coord.x}
+                    onChange={(e) => handleReviewChange(index, 'x', parseFloat(e.target.value))}
+                    style={{ width: '100%', backgroundColor: '#2e2e2e', color: '#fff', border: '1px solid #555', borderRadius: '3px', padding: '4px' }}
+                  />
+                </td>
+                <td style={{ padding: '8px' }}>
+                  <input
+                    type="number"
+                    value={coord.y}
+                    onChange={(e) => handleReviewChange(index, 'y', parseFloat(e.target.value))}
+                    style={{ width: '100%', backgroundColor: '#2e2e2e', color: '#fff', border: '1px solid #555', borderRadius: '3px', padding: '4px' }}
+                  />
+                </td>
+                <td style={{ textAlign: 'center', padding: '8px' }}>
+                  <button
+                    className="review-modal-btn"
+                    onClick={() => handleDeleteCoordinate(index)}
+                    style={{
+                      backgroundColor: '#cf4242',
+                      border: 'none',
+                      borderRadius: '3px',
+                      color: '#fff',
+                      padding: '4px 8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div style={{ textAlign: 'right', marginTop: '15px' }}>
+          <button
+            className="review-modal-btn"
+            onClick={handleSaveReviewChanges}
+            style={{
+              backgroundColor: '#007bff',
+              border: 'none',
+              borderRadius: '3px',
+              color: '#fff',
+              padding: '8px 16px',
+              cursor: 'pointer',
+              marginRight: '10px'
+            }}
+          >
+            Save Changes
+          </button>
+          <button
+            className="review-modal-btn"
+            onClick={toggleReviewModal}
+            style={{
+              backgroundColor: '#6c757d',
+              border: 'none',
+              borderRadius: '3px',
+              color: '#fff',
+              padding: '8px 16px',
+              cursor: 'pointer'
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </Modal>
+
 
 
     </div>

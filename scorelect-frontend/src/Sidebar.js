@@ -97,14 +97,20 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
         }
       });
     } else {
-      // Only navigate to analysis if the selected sport is supported (Soccer)
-      if (selectedSport === 'Soccer') {
-        onNavigate('/analysis');
+      // Ensure selectedSport is defined and compare in a case-insensitive way.
+      if (selectedSport && selectedSport.toUpperCase() === 'SOCCER') {
+        onNavigate('/analysis'); // Regular analysis for Soccer
+      } else if (selectedSport && selectedSport.toUpperCase() === 'GAA') {
+        onNavigate('/analysis-gaa'); // Navigate to AnalysisGAA page for GAA
       } else {
-        Swal.fire('Sport Not Supported', 'The advanced analysis dashboard is currently available only for Soccer. Please select "Soccer".', 'info');
+        Swal.fire(
+          'Sport Not Supported',
+          'The advanced analysis dashboard is currently available only for Soccer and GAA. Please select one of these sports.',
+          'info'
+        );
       }
     }
-  };
+  };  
 
   const handleTrainingClick = () => {
     // Navigate directly to the training page
@@ -209,7 +215,7 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
               {!collapsed && 'Data Hub'}
             </button>
           </li> */}
-          
+
           <li>
             <button onClick={handleAnalysisAccess}>
               <FaChartBar className="icon" size={16} />

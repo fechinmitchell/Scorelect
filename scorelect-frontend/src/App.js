@@ -46,7 +46,8 @@ import ErrorBoundary from './components/ErrorBoundary'; // Import ErrorBoundary
 import PlayerShotDataGAA from './components/PlayerShotDataGAA';
 import TeamDataGAA from './TeamDataGAA';
 import TeamDetails from './components/TeamDetails';
-
+import AnalysisGAA from './AnalysisGAA'; // Import the AnalysisGAA component
+import GAAAnalysisDashboard from './components/GAAAnalysisDashboard'; // Import the AnalysisGAA component
 
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
@@ -245,15 +246,21 @@ const App = () => {
                       />
                     }
                   />
-                  <Route
-                    path="/analysis"
-                    element={
-                      <Analysis
-                        onSportSelect={(sport) => setSelectedSport(sport)}
-                        selectedSport={selectedSport}
-                      />
-                    }
-                  />
+                  <Route path="/analysis" element={
+                    <Analysis
+                      onSportSelect={(sport) => setSelectedSport(sport)}
+                      selectedSport={selectedSport}
+                    />
+                  }/>
+                  <Route path="/analysis-gaa" element={
+                    <AnalysisGAA
+                      onSportSelect={(sport) => setSelectedSport(sport)}
+                      selectedSport={selectedSport}
+                    />
+                  }/>
+
+                  <Route path="/analysis/gaa-dashboard" element={<GAAAnalysisDashboard />} />
+
                   {/* For Soccer, we navigate to soccer-filter instead of a generic filter */}
                   <Route path="/analysis/soccer-filter" element={<SoccerFilterPage />} />
 

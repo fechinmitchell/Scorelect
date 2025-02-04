@@ -123,6 +123,12 @@ db = firestore.client()
 # Initialize OpenAI client with the API key loaded from environment variables
 client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
+def flattenShots(games):
+    """Given a list of game objects, return an array of all shots.
+       Each game is expected to have a key 'gameData' which is a list of shots.
+    """
+    return [shot for game in games for shot in game.get('gameData', [])]
+
 
 # Define a Flask route for creating a Stripe checkout session
 @app.route('/create-checkout-session', methods=['POST'])
@@ -1680,6 +1686,134 @@ def sitemap():
     response.headers['Content-Type'] = 'application/xml'
     return response
 
+# --- Helper function ---
+
+# ---------------------------
+# Endpoint: /recalculate-target-xpoints
+# ---------------------------
+@app.route('/recalculate-target-xpoints', methods=['POST'])
+def recalculate_target_xpoints():
+    """
+    Recalculates xP and xG for a target dataset using a model trained on historical "all shots" data.
+    Expected JSON payload:
+      {
+        "user_id": "w9ZkqaYVM3dKSqqjWHLDVyh5sVg2",
+        "training_dataset": "GAA All Shots",
+        "target_dataset": "CurrentMatchDataset"
+      }
+    Returns updated summary stats for the target dataset.
+    """
+    try:
+        import numpy as np
+        import pandas as pd
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.model_selection import train_test_split
+        from sklearn.metrics import accuracy_score
+        from sklearn.calibration import CalibratedClassifierCV
+        from imblearn.over_sampling import SMOTE
+
+        data = request.get_json()
+        user_id = data.get('user_id')
+        training_dataset = data.get('training_dataset', "GAA All Shots")
+        target_dataset = data.get('target_dataset')
+
+        if not user_id or not target_dataset:
+            return jsonify({'error': 'user_id and target_dataset are required.'}), 400
+
+        # --- Step 1: Fetch training data ---
+        training_games_ref = db.collection('savedGames').document(user_id) \
+                              .collection('games') \
+                              .where('datasetName', '==', training_dataset)
+        training_games = [doc.to_dict() for doc in training_games_ref.stream()]
+        training_shots = flattenShots(training_games)
+        if not training_shots:
+            return jsonify({'error': 'No training data found.'}), 404
+
+        df_train = pd.DataFrame(training_shots)
+        df_train['x'] = pd.to_numeric(df_train['x'], errors='coerce').fillna(0)
+        df_train['y'] = pd.to_numeric(df_train['y'], errors='coerce').fillna(0)
+        X_train = df_train[['x', 'y']].values
+        df_train['target'] = df_train['action'].apply(lambda a: 1 if a.lower().strip() == 'point' else 0)
+        y_train = df_train['target'].values
+
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+
+        sm = SMOTE(random_state=42)
+        X_train_res, y_train_res = sm.fit_resample(X_train_scaled, y_train)
+
+        model = LogisticRegression(random_state=42, max_iter=1000)
+        model.fit(X_train_res, y_train_res)
+
+        cal_model = CalibratedClassifierCV(model, method='isotonic', cv='prefit')
+        cal_model.fit(X_train_scaled, y_train)
+
+        # --- Step 2: Fetch target data ---
+        target_games_ref = db.collection('savedGames').document(user_id) \
+            .collection('games') \
+            .where('datasetName', '==', target_dataset)
+        target_games_docs = list(target_games_ref.stream())
+        target_games = [doc.to_dict() for doc in target_games_docs]
+        target_shots = flattenShots(target_games)
+        if not target_shots:
+            return jsonify({'error': 'No target data found.'}), 404
+
+        df_target = pd.DataFrame(target_shots)
+        df_target['x'] = pd.to_numeric(df_target['x'], errors='coerce').fillna(0)
+        df_target['y'] = pd.to_numeric(df_target['y'], errors='coerce').fillna(0)
+        X_target = df_target[['x', 'y']].values
+        X_target_scaled = scaler.transform(X_target)
+
+        # --- Step 3: Predict xP and xG ---
+        xP_preds = cal_model.predict_proba(X_target_scaled)[:, 1]
+        xG_preds = xP_preds * 0.5  # Dummy logic for xG
+
+        df_target['xPoints_Final'] = xP_preds
+        df_target['xGoals_Final'] = xG_preds
+
+        # --- Step 4: Compute summary statistics ---
+        total_shots = len(df_target)
+        successful_shots = df_target[df_target['xPoints_Final'] > 0.5].shape[0]
+        points = df_target[df_target['action'].str.lower().str.strip() == 'point'].shape[0]
+        goals = df_target[df_target['action'].str.lower().str.strip() == 'goal'].shape[0]
+        offensive_marks = 8  # dummy value
+        frees = 37           # dummy value
+        fortyfives = 11      # dummy value
+        two_pointers = 5     # dummy value
+        avg_distance = df_target['x'].sub(145).abs().mean() / 100
+
+        target_summary = {
+            "totalShots": total_shots,
+            "successfulShots": successful_shots,
+            "points": points,
+            "goals": goals,
+            "misses": total_shots - successful_shots,
+            "offensiveMarks": offensive_marks,
+            "frees": frees,
+            "45s": fortyfives,
+            "2Pointers": two_pointers,
+            "avgDistance": round(avg_distance, 2)
+        }
+
+        # --- Step 5: Update target data in Firestore ---
+        batch = db.batch()
+        for doc in target_games_docs:
+            game_data = doc.to_dict().get('gameData', [])
+            for i in range(len(game_data)):
+                if i < len(df_target):
+                    game_data[i]['xPoints'] = float(df_target.iloc[i]['xPoints_Final'])
+                    game_data[i]['xGoals'] = float(df_target.iloc[i]['xGoals_Final'])
+            batch.update(doc.reference, {'gameData': game_data})
+        batch.commit()
+
+        # --- Step 6: Return summary stats ---
+        return jsonify({'success': True, 'summary': target_summary}), 200
+
+    except Exception as e:
+        logging.error(f"Error in recalculate_target_xpoints: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/recalculate-xpoints', methods=['POST'])
 def recalculate_xpoints():
     """
@@ -2018,6 +2152,7 @@ def recalculate_xpoints():
     except Exception as e:
         logging.error(f"Error recalculating xpoints: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
+
     
 if __name__ == '__main__':
     app.run(port=5001, debug=True)

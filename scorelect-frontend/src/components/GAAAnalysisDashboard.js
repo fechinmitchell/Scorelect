@@ -16,6 +16,8 @@ import {
   Group
 } from 'react-konva';
 import { Radar } from 'react-chartjs-2';
+import axios from 'axios';
+import { useAuth } from '../AuthContext'; // or wherever your Auth is
 
 // ---------- Default Colors & Pitch Size ----------
 const defaultPitchColor = '#006400';
@@ -91,8 +93,8 @@ const GraphTitle = styled.h2`
  * @returns {Array} - Flattened array of all shots.
  */
 function flattenShots(games = []) {
-  return games.flatMap((game) => game.gameData || []);
-}
+    return games.flatMap((game) => game.gameData || []);
+  }
 
 /**
  * Translate a shot for consistent 'one-goal' analysis.
@@ -654,9 +656,11 @@ function renderFullGAAPitch(games, xScale, yScale, pitchColorState, lineColorSta
 
 // ---------- Main Component ----------
 export default function GAAAnalysisDashboard() {
-  const navigate = useNavigate();
-  const { state } = useLocation();
-  const { file, sport, filters } = state || {};
+    const { state } = useLocation();
+    const { file, sport, filters } = state || {};
+    const { currentUser } = useAuth();  
+    const navigate = useNavigate(); 
+
 
   // Filter states
   const [appliedFilters, setAppliedFilters] = useState({
@@ -696,6 +700,7 @@ export default function GAAAnalysisDashboard() {
   const yScale = canvasSize.height / pitchHeight;
 
   // On mount, validate & parse dataset
+  // On mount, validate & parse dataset
   useEffect(() => {
     if (!file || sport !== 'GAA') {
       Swal.fire('No Data', 'Invalid or no GAA dataset found.', 'error')
@@ -724,35 +729,26 @@ export default function GAAAnalysisDashboard() {
 
   // Recompute summary each time filters change
   useEffect(() => {
-    // Start with the full set of games
     let filteredGames = file?.games || [];
-
-    // Filter by team
     if (appliedFilters.team) {
       filteredGames = filteredGames.map(g => ({
         ...g,
         gameData: (g.gameData || []).filter(sh => sh.team === appliedFilters.team)
       }));
     }
-    // Filter by player
     if (appliedFilters.player) {
       filteredGames = filteredGames.map(g => ({
         ...g,
         gameData: (g.gameData || []).filter(sh => sh.playerName === appliedFilters.player)
       }));
     }
-    // Filter by action
     if (appliedFilters.action) {
       filteredGames = filteredGames.map(g => ({
         ...g,
         gameData: (g.gameData || []).filter(sh => sh.action === appliedFilters.action)
       }));
     }
-
-    // Remove any games that now have zero shots
     filteredGames = filteredGames.filter(g => (g.gameData || []).length > 0);
-
-    // Flatten to compute summary
     const shots = flattenShots(filteredGames);
     let totalShots = 0, totalGoals = 0, totalPoints = 0, totalMisses = 0;
     shots.forEach(sh => {
@@ -766,8 +762,69 @@ export default function GAAAnalysisDashboard() {
     setGames(filteredGames);
   }, [file, appliedFilters]);
 
-  // Flatten allShots for the one-sided pitch
   const allShots = flattenShots(games);
+  
+    const handleRecalculate = async () => {
+      try {
+        // 1. The actual user ID
+        const userId = currentUser?.uid;  
+        if (!userId) {
+          Swal.fire("Error", "No authenticated user ID found", "error");
+          return;
+        }
+  
+        // 2. The dataset name the user actually wants to recalc
+        const targetDataset = file?.datasetName || "DefaultDataset";
+        
+        // 3. The training dataset (whatever name you store it as)
+        const trainingDataset = "GAA All Shots";
+  
+        const payload = {
+          user_id: userId,
+          training_dataset: trainingDataset,
+          target_dataset: targetDataset,
+        };
+  
+        const response = await axios.post(
+          'http://localhost:5001/recalculate-target-xpoints',
+          payload
+        );
+  
+        if (response.data.success) {
+          Swal.fire(
+            'Recalculation Complete',
+            'xP and xG values have been updated for ' + targetDataset,
+            'success'
+          );
+          // 4. If you want to show the new summary from the server:
+          setSummary(response.data.summary);
+  
+          // 5. REFRESH from Firestore so you see new xPoints/xGoals in your UI
+          await fetchUpdatedDataset(userId, targetDataset);
+        }
+      } catch (error) {
+        console.error('Recalculation error:', error);
+        Swal.fire('Error', 'Recalculation failed. Check the console for details.', 'error');
+      }
+    };
+  
+    // Example function to load from Firestore again
+    const fetchUpdatedDataset = async (uid, datasetName) => {
+      try {
+        const loadResp = await axios.post('http://localhost:5001/load-games', {
+          uid: uid,
+        });
+        const allGames = loadResp.data || [];
+  
+        // filter for the specific dataset name
+        const filtered = allGames.filter(g => g.datasetName === datasetName);
+  
+        // Now update local state
+        setGames(filtered);
+      } catch (err) {
+        console.error("Error fetching updated dataset:", err);
+      }
+    };  
 
   // Handlers
   const handleFilterChange = (field, value) => {
@@ -777,6 +834,22 @@ export default function GAAAnalysisDashboard() {
   return (
     <Container>
       <Header>GAA Analysis Dashboard</Header>
+        <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+            <button
+                onClick={handleRecalculate}
+                style={{
+                backgroundColor: '#0069d9',
+                border: 'none',
+                borderRadius: '5px',
+                color: '#fff',
+                padding: '10px 20px',
+                fontSize: '1rem',
+                cursor: 'pointer'
+                }}
+            >
+                Recalculate xP/xG for Target Dataset
+            </button>
+        </div>
 
       {/* Filters */}
       <FiltersContainer>

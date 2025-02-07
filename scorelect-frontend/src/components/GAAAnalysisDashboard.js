@@ -4,12 +4,12 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import styled from 'styled-components';
-import { Stage } from 'react-konva';
+import { Stage, Layer, Group, Rect, Circle, Text } from 'react-konva'; // <-- Important for the legend
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
 
-// Import your pitch functions from GAAPitchComponents (adjust path as needed)
-import { renderGAAPitch, renderOneSidePitchShots } from './GAAPitchComponents';
+// Import your pitch functions
+import { renderGAAPitch, renderLegendOneSideShots, renderOneSidePitchShots } from './GAAPitchComponents';
 
 // ---------- Default Colors & Pitch Size ----------
 const defaultPitchColor = '#006400';
@@ -17,17 +17,14 @@ const defaultLineColor = '#FFFFFF';
 const defaultLightStripeColor = '#228B22';
 const defaultDarkStripeColor = '#006400';
 
-// Usually your pitch is 145x88m, but we can scale it
 const pitchWidth = 145;
 const pitchHeight = 88;
 
 // ---------- Styled Components ----------
-
-// A dark page container
 const PageContainer = styled.div`
   background: #1c1c1c;
   min-height: 100vh;
-  color: #ffc107; /* bright accent color */
+  color: #ffc107; 
   padding: 2rem;
   font-family: 'Roboto', sans-serif;
 `;
@@ -57,7 +54,6 @@ const RecalcButton = styled.button`
   }
 `;
 
-// A single "card" or "section"
 const Section = styled.section`
   background: #2a2a2a;
   border-radius: 10px;
@@ -66,14 +62,12 @@ const Section = styled.section`
   box-shadow: 0 4px 8px rgba(0,0,0,0.3);
 `;
 
-// The filters & summary tiles in the same container
 const FiltersAndStatsContainer = styled.div`
   display: flex;
   flex-direction: column;
   gap: 1rem;
 `;
 
-// Filters area
 const FiltersContainer = styled.div`
   background: #333;
   padding: 1rem;
@@ -93,7 +87,6 @@ const FilterSelect = styled.select`
   font-size: 1rem;
 `;
 
-// Summary tiles container
 const TilesContainer = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -118,11 +111,10 @@ const Tile = styled.div`
     font-size: 1rem;
     font-weight: bold;
     margin: 0;
-    color: #ffc107; /* bright accent color */
+    color: #ffc107; 
   }
 `;
 
-// Container for the half-pitch + Team Stats side by side
 const PitchAndTeamStatsWrapper = styled.div`
   display: flex;
   gap: 2rem;
@@ -130,7 +122,6 @@ const PitchAndTeamStatsWrapper = styled.div`
   align-items: flex-start;
 `;
 
-// The pitch card
 const PitchSection = styled.section`
   background: #2a2a2a;
   border-radius: 10px;
@@ -138,22 +129,21 @@ const PitchSection = styled.section`
   box-shadow: 0 4px 8px rgba(0,0,0,0.3);
 `;
 
-// The teams stats card
 const TeamStatsCard = styled.div`
   background: #333;
   border-radius: 8px;
   padding: 1rem;
   min-width: 220px;
   box-shadow: 0 3px 5px rgba(0,0,0,0.2);
-  align-self: flex-start; /* so it aligns at the top with the pitch */
+  align-self: flex-start;
 `;
 
-// ---------- Helper to flatten shots ----------
+// --- Flatten helper
 function flattenShots(games = []) {
   return games.flatMap((game) => game.gameData || []);
 }
 
-// ---------- Main Component ----------
+// ---------- MAIN COMPONENT ----------
 export default function GAAAnalysisDashboard() {
   const { state } = useLocation();
   const { file, sport, filters } = state || {};
@@ -166,45 +156,38 @@ export default function GAAAnalysisDashboard() {
     action: filters?.action || ''
   });
 
-  // Summaries for the "All Shots" tile row
   const [summary, setSummary] = useState({
-    totalShots: 0, 
-    totalGoals: 0, 
-    totalPoints: 0, 
+    totalShots: 0,
+    totalGoals: 0,
+    totalPoints: 0,
     totalMisses: 0,
   });
 
-  // Options for filters
   const [filterOptions, setFilterOptions] = useState({
     teams: [],
     players: [],
     actions: [],
   });
 
-  // Data from Firestore
   const [games, setGames] = useState([]);
 
-  // For aggregator
   const [teamAggregatedData, setTeamAggregatedData] = useState({});
   const [teamScorers, setTeamScorers] = useState({});
 
-  // Pitch colors
+  // Colors
   const [pitchColorState] = useState(defaultPitchColor);
   const [lineColorState] = useState(defaultLineColor);
   const [lightStripeColorState] = useState(defaultLightStripeColor);
   const [darkStripeColorState] = useState(defaultDarkStripeColor);
 
-  // The standard GAA pitch is 145 x 88
-  // We'll pick a bigger scale so the half-pitch is decent size
+  // We'll pick a bigger scale for half pitch
   const xScale = 6;
   const yScale = 6;
-
-  // For half-pitch
-  const halfLineX = pitchWidth / 2; 
+  const halfLineX = pitchWidth / 2;
   const goalX = 0;
   const goalY = pitchHeight / 2;
 
-  // On mount, validate & parse dataset
+  // On mount, parse data
   useEffect(() => {
     if (!file || sport !== 'GAA') {
       Swal.fire('No Data', 'Invalid or no GAA dataset found.', 'error')
@@ -213,7 +196,6 @@ export default function GAAAnalysisDashboard() {
     }
     setGames(file.games || []);
 
-    // Build filter dropdown options
     const tSet = new Set();
     const pSet = new Set();
     const aSet = new Set();
@@ -231,7 +213,7 @@ export default function GAAAnalysisDashboard() {
     });
   }, [file, sport, navigate]);
 
-  // Recompute summary each time filters change
+  // Recompute summary
   useEffect(() => {
     let filteredGames = file?.games || [];
     if (appliedFilters.team) {
@@ -255,7 +237,6 @@ export default function GAAAnalysisDashboard() {
     filteredGames = filteredGames.filter(g => (g.gameData || []).length > 0);
     const shots = flattenShots(filteredGames);
 
-    // Build high-level summary for the "tiles"
     let totalShots = 0, totalGoals = 0, totalPoints = 0, totalMisses = 0;
     shots.forEach(sh => {
       totalShots++;
@@ -269,10 +250,10 @@ export default function GAAAnalysisDashboard() {
     setGames(filteredGames);
   }, [file, appliedFilters]);
 
-  // Flatten allShots (the filtered version)
+  // Flatten allShots
   const allShots = flattenShots(games);
 
-  // ----- AGGREGATOR for Each Team & Scorers -----
+  // Team aggregator
   useEffect(() => {
     const aggregator = {};
     const scorersMap = {};
@@ -290,11 +271,11 @@ export default function GAAAnalysisDashboard() {
           frees: 0,
           fortyFives: 0,
           twoPointers: 0,
-          avgDistance: 0, // accumulate total distance, then we'll divide
+          avgDistance: 0,
         };
       }
       if (!scorersMap[tm]) {
-        scorersMap[tm] = {}; // { 'Player X': { goals, points } }
+        scorersMap[tm] = {};
       }
 
       aggregator[tm].totalShots++;
@@ -305,7 +286,6 @@ export default function GAAAnalysisDashboard() {
       if (action === 'goal' || action === 'penalty goal') {
         aggregator[tm].goals++;
         aggregator[tm].successfulShots++;
-        // track scorer
         const pName = shot.playerName || 'NoName';
         if (!scorersMap[tm][pName]) {
           scorersMap[tm][pName] = { goals: 0, points: 0 };
@@ -317,7 +297,6 @@ export default function GAAAnalysisDashboard() {
         if (dist >= 40) {
           aggregator[tm].twoPointers++;
         }
-        // track scorer
         const pName = shot.playerName || 'NoName';
         if (!scorersMap[tm][pName]) {
           scorersMap[tm][pName] = { goals: 0, points: 0 };
@@ -331,10 +310,9 @@ export default function GAAAnalysisDashboard() {
       ) {
         aggregator[tm].misses++;
       }
-      // you can do frees, 45, etc. similarly
+      // etc.
     });
 
-    // finalize avgDistance
     Object.keys(aggregator).forEach((tm) => {
       const tStats = aggregator[tm];
       if (tStats.totalShots > 0) {
@@ -348,7 +326,7 @@ export default function GAAAnalysisDashboard() {
     setTeamScorers(scorersMap);
   }, [allShots]);
 
-  // ----- Recalc Handler -----
+  // Recalc
   const handleRecalculate = async () => {
     try {
       const userId = currentUser?.uid;
@@ -376,11 +354,9 @@ export default function GAAAnalysisDashboard() {
           'xP and xG values have been updated for ' + targetDataset,
           'success'
         );
-        // If the server returns updated summary, you can set it:
         if (response.data.summary) {
           setSummary(response.data.summary);
         }
-        // Optionally refetch from Firestore
         await fetchUpdatedDataset(userId, targetDataset);
       }
     } catch (error) {
@@ -389,14 +365,12 @@ export default function GAAAnalysisDashboard() {
     }
   };
 
-  // ----- Firestore reload (if needed) -----
   const fetchUpdatedDataset = async (uid, datasetName) => {
     try {
       const loadResp = await axios.post('http://localhost:5001/load-games', {
         uid: uid,
       });
       const allGames = loadResp.data || [];
-      // filter for the specific dataset
       const filtered = allGames.filter(g => g.datasetName === datasetName);
       setGames(filtered);
     } catch (err) {
@@ -404,7 +378,6 @@ export default function GAAAnalysisDashboard() {
     }
   };
 
-  // Filter change handler
   const handleFilterChange = (field, value) => {
     setAppliedFilters((prev) => ({ ...prev, [field]: value }));
   };
@@ -512,10 +485,23 @@ export default function GAAAnalysisDashboard() {
                       'info'
                     );
                   },
-                  halfLineX: pitchWidth / 2,
-                  goalX: 0,
-                  goalY: pitchHeight / 2,
+                  halfLineX,
+                  goalX,
+                  goalY,
                 })}
+
+                {/* STEP 3: Actually draw the legend */}
+                {renderLegendOneSideShots(
+                  {
+                    goal: '#FFFF33',
+                    point: '#39FF14',
+                    miss: 'red',
+                    setPlayScore: '#39FF14',
+                    setPlayMiss: 'red',
+                  },
+                  xScale * (pitchWidth / 2), // stageWidth
+                  yScale * pitchHeight       // stageHeight
+                )}
               </Stage>
             </div>
           </PitchSection>
@@ -542,14 +528,14 @@ export default function GAAAnalysisDashboard() {
                   <p>2-Pointers: {tStats.twoPointers}</p>
                   <p>Avg Distance (m): {tStats.avgDistance}</p>
 
-                  {/* Scorers list */}
+                  {/* Example scorers list */}
                   <h4 style={{ marginTop: '1rem', color: '#fff' }}>Scorers</h4>
                   {Object.keys(scorersObj).length === 0 && (
                     <p style={{ margin: 0 }}>No scorers found</p>
                   )}
                   {Object.entries(scorersObj).map(([playerName, val]) => (
                     <p key={playerName} style={{ margin: 0 }}>
-                      {playerName}: 
+                      {playerName}:
                       {val.goals > 0 && ` ${val.goals} goal(s)`}
                       {val.points > 0 && ` ${val.points} point(s)`}
                     </p>

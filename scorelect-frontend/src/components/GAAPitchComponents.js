@@ -1,7 +1,8 @@
 // src/components/GAAPitchComponents.js
 import React from 'react';
-import { Layer, Rect, Line, Arc, Text, Circle, RegularPolygon } from 'react-konva';
+import { Layer, Group, Rect, Line, Arc, Text, Circle, RegularPolygon } from 'react-konva';
 import PropTypes from 'prop-types';
+
 
 // -- Example function #1 --
 export function translateShotToOneSide(shot, halfLineX, goalX, goalY) {
@@ -20,6 +21,64 @@ export function translateShotToLeftSide(shot, halfLineX) {
     }
     return { ...shot, x: newX };
   }
+
+  function renderLegendOneSideShots(colors, stageWidth, stageHeight) {
+    // 1) Define the legend items array
+    const legendItems = [
+      { label: 'Penalty Goal', color: '#FFFF00', hasWhiteBorder: true },
+      { label: 'Goal', color: colors.goal, hasWhiteBorder: false },
+      { label: 'Point', color: colors.point, hasWhiteBorder: false },
+      { label: 'Miss', color: colors.miss, hasWhiteBorder: false },
+      { label: 'SetPlay Score', color: colors.setPlayScore, hasWhiteBorder: true },
+      { label: 'SetPlay Miss', color: colors.setPlayMiss, hasWhiteBorder: true },
+    ];
+  
+    // 2) We'll define the size & positions for the legend box
+    const itemHeight = 20;
+    const legendWidth = 120;
+    const legendHeight = legendItems.length * itemHeight + 10; 
+    // We'll place it near bottom-right corner of the stage.
+  
+    return (
+      <Layer>
+        <Group x={stageWidth - legendWidth - 10} y={stageHeight - legendHeight - 10}>
+          {/* Background box */}
+          <Rect
+            x={0}
+            y={0}
+            width={legendWidth}
+            height={legendHeight}
+            fill="rgba(0,0,0,0.5)"
+            cornerRadius={5}
+          />
+          {legendItems.map((item, i) => {
+            const yPos = i * itemHeight + 10;
+            return (
+              <Group key={i}>
+                <Circle
+                  x={15}
+                  y={yPos}
+                  radius={5}
+                  fill={item.color}
+                  stroke={item.hasWhiteBorder ? '#fff' : null}
+                  strokeWidth={item.hasWhiteBorder ? 2 : 0}
+                />
+                <Text
+                  x={30}
+                  y={yPos - 6}
+                  text={item.label}
+                  fontSize={12}
+                  fill="#fff"
+                />
+              </Group>
+            );
+          })}
+        </Group>
+      </Layer>
+    );
+  }
+  
+  export { renderLegendOneSideShots };
 
 // -- Example function #3 --
 export function getShotCategory(actionStr) {

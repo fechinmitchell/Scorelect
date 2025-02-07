@@ -16,6 +16,7 @@ import './TeamDetails.css';
 import { 
   renderGAAPitch, 
   renderOneSidePitchShots, 
+  renderLegendOneSideShots,
   translateShotToOneSide, 
   getShotCategory 
 } from './GAAPitchComponents';
@@ -705,6 +706,17 @@ export default function TeamDetails() {
                 goalX: goalXRight,
                 goalY: goalY,
               })}
+              {renderLegendOneSideShots(
+                {
+                goal: colorGoal,
+                point: colorPoint,
+                miss: colorMiss,
+                setPlayScore: colorSetPlayScore,
+                setPlayMiss: colorSetPlayMiss
+                },
+                xScale * (pitchWidth / 2),   // stageWidth
+                yScale * pitchHeight         // stageHeight
+            )}
             </Stage>
           </div>
 

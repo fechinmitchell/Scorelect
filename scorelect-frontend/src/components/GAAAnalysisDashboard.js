@@ -4,17 +4,22 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import styled from 'styled-components';
-import { Stage, Layer, Group, Rect, Circle, Text } from 'react-konva';
-import Modal from 'react-modal'; // <-- IMPORTANT for the shot details modal
+import { Stage } from 'react-konva';
+import Modal from 'react-modal';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
 
-// Import your pitch functions
+// Import pitch renderers & legend
 import {
   renderGAAPitch,
   renderLegendOneSideShots,
   renderOneSidePitchShots,
 } from './GAAPitchComponents';
+
+// ----- Environment-based API URLs -----
+// If REACT_APP_API_URL is set to 'https://scorelect.onrender.com', we use that,
+// otherwise default to 'http://localhost:5001'
+const BASE_API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 // ---------- Default Colors & Pitch Size ----------
 const defaultPitchColor = '#006400';
@@ -54,7 +59,6 @@ const RecalcButton = styled.button`
   margin-bottom: 1rem;
   box-shadow: 0 3px 5px rgba(0,0,0,0.2);
   transition: background-color 0.3s ease;
-
   &:hover {
     background-color: #005bb5;
   }
@@ -105,14 +109,12 @@ const Tile = styled.div`
   padding: 1rem;
   text-align: center;
   box-shadow: 0 3px 5px rgba(0,0,0,0.2);
-
   h5 {
     margin-bottom: 0.5rem;
     font-weight: 600;
     color: #fff;
     font-size: 1rem;
   }
-
   p {
     font-size: 1rem;
     font-weight: bold;
@@ -144,7 +146,7 @@ const TeamStatsCard = styled.div`
   align-self: flex-start;
 `;
 
-// A small "flattenShots" helper
+// Helper to flatten shots
 function flattenShots(games = []) {
   return games.flatMap((game) => game.gameData || []);
 }
@@ -200,12 +202,6 @@ export default function GAAAnalysisDashboard() {
   // For displaying the shot details in a modal
   const [selectedShot, setSelectedShot] = useState(null);
 
-  // Colors
-  const [pitchColorState] = useState(defaultPitchColor);
-  const [lineColorState] = useState(defaultLineColor);
-  const [lightStripeColorState] = useState(defaultLightStripeColor);
-  const [darkStripeColorState] = useState(defaultDarkStripeColor);
-
   // We'll pick a bigger scale for half pitch
   const xScale = 6;
   const yScale = 6;
@@ -213,13 +209,13 @@ export default function GAAAnalysisDashboard() {
   const goalX = 0;
   const goalY = pitchHeight / 2;
 
-    // --------------- fix the handleFilterChange error ---------------
-    function handleFilterChange(field, value) {
-        setAppliedFilters((prev) => ({
-          ...prev,
-          [field]: value,
-        }));
-      }
+  // Filter-changer function
+  function handleFilterChange(field, value) {
+    setAppliedFilters((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  }
 
   // On mount, parse data
   useEffect(() => {
@@ -230,11 +226,12 @@ export default function GAAAnalysisDashboard() {
     }
     setGames(file.games || []);
 
+    // Build filter dropdown options
     const tSet = new Set();
     const pSet = new Set();
     const aSet = new Set();
-    (file.games || []).forEach(g => {
-      (g.gameData || []).forEach(sh => {
+    (file.games || []).forEach((g) => {
+      (g.gameData || []).forEach((sh) => {
         if (sh.team) tSet.add(sh.team);
         if (sh.playerName) pSet.add(sh.playerName);
         if (sh.action) aSet.add(sh.action);
@@ -247,32 +244,35 @@ export default function GAAAnalysisDashboard() {
     });
   }, [file, sport, navigate]);
 
-  // Recompute summary
+  // Recompute summary each time filters change
   useEffect(() => {
     let filteredGames = file?.games || [];
     if (appliedFilters.team) {
-      filteredGames = filteredGames.map(g => ({
+      filteredGames = filteredGames.map((g) => ({
         ...g,
-        gameData: (g.gameData || []).filter(sh => sh.team === appliedFilters.team)
+        gameData: (g.gameData || []).filter((sh) => sh.team === appliedFilters.team),
       }));
     }
     if (appliedFilters.player) {
-      filteredGames = filteredGames.map(g => ({
+      filteredGames = filteredGames.map((g) => ({
         ...g,
-        gameData: (g.gameData || []).filter(sh => sh.playerName === appliedFilters.player)
+        gameData: (g.gameData || []).filter((sh) => sh.playerName === appliedFilters.player),
       }));
     }
     if (appliedFilters.action) {
-      filteredGames = filteredGames.map(g => ({
+      filteredGames = filteredGames.map((g) => ({
         ...g,
-        gameData: (g.gameData || []).filter(sh => sh.action === appliedFilters.action)
+        gameData: (g.gameData || []).filter((sh) => sh.action === appliedFilters.action),
       }));
     }
-    filteredGames = filteredGames.filter(g => (g.gameData || []).length > 0);
+    filteredGames = filteredGames.filter((g) => (g.gameData || []).length > 0);
     const shots = flattenShots(filteredGames);
 
-    let totalShots = 0, totalGoals = 0, totalPoints = 0, totalMisses = 0;
-    shots.forEach(sh => {
+    let totalShots = 0,
+      totalGoals = 0,
+      totalPoints = 0,
+      totalMisses = 0;
+    shots.forEach((sh) => {
       totalShots++;
       const a = (sh.action || '').toLowerCase();
       if (a === 'goal' || a === 'penalty goal') totalGoals++;
@@ -287,7 +287,7 @@ export default function GAAAnalysisDashboard() {
   // Flatten allShots
   const allShots = flattenShots(games);
 
-  // Team aggregator
+  // Aggregator for team stats
   useEffect(() => {
     const aggregator = {};
     const scorersMap = {};
@@ -344,7 +344,6 @@ export default function GAAAnalysisDashboard() {
       ) {
         aggregator[tm].misses++;
       }
-      // etc. frees, 45, etc.
     });
 
     Object.keys(aggregator).forEach((tm) => {
@@ -360,16 +359,16 @@ export default function GAAAnalysisDashboard() {
     setTeamScorers(scorersMap);
   }, [allShots]);
 
-  // Recalc
+  // Handle Recalculate
   const handleRecalculate = async () => {
     try {
       const userId = currentUser?.uid;
       if (!userId) {
-        Swal.fire("Error", "No authenticated user ID found", "error");
+        Swal.fire('Error', 'No authenticated user ID found', 'error');
         return;
       }
-      const targetDataset = file?.datasetName || "DefaultDataset";
-      const trainingDataset = "GAA All Shots";
+      const targetDataset = file?.datasetName || 'DefaultDataset';
+      const trainingDataset = 'GAA All Shots';
 
       const payload = {
         user_id: userId,
@@ -377,8 +376,9 @@ export default function GAAAnalysisDashboard() {
         target_dataset: targetDataset,
       };
 
+      // --- Use the BASE_API_URL, which might be local or on Render ---
       const response = await axios.post(
-        'http://localhost:5001/recalculate-target-xpoints',
+        `${BASE_API_URL}/recalculate-target-xpoints`,
         payload
       );
 
@@ -399,28 +399,29 @@ export default function GAAAnalysisDashboard() {
     }
   };
 
+  // Reload from Firestore
   const fetchUpdatedDataset = async (uid, datasetName) => {
     try {
-      const loadResp = await axios.post('http://localhost:5001/load-games', {
+      const loadResp = await axios.post(`${BASE_API_URL}/load-games`, {
         uid: uid,
       });
       const allGames = loadResp.data || [];
-      const filtered = allGames.filter(g => g.datasetName === datasetName);
+      const filtered = allGames.filter((g) => g.datasetName === datasetName);
       setGames(filtered);
     } catch (err) {
-      console.error("Error fetching updated dataset:", err);
+      console.error('Error fetching updated dataset:', err);
     }
   };
 
-  // Handler for shot click -> open React Modal
+  // Handle shot click -> open React Modal
   const handleShotClick = (shot) => {
     setSelectedShot(shot);
   };
 
-  // Render the shot details inside a nice modal
+  // Render the shot details in a modal
   function renderSelectedShotDetails() {
     if (!selectedShot) return null;
-    
+
     const distance = selectedShot.distMeters
       ? selectedShot.distMeters.toFixed(1)
       : 'N/A';
@@ -545,7 +546,7 @@ export default function GAAAnalysisDashboard() {
                   },
                   xScale,
                   yScale,
-                  onShotClick: handleShotClick, // <-- Set our local handleShotClick
+                  onShotClick: handleShotClick,
                   halfLineX,
                   goalX,
                   goalY,
@@ -559,8 +560,8 @@ export default function GAAAnalysisDashboard() {
                     setPlayScore: '#39FF14',
                     setPlayMiss: 'red',
                   },
-                  xScale * (pitchWidth / 2), // stageWidth
-                  yScale * pitchHeight       // stageHeight
+                  xScale * (pitchWidth / 2),
+                  yScale * pitchHeight
                 )}
               </Stage>
             </div>
@@ -588,7 +589,6 @@ export default function GAAAnalysisDashboard() {
                   <p>2-Pointers: {tStats.twoPointers}</p>
                   <p>Avg Distance (m): {tStats.avgDistance}</p>
 
-                  {/* Example scorers list */}
                   <h4 style={{ marginTop: '1rem', color: '#fff' }}>Scorers</h4>
                   {Object.keys(scorersObj).length === 0 && (
                     <p style={{ margin: 0 }}>No scorers found</p>
@@ -616,12 +616,28 @@ export default function GAAAnalysisDashboard() {
 
       {/* Shot Details Modal */}
       <Modal
-        isOpen={!!selectedShot} // open if selectedShot is truthy
+        isOpen={!!selectedShot}
         onRequestClose={() => setSelectedShot(null)}
         style={customModalStyles}
         contentLabel="Shot Details Modal"
       >
-        {renderSelectedShotDetails()}
+        {selectedShot && (
+          <div style={{ lineHeight: '1.6' }}>
+            <h2 style={{ marginTop: 0, marginBottom: '1rem', color: '#ffc107' }}>
+              Shot Details
+            </h2>
+            <p><strong>Team:</strong> {selectedShot.team || 'N/A'}</p>
+            <p><strong>Player:</strong> {selectedShot.playerName || 'N/A'}</p>
+            <p><strong>Minute:</strong> {selectedShot.minute || 'N/A'}</p>
+            <p><strong>Action:</strong> {selectedShot.action || 'N/A'}</p>
+            <p><strong>Distance (m):</strong> {selectedShot.distMeters ? selectedShot.distMeters.toFixed(1) : 'N/A'}</p>
+            <p><strong>Foot:</strong> {selectedShot.foot || 'N/A'}</p>
+            <p><strong>Pressure:</strong> {selectedShot.pressure || 'N/A'}</p>
+            <p><strong>Position:</strong> {selectedShot.position || 'N/A'}</p>
+            <p><strong>xP:</strong> {typeof selectedShot.xPoints === 'number' ? selectedShot.xPoints.toFixed(2) : 'N/A'}</p>
+            <p><strong>xP_ADV:</strong> {typeof selectedShot.xP_adv === 'number' ? selectedShot.xP_adv.toFixed(2) : 'N/A'}</p>
+          </div>
+        )}
         <div style={{ textAlign: 'right', marginTop: '1rem' }}>
           <RecalcButton onClick={() => setSelectedShot(null)} style={{ backgroundColor: '#444' }}>
             Close

@@ -4,12 +4,17 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import styled from 'styled-components';
-import { Stage, Layer, Group, Rect, Circle, Text } from 'react-konva'; // <-- Important for the legend
+import { Stage, Layer, Group, Rect, Circle, Text } from 'react-konva';
+import Modal from 'react-modal'; // <-- IMPORTANT for the shot details modal
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
 
 // Import your pitch functions
-import { renderGAAPitch, renderLegendOneSideShots, renderOneSidePitchShots } from './GAAPitchComponents';
+import {
+  renderGAAPitch,
+  renderLegendOneSideShots,
+  renderOneSidePitchShots,
+} from './GAAPitchComponents';
 
 // ---------- Default Colors & Pitch Size ----------
 const defaultPitchColor = '#006400';
@@ -24,7 +29,7 @@ const pitchHeight = 88;
 const PageContainer = styled.div`
   background: #1c1c1c;
   min-height: 100vh;
-  color: #ffc107; 
+  color: #ffc107;
   padding: 2rem;
   font-family: 'Roboto', sans-serif;
 `;
@@ -49,6 +54,7 @@ const RecalcButton = styled.button`
   margin-bottom: 1rem;
   box-shadow: 0 3px 5px rgba(0,0,0,0.2);
   transition: background-color 0.3s ease;
+
   &:hover {
     background-color: #005bb5;
   }
@@ -111,7 +117,7 @@ const Tile = styled.div`
     font-size: 1rem;
     font-weight: bold;
     margin: 0;
-    color: #ffc107; 
+    color: #ffc107;
   }
 `;
 
@@ -138,10 +144,27 @@ const TeamStatsCard = styled.div`
   align-self: flex-start;
 `;
 
-// --- Flatten helper
+// A small "flattenShots" helper
 function flattenShots(games = []) {
   return games.flatMap((game) => game.gameData || []);
 }
+
+// For React Modal styling
+Modal.setAppElement('#root');
+const customModalStyles = {
+  content: {
+    maxWidth: '500px',
+    margin: 'auto',
+    padding: '20px',
+    borderRadius: '8px',
+    backgroundColor: '#2e2e2e',
+    color: '#fff',
+  },
+  overlay: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 9999,
+  },
+};
 
 // ---------- MAIN COMPONENT ----------
 export default function GAAAnalysisDashboard() {
@@ -174,6 +197,9 @@ export default function GAAAnalysisDashboard() {
   const [teamAggregatedData, setTeamAggregatedData] = useState({});
   const [teamScorers, setTeamScorers] = useState({});
 
+  // For displaying the shot details in a modal
+  const [selectedShot, setSelectedShot] = useState(null);
+
   // Colors
   const [pitchColorState] = useState(defaultPitchColor);
   const [lineColorState] = useState(defaultLineColor);
@@ -186,6 +212,14 @@ export default function GAAAnalysisDashboard() {
   const halfLineX = pitchWidth / 2;
   const goalX = 0;
   const goalY = pitchHeight / 2;
+
+    // --------------- fix the handleFilterChange error ---------------
+    function handleFilterChange(field, value) {
+        setAppliedFilters((prev) => ({
+          ...prev,
+          [field]: value,
+        }));
+      }
 
   // On mount, parse data
   useEffect(() => {
@@ -310,7 +344,7 @@ export default function GAAAnalysisDashboard() {
       ) {
         aggregator[tm].misses++;
       }
-      // etc.
+      // etc. frees, 45, etc.
     });
 
     Object.keys(aggregator).forEach((tm) => {
@@ -378,9 +412,43 @@ export default function GAAAnalysisDashboard() {
     }
   };
 
-  const handleFilterChange = (field, value) => {
-    setAppliedFilters((prev) => ({ ...prev, [field]: value }));
+  // Handler for shot click -> open React Modal
+  const handleShotClick = (shot) => {
+    setSelectedShot(shot);
   };
+
+  // Render the shot details inside a nice modal
+  function renderSelectedShotDetails() {
+    if (!selectedShot) return null;
+    
+    const distance = selectedShot.distMeters
+      ? selectedShot.distMeters.toFixed(1)
+      : 'N/A';
+    const xPVal = typeof selectedShot.xPoints === 'number'
+      ? selectedShot.xPoints.toFixed(2)
+      : 'N/A';
+    const xPAdvVal = typeof selectedShot.xP_adv === 'number'
+      ? selectedShot.xP_adv.toFixed(2)
+      : 'N/A';
+
+    return (
+      <div style={{ lineHeight: '1.6' }}>
+        <h2 style={{ marginTop: 0, marginBottom: '1rem', color: '#ffc107' }}>
+          Shot Details
+        </h2>
+        <p><strong>Team:</strong> {selectedShot.team || 'N/A'}</p>
+        <p><strong>Player:</strong> {selectedShot.playerName || 'N/A'}</p>
+        <p><strong>Minute:</strong> {selectedShot.minute || 'N/A'}</p>
+        <p><strong>Action:</strong> {selectedShot.action || 'N/A'}</p>
+        <p><strong>Distance (m):</strong> {distance}</p>
+        <p><strong>Foot:</strong> {selectedShot.foot || 'N/A'}</p>
+        <p><strong>Pressure:</strong> {selectedShot.pressure || 'N/A'}</p>
+        <p><strong>Position:</strong> {selectedShot.position || 'N/A'}</p>
+        <p><strong>xP:</strong> {xPVal}</p>
+        <p><strong>xP_ADV:</strong> {xPAdvVal}</p>
+      </div>
+    );
+  }
 
   return (
     <PageContainer>
@@ -453,7 +521,6 @@ export default function GAAAnalysisDashboard() {
       {/* Pitch + Team Stats side by side */}
       <Section>
         <PitchAndTeamStatsWrapper>
-
           {/* One-Sided Pitch on the left */}
           <PitchSection>
             <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -478,19 +545,12 @@ export default function GAAAnalysisDashboard() {
                   },
                   xScale,
                   yScale,
-                  onShotClick: (shot) => {
-                    Swal.fire(
-                      'Shot Details',
-                      `Action: ${shot.action}\nTeam: ${shot.team}`,
-                      'info'
-                    );
-                  },
+                  onShotClick: handleShotClick, // <-- Set our local handleShotClick
                   halfLineX,
                   goalX,
                   goalY,
                 })}
 
-                {/* STEP 3: Actually draw the legend */}
                 {renderLegendOneSideShots(
                   {
                     goal: '#FFFF33',
@@ -553,6 +613,21 @@ export default function GAAAnalysisDashboard() {
           Recalculate xP/xG for Target Dataset
         </RecalcButton>
       </div>
+
+      {/* Shot Details Modal */}
+      <Modal
+        isOpen={!!selectedShot} // open if selectedShot is truthy
+        onRequestClose={() => setSelectedShot(null)}
+        style={customModalStyles}
+        contentLabel="Shot Details Modal"
+      >
+        {renderSelectedShotDetails()}
+        <div style={{ textAlign: 'right', marginTop: '1rem' }}>
+          <RecalcButton onClick={() => setSelectedShot(null)} style={{ backgroundColor: '#444' }}>
+            Close
+          </RecalcButton>
+        </div>
+      </Modal>
     </PageContainer>
   );
 }

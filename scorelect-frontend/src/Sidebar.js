@@ -83,7 +83,7 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
   };
 
   const handleAnalysisAccess = () => {
-    if (userRole === 'free') {
+    if (userRole === '') {
       Swal.fire({
         title: 'Upgrade Required',
         text: 'Access to "Advanced Analysis" is a premium feature. Please upgrade your account to unlock this functionality.',

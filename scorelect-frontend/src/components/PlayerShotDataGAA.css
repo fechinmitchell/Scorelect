@@ -1,104 +1,145 @@
 /* src/components/PlayerShotDataGAA.css */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
 
+/* Import a font (Poppins) for a cleaner look */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap');
 
+/* Container around the Konva Stage */
 .stage-container {
-    display: flex;
-    justify-content: center;
-    margin: 20px auto; /* or any other style you prefer */
-  }
-  
-  .player-shot-data-container {
-    font-family: 'Poppins', sans-serif; /* or whichever font you imported */
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    background-color: #2e2e2e;
-    min-height: 100vh;
-    padding: 20px;
-  }
-  
-  
-  .back-button,
-  .export-button {
-    background-color: #007bff; /* Bootstrap primary color */
-    color: #fff;
-    border: none;
-    padding: 10px 15px;
-    margin: 0 5px;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background-color 0.3s;
-  }
-  
-  .back-button:hover,
-  .export-button:hover {
-    background-color: #0056b3; /* Darker blue on hover */
-  }
-  
-  .loading-container,
-  .error-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    color: #fff;
-  }
-  
-  .spinner {
-    border: 8px solid #f3f3f3; /* Light grey */
-    border-top: 8px solid #3498db; /* Blue */
-    border-radius: 50%;
-    width: 60px;
-    height: 60px;
-    animation: spin 2s linear infinite;
-  }
-  
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-  
-  .tooltip {
-    /* Additional tooltip styles can go here if needed */
-  }
-  
-  .player-shot-data-container h1 {
-    margin-bottom: 20px;
-  }
-  
-  .back-button,
-  .export-button {
-    font-size: 16px;
-  }
-  
+  display: flex;
+  justify-content: center;
+  margin: 20px auto;
+}
+
+/* Page container if you use it specifically for the PlayerShotDataGAA page */
+.player-shot-data-container {
+  font-family: 'Poppins', sans-serif; 
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: #2e2e2e;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+/* Navigation / export buttons */
+.back-button,
+.export-button {
+  background-color: #007bff; 
+  color: #fff;
+  border: none;
+  padding: 10px 15px;
+  margin: 0 5px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.back-button:hover,
+.export-button:hover {
+  background-color: #0056b3; 
+}
+
+
+
+/* --------------
+   ERROR CONTAINER
+   -------------- */
+.error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 80vh;  
+  text-align: center;
+  color: #fff;
+}
+
+/* Headings inside the page container */
+.player-shot-data-container h1 {
+  margin-bottom: 20px;
+}
+
+/* Buttons for nav or export with larger font */
+.back-button,
+.export-button {
+  font-size: 16px;
+}
+
+/* 
+   COLOR MODAL OR CUSTOM COLOR BUTTONS
+   if you use them 
+*/
 .color-modal-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+}
+
+.color-modal-header {
+  color: purple;
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.custom-color-button {
+  background-color: #333;
+  color: #fff;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: bold;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+  transition: background 0.3s ease;
+}
+
+.custom-color-button:hover {
+  background-color: #444;
+}
+
+
+.loading-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;             /* full viewport width */
+  height: 100vh;            /* full viewport height */
+  background: linear-gradient(135deg, #1a1a1a, #000); /* subtle dark gradient */
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;  /* center vertically */
+  align-items: center;      /* center horizontally */
+}
+
+.loading-text {
+  font-family: 'Poppins', sans-serif;
+  color: rgb(172, 73, 206);                   /* neon cyan color */
+  font-size: 1.6rem;
+  margin-bottom: 20px;
+  text-align: center;
+  text-shadow: 0 0 10px rgb(192, 68, 216), 0 0 20px rgb(206, 90, 230); /* glowing effect */
+  padding: 0 10px;
+}
+
+.spinner {
+  width: 60px;
+  height: 60px;
+  border: 6px solid rgba(255, 255, 255, 0.1);
+  border-top: 6px solid rgb(178, 52, 210);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  box-shadow: 0 0 15px rgb(161, 25, 206), 0 0 30px rgb(165, 92, 217);
+  margin-left: -50px;  /* shifts the spinner 50px to the left */
+}
+
+@keyframes spin {
+  0% {
+    transform: translateX(-50px) rotate(0deg);
   }
-  .color-modal-header {
-    color: purple;
-    text-align: center;
-    margin-bottom: 1rem;
+  100% {
+    transform: translateX(-50px) rotate(360deg);
   }
-  
-  .custom-color-button {
-    background-color: #333;
-    color: #fff;
-    border: none;
-    padding: 0.75rem 1.5rem;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 1rem;
-    font-weight: bold;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-    transition: background 0.3s ease;
-  }
-  
-  .custom-color-button:hover {
-    background-color: #444;
-  }
-  
-  
+}
+

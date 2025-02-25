@@ -10,6 +10,8 @@ import Modal from 'react-modal';
 import { Radar } from 'react-chartjs-2';
 import 'chart.js/auto';
 import styled from 'styled-components';
+import './PlayerShotDataGAA.css';
+
 
 // Import pitch renderers & helper from your GAAPitchComponents
 import {
@@ -194,12 +196,14 @@ const StyledButton = styled.button`
 // Loading & Error Components
 function LoadingIndicator() {
   return (
-    <div className="loading-container">
+    <div className="loading-screen">
+      {/* Text now appears above the spinner */}
+      <h2 className="loading-text">Loading player data...</h2>
       <div className="spinner"></div>
-      <p>Loading player data...</p>
     </div>
   );
 }
+
 function ErrorMessage({ message }) {
   return (
     <div className="error-container">

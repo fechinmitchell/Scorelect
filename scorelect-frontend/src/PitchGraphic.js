@@ -393,7 +393,7 @@ const PitchGraphic = () => {
 
     // Create handleOpenSaveModal
   const handleOpenSaveModal = () => {
-    if (userType === 'free') {
+    if (userType === '') {
       handlePremiumFeatureAccess('Save Game');
       return;
     }
@@ -442,7 +442,7 @@ const PitchGraphic = () => {
 const handleSaveGame = async () => {
   console.log('handleSaveGame called'); // Debugging statement
 
-  if (userType === 'free') {
+  if (userType === '') {
     console.log('User is free. Prompting for upgrade.'); // Debugging statement
     handlePremiumFeatureAccess('Save Game');
     return;

@@ -317,7 +317,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
         />
       )}
 
-      {userType === 'free' ? (
+      {userType === '' ? (
         <p>Please upgrade to access saved games.</p>
       ) : (
         <>

@@ -9,16 +9,15 @@ import Modal from 'react-modal';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
 
-// Import pitch renderers & legend
+// Import pitch renderers, legend and the translation helper
 import {
   renderGAAPitch,
   renderLegendOneSideShots,
   renderOneSidePitchShots,
+  translateShotToOneSide, // helper to transform shots
 } from './GAAPitchComponents';
 
 // ----- Environment-based API URLs -----
-// If REACT_APP_API_URL is set to 'https://scorelect.onrender.com', we use that,
-// otherwise default to 'http://localhost:5001'
 const BASE_API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 // ---------- Default Colors & Pitch Size ----------
@@ -146,7 +145,7 @@ const TeamStatsCard = styled.div`
   align-self: flex-start;
 `;
 
-// Helper to flatten shots
+// Helper to flatten shots from games
 function flattenShots(games = []) {
   return games.flatMap((game) => game.gameData || []);
 }
@@ -175,10 +174,12 @@ export default function GAAAnalysisDashboard() {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
+  // Add a new filter for match
   const [appliedFilters, setAppliedFilters] = useState({
     team: filters?.team || '',
     player: filters?.player || '',
-    action: filters?.action || ''
+    action: filters?.action || '',
+    match: filters?.match || '', // NEW: match filter
   });
 
   const [summary, setSummary] = useState({
@@ -188,10 +189,12 @@ export default function GAAAnalysisDashboard() {
     totalMisses: 0,
   });
 
+  // Add matches to filterOptions
   const [filterOptions, setFilterOptions] = useState({
     teams: [],
     players: [],
     actions: [],
+    matches: [], // NEW: match options
   });
 
   const [games, setGames] = useState([]);
@@ -217,7 +220,7 @@ export default function GAAAnalysisDashboard() {
     }));
   }
 
-  // On mount, parse data
+  // On mount, parse data and build filter dropdown options
   useEffect(() => {
     if (!file || sport !== 'GAA') {
       Swal.fire('No Data', 'Invalid or no GAA dataset found.', 'error')
@@ -226,27 +229,42 @@ export default function GAAAnalysisDashboard() {
     }
     setGames(file.games || []);
 
-    // Build filter dropdown options
+    // Build filter dropdown options from both games and shots
     const tSet = new Set();
     const pSet = new Set();
     const aSet = new Set();
+    const mSet = new Set(); // NEW: match filter options
+
+    // Iterate over games for match-level info...
     (file.games || []).forEach((g) => {
+      if (g.match) mSet.add(g.match);
+      // Also build options from gameData for team, player and action
       (g.gameData || []).forEach((sh) => {
         if (sh.team) tSet.add(sh.team);
         if (sh.playerName) pSet.add(sh.playerName);
         if (sh.action) aSet.add(sh.action);
       });
     });
+
     setFilterOptions({
       teams: Array.from(tSet),
       players: Array.from(pSet),
       actions: Array.from(aSet),
+      matches: Array.from(mSet), // NEW
     });
   }, [file, sport, navigate]);
 
   // Recompute summary each time filters change
   useEffect(() => {
+    // Start with all games
     let filteredGames = file?.games || [];
+
+    // NEW: If a match filter is applied, filter games by match.
+    if (appliedFilters.match) {
+      filteredGames = filteredGames.filter((g) => g.match === appliedFilters.match);
+    }
+
+    // Then apply shot-level filters for team, player, and action.
     if (appliedFilters.team) {
       filteredGames = filteredGames.map((g) => ({
         ...g,
@@ -313,6 +331,7 @@ export default function GAAAnalysisDashboard() {
       }
 
       aggregator[tm].totalShots++;
+      // Use shot.distMeters if available
       const dist = shot.distMeters || 0;
       aggregator[tm].avgDistance += dist;
 
@@ -376,7 +395,6 @@ export default function GAAAnalysisDashboard() {
         target_dataset: targetDataset,
       };
 
-      // --- Use the BASE_API_URL, which might be local or on Render ---
       const response = await axios.post(
         `${BASE_API_URL}/recalculate-target-xpoints`,
         payload
@@ -413,12 +431,14 @@ export default function GAAAnalysisDashboard() {
     }
   };
 
-  // Handle shot click -> open React Modal
+  // Handle shot click -> open React Modal.
+  // We transform the shot so it includes distMeters (and other properties) before displaying it.
   const handleShotClick = (shot) => {
-    setSelectedShot(shot);
+    const transformedShot = translateShotToOneSide(shot, halfLineX, goalX, goalY);
+    setSelectedShot(transformedShot);
   };
 
-  // Render the shot details in a modal
+  // Render the shot details in a modal.
   function renderSelectedShotDetails() {
     if (!selectedShot) return null;
 
@@ -460,6 +480,19 @@ export default function GAAAnalysisDashboard() {
         <FiltersAndStatsContainer>
           {/* Filters */}
           <FiltersContainer>
+            {/* Match Filter */}
+            <FilterSelect
+              value={appliedFilters.match}
+              onChange={(e) => handleFilterChange('match', e.target.value)}
+            >
+              <option value="">All Matches</option>
+              {filterOptions.matches.map((match) => (
+                <option key={match} value={match}>
+                  {match}
+                </option>
+              ))}
+            </FilterSelect>
+            {/* Team Filter */}
             <FilterSelect
               value={appliedFilters.team}
               onChange={(e) => handleFilterChange('team', e.target.value)}
@@ -471,7 +504,7 @@ export default function GAAAnalysisDashboard() {
                 </option>
               ))}
             </FilterSelect>
-
+            {/* Player Filter */}
             <FilterSelect
               value={appliedFilters.player}
               onChange={(e) => handleFilterChange('player', e.target.value)}
@@ -483,7 +516,7 @@ export default function GAAAnalysisDashboard() {
                 </option>
               ))}
             </FilterSelect>
-
+            {/* Action Filter */}
             <FilterSelect
               value={appliedFilters.action}
               onChange={(e) => handleFilterChange('action', e.target.value)}
@@ -608,7 +641,7 @@ export default function GAAAnalysisDashboard() {
       </Section>
 
       {/* Recalc Button at bottom */}
-      <div style={{ textAlign: 'center', marginTop: '20px'}}>
+      <div style={{ textAlign: 'center', marginTop: '20px' }}>
         <RecalcButton onClick={handleRecalculate}>
           Recalculate xP/xG for Target Dataset
         </RecalcButton>
@@ -630,12 +663,25 @@ export default function GAAAnalysisDashboard() {
             <p><strong>Player:</strong> {selectedShot.playerName || 'N/A'}</p>
             <p><strong>Minute:</strong> {selectedShot.minute || 'N/A'}</p>
             <p><strong>Action:</strong> {selectedShot.action || 'N/A'}</p>
-            <p><strong>Distance (m):</strong> {selectedShot.distMeters ? selectedShot.distMeters.toFixed(1) : 'N/A'}</p>
+            <p>
+              <strong>Distance (m):</strong>{' '}
+              {selectedShot.distMeters ? selectedShot.distMeters.toFixed(1) : 'N/A'}
+            </p>
             <p><strong>Foot:</strong> {selectedShot.foot || 'N/A'}</p>
             <p><strong>Pressure:</strong> {selectedShot.pressure || 'N/A'}</p>
             <p><strong>Position:</strong> {selectedShot.position || 'N/A'}</p>
-            <p><strong>xP:</strong> {typeof selectedShot.xPoints === 'number' ? selectedShot.xPoints.toFixed(2) : 'N/A'}</p>
-            <p><strong>xP_ADV:</strong> {typeof selectedShot.xP_adv === 'number' ? selectedShot.xP_adv.toFixed(2) : 'N/A'}</p>
+            <p>
+              <strong>xP:</strong>{' '}
+              {typeof selectedShot.xPoints === 'number'
+                ? selectedShot.xPoints.toFixed(2)
+                : 'N/A'}
+            </p>
+            <p>
+              <strong>xP_ADV:</strong>{' '}
+              {typeof selectedShot.xP_adv === 'number'
+                ? selectedShot.xP_adv.toFixed(2)
+                : 'N/A'}
+            </p>
           </div>
         )}
         <div style={{ textAlign: 'right', marginTop: '1rem' }}>

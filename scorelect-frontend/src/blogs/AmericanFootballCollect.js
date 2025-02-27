@@ -58,31 +58,26 @@ const AmericanFootballCollect = () => {
       label: '1. Collect Team Stats',
       description:
         'Seamlessly collect and manage your team\'s sports data to maximize performance.',
-      image: "/images/step1_af_collect.png",
     },
     {
       label: '2. Create Training Sessions',
       description:
         'Design and organize effective training sessions tailored to your team\'s needs.',
-      image: "/images/step2_af_collect.png",
     },
     {
       label: '3. Find Team Stats',
       description:
         'Access comprehensive team statistics to inform your coaching strategies.',
-      image: "/images/step3_af_collect.png",
     },
     {
       label: '4. Scout and Analyze Players',
       description:
         'Evaluate and analyze player performance to make informed scouting decisions.',
-      image: "/images/step4_af_collect.png",
     },
     {
       label: '5. Export Raw Data',
       description:
         'After the game, export your data for further analysis. Free users are limited to one export per day, while Scorelect Pro users enjoy unlimited exports.',
-      image: "/images/step5_af_collect.png",
     },
   ];
 
@@ -100,8 +95,6 @@ const AmericanFootballCollect = () => {
       <Typography variant="subtitle1" color="#FFFFFF" paragraph>
         A comprehensive guide to collecting and analyzing American Football stats for non-professional games using Scorelect.
       </Typography>
-
-      <Image src="/images/american_football_stats_banner.jpg" alt="American Football Statistics" />
 
       <Typography variant="h5" gutterBottom style={{ color: '#FFFFFF' }}>
         Why Collect American Football Statistics?

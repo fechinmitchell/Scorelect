@@ -67,31 +67,26 @@ const SoccerCollect = () => {
       label: '1. Collect Team Stats',
       description:
         'Seamlessly collect and manage your team\'s sports data to maximize performance.',
-      image: step1SoccerCollect,
     },
     {
       label: '2. Create Training Sessions',
       description:
         'Design and organize effective training sessions tailored to your team\'s needs.',
-      image: step2SoccerCollect,
     },
     {
       label: '3. Find Team Stats',
       description:
         'Access comprehensive team statistics to inform your coaching strategies.',
-      image: step3SoccerCollect,
     },
     {
       label: '4. Scout and Analyze Players',
       description:
         'Evaluate and analyze player performance to make informed scouting decisions.',
-      image: step4SoccerCollect,
     },
     {
       label: '5. Export Raw Data',
       description:
         'After the game, export the data for further analysis. Free users have a limit of one export per day, while Scorelect Pro users enjoy unlimited exports.',
-      image: step5SoccerCollect,
     },
   ];
 

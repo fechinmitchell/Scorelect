@@ -58,31 +58,26 @@ const BballCollect = () => {
       label: '1. Collect Team Stats',
       description:
         'Seamlessly collect and manage your team\'s sports data to maximize performance.',
-      image: "/images/step1_bball_collect.png",
     },
     {
       label: '2. Create Training Sessions',
       description:
         'Design and organize effective training sessions tailored to your team\'s needs.',
-      image: "/images/step2_bball_collect.png",
     },
     {
       label: '3. Find Team Stats',
       description:
         'Access comprehensive team statistics to inform your coaching strategies.',
-      image: "/images/step3_bball_collect.png",
     },
     {
       label: '4. Scout and Analyze Players',
       description:
         'Evaluate and analyze player performance to make informed scouting decisions.',
-      image: "/images/step4_bball_collect.png",
     },
     {
       label: '5. Export Raw Data',
       description:
         'After the game, export your data for further analysis. Free users are limited to one export per day, while Scorelect Pro users enjoy unlimited exports.',
-      image: "/images/step5_bball_collect.png",
     },
   ];
 
@@ -100,8 +95,6 @@ const BballCollect = () => {
       <Typography variant="subtitle1" color="#FFFFFF" paragraph>
         A comprehensive guide to collecting and analyzing basketball stats for non-professional games using Scorelect.
       </Typography>
-
-      <Image src="/images/basketball_stats_banner.jpg" alt="Basketball Statistics" />
 
       <Typography variant="h5" gutterBottom style={{ color: '#FFFFFF' }}>
         Why Collect Basketball Statistics?

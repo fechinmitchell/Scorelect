@@ -193,16 +193,21 @@ const PitchGraphic = () => {
     );
 
     const handleCustomDownload = async () => {
-      // 1) If user is free and no downloads remain, prompt for upgrade
       if (userType === 'free' && downloadsRemaining <= 0) {
         handlePremiumFeatureAccess('Download Data');
         return;
       }
-    
-      // 2) Decrement downloads remaining if user is free
+
       if (userType === 'free') {
         setDownloadsRemaining(downloadsRemaining - 1);
-        // Also update Firestore or localStorage if needed
+        const auth = getAuth();
+        const user = auth.currentUser;
+        if (user) {
+          const docRef = doc(firestore, 'users', user.uid);
+          await setDoc(docRef, { downloadsRemaining: downloadsRemaining - 1 }, { merge: true });
+        } else {
+          localStorage.setItem('downloadCount', (downloadsRemaining - 1).toString());
+        }
       }
     
       // 3) Build the data object (this is used only for the JSON export)
@@ -715,24 +720,25 @@ const handleSaveToDataset = async () => {
             const userData = docSnap.data();
             setUserType(userData.role || 'free'); // Changed from userData.userType to userData.role
 
-            // Handle downloadsRemaining as before
+            // Handle downloadsRemaining
             const lastDownloadDate = userData.lastDownloadDate;
             const today = new Date().toLocaleDateString();
             if (lastDownloadDate === today) {
               setDownloadsRemaining(userData.downloadsRemaining);
             } else {
-              setDoc(docRef, { lastDownloadDate: today, downloadsRemaining: 1 }, { merge: true });
-              setDownloadsRemaining(1);
+              setDoc(docRef, { lastDownloadDate: today, downloadsRemaining: FREE_USER_DOWNLOAD_LIMIT }, { merge: true });
+              setDownloadsRemaining(FREE_USER_DOWNLOAD_LIMIT);
             }
+            
           } else {
             // If user document doesn't exist, create it with default values
             setDoc(docRef, {
               role: 'free', // Changed from userType to role
               lastDownloadDate: new Date().toLocaleDateString(),
-              downloadsRemaining: 1,
+              downloadsRemaining: FREE_USER_DOWNLOAD_LIMIT,
             });
             setUserType('free');
-            setDownloadsRemaining(1);
+            setDownloadsRemaining(FREE_USER_DOWNLOAD_LIMIT);
           }
         });
 
@@ -745,11 +751,11 @@ const handleSaveToDataset = async () => {
         const lastDownloadDate = localStorage.getItem('lastDownloadDate');
         const today = new Date().toLocaleDateString();
         if (lastDownloadDate === today) {
-          setDownloadsRemaining(parseInt(storedDownloadCount, 10) || 0);
+          setDownloadsRemaining(parseInt(storedDownloadCount, 10) || FREE_USER_DOWNLOAD_LIMIT);
         } else {
           localStorage.setItem('lastDownloadDate', today);
-          localStorage.setItem('downloadCount', '1');
-          setDownloadsRemaining(1);
+          localStorage.setItem('downloadCount', FREE_USER_DOWNLOAD_LIMIT.toString());
+          setDownloadsRemaining(FREE_USER_DOWNLOAD_LIMIT);
         }
       }
     });
@@ -1245,12 +1251,24 @@ const handleSaveToDataset = async () => {
     });
   };
 
+  const FREE_USER_DOWNLOAD_LIMIT = 10; // Set the new free download limit
+
   const handleDownloadData = async () => {
     if (userType === 'free') {
       if (downloadsRemaining <= 0) {
-        handlePremiumFeatureAccess('Download Data');
-        return;
+        // Optionally reset downloads every month
+        const lastResetDate = localStorage.getItem('lastResetDate');
+        const today = new Date().toISOString().split('T')[0];
+  
+        if (lastResetDate !== today) {
+          setDownloadsRemaining(FREE_USER_DOWNLOAD_LIMIT);
+          localStorage.setItem('lastResetDate', today);
+        } else {
+          handlePremiumFeatureAccess('Download Data');
+          return;
+        }
       }
+  
       // Decrease downloadsRemaining
       setDownloadsRemaining(downloadsRemaining - 1);
   
@@ -1266,7 +1284,6 @@ const handleSaveToDataset = async () => {
     }
   
     // Proceed with downloading data
-  
     const datasetName = selectedDataset || newDatasetName || 'My Dataset';
   
     const downloadData = {
@@ -1297,7 +1314,7 @@ const handleSaveToDataset = async () => {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  };  
+  };
   
 
   const handleDownloadFilteredData = async () => {
@@ -1569,7 +1586,20 @@ const handleSaveToDataset = async () => {
         <div className="button-container">
           <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
           <button className="button" onClick={handleUndoLastMarker}>Undo Last Marker</button>
-          <button className="button" onClick={() => { if (userType === 'free' && downloadsRemaining <= 0) { handlePremiumFeatureAccess('Download Data'); return; } setIsCustomDownloadModalOpen(true); }} > {userType === 'free' ? `Download Data (${downloadsRemaining} left)` : 'Download Data (Unlimited)'} </button>
+          <button 
+            className="button" 
+            onClick={() => { 
+              if (userType === 'free' && downloadsRemaining <= 0) { 
+                handlePremiumFeatureAccess('Download Data'); 
+                return; 
+              } 
+              setIsCustomDownloadModalOpen(true); 
+            }} 
+          >
+            {userType === 'free' 
+              ? `Download Data (${downloadsRemaining} download${downloadsRemaining === 1 ? '' : 's'} left)` 
+              : 'Download Data (Unlimited)'}
+          </button>
           <button className="button" onClick={toggleDownloadModal}>Download Filtered Data</button>
           <button className="button" onClick={toggleScreenshotModal}>Download Screenshot</button>
           <button className="button" onClick={toggleModal}>Review Data</button>

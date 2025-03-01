@@ -793,11 +793,27 @@ const handleSaveToDataset = async () => {
   };
 
     const handlePlayerClick = (team, playerName, playerNumber) => {
+    // Update form data with player info
     setFormData({
       ...formData,
       team: team,
       playerName: playerName,
       player: playerNumber,
+    });
+    
+    // Make sure an action type is selected if none is currently selected
+    if (!actionType) {
+      // Set a default action type (first one in the list)
+      setActionType(actionButtons[0]);
+    }
+    
+    // Optional: Add visual feedback to show the player was selected
+    Swal.fire({
+      title: 'Player Selected',
+      text: `${playerName} (${playerNumber}) from ${team} selected. Now click on the pitch to record an action.`,
+      icon: 'success',
+      timer: 2000,
+      showConfirmButton: false
     });
   };
 

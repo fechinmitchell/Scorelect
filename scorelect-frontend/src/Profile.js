@@ -93,7 +93,7 @@ const Profile = ({ onLogout }) => {
       )}
 
       {/* Earnings Section */}
-      <h3>Earnings</h3>
+      {/* <h3>Earnings</h3>
       <p>
         <strong>Total Earnings:</strong> ${userData.earnings ? userData.earnings.toFixed(2) : '0.00'}
       </p>
@@ -109,7 +109,7 @@ const Profile = ({ onLogout }) => {
         <button onClick={handleWithdraw} className="withdraw-button">
           Withdraw
         </button>
-      </div>
+      </div> */}
     </div>
   );
 };

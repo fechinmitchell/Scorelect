@@ -868,21 +868,24 @@ const handleSaveToDataset = async () => {
     const [selectedPlayer, setSelectedPlayer] = useState(null);
 
     // Modified handlePlayerClick function - remove Swal notification
-    const handlePlayerClick = (team, playerName, playerNumber) => {
+    const handlePlayerClick = (teamName, playerName, playerNumber) => {
       // Update form data with player info
       setFormData({
         ...formData,
-        team: team,
+        team: teamName,
         playerName: playerName,
         player: playerNumber,
       });
       
       // Save the selected player info for highlighting
-      setSelectedPlayer({ team, playerName, playerNumber });
+      setSelectedPlayer({ 
+        team: teamName, 
+        playerName: playerName, 
+        playerNumber: playerNumber 
+      });
       
       // Make sure an action type is selected if none is currently selected
       if (!actionType) {
-        // Set a default action type (first one in the list)
         setActionType(actionButtons[0]);
       }
     };
@@ -1568,9 +1571,9 @@ const handleSaveToDataset = async () => {
       <div className="team-players">
         {teamPlayers.map((player, index) => (
           <button
-            key={index}
+            key={`${teamName}-${index}`}
             onClick={() => handlePlayerClick(teamName, player.name, index + 1)}
-            style={playerButtonStyle(player, teamName)}
+            style={playerButtonStyle(player, teamName, index)}
             className="player-button"
           >
             {displayPlayerNumber && (index + 1)} {displayPlayerName && player.name}
@@ -1629,17 +1632,18 @@ const handleSaveToDataset = async () => {
   };
 
   // Add this style function for player buttons
-  const playerButtonStyle = (player, teamName) => {
+  const playerButtonStyle = (player, teamName, index) => {
+    // Check if this player button is selected by comparing team and player number
     const isSelected = selectedPlayer && 
       selectedPlayer.team === teamName && 
-      selectedPlayer.playerNumber === player.number;
+      selectedPlayer.playerNumber === (index + 1);
     
     const teamColor = teamName === team1 ? team1Color : team2Color;
     
     return {
       backgroundColor: isSelected ? '#a020f0' : teamColor.main,
       color: isSelected ? '#fff' : teamColor.secondary,
-      boxShadow: isSelected ? '0 0 8px 2px rgba(0, 255, 0, 0.4)' : 'none',
+      boxShadow: isSelected ? '0 0 8px 2px rgba(0, 255, 0, 0.4)' : 'none', // Green glow when active
       border: isSelected ? '2px solid #00ff00' : `2px solid ${teamColor.secondary}`,
       padding: '10px',
       borderRadius: '5px',

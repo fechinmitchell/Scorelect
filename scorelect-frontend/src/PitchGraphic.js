@@ -1855,7 +1855,7 @@ const handleSaveToDataset = async () => {
     style={{
       overlay: {
         backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        zIndex: 1000
+        zIndex: 1000,
       },
       content: {
         position: 'absolute',
@@ -1868,42 +1868,66 @@ const handleSaveToDataset = async () => {
         background: '#2e2e2e',
         borderRadius: '10px',
         padding: '20px',
-        width: '500px',  // Increased width
+        width: '500px',
         maxHeight: '90vh',
         overflow: 'auto',
         display: 'flex',
-        flexDirection: 'column'
-      }
+        flexDirection: 'column',
+      },
     }}
   >
-    <div className="dialog-header" style={{ marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div
+      className="dialog-header"
+      style={{
+        marginBottom: '15px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}
+    >
       <h3 style={{ color: 'white' }}>Enter Action Details</h3>
-      <button className="close-button" onClick={handleCloseDialog} style={{ background: 'none', border: 'none', color: 'white', fontSize: '20px', cursor: 'pointer' }}>
+      <button
+        className="close-button"
+        onClick={handleCloseDialog}
+        style={{
+          background: 'none',
+          border: 'none',
+          color: 'white',
+          fontSize: '20px',
+          cursor: 'pointer',
+        }}
+      >
         &#10005;
       </button>
     </div>
 
-    <div style={{ 
-      display: 'grid', 
-      gridTemplateColumns: '1fr', 
-      gap: '10px',
-      width: '100%'
-    }}>
-      {/* Action */}
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr',
+        gap: '10px',
+        width: '100%',
+      }}
+    >
+      {/* Action Field */}
       <div>
         <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Action:</label>
-        <select 
-          name="action" 
-          value={formData.action} 
+        <select
+          name="action"
+          value={formData.action}
           onChange={handleChange}
           style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
         >
           <option value="custom">Add New Action</option>
           {recentActions.map((action) => (
-            <option key={action} value={action}>{action}</option>
+            <option key={action} value={action}>
+              {action}
+            </option>
           ))}
           {actionCodes.map((action) => (
-            <option key={action} value={action}>{action}</option>
+            <option key={action} value={action}>
+              {action}
+            </option>
           ))}
         </select>
         {formData.action === 'custom' && (
@@ -1913,21 +1937,22 @@ const handleSaveToDataset = async () => {
               placeholder="New Action Name"
               name="customAction"
               value={customInput.action}
-              onChange={(e) => setCustomInput({ ...customInput, action: e.target.value })}
+              onChange={(e) =>
+                setCustomInput({ ...customInput, action: e.target.value })
+              }
               style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
             />
           </div>
         )}
       </div>
 
-      {/* Two-column layout for shorter fields */}
+      {/* Team & Minute */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-        {/* Team */}
         <div>
           <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Team:</label>
-          <select 
-            name="team" 
-            value={formData.team} 
+          <select
+            name="team"
+            value={formData.team}
             onChange={handleChange}
             style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
           >
@@ -1937,14 +1962,29 @@ const handleSaveToDataset = async () => {
                 {team2 && <option value={team2}>{team2}</option>}
               </>
             ) : (
-              initialCounties.map(county => (
-                <option key={county} value={county}>{county}</option>
+              initialCounties.map((county) => (
+                <option key={county} value={county}>
+                  {county}
+                </option>
               ))
             )}
+            <option value="custom">Add New Team</option>
           </select>
+          {formData.team === 'custom' && (
+            <div style={{ marginTop: '5px' }}>
+              <input
+                type="text"
+                placeholder="New Team Name"
+                name="customTeam"
+                value={customInput.team}
+                onChange={(e) =>
+                  setCustomInput({ ...customInput, team: e.target.value })
+                }
+                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+              />
+            </div>
+          )}
         </div>
-
-        {/* Minute */}
         <div>
           <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Minute:</label>
           <input
@@ -1957,7 +1997,7 @@ const handleSaveToDataset = async () => {
         </div>
       </div>
 
-      {/* Player section */}
+      {/* Player Info */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
         <div>
           <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Player Name:</label>
@@ -1981,82 +2021,133 @@ const handleSaveToDataset = async () => {
         </div>
       </div>
 
-      {/* Position, Pressure, Foot in a grid */}
+      {/* Position & Pressure */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
         <div>
           <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Position:</label>
-          <select 
-            name="position" 
-            value={formData.position} 
+          <select
+            name="position"
+            value={formData.position}
             onChange={handleChange}
             style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
           >
             <option value="custom">Add New Position</option>
-            {positions.map(position => (
-              <option key={position} value={position}>{position}</option>
+            {positions.map((position) => (
+              <option key={position} value={position}>
+                {position}
+              </option>
             ))}
           </select>
+          {formData.position === 'custom' && (
+            <div style={{ marginTop: '5px' }}>
+              <input
+                type="text"
+                placeholder="New Position"
+                name="customPosition"
+                value={customInput.position}
+                onChange={(e) =>
+                  setCustomInput({ ...customInput, position: e.target.value })
+                }
+                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+              />
+            </div>
+          )}
         </div>
         <div>
           <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Pressure:</label>
-          <select 
-            name="pressure" 
-            value={formData.pressure} 
+          <select
+            name="pressure"
+            value={formData.pressure}
             onChange={handleChange}
             style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
           >
             <option value="custom">Add New Pressure</option>
-            {pressures.map(pressure => (
-              <option key={pressure} value={pressure}>{pressure}</option>
+            {pressures.map((pressure) => (
+              <option key={pressure} value={pressure}>
+                {pressure}
+              </option>
             ))}
           </select>
+          {formData.pressure === 'custom' && (
+            <div style={{ marginTop: '5px' }}>
+              <input
+                type="text"
+                placeholder="New Pressure"
+                name="customPressure"
+                value={customInput.pressure}
+                onChange={(e) =>
+                  setCustomInput({ ...customInput, pressure: e.target.value })
+                }
+                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+              />
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Foot/Hand */}
       <div>
         <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Foot/Hand:</label>
-        <select 
-          name="foot" 
-          value={formData.foot} 
+        <select
+          name="foot"
+          value={formData.foot}
           onChange={handleChange}
           style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
         >
           <option value="custom">Add New Option</option>
-          {feet.map(foot => (
-            <option key={foot} value={foot}>{foot}</option>
+          {feet.map((foot) => (
+            <option key={foot} value={foot}>
+              {foot}
+            </option>
           ))}
         </select>
+        {formData.foot === 'custom' && (
+          <div style={{ marginTop: '5px' }}>
+            <input
+              type="text"
+              placeholder="New Foot/Hand Option"
+              name="customFoot"
+              value={customInput.foot}
+              onChange={(e) =>
+                setCustomInput({ ...customInput, foot: e.target.value })
+              }
+              style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+            />
+          </div>
+        )}
       </div>
 
-      {/* Buttons */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'flex-end', 
-        gap: '10px', 
-        marginTop: '20px' 
-      }}>
-        <button 
-          onClick={handleCloseDialog} 
-          style={{ 
-            padding: '8px 16px', 
-            background: '#444', 
-            color: 'white', 
-            border: 'none', 
+      {/* Modal Buttons */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: '10px',
+          marginTop: '20px',
+        }}
+      >
+        <button
+          onClick={handleCloseDialog}
+          style={{
+            padding: '8px 16px',
+            background: '#444',
+            color: 'white',
+            border: 'none',
             borderRadius: '4px',
-            cursor: 'pointer'
+            cursor: 'pointer',
           }}
         >
           Cancel
         </button>
-        <button 
-          onClick={handleFormSubmit} 
-          style={{ 
-            padding: '8px 16px', 
-            background: '#8e44ad', 
-            color: 'white', 
-            border: 'none', 
+        <button
+          onClick={handleFormSubmit}
+          style={{
+            padding: '8px 16px',
+            background: '#8e44ad',
+            color: 'white',
+            border: 'none',
             borderRadius: '4px',
-            cursor: 'pointer'
+            cursor: 'pointer',
           }}
         >
           Submit
@@ -2066,224 +2157,315 @@ const handleSaveToDataset = async () => {
   </Modal>
 )}
 
-    {openLineDialog && (
-      <Modal
-        isOpen={openLineDialog}
-        onRequestClose={handleCloseLineDialog}
-        contentLabel="Line Action Details"
+{openLineDialog && (
+  <Modal
+    isOpen={openLineDialog}
+    onRequestClose={handleCloseLineDialog}
+    contentLabel="Line Action Details"
+    style={{
+      overlay: {
+        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+        zIndex: 1000,
+      },
+      content: {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        right: 'auto',
+        bottom: 'auto',
+        transform: 'translate(-50%, -50%)',
+        marginRight: '-50%',
+        background: '#2e2e2e',
+        borderRadius: '10px',
+        padding: '20px',
+        width: '500px',
+        maxHeight: '90vh',
+        overflow: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+      },
+    }}
+  >
+    <div
+      className="dialog-header"
+      style={{
+        marginBottom: '15px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}
+    >
+      <h3 style={{ color: 'white' }}>Enter Action Details for Line</h3>
+      <button
+        className="close-button"
+        onClick={handleCloseLineDialog}
         style={{
-          overlay: {
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            zIndex: 1000
-          },
-          content: {
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            right: 'auto',
-            bottom: 'auto',
-            transform: 'translate(-50%, -50%)',
-            marginRight: '-50%',
-            background: '#2e2e2e',
-            borderRadius: '10px',
-            padding: '20px',
-            width: '500px',
-            maxHeight: '90vh',
-            overflow: 'auto',
-            display: 'flex',
-            flexDirection: 'column'
-          }
+          background: 'none',
+          border: 'none',
+          color: 'white',
+          fontSize: '20px',
+          cursor: 'pointer',
         }}
       >
-        <div className="dialog-header" style={{ marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ color: 'white' }}>Enter Action Details for Line</h3>
-          <button className="close-button" onClick={handleCloseLineDialog} style={{ background: 'none', border: 'none', color: 'white', fontSize: '20px', cursor: 'pointer' }}>
-            &#10005;
-          </button>
-        </div>
+        &#10005;
+      </button>
+    </div>
 
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: '1fr', 
-          gap: '10px',
-          width: '100%'
-        }}>
-          {/* Action */}
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Action:</label>
-            <select 
-              name="action" 
-              value={formData.action} 
-              onChange={handleChange}
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr',
+        gap: '10px',
+        width: '100%',
+      }}
+    >
+      {/* Action Field */}
+      <div>
+        <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Action:</label>
+        <select
+          name="action"
+          value={formData.action}
+          onChange={handleChange}
+          style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+        >
+          <option value="custom">Add New Action</option>
+          {recentActions.map((action) => (
+            <option key={action} value={action}>
+              {action}
+            </option>
+          ))}
+          {actionCodes.map((action) => (
+            <option key={action} value={action}>
+              {action}
+            </option>
+          ))}
+        </select>
+        {formData.action === 'custom' && (
+          <div style={{ marginTop: '5px' }}>
+            <input
+              type="text"
+              placeholder="New Action Name"
+              name="customAction"
+              value={customInput.action}
+              onChange={(e) =>
+                setCustomInput({ ...customInput, action: e.target.value })
+              }
               style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-            >
-              <option value="custom">Add New Action</option>
-              {recentActions.map((action) => (
-                <option key={action} value={action}>{action}</option>
-              ))}
-              {actionCodes.map((action) => (
-                <option key={action} value={action}>{action}</option>
-              ))}
-            </select>
-            {formData.action === 'custom' && (
-              <div style={{ marginTop: '5px' }}>
-                <input
-                  type="text"
-                  placeholder="New Action Name"
-                  name="customAction"
-                  value={customInput.action}
-                  onChange={(e) => setCustomInput({ ...customInput, action: e.target.value })}
-                  style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-                />
-              </div>
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Team & Minute */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Team:</label>
+          <select
+            name="team"
+            value={formData.team}
+            onChange={handleChange}
+            style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+          >
+            {(team1 || team2) ? (
+              <>
+                {team1 && <option value={team1}>{team1}</option>}
+                {team2 && <option value={team2}>{team2}</option>}
+              </>
+            ) : (
+              initialCounties.map((county) => (
+                <option key={county} value={county}>
+                  {county}
+                </option>
+              ))
             )}
-          </div>
-          
-          {/* Two-column layout for shorter fields */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            {/* Team */}
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Team:</label>
-              <select 
-                name="team" 
-                value={formData.team} 
-                onChange={handleChange}
-                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-              >
-                {(team1 || team2) ? (
-                  <>
-                    {team1 && <option value={team1}>{team1}</option>}
-                    {team2 && <option value={team2}>{team2}</option>}
-                  </>
-                ) : (
-                  initialCounties.map(county => (
-                    <option key={county} value={county}>{county}</option>
-                  ))
-                )}
-              </select>
-            </div>
-
-            {/* Minute */}
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Minute:</label>
+            <option value="custom">Add New Team</option>
+          </select>
+          {formData.team === 'custom' && (
+            <div style={{ marginTop: '5px' }}>
               <input
                 type="text"
-                name="minute"
-                value={formData.minute}
-                onChange={handleChange}
+                placeholder="New Team Name"
+                name="customTeam"
+                value={customInput.team}
+                onChange={(e) =>
+                  setCustomInput({ ...customInput, team: e.target.value })
+                }
                 style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
               />
             </div>
-          </div>
-
-          {/* Player section */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Player Name:</label>
-              <input
-                type="text"
-                name="playerName"
-                value={formData.playerName}
-                onChange={handleChange}
-                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Player Number:</label>
-              <input
-                type="text"
-                name="player"
-                value={formData.player}
-                onChange={handleChange}
-                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-              />
-            </div>
-          </div>
-
-          {/* Position, Pressure, Foot in a grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Position:</label>
-              <select 
-                name="position" 
-                value={formData.position} 
-                onChange={handleChange}
-                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-              >
-                <option value="custom">Add New Position</option>
-                {positions.map(position => (
-                  <option key={position} value={position}>{position}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Pressure:</label>
-              <select 
-                name="pressure" 
-                value={formData.pressure} 
-                onChange={handleChange}
-                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-              >
-                <option value="custom">Add New Pressure</option>
-                {pressures.map(pressure => (
-                  <option key={pressure} value={pressure}>{pressure}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Foot/Hand:</label>
-            <select 
-              name="foot" 
-              value={formData.foot} 
-              onChange={handleChange}
-              style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-            >
-              <option value="custom">Add New Option</option>
-              {feet.map(foot => (
-                <option key={foot} value={foot}>{foot}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Buttons */}
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'flex-end', 
-            gap: '10px', 
-            marginTop: '20px' 
-          }}>
-            <button 
-              onClick={handleCloseLineDialog} 
-              style={{ 
-                padding: '8px 16px', 
-                background: '#444', 
-                color: 'white', 
-                border: 'none', 
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              Cancel
-            </button>
-            <button 
-              onClick={handleFormSubmit} 
-              style={{ 
-                padding: '8px 16px', 
-                background: '#8e44ad', 
-                color: 'white', 
-                border: 'none', 
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              Submit
-            </button>
-          </div>
+          )}
         </div>
-      </Modal>
-    )}
+        <div>
+          <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Minute:</label>
+          <input
+            type="text"
+            name="minute"
+            value={formData.minute}
+            onChange={handleChange}
+            style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+          />
+        </div>
+      </div>
+
+      {/* Player Info */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Player Name:</label>
+          <input
+            type="text"
+            name="playerName"
+            value={formData.playerName}
+            onChange={handleChange}
+            style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+          />
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Player Number:</label>
+          <input
+            type="text"
+            name="player"
+            value={formData.player}
+            onChange={handleChange}
+            style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+          />
+        </div>
+      </div>
+
+      {/* Position & Pressure */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Position:</label>
+          <select
+            name="position"
+            value={formData.position}
+            onChange={handleChange}
+            style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+          >
+            <option value="custom">Add New Position</option>
+            {positions.map((position) => (
+              <option key={position} value={position}>
+                {position}
+              </option>
+            ))}
+          </select>
+          {formData.position === 'custom' && (
+            <div style={{ marginTop: '5px' }}>
+              <input
+                type="text"
+                placeholder="New Position"
+                name="customPosition"
+                value={customInput.position}
+                onChange={(e) =>
+                  setCustomInput({ ...customInput, position: e.target.value })
+                }
+                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+              />
+            </div>
+          )}
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Pressure:</label>
+          <select
+            name="pressure"
+            value={formData.pressure}
+            onChange={handleChange}
+            style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+          >
+            <option value="custom">Add New Pressure</option>
+            {pressures.map((pressure) => (
+              <option key={pressure} value={pressure}>
+                {pressure}
+              </option>
+            ))}
+          </select>
+          {formData.pressure === 'custom' && (
+            <div style={{ marginTop: '5px' }}>
+              <input
+                type="text"
+                placeholder="New Pressure"
+                name="customPressure"
+                value={customInput.pressure}
+                onChange={(e) =>
+                  setCustomInput({ ...customInput, pressure: e.target.value })
+                }
+                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Foot/Hand */}
+      <div>
+        <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Foot/Hand:</label>
+        <select
+          name="foot"
+          value={formData.foot}
+          onChange={handleChange}
+          style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+        >
+          <option value="custom">Add New Option</option>
+          {feet.map((foot) => (
+            <option key={foot} value={foot}>
+              {foot}
+            </option>
+          ))}
+        </select>
+        {formData.foot === 'custom' && (
+          <div style={{ marginTop: '5px' }}>
+            <input
+              type="text"
+              placeholder="New Foot/Hand Option"
+              name="customFoot"
+              value={customInput.foot}
+              onChange={(e) =>
+                setCustomInput({ ...customInput, foot: e.target.value })
+              }
+              style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Modal Buttons */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: '10px',
+          marginTop: '20px',
+        }}
+      >
+        <button
+          onClick={handleCloseLineDialog}
+          style={{
+            padding: '8px 16px',
+            background: '#444',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleFormSubmit}
+          style={{
+            padding: '8px 16px',
+            background: '#8e44ad',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+          }}
+        >
+          Submit
+        </button>
+      </div>
+    </div>
+  </Modal>
+)}
 
       {/* Save Game Modal */}
       <Modal

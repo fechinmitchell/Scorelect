@@ -1,5 +1,3 @@
-// src/Sidebar.js
-
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import './Sidebar.css';
@@ -82,41 +80,25 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
     }
   };
 
+  // Updated handleAnalysisAccess without premium check
   const handleAnalysisAccess = () => {
-    if (userRole === '') {
-      Swal.fire({
-        title: 'Upgrade Required',
-        text: 'Access to "Advanced Analysis" is a premium feature. Please upgrade your account to unlock this functionality.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Upgrade Now',
-        cancelButtonText: 'Cancel',
-      }).then((result) => {
-        if (result.isConfirmed) {
-          onNavigate('/signup');
-        }
-      });
+    if (selectedSport && selectedSport.toUpperCase() === 'SOCCER') {
+      onNavigate('/analysis'); // Regular analysis for Soccer
+    } else if (selectedSport && selectedSport.toUpperCase() === 'GAA') {
+      onNavigate('/analysis-gaa'); // Navigate to AnalysisGAA page for GAA
     } else {
-      // Ensure selectedSport is defined and compare in a case-insensitive way.
-      if (selectedSport && selectedSport.toUpperCase() === 'SOCCER') {
-        onNavigate('/analysis'); // Regular analysis for Soccer
-      } else if (selectedSport && selectedSport.toUpperCase() === 'GAA') {
-        onNavigate('/analysis-gaa'); // Navigate to AnalysisGAA page for GAA
-      } else {
-        Swal.fire(
-          'Sport Not Supported',
-          'The advanced analysis dashboard is currently available only for Soccer and GAA. Please select one of these sports.',
-          'info'
-        );
-      }
+      Swal.fire(
+        'Sport Not Supported',
+        'The advanced analysis dashboard is currently available only for Soccer and GAA. Please select one of these sports.',
+        'info'
+      );
     }
-  };  
+  };
 
   const handleTrainingClick = () => {
     // Navigate directly to the training page
     onNavigate('/training');
   };
-  
 
   const handleScoutingClick = () => {
     Swal.fire({
@@ -189,17 +171,17 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
             </button>
           </li>
           <li>
-          {selectedSport === 'GAA' ? (
-            <button onClick={() => onNavigate('/player-data-gaa')}>
-              <FaChartLine className="icon" size={16} />
-              {!collapsed && 'Player Data'}
-            </button>
-          ) : (
-            <button onClick={handleScoutingClick}>
-              <FaChartLine className="icon" size={16} />
-              {!collapsed && 'Scouting'}
-            </button>
-          )}
+            {selectedSport === 'GAA' ? (
+              <button onClick={() => onNavigate('/player-data-gaa')}>
+                <FaChartLine className="icon" size={16} />
+                {!collapsed && 'Player Data'}
+              </button>
+            ) : (
+              <button onClick={handleScoutingClick}>
+                <FaChartLine className="icon" size={16} />
+                {!collapsed && 'Scouting'}
+              </button>
+            )}
           </li>
           
           <li>
@@ -208,14 +190,6 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
               {!collapsed && 'Team Data'}
             </button>
           </li>
-
-          {/* <li>
-            <button onClick={() => onNavigate('/sports-datahub')}>
-              <FaDatabase className="icon" size={16} />
-              {!collapsed && 'Data Hub'}
-            </button>
-          </li> */}
-
           <li>
             <button onClick={handleAnalysisAccess}>
               <FaChartBar className="icon" size={16} />

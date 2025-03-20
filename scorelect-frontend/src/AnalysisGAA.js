@@ -1,5 +1,3 @@
-// src/components/AnalysisGAA.js
-
 import React, { useState, useEffect, useContext } from 'react';
 import styled from 'styled-components';
 import { useDropzone } from 'react-dropzone';
@@ -186,26 +184,14 @@ const AnalysisGAA = () => {
     multiple: false,
   });
 
-  // Check authentication and premium access
+  // Check authentication only; premium check removed so all signed-in users have access
   useEffect(() => {
     if (loading) return;
     if (!currentUser) {
       Swal.fire('Authentication Required', 'Please sign in to access this page.', 'warning')
         .then(() => navigate('/signin'));
-    } else if (userData && userData.role !== 'paid') {
-      Swal.fire({
-        title: 'Upgrade Required',
-        text: 'This feature is available for premium users only. Please upgrade your account.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Upgrade Now',
-        cancelButtonText: 'Cancel',
-      }).then((result) => {
-        if (result.isConfirmed) navigate('/upgrade');
-        else navigate('/');
-      });
     }
-  }, [currentUser, userData, loading, navigate]);
+  }, [currentUser, loading, navigate]);
 
   // Extract unique filter options (teams, players, actions) from the dataset once available
   useEffect(() => {
@@ -283,64 +269,56 @@ const AnalysisGAA = () => {
         Select a saved dataset or upload a new one to analyze your GAA match data. Then use the filters below.
       </InstructionText>
 
-      {/* Saved Datasets Section (for premium users) */}
-      {userData && userData.role === 'paid' ? (
-        Object.keys(datasets).length > 0 ? (
-          <SavedDatasetsContainer>
-            <SectionTitle>Analyze from Your Saved Datasets</SectionTitle>
-            <InstructionText>Select one of your saved datasets.</InstructionText>
-            <Select
-              value={selectedUserDataset}
-              onChange={(e) => {
-                setSelectedUserDataset(e.target.value);
-                // Reset match selection when dataset changes
-                setSelectedMatch('all');
-              }}
-            >
-              <option value="">Select a Dataset</option>
-              {Object.keys(datasets).map((datasetName) => (
-                <option key={datasetName} value={datasetName}>
-                  {datasetName}
-                </option>
-              ))}
-            </Select>
-            {selectedUserDataset &&
-              datasets[selectedUserDataset]?.games &&
-              datasets[selectedUserDataset].games.length > 0 && (
-                <>
-                  <Select
-                    value={selectedMatch}
-                    onChange={(e) => setSelectedMatch(e.target.value)}
-                  >
-                    <option value="all">All Matches</option>
-                    {datasets[selectedUserDataset].games.map((game) => {
-                      const id = game.gameId || game.gameName;
-                      return (
-                        <option key={id} value={id}>
-                          {game.gameName} ({game.matchDate ? new Date(game.matchDate).toLocaleDateString() : 'N/A'})
-                        </option>
-                      );
-                    })}
-                  </Select>
-                  {/* Continue button placed here so users can proceed without scrolling further */}
-                  <ButtonGroup>
-                    <ContinueButton onClick={handleContinue}>
-                      Continue Without Additional Filters
-                    </ContinueButton>
-                  </ButtonGroup>
-                </>
-              )}
-          </SavedDatasetsContainer>
-        ) : (
-          <SavedDatasetsContainer>
-            <SectionTitle>Your Saved Datasets</SectionTitle>
-            <p>No saved datasets available. Please upload and save some games first.</p>
-          </SavedDatasetsContainer>
-        )
+      {/* Saved Datasets Section (accessible to all authenticated users) */}
+      {Object.keys(datasets).length > 0 ? (
+        <SavedDatasetsContainer>
+          <SectionTitle>Analyze from Your Saved Datasets</SectionTitle>
+          <InstructionText>Select one of your saved datasets.</InstructionText>
+          <Select
+            value={selectedUserDataset}
+            onChange={(e) => {
+              setSelectedUserDataset(e.target.value);
+              // Reset match selection when dataset changes
+              setSelectedMatch('all');
+            }}
+          >
+            <option value="">Select a Dataset</option>
+            {Object.keys(datasets).map((datasetName) => (
+              <option key={datasetName} value={datasetName}>
+                {datasetName}
+              </option>
+            ))}
+          </Select>
+          {selectedUserDataset &&
+            datasets[selectedUserDataset]?.games &&
+            datasets[selectedUserDataset].games.length > 0 && (
+              <>
+                <Select
+                  value={selectedMatch}
+                  onChange={(e) => setSelectedMatch(e.target.value)}
+                >
+                  <option value="all">All Matches</option>
+                  {datasets[selectedUserDataset].games.map((game) => {
+                    const id = game.gameId || game.gameName;
+                    return (
+                      <option key={id} value={id}>
+                        {game.gameName} ({game.matchDate ? new Date(game.matchDate).toLocaleDateString() : 'N/A'})
+                      </option>
+                    );
+                  })}
+                </Select>
+                <ButtonGroup>
+                  <ContinueButton onClick={handleContinue}>
+                    Continue Without Additional Filters
+                  </ContinueButton>
+                </ButtonGroup>
+              </>
+            )}
+        </SavedDatasetsContainer>
       ) : (
         <SavedDatasetsContainer>
           <SectionTitle>Your Saved Datasets</SectionTitle>
-          <p>Please upgrade to a premium plan to access and analyze your saved datasets.</p>
+          <p>No saved datasets available. Please upload and save some games first.</p>
         </SavedDatasetsContainer>
       )}
 

@@ -14,7 +14,8 @@ import {
   renderGAAPitch,
   renderLegendOneSideShots,
   renderOneSidePitchShots,
-  translateShotToOneSide, // helper to transform shots
+  // We'll replace the built‐in translation with our custom one below.
+  // translateShotToOneSide,
 } from './GAAPitchComponents';
 
 // ----- Environment-based API URLs -----
@@ -127,6 +128,7 @@ const PitchAndTeamStatsWrapper = styled.div`
   gap: 2rem;
   justify-content: center;
   align-items: flex-start;
+  flex-wrap: nowrap; /* Ensure two team details are side by side */
 `;
 
 const PitchSection = styled.section`
@@ -148,6 +150,15 @@ const TeamStatsCard = styled.div`
 // Helper to flatten shots from games
 function flattenShots(games = []) {
   return games.flatMap((game) => game.gameData || []);
+}
+
+// Our custom translation function:
+// If the shot's x is greater than half the pitch (72.5m), we mirror it: new x = pitchWidth - shot.x.
+// Otherwise, we keep shot.x.
+function translateShotCustom(shot, halfLineX, fullPitch) {
+  const originalX = shot.x || 0;
+  const translatedX = originalX > halfLineX ? fullPitch - originalX : originalX;
+  return { ...shot, translatedX, distMeters: translatedX };
 }
 
 // For React Modal styling
@@ -174,12 +185,12 @@ export default function GAAAnalysisDashboard() {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
-  // Add a new filter for match
+  // Filter state (including match)
   const [appliedFilters, setAppliedFilters] = useState({
     team: filters?.team || '',
     player: filters?.player || '',
     action: filters?.action || '',
-    match: filters?.match || '', // NEW: match filter
+    match: filters?.match || '',
   });
 
   const [summary, setSummary] = useState({
@@ -189,30 +200,27 @@ export default function GAAAnalysisDashboard() {
     totalMisses: 0,
   });
 
-  // Add matches to filterOptions
   const [filterOptions, setFilterOptions] = useState({
     teams: [],
     players: [],
     actions: [],
-    matches: [], // NEW: match options
+    matches: [],
   });
 
   const [games, setGames] = useState([]);
-
   const [teamAggregatedData, setTeamAggregatedData] = useState({});
   const [teamScorers, setTeamScorers] = useState({});
 
-  // For displaying the shot details in a modal
+  // For displaying shot details in a modal
   const [selectedShot, setSelectedShot] = useState(null);
 
-  // We'll pick a bigger scale for half pitch
+  // Use a translation scale for the pitch calculations
   const xScale = 6;
   const yScale = 6;
-  const halfLineX = pitchWidth / 2;
+  const halfLineX = pitchWidth / 2; // 72.5m
   const goalX = 0;
-  const goalY = pitchHeight / 2;
+  const goalY = pitchHeight / 2; // 44
 
-  // Filter-changer function
   function handleFilterChange(field, value) {
     setAppliedFilters((prev) => ({
       ...prev,
@@ -220,7 +228,7 @@ export default function GAAAnalysisDashboard() {
     }));
   }
 
-  // On mount, parse data and build filter dropdown options
+  // On mount, set up filter options from the file
   useEffect(() => {
     if (!file || sport !== 'GAA') {
       Swal.fire('No Data', 'Invalid or no GAA dataset found.', 'error')
@@ -228,43 +236,32 @@ export default function GAAAnalysisDashboard() {
       return;
     }
     setGames(file.games || []);
-
-    // Build filter dropdown options from both games and shots
     const tSet = new Set();
     const pSet = new Set();
     const aSet = new Set();
-    const mSet = new Set(); // NEW: match filter options
-
-    // Iterate over games for match-level info...
+    const mSet = new Set();
     (file.games || []).forEach((g) => {
       if (g.match) mSet.add(g.match);
-      // Also build options from gameData for team, player and action
       (g.gameData || []).forEach((sh) => {
         if (sh.team) tSet.add(sh.team);
         if (sh.playerName) pSet.add(sh.playerName);
         if (sh.action) aSet.add(sh.action);
       });
     });
-
     setFilterOptions({
       teams: Array.from(tSet),
       players: Array.from(pSet),
       actions: Array.from(aSet),
-      matches: Array.from(mSet), // NEW
+      matches: Array.from(mSet),
     });
   }, [file, sport, navigate]);
 
-  // Recompute summary each time filters change
+  // Recompute summary when filters change
   useEffect(() => {
-    // Start with all games
     let filteredGames = file?.games || [];
-
-    // NEW: If a match filter is applied, filter games by match.
     if (appliedFilters.match) {
       filteredGames = filteredGames.filter((g) => g.match === appliedFilters.match);
     }
-
-    // Then apply shot-level filters for team, player, and action.
     if (appliedFilters.team) {
       filteredGames = filteredGames.map((g) => ({
         ...g,
@@ -285,14 +282,10 @@ export default function GAAAnalysisDashboard() {
     }
     filteredGames = filteredGames.filter((g) => (g.gameData || []).length > 0);
     const shots = flattenShots(filteredGames);
-
-    let totalShots = 0,
-      totalGoals = 0,
-      totalPoints = 0,
-      totalMisses = 0;
+    let totalShots = 0, totalGoals = 0, totalPoints = 0, totalMisses = 0;
     shots.forEach((sh) => {
       totalShots++;
-      const a = (sh.action || '').toLowerCase();
+      const a = (sh.action || '').toLowerCase().trim();
       if (a === 'goal' || a === 'penalty goal') totalGoals++;
       else if (a === 'point') totalPoints++;
       else if (a.includes('miss') || a.includes('wide') || a.includes('short'))
@@ -302,14 +295,20 @@ export default function GAAAnalysisDashboard() {
     setGames(filteredGames);
   }, [file, appliedFilters]);
 
-  // Flatten allShots
+  // Flatten all shots from current games
   const allShots = flattenShots(games);
 
   // Aggregator for team stats
+  // • Every shot is translated:
+  //    If shot.x > halfLineX, then translated.x = pitchWidth – shot.x;
+  //    Otherwise, translated.x = shot.x.
+  // • Average distance is computed as the average of translated.x (which will be in [0, 72.5]).
+  // • For categories (Offensive Marks, Frees, 45s, 2-Pointers), we display the count
+  //   and in brackets the total attempts (here attempts equal the count, as no separate conversion data exists).
   useEffect(() => {
     const aggregator = {};
     const scorersMap = {};
-
+    let teamDistance = {}; // Sum of translated.x for each team
     allShots.forEach((shot) => {
       const tm = shot.team || 'Unknown';
       if (!aggregator[tm]) {
@@ -323,19 +322,21 @@ export default function GAAAnalysisDashboard() {
           frees: 0,
           fortyFives: 0,
           twoPointers: 0,
-          avgDistance: 0,
         };
+        teamDistance[tm] = 0;
       }
       if (!scorersMap[tm]) {
         scorersMap[tm] = {};
       }
-
       aggregator[tm].totalShots++;
-      // Use shot.distMeters if available
-      const dist = shot.distMeters || 0;
-      aggregator[tm].avgDistance += dist;
 
-      const action = (shot.action || '').toLowerCase();
+      // Use our custom translation:
+      const translated = translateShotCustom(shot, halfLineX, pitchWidth);
+      // translated.translatedX is now in [0, 72.5]
+      teamDistance[tm] += translated.translatedX;
+
+      // Normalize action string
+      const action = (shot.action || '').toLowerCase().trim();
       if (action === 'goal' || action === 'penalty goal') {
         aggregator[tm].goals++;
         aggregator[tm].successfulShots++;
@@ -347,7 +348,8 @@ export default function GAAAnalysisDashboard() {
       } else if (action === 'point') {
         aggregator[tm].points++;
         aggregator[tm].successfulShots++;
-        if (dist >= 40) {
+        // Count as 2-Pointer if translated distance is at least 40m
+        if (translated.translatedX >= 40) {
           aggregator[tm].twoPointers++;
         }
         const pName = shot.playerName || 'NoName';
@@ -355,6 +357,20 @@ export default function GAAAnalysisDashboard() {
           scorersMap[tm][pName] = { goals: 0, points: 0 };
         }
         scorersMap[tm][pName].points++;
+      } else if (action === 'offensive mark') {
+        aggregator[tm].offensiveMarks++;
+        aggregator[tm].successfulShots++;
+      } else if (action === 'free') {
+        aggregator[tm].frees++;
+        aggregator[tm].successfulShots++;
+      } else if (
+        action === '45' ||
+        action === 'forty five' ||
+        action === 'forty-five' ||
+        action === 'fortyfive'
+      ) {
+        aggregator[tm].fortyFives++;
+        aggregator[tm].successfulShots++;
       } else if (
         action.includes('miss') ||
         action.includes('wide') ||
@@ -365,10 +381,11 @@ export default function GAAAnalysisDashboard() {
       }
     });
 
+    // Compute average translated distance for each team (will be between 0 and 72.5)
     Object.keys(aggregator).forEach((tm) => {
       const tStats = aggregator[tm];
       if (tStats.totalShots > 0) {
-        tStats.avgDistance = (tStats.avgDistance / tStats.totalShots).toFixed(2);
+        tStats.avgDistance = (teamDistance[tm] / tStats.totalShots).toFixed(2);
       } else {
         tStats.avgDistance = '0.00';
       }
@@ -376,9 +393,9 @@ export default function GAAAnalysisDashboard() {
 
     setTeamAggregatedData(aggregator);
     setTeamScorers(scorersMap);
-  }, [allShots]);
+  }, [allShots, halfLineX, pitchWidth]);
 
-  // Handle Recalculate
+  // Handle Recalculate button click
   const handleRecalculate = async () => {
     try {
       const userId = currentUser?.uid;
@@ -417,12 +434,10 @@ export default function GAAAnalysisDashboard() {
     }
   };
 
-  // Reload from Firestore
+  // Reload updated dataset from Firestore
   const fetchUpdatedDataset = async (uid, datasetName) => {
     try {
-      const loadResp = await axios.post(`${BASE_API_URL}/load-games`, {
-        uid: uid,
-      });
+      const loadResp = await axios.post(`${BASE_API_URL}/load-games`, { uid });
       const allGames = loadResp.data || [];
       const filtered = allGames.filter((g) => g.datasetName === datasetName);
       setGames(filtered);
@@ -431,19 +446,17 @@ export default function GAAAnalysisDashboard() {
     }
   };
 
-  // Handle shot click -> open React Modal.
-  // We transform the shot so it includes distMeters (and other properties) before displaying it.
+  // When a shot is clicked, translate it and open the modal
   const handleShotClick = (shot) => {
-    const transformedShot = translateShotToOneSide(shot, halfLineX, goalX, goalY);
+    const transformedShot = translateShotCustom(shot, halfLineX, pitchWidth);
     setSelectedShot(transformedShot);
   };
 
-  // Render the shot details in a modal.
+  // Render shot details in a modal (using the translated value)
   function renderSelectedShotDetails() {
     if (!selectedShot) return null;
-
-    const distance = selectedShot.distMeters
-      ? selectedShot.distMeters.toFixed(1)
+    const distance = selectedShot.translatedX !== undefined
+      ? selectedShot.translatedX.toFixed(1)
       : 'N/A';
     const xPVal = typeof selectedShot.xPoints === 'number'
       ? selectedShot.xPoints.toFixed(2)
@@ -454,9 +467,7 @@ export default function GAAAnalysisDashboard() {
 
     return (
       <div style={{ lineHeight: '1.6' }}>
-        <h2 style={{ marginTop: 0, marginBottom: '1rem', color: '#ffc107' }}>
-          Shot Details
-        </h2>
+        <h2 style={{ marginTop: 0, marginBottom: '1rem', color: '#ffc107' }}>Shot Details</h2>
         <p><strong>Team:</strong> {selectedShot.team || 'N/A'}</p>
         <p><strong>Player:</strong> {selectedShot.playerName || 'N/A'}</p>
         <p><strong>Minute:</strong> {selectedShot.minute || 'N/A'}</p>
@@ -465,22 +476,33 @@ export default function GAAAnalysisDashboard() {
         <p><strong>Foot:</strong> {selectedShot.foot || 'N/A'}</p>
         <p><strong>Pressure:</strong> {selectedShot.pressure || 'N/A'}</p>
         <p><strong>Position:</strong> {selectedShot.position || 'N/A'}</p>
-        <p><strong>xP:</strong> {xPVal}</p>
-        <p><strong>xP_ADV:</strong> {xPAdvVal}</p>
+        <p>
+          <strong>xP:</strong>{' '}
+          {typeof selectedShot.xPoints === 'number'
+            ? selectedShot.xPoints.toFixed(2)
+            : 'N/A'}
+        </p>
+        <p>
+          <strong>xP_ADV:</strong>{' '}
+          {typeof selectedShot.xP_adv === 'number'
+            ? selectedShot.xP_adv.toFixed(2)
+            : 'N/A'}
+        </p>
       </div>
     );
   }
+
+  // Helper to format stat with attempts (here attempts equal the count, since no extra attempt data is provided)
+  const formatStat = (count) => `${count} (${count} attempts)`;
 
   return (
     <PageContainer>
       <Header>GAA Analysis Dashboard</Header>
 
-      {/* Filters + Summary */}
+      {/* Filters and Summary Section */}
       <Section>
         <FiltersAndStatsContainer>
-          {/* Filters */}
           <FiltersContainer>
-            {/* Match Filter */}
             <FilterSelect
               value={appliedFilters.match}
               onChange={(e) => handleFilterChange('match', e.target.value)}
@@ -492,7 +514,6 @@ export default function GAAAnalysisDashboard() {
                 </option>
               ))}
             </FilterSelect>
-            {/* Team Filter */}
             <FilterSelect
               value={appliedFilters.team}
               onChange={(e) => handleFilterChange('team', e.target.value)}
@@ -504,7 +525,6 @@ export default function GAAAnalysisDashboard() {
                 </option>
               ))}
             </FilterSelect>
-            {/* Player Filter */}
             <FilterSelect
               value={appliedFilters.player}
               onChange={(e) => handleFilterChange('player', e.target.value)}
@@ -516,7 +536,6 @@ export default function GAAAnalysisDashboard() {
                 </option>
               ))}
             </FilterSelect>
-            {/* Action Filter */}
             <FilterSelect
               value={appliedFilters.action}
               onChange={(e) => handleFilterChange('action', e.target.value)}
@@ -530,7 +549,6 @@ export default function GAAAnalysisDashboard() {
             </FilterSelect>
           </FiltersContainer>
 
-          {/* Summary Tiles */}
           <TilesContainer>
             <Tile>
               <h5>Total Shots</h5>
@@ -552,10 +570,9 @@ export default function GAAAnalysisDashboard() {
         </FiltersAndStatsContainer>
       </Section>
 
-      {/* Pitch + Team Stats side by side */}
+      {/* Pitch and Team Stats Section */}
       <Section>
         <PitchAndTeamStatsWrapper>
-          {/* One-Sided Pitch on the left */}
           <PitchSection>
             <div style={{ display: 'flex', justifyContent: 'center' }}>
               <Stage
@@ -584,7 +601,6 @@ export default function GAAAnalysisDashboard() {
                   goalX,
                   goalY,
                 })}
-
                 {renderLegendOneSideShots(
                   {
                     goal: '#FFFF33',
@@ -600,12 +616,10 @@ export default function GAAAnalysisDashboard() {
             </div>
           </PitchSection>
 
-          {/* Team Stats on the right */}
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'nowrap', justifyContent: 'center' }}>
             {Object.keys(teamAggregatedData).map((tmName) => {
               const tStats = teamAggregatedData[tmName];
               const scorersObj = teamScorers[tmName] || {};
-
               return (
                 <TeamStatsCard key={tmName}>
                   <h3 style={{ marginTop: 0, marginBottom: '1rem', color: '#fff' }}>
@@ -616,12 +630,11 @@ export default function GAAAnalysisDashboard() {
                   <p>Points: {tStats.points}</p>
                   <p>Goals: {tStats.goals}</p>
                   <p>Misses: {tStats.misses}</p>
-                  <p>Offensive Marks: {tStats.offensiveMarks}</p>
-                  <p>Frees: {tStats.frees}</p>
-                  <p>45s: {tStats.fortyFives}</p>
-                  <p>2-Pointers: {tStats.twoPointers}</p>
-                  <p>Avg Distance (m): {tStats.avgDistance}</p>
-
+                  <p>Offensive Marks: {formatStat(tStats.offensiveMarks)}</p>
+                  <p>Frees: {formatStat(tStats.frees)}</p>
+                  <p>45s: {formatStat(tStats.fortyFives)}</p>
+                  <p>2-Pointers: {formatStat(tStats.twoPointers)}</p>
+                  <p>Avg Distance Above Half (m): {tStats.avgDistance}</p>
                   <h4 style={{ marginTop: '1rem', color: '#fff' }}>Scorers</h4>
                   {Object.keys(scorersObj).length === 0 && (
                     <p style={{ margin: 0 }}>No scorers found</p>
@@ -640,7 +653,6 @@ export default function GAAAnalysisDashboard() {
         </PitchAndTeamStatsWrapper>
       </Section>
 
-      {/* Recalc Button at bottom */}
       <div style={{ textAlign: 'center', marginTop: '20px' }}>
         <RecalcButton onClick={handleRecalculate}>
           Recalculate xP/xG for Target Dataset
@@ -656,16 +668,16 @@ export default function GAAAnalysisDashboard() {
       >
         {selectedShot && (
           <div style={{ lineHeight: '1.6' }}>
-            <h2 style={{ marginTop: 0, marginBottom: '1rem', color: '#ffc107' }}>
-              Shot Details
-            </h2>
+            <h2 style={{ marginTop: 0, marginBottom: '1rem', color: '#ffc107' }}>Shot Details</h2>
             <p><strong>Team:</strong> {selectedShot.team || 'N/A'}</p>
             <p><strong>Player:</strong> {selectedShot.playerName || 'N/A'}</p>
             <p><strong>Minute:</strong> {selectedShot.minute || 'N/A'}</p>
             <p><strong>Action:</strong> {selectedShot.action || 'N/A'}</p>
             <p>
               <strong>Distance (m):</strong>{' '}
-              {selectedShot.distMeters ? selectedShot.distMeters.toFixed(1) : 'N/A'}
+              {selectedShot.translatedX !== undefined
+                ? selectedShot.translatedX.toFixed(1)
+                : 'N/A'}
             </p>
             <p><strong>Foot:</strong> {selectedShot.foot || 'N/A'}</p>
             <p><strong>Pressure:</strong> {selectedShot.pressure || 'N/A'}</p>

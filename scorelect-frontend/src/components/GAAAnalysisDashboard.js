@@ -1,6 +1,6 @@
 // src/components/GAAAnalysisDashboard.js
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import styled from 'styled-components';
@@ -8,14 +8,14 @@ import { Stage } from 'react-konva';
 import Modal from 'react-modal';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 // Import pitch renderers, legend and the translation helper
 import {
   renderGAAPitch,
   renderLegendOneSideShots,
   renderOneSidePitchShots,
-  // We'll replace the built‐in translation with our custom one below.
-  // translateShotToOneSide,
 } from './GAAPitchComponents';
 
 // ----- Environment-based API URLs -----
@@ -26,13 +26,12 @@ const defaultPitchColor = '#006400';
 const defaultLineColor = '#FFFFFF';
 const defaultLightStripeColor = '#228B22';
 const defaultDarkStripeColor = '#006400';
-
 const pitchWidth = 145;
 const pitchHeight = 88;
 
 // ---------- Styled Components ----------
 const PageContainer = styled.div`
-  background: #1c1c1c;
+  background: #1c1a1a;
   min-height: 100vh;
   color: #ffc107;
   padding: 2rem;
@@ -61,6 +60,23 @@ const RecalcButton = styled.button`
   transition: background-color 0.3s ease;
   &:hover {
     background-color: #005bb5;
+  }
+`;
+
+const DownloadButton = styled.button`
+  background-color: #4caf50;
+  border: none;
+  border-radius: 5px;
+  color: #fff;
+  padding: 0.75rem 1.25rem;
+  font-size: 1rem;
+  cursor: pointer;
+  font-weight: 500;
+  margin-left: 1rem;
+  box-shadow: 0 3px 5px rgba(0,0,0,0.2);
+  transition: background-color 0.3s ease;
+  &:hover {
+    background-color: #45a049;
   }
 `;
 
@@ -128,7 +144,7 @@ const PitchAndTeamStatsWrapper = styled.div`
   gap: 2rem;
   justify-content: center;
   align-items: flex-start;
-  flex-wrap: nowrap; /* Ensure two team details are side by side */
+  flex-wrap: nowrap;
 `;
 
 const PitchSection = styled.section`
@@ -147,45 +163,289 @@ const TeamStatsCard = styled.div`
   align-self: flex-start;
 `;
 
-// Helper to flatten shots from games
+// New styled components for PDF content
+const PdfContentWrapper = styled.div`
+  position: relative;
+  background-color: #333;
+  padding: 1rem;
+`;
+
+const Watermark = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.3;
+  pointer-events: none;
+  font-size: 3rem;
+  color: #fff;
+  z-index: 10;
+`;
+
+// ---------- Helper Functions ----------
+
 function flattenShots(games = []) {
   return games.flatMap((game) => game.gameData || []);
 }
 
-// Our custom translation function:
-// If the shot's x is greater than half the pitch (72.5m), we mirror it: new x = pitchWidth - shot.x.
-// Otherwise, we keep shot.x.
-function translateShotCustom(shot, halfLineX, fullPitch) {
+/*
+  translateShotToGoal() computes the Euclidean distance from a shot's (x,y) to the appropriate goal centre.
+  - For shots with x < half the pitch (72.5 m), we assume the left goal centre is at (0, pitchHeight/2).
+  - For shots with x ≥ 72.5 m, we assume the shot is aimed at the right goal (centre: [pitchWidth, pitchHeight/2]).
+  The computed distance is stored in the property distMeters.
+*/
+function translateShotToGoal(shot, fullPitch, pitchHeight) {
+  const leftGoalCentre = { x: 0, y: pitchHeight / 2 };
+  const rightGoalCentre = { x: fullPitch, y: pitchHeight / 2 };
   const originalX = shot.x || 0;
-  const translatedX = originalX > halfLineX ? fullPitch - originalX : originalX;
-  return { ...shot, translatedX, distMeters: translatedX };
+  const originalY = shot.y || 0;
+  const goalCentre = originalX < fullPitch / 2 ? leftGoalCentre : rightGoalCentre;
+  const dx = originalX - goalCentre.x;
+  const dy = originalY - goalCentre.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  return { ...shot, distMeters: dist };
 }
 
-// For React Modal styling
-Modal.setAppElement('#root');
+/*
+  downloadPDF() captures the content inside the element with id "pdf-content"
+  and creates a landscape PDF with a dark grey background and watermark.
+*/
+const downloadPDF = async (setIsDownloading) => {
+  setIsDownloading(true);
+  const input = document.getElementById('pdf-content');
+  if (!input) {
+    Swal.fire('Error', 'Could not find content to export.', 'error');
+    setIsDownloading(false);
+    return;
+  }
+  try {
+    const canvas = await html2canvas(input, { scale: 2 });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('l', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    pdf.setFillColor(50, 50, 50);
+    pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
+    const imgProps = pdf.getImageProperties(imgData);
+    const imgWidth = pdfWidth;
+    const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+    const marginTop = (pdfHeight - imgHeight) / 2;
+    pdf.addImage(imgData, 'PNG', 0, marginTop, imgWidth, imgHeight);
+    pdf.setFontSize(12);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("scorelect.com", pdfWidth - 40, pdfHeight - 10);
+    pdf.save('dashboard.pdf');
+  } catch (error) {
+    Swal.fire('Error', 'Failed to generate PDF.', 'error');
+  }
+  setIsDownloading(false);
+};
+
+// ---------- Modular Components ----------
+
+function FiltersBar({ appliedFilters, handleFilterChange, filterOptions }) {
+  return (
+    <FiltersContainer>
+      <FilterSelect
+        value={appliedFilters.match}
+        onChange={(e) => handleFilterChange('match', e.target.value)}
+      >
+        <option value="">All Matches</option>
+        {filterOptions.matches.map((match) => (
+          <option key={match} value={match}>
+            {match}
+          </option>
+        ))}
+      </FilterSelect>
+      <FilterSelect
+        value={appliedFilters.team}
+        onChange={(e) => handleFilterChange('team', e.target.value)}
+      >
+        <option value="">All Teams</option>
+        {filterOptions.teams.map((team) => (
+          <option key={team} value={team}>
+            {team}
+          </option>
+        ))}
+      </FilterSelect>
+      <FilterSelect
+        value={appliedFilters.player}
+        onChange={(e) => handleFilterChange('player', e.target.value)}
+      >
+        <option value="">All Players</option>
+        {filterOptions.players.map((player) => (
+          <option key={player} value={player}>
+            {player}
+          </option>
+        ))}
+      </FilterSelect>
+      <FilterSelect
+        value={appliedFilters.action}
+        onChange={(e) => handleFilterChange('action', e.target.value)}
+      >
+        <option value="">All Actions</option>
+        {filterOptions.actions.map((action) => (
+          <option key={action} value={action}>
+            {action}
+          </option>
+        ))}
+      </FilterSelect>
+    </FiltersContainer>
+  );
+}
+
+function SummaryTiles({ summary }) {
+  return (
+    <TilesContainer>
+      <Tile>
+        <h5>Total Shots</h5>
+        <p>{summary.totalShots}</p>
+      </Tile>
+      <Tile>
+        <h5>Total Goals</h5>
+        <p>{summary.totalGoals}</p>
+      </Tile>
+      <Tile>
+        <h5>Total Points</h5>
+        <p>{summary.totalPoints}</p>
+      </Tile>
+      <Tile>
+        <h5>Total Misses</h5>
+        <p>{summary.totalMisses}</p>
+      </Tile>
+    </TilesContainer>
+  );
+}
+
+function StatsCard({ teamName, stats, scorers, formatCategory }) {
+  return (
+    <TeamStatsCard>
+      <h3 style={{ marginTop: 0, marginBottom: '1rem', color: '#fff' }}>{teamName} Stats</h3>
+      <p>Total Shots: {stats.totalShots}</p>
+      <p>Successful Shots: {stats.successfulShots || 0}</p>
+      <p>Points: {stats.points}</p>
+      <p>Goals: {stats.goals}</p>
+      <p>Misses: {stats.misses}</p>
+      <p>Offensive Marks: {formatCategory(stats.offensiveMarkAttempts || 0, stats.offensiveMarkScored || 0)}</p>
+      <p>Frees: {formatCategory(stats.freeAttempts || 0, stats.freeScored || 0)}</p>
+      <p>45s: {formatCategory(stats.fortyFiveAttempts || 0, stats.fortyFiveScored || 0)}</p>
+      <p>2-Pointers: {formatCategory(stats.twoPointerAttempts || 0, stats.twoPointerScored || 0)}</p>
+      <p>Avg Distance from Goal (m): {stats.avgDistance}</p>
+      <h4 style={{ marginTop: '1rem', color: '#fff' }}>Scorers</h4>
+      {Object.keys(scorers).length === 0 ? (
+        <p style={{ margin: 0 }}>No scorers found</p>
+      ) : (
+        Object.entries(scorers).map(([playerName, val]) => (
+          <p key={playerName} style={{ margin: 0 }}>
+            {playerName}: {val.goals > 0 && `${val.goals} goal(s)`} {val.points > 0 && `${val.points} point(s)`}
+          </p>
+        ))
+      )}
+    </TeamStatsCard>
+  );
+}
+
+function PitchView({ allShots, xScale, yScale, halfLineX, goalX, goalY, onShotClick }) {
+  return (
+    <PitchSection>
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <Stage
+          width={xScale * (pitchWidth / 2)}
+          height={yScale * pitchHeight}
+          style={{
+            background: '#1a1a1a',
+            border: '1px solid #444',
+            borderRadius: '8px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+          }}
+        >
+          {renderOneSidePitchShots({
+            shots: allShots,
+            colors: {
+              goal: '#FFFF33',
+              point: '#39FF14',
+              miss: 'red',
+              setPlayScore: '#39FF14',
+              setPlayMiss: '#39FF14',
+            },
+            xScale,
+            yScale,
+            onShotClick,
+            halfLineX,
+            goalX,
+            goalY,
+          })}
+          {renderLegendOneSideShots(
+            {
+              goal: '#FFFF33',
+              point: '#39FF14',
+              miss: 'red',
+              setPlayScore: '#39FF14',
+              setPlayMiss: '#39FF14',
+            },
+            xScale * (pitchWidth / 2),
+            yScale * pitchHeight
+          )}
+        </Stage>
+      </div>
+    </PitchSection>
+  );
+}
+
+// ---------- Updated Modal Styling ----------
+// Updated customModalStyles for a nicely styled and well-sized modal.
 const customModalStyles = {
   content: {
-    maxWidth: '500px',
-    margin: 'auto',
-    padding: '20px',
-    borderRadius: '8px',
+    top: '50%',
+    left: '50%',
+    right: 'auto',
+    bottom: 'auto',
+    transform: 'translate(-50%, -50%)',
+    width: '600px',
+    maxHeight: '80vh',
+    padding: '30px',
+    borderRadius: '10px',
     backgroundColor: '#2e2e2e',
     color: '#fff',
+    overflow: 'auto',
   },
   overlay: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.75)',
     zIndex: 9999,
   },
 };
 
-// ---------- MAIN COMPONENT ----------
+// ---------- ErrorBoundary Component ----------
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return <h2 style={{ textAlign: 'center', color: 'red' }}>Something went wrong.</h2>;
+    }
+    return this.props.children;
+  }
+}
+
+// ---------- Main Component: GAAAnalysisDashboard ----------
 export default function GAAAnalysisDashboard() {
   const { state } = useLocation();
   const { file, sport, filters } = state || {};
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
-  // Filter state (including match)
   const [appliedFilters, setAppliedFilters] = useState({
     team: filters?.team || '',
     player: filters?.player || '',
@@ -210,29 +470,22 @@ export default function GAAAnalysisDashboard() {
   const [games, setGames] = useState([]);
   const [teamAggregatedData, setTeamAggregatedData] = useState({});
   const [teamScorers, setTeamScorers] = useState({});
-
-  // For displaying shot details in a modal
   const [selectedShot, setSelectedShot] = useState(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
-  // Use a translation scale for the pitch calculations
   const xScale = 6;
   const yScale = 6;
-  const halfLineX = pitchWidth / 2; // 72.5m
+  const halfLineX = pitchWidth / 2; // 72.5 m
   const goalX = 0;
   const goalY = pitchHeight / 2; // 44
 
   function handleFilterChange(field, value) {
-    setAppliedFilters((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setAppliedFilters((prev) => ({ ...prev, [field]: value }));
   }
 
-  // On mount, set up filter options from the file
   useEffect(() => {
     if (!file || sport !== 'GAA') {
-      Swal.fire('No Data', 'Invalid or no GAA dataset found.', 'error')
-        .then(() => navigate('/analysis'));
+      Swal.fire('No Data', 'Invalid or no GAA dataset found.', 'error').then(() => navigate('/analysis'));
       return;
     }
     setGames(file.games || []);
@@ -256,7 +509,6 @@ export default function GAAAnalysisDashboard() {
     });
   }, [file, sport, navigate]);
 
-  // Recompute summary when filters change
   useEffect(() => {
     let filteredGames = file?.games || [];
     if (appliedFilters.match) {
@@ -295,20 +547,14 @@ export default function GAAAnalysisDashboard() {
     setGames(filteredGames);
   }, [file, appliedFilters]);
 
-  // Flatten all shots from current games
   const allShots = flattenShots(games);
 
-  // Aggregator for team stats
-  // • Every shot is translated:
-  //    If shot.x > halfLineX, then translated.x = pitchWidth – shot.x;
-  //    Otherwise, translated.x = shot.x.
-  // • Average distance is computed as the average of translated.x (which will be in [0, 72.5]).
-  // • For categories (Offensive Marks, Frees, 45s, 2-Pointers), we display the count
-  //   and in brackets the total attempts (here attempts equal the count, as no separate conversion data exists).
-  useEffect(() => {
+  const eligibleFor2Pointer = ['point', 'free', 'offensive mark', '45', 'fortyfive'];
+
+  const aggregatedData = useMemo(() => {
     const aggregator = {};
     const scorersMap = {};
-    let teamDistance = {}; // Sum of translated.x for each team
+    let teamDistance = {};
     allShots.forEach((shot) => {
       const tm = shot.team || 'Unknown';
       if (!aggregator[tm]) {
@@ -318,10 +564,14 @@ export default function GAAAnalysisDashboard() {
           points: 0,
           goals: 0,
           misses: 0,
-          offensiveMarks: 0,
-          frees: 0,
-          fortyFives: 0,
-          twoPointers: 0,
+          freeAttempts: 0,
+          freeScored: 0,
+          offensiveMarkAttempts: 0,
+          offensiveMarkScored: 0,
+          fortyFiveAttempts: 0,
+          fortyFiveScored: 0,
+          twoPointerAttempts: 0,
+          twoPointerScored: 0,
         };
         teamDistance[tm] = 0;
       }
@@ -330,13 +580,11 @@ export default function GAAAnalysisDashboard() {
       }
       aggregator[tm].totalShots++;
 
-      // Use our custom translation:
-      const translated = translateShotCustom(shot, halfLineX, pitchWidth);
-      // translated.translatedX is now in [0, 72.5]
-      teamDistance[tm] += translated.translatedX;
+      const translated = translateShotToGoal(shot, pitchWidth, pitchHeight);
+      teamDistance[tm] += translated.distMeters;
 
-      // Normalize action string
       const action = (shot.action || '').toLowerCase().trim();
+
       if (action === 'goal' || action === 'penalty goal') {
         aggregator[tm].goals++;
         aggregator[tm].successfulShots++;
@@ -348,30 +596,31 @@ export default function GAAAnalysisDashboard() {
       } else if (action === 'point') {
         aggregator[tm].points++;
         aggregator[tm].successfulShots++;
-        // Count as 2-Pointer if translated distance is at least 40m
-        if (translated.translatedX >= 40) {
-          aggregator[tm].twoPointers++;
-        }
         const pName = shot.playerName || 'NoName';
         if (!scorersMap[tm][pName]) {
           scorersMap[tm][pName] = { goals: 0, points: 0 };
         }
         scorersMap[tm][pName].points++;
       } else if (action === 'offensive mark') {
-        aggregator[tm].offensiveMarks++;
+        aggregator[tm].offensiveMarkAttempts++;
+        aggregator[tm].offensiveMarkScored++;
         aggregator[tm].successfulShots++;
-      } else if (action === 'free') {
-        aggregator[tm].frees++;
-        aggregator[tm].successfulShots++;
-      } else if (
-        action === '45' ||
-        action === 'forty five' ||
-        action === 'forty-five' ||
-        action === 'fortyfive'
-      ) {
-        aggregator[tm].fortyFives++;
-        aggregator[tm].successfulShots++;
-      } else if (
+      }
+      if (action.startsWith('free')) {
+        aggregator[tm].freeAttempts++;
+        if (action === 'free') {
+          aggregator[tm].freeScored++;
+          aggregator[tm].successfulShots++;
+        }
+      }
+      if (action.startsWith('45') || action.startsWith('forty')) {
+        aggregator[tm].fortyFiveAttempts++;
+        if (action === '45' || action === 'fortyfive') {
+          aggregator[tm].fortyFiveScored++;
+          aggregator[tm].successfulShots++;
+        }
+      }
+      if (
         action.includes('miss') ||
         action.includes('wide') ||
         action.includes('short') ||
@@ -379,23 +628,35 @@ export default function GAAAnalysisDashboard() {
       ) {
         aggregator[tm].misses++;
       }
-    });
-
-    // Compute average translated distance for each team (will be between 0 and 72.5)
-    Object.keys(aggregator).forEach((tm) => {
-      const tStats = aggregator[tm];
-      if (tStats.totalShots > 0) {
-        tStats.avgDistance = (teamDistance[tm] / tStats.totalShots).toFixed(2);
-      } else {
-        tStats.avgDistance = '0.00';
+      if (eligibleFor2Pointer.includes(action)) {
+        if (translated.distMeters >= 40) {
+          aggregator[tm].twoPointerAttempts++;
+          if (
+            action === 'point' ||
+            action === 'free' ||
+            action === 'offensive mark' ||
+            action === '45' ||
+            action === 'fortyfive'
+          ) {
+            aggregator[tm].twoPointerScored++;
+          }
+        }
       }
     });
 
-    setTeamAggregatedData(aggregator);
-    setTeamScorers(scorersMap);
-  }, [allShots, halfLineX, pitchWidth]);
+    Object.keys(aggregator).forEach((tm) => {
+      const tStats = aggregator[tm];
+      tStats.avgDistance = tStats.totalShots > 0 ? (teamDistance[tm] / tStats.totalShots).toFixed(2) : '0.00';
+    });
 
-  // Handle Recalculate button click
+    return { aggregator, scorersMap };
+  }, [allShots, pitchWidth, pitchHeight]);
+
+  useEffect(() => {
+    setTeamAggregatedData(aggregatedData.aggregator);
+    setTeamScorers(aggregatedData.scorersMap);
+  }, [aggregatedData]);
+
   const handleRecalculate = async () => {
     try {
       const userId = currentUser?.uid;
@@ -405,24 +666,14 @@ export default function GAAAnalysisDashboard() {
       }
       const targetDataset = file?.datasetName || 'DefaultDataset';
       const trainingDataset = 'GAA All Shots';
-
       const payload = {
         user_id: userId,
         training_dataset: trainingDataset,
         target_dataset: targetDataset,
       };
-
-      const response = await axios.post(
-        `${BASE_API_URL}/recalculate-target-xpoints`,
-        payload
-      );
-
+      const response = await axios.post(`${BASE_API_URL}/recalculate-target-xpoints`, payload);
       if (response.data.success) {
-        Swal.fire(
-          'Recalculation Complete',
-          'xP and xG values have been updated for ' + targetDataset,
-          'success'
-        );
+        Swal.fire('Recalculation Complete', `xP and xG values have been updated for ${targetDataset}`, 'success');
         if (response.data.summary) {
           setSummary(response.data.summary);
         }
@@ -434,7 +685,6 @@ export default function GAAAnalysisDashboard() {
     }
   };
 
-  // Reload updated dataset from Firestore
   const fetchUpdatedDataset = async (uid, datasetName) => {
     try {
       const loadResp = await axios.post(`${BASE_API_URL}/load-games`, { uid });
@@ -446,17 +696,15 @@ export default function GAAAnalysisDashboard() {
     }
   };
 
-  // When a shot is clicked, translate it and open the modal
   const handleShotClick = (shot) => {
-    const transformedShot = translateShotCustom(shot, halfLineX, pitchWidth);
+    const transformedShot = translateShotToGoal(shot, pitchWidth, pitchHeight);
     setSelectedShot(transformedShot);
   };
 
-  // Render shot details in a modal (using the translated value)
   function renderSelectedShotDetails() {
     if (!selectedShot) return null;
-    const distance = selectedShot.translatedX !== undefined
-      ? selectedShot.translatedX.toFixed(1)
+    const distance = selectedShot.distMeters !== undefined
+      ? selectedShot.distMeters.toFixed(1)
       : 'N/A';
     const xPVal = typeof selectedShot.xPoints === 'number'
       ? selectedShot.xPoints.toFixed(2)
@@ -464,15 +712,21 @@ export default function GAAAnalysisDashboard() {
     const xPAdvVal = typeof selectedShot.xP_adv === 'number'
       ? selectedShot.xP_adv.toFixed(2)
       : 'N/A';
-
     return (
       <div style={{ lineHeight: '1.6' }}>
-        <h2 style={{ marginTop: 0, marginBottom: '1rem', color: '#ffc107' }}>Shot Details</h2>
+        <h2 id="shot-details-title" style={{ marginTop: 0, marginBottom: '1rem', color: '#ffc107' }}>
+          Shot Details
+        </h2>
         <p><strong>Team:</strong> {selectedShot.team || 'N/A'}</p>
         <p><strong>Player:</strong> {selectedShot.playerName || 'N/A'}</p>
         <p><strong>Minute:</strong> {selectedShot.minute || 'N/A'}</p>
         <p><strong>Action:</strong> {selectedShot.action || 'N/A'}</p>
-        <p><strong>Distance (m):</strong> {distance}</p>
+        <p>
+          <strong>Distance (m):</strong>{' '}
+          {selectedShot.distMeters !== undefined
+            ? selectedShot.distMeters.toFixed(1)
+            : 'N/A'}
+        </p>
         <p><strong>Foot:</strong> {selectedShot.foot || 'N/A'}</p>
         <p><strong>Pressure:</strong> {selectedShot.pressure || 'N/A'}</p>
         <p><strong>Position:</strong> {selectedShot.position || 'N/A'}</p>
@@ -492,216 +746,94 @@ export default function GAAAnalysisDashboard() {
     );
   }
 
-  // Helper to format stat with attempts (here attempts equal the count, since no extra attempt data is provided)
-  const formatStat = (count) => `${count} (${count} attempts)`;
+  const formatCategory = (attempts, scored) => `${attempts} (${scored} Scored)`;
 
   return (
-    <PageContainer>
-      <Header>GAA Analysis Dashboard</Header>
+    <ErrorBoundary>
+      <PageContainer>
+        <Header>GAA Analysis Dashboard</Header>
 
-      {/* Filters and Summary Section */}
-      <Section>
-        <FiltersAndStatsContainer>
-          <FiltersContainer>
-            <FilterSelect
-              value={appliedFilters.match}
-              onChange={(e) => handleFilterChange('match', e.target.value)}
-            >
-              <option value="">All Matches</option>
-              {filterOptions.matches.map((match) => (
-                <option key={match} value={match}>
-                  {match}
-                </option>
-              ))}
-            </FilterSelect>
-            <FilterSelect
-              value={appliedFilters.team}
-              onChange={(e) => handleFilterChange('team', e.target.value)}
-            >
-              <option value="">All Teams</option>
-              {filterOptions.teams.map((team) => (
-                <option key={team} value={team}>
-                  {team}
-                </option>
-              ))}
-            </FilterSelect>
-            <FilterSelect
-              value={appliedFilters.player}
-              onChange={(e) => handleFilterChange('player', e.target.value)}
-            >
-              <option value="">All Players</option>
-              {filterOptions.players.map((player) => (
-                <option key={player} value={player}>
-                  {player}
-                </option>
-              ))}
-            </FilterSelect>
-            <FilterSelect
-              value={appliedFilters.action}
-              onChange={(e) => handleFilterChange('action', e.target.value)}
-            >
-              <option value="">All Actions</option>
-              {filterOptions.actions.map((action) => (
-                <option key={action} value={action}>
-                  {action}
-                </option>
-              ))}
-            </FilterSelect>
-          </FiltersContainer>
-
-          <TilesContainer>
-            <Tile>
-              <h5>Total Shots</h5>
-              <p>{summary.totalShots}</p>
-            </Tile>
-            <Tile>
-              <h5>Total Goals</h5>
-              <p>{summary.totalGoals}</p>
-            </Tile>
-            <Tile>
-              <h5>Total Points</h5>
-              <p>{summary.totalPoints}</p>
-            </Tile>
-            <Tile>
-              <h5>Total Misses</h5>
-              <p>{summary.totalMisses}</p>
-            </Tile>
-          </TilesContainer>
-        </FiltersAndStatsContainer>
-      </Section>
-
-      {/* Pitch and Team Stats Section */}
-      <Section>
-        <PitchAndTeamStatsWrapper>
-          <PitchSection>
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <Stage
-                width={xScale * (pitchWidth / 2)}
-                height={yScale * pitchHeight}
-                style={{
-                  background: '#1a1a1a',
-                  border: '1px solid #444',
-                  borderRadius: '8px',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                }}
-              >
-                {renderOneSidePitchShots({
-                  shots: allShots,
-                  colors: {
-                    goal: '#FFFF33',
-                    point: '#39FF14',
-                    miss: 'red',
-                    setPlayScore: '#39FF14',
-                    setPlayMiss: 'red',
-                  },
-                  xScale,
-                  yScale,
-                  onShotClick: handleShotClick,
-                  halfLineX,
-                  goalX,
-                  goalY,
-                })}
-                {renderLegendOneSideShots(
-                  {
-                    goal: '#FFFF33',
-                    point: '#39FF14',
-                    miss: 'red',
-                    setPlayScore: '#39FF14',
-                    setPlayMiss: 'red',
-                  },
-                  xScale * (pitchWidth / 2),
-                  yScale * pitchHeight
-                )}
-              </Stage>
+        {/* Filters and Summary Section */}
+        <Section>
+          <FiltersAndStatsContainer>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
+              <FiltersBar
+                appliedFilters={appliedFilters}
+                handleFilterChange={handleFilterChange}
+                filterOptions={filterOptions}
+              />
+              <DownloadButton onClick={() => downloadPDF(setIsDownloading)}>
+                {isDownloading ? 'Downloading...' : 'Download PDF'}
+              </DownloadButton>
             </div>
-          </PitchSection>
+            <SummaryTiles summary={summary} />
+          </FiltersAndStatsContainer>
+        </Section>
 
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'nowrap', justifyContent: 'center' }}>
-            {Object.keys(teamAggregatedData).map((tmName) => {
-              const tStats = teamAggregatedData[tmName];
-              const scorersObj = teamScorers[tmName] || {};
-              return (
-                <TeamStatsCard key={tmName}>
-                  <h3 style={{ marginTop: 0, marginBottom: '1rem', color: '#fff' }}>
-                    {tmName} Stats
-                  </h3>
-                  <p>Total Shots: {tStats.totalShots}</p>
-                  <p>Successful Shots: {tStats.successfulShots}</p>
-                  <p>Points: {tStats.points}</p>
-                  <p>Goals: {tStats.goals}</p>
-                  <p>Misses: {tStats.misses}</p>
-                  <p>Offensive Marks: {formatStat(tStats.offensiveMarks)}</p>
-                  <p>Frees: {formatStat(tStats.frees)}</p>
-                  <p>45s: {formatStat(tStats.fortyFives)}</p>
-                  <p>2-Pointers: {formatStat(tStats.twoPointers)}</p>
-                  <p>Avg Distance Above Half (m): {tStats.avgDistance}</p>
-                  <h4 style={{ marginTop: '1rem', color: '#fff' }}>Scorers</h4>
-                  {Object.keys(scorersObj).length === 0 && (
-                    <p style={{ margin: 0 }}>No scorers found</p>
-                  )}
-                  {Object.entries(scorersObj).map(([playerName, val]) => (
-                    <p key={playerName} style={{ margin: 0 }}>
-                      {playerName}:
-                      {val.goals > 0 && ` ${val.goals} goal(s)`}
-                      {val.points > 0 && ` ${val.points} point(s)`}
-                    </p>
-                  ))}
-                </TeamStatsCard>
-              );
-            })}
-          </div>
-        </PitchAndTeamStatsWrapper>
-      </Section>
+        {/* PDF Content: Half Pitch and Team Stats (landscape) */}
+        <Section id="pdf-content">
+          <PdfContentWrapper id="pdf-content">
+            {/* <Watermark>scorelect.com</Watermark> */}
+            <PitchAndTeamStatsWrapper>
+              <PitchView
+                allShots={allShots}
+                xScale={xScale}
+                yScale={yScale}
+                halfLineX={halfLineX}
+                goalX={goalX}
+                goalY={goalY}
+                onShotClick={handleShotClick}
+              />
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'nowrap', justifyContent: 'center' }}>
+                {Object.keys(teamAggregatedData).map((tmName) => {
+                  const tStats = teamAggregatedData[tmName];
+                  const scorersObj = teamScorers[tmName] || {};
+                  return (
+                    <StatsCard
+                      key={tmName}
+                      teamName={tmName}
+                      stats={tStats}
+                      scorers={scorersObj}
+                      formatCategory={formatCategory}
+                    />
+                  );
+                })}
+              </div>
+            </PitchAndTeamStatsWrapper>
+          </PdfContentWrapper>
+        </Section>
 
-      <div style={{ textAlign: 'center', marginTop: '20px' }}>
-        <RecalcButton onClick={handleRecalculate}>
-          Recalculate xP/xG for Target Dataset
-        </RecalcButton>
-      </div>
-
-      {/* Shot Details Modal */}
-      <Modal
-        isOpen={!!selectedShot}
-        onRequestClose={() => setSelectedShot(null)}
-        style={customModalStyles}
-        contentLabel="Shot Details Modal"
-      >
-        {selectedShot && (
-          <div style={{ lineHeight: '1.6' }}>
-            <h2 style={{ marginTop: 0, marginBottom: '1rem', color: '#ffc107' }}>Shot Details</h2>
-            <p><strong>Team:</strong> {selectedShot.team || 'N/A'}</p>
-            <p><strong>Player:</strong> {selectedShot.playerName || 'N/A'}</p>
-            <p><strong>Minute:</strong> {selectedShot.minute || 'N/A'}</p>
-            <p><strong>Action:</strong> {selectedShot.action || 'N/A'}</p>
-            <p>
-              <strong>Distance (m):</strong>{' '}
-              {selectedShot.translatedX !== undefined
-                ? selectedShot.translatedX.toFixed(1)
-                : 'N/A'}
-            </p>
-            <p><strong>Foot:</strong> {selectedShot.foot || 'N/A'}</p>
-            <p><strong>Pressure:</strong> {selectedShot.pressure || 'N/A'}</p>
-            <p><strong>Position:</strong> {selectedShot.position || 'N/A'}</p>
-            <p>
-              <strong>xP:</strong>{' '}
-              {typeof selectedShot.xPoints === 'number'
-                ? selectedShot.xPoints.toFixed(2)
-                : 'N/A'}
-            </p>
-            <p>
-              <strong>xP_ADV:</strong>{' '}
-              {typeof selectedShot.xP_adv === 'number'
-                ? selectedShot.xP_adv.toFixed(2)
-                : 'N/A'}
-            </p>
-          </div>
-        )}
-        <div style={{ textAlign: 'right', marginTop: '1rem' }}>
-          <RecalcButton onClick={() => setSelectedShot(null)} style={{ backgroundColor: '#444' }}>
-            Close
+        <div style={{ textAlign: 'center', marginTop: '20px' }}>
+          <RecalcButton onClick={handleRecalculate}>
+            Recalculate xP/xG for Target Dataset
           </RecalcButton>
         </div>
-      </Modal>
-    </PageContainer>
+
+        {/* Shot Details Modal */}
+        <Modal
+          isOpen={!!selectedShot}
+          onRequestClose={() => setSelectedShot(null)}
+          contentLabel="Shot Details Modal"
+          aria={{
+            labelledby: "shot-details-title",
+            describedby: "shot-details-description",
+          }}
+          style={customModalStyles}
+        >
+          {selectedShot && (
+            <div style={{ lineHeight: '1.6' }}>
+              {renderSelectedShotDetails()}
+            </div>
+          )}
+          <div style={{ textAlign: 'right', marginTop: '1rem' }}>
+            <RecalcButton onClick={() => setSelectedShot(null)} style={{ backgroundColor: '#444' }}>
+              Close
+            </RecalcButton>
+          </div>
+        </Modal>
+      </PageContainer>
+    </ErrorBoundary>
   );
 }
+
+

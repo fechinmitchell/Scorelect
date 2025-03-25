@@ -30,6 +30,7 @@ const pitchWidth = 145;
 const pitchHeight = 88;
 
 // ---------- Styled Components ----------
+
 const PageContainer = styled.div`
   background: #1c1a1a;
   min-height: 100vh;
@@ -139,12 +140,28 @@ const Tile = styled.div`
   }
 `;
 
+// ---------- New Styled Components for Pitch and Stats ----------
+
+// This container holds the pitch and team stats side by side.
 const PitchAndTeamStatsWrapper = styled.div`
   display: flex;
   gap: 2rem;
-  justify-content: center;
   align-items: flex-start;
+`;
+
+// A wrapper for the pitch so that it never shrinks.
+const PitchWrapper = styled.div`
+  flex-shrink: 0;
+`;
+
+// A horizontally scrollable container for the team stats cards.
+const StatsScrollContainer = styled.div`
+  display: flex;
+  gap: 1rem;
   flex-wrap: nowrap;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  flex: 1;
 `;
 
 const PitchSection = styled.section`
@@ -163,7 +180,6 @@ const TeamStatsCard = styled.div`
   align-self: flex-start;
 `;
 
-// New styled components for PDF content
 const PdfContentWrapper = styled.div`
   position: relative;
   background-color: #333;
@@ -186,64 +202,47 @@ const Watermark = styled.div`
   z-index: 10;
 `;
 
-// ---------- Helper Functions ----------
-
-function flattenShots(games = []) {
-  return games.flatMap((game) => game.gameData || []);
-}
-
-/*
-  translateShotToGoal() computes the Euclidean distance from a shot's (x,y) to the appropriate goal centre.
-  - For shots with x < half the pitch (72.5 m), we assume the left goal centre is at (0, pitchHeight/2).
-  - For shots with x ≥ 72.5 m, we assume the shot is aimed at the right goal (centre: [pitchWidth, pitchHeight/2]).
-  The computed distance is stored in the property distMeters.
-*/
-function translateShotToGoal(shot, fullPitch, pitchHeight) {
-  const leftGoalCentre = { x: 0, y: pitchHeight / 2 };
-  const rightGoalCentre = { x: fullPitch, y: pitchHeight / 2 };
-  const originalX = shot.x || 0;
-  const originalY = shot.y || 0;
-  const goalCentre = originalX < fullPitch / 2 ? leftGoalCentre : rightGoalCentre;
-  const dx = originalX - goalCentre.x;
-  const dy = originalY - goalCentre.y;
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  return { ...shot, distMeters: dist };
-}
-
-/*
-  downloadPDF() captures the content inside the element with id "pdf-content"
-  and creates a landscape PDF with a dark grey background and watermark.
-*/
-const downloadPDF = async (setIsDownloading) => {
-  setIsDownloading(true);
-  const input = document.getElementById('pdf-content');
-  if (!input) {
-    Swal.fire('Error', 'Could not find content to export.', 'error');
-    setIsDownloading(false);
-    return;
-  }
-  try {
-    const canvas = await html2canvas(input, { scale: 2 });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('l', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    pdf.setFillColor(50, 50, 50);
-    pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
-    const imgProps = pdf.getImageProperties(imgData);
-    const imgWidth = pdfWidth;
-    const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-    const marginTop = (pdfHeight - imgHeight) / 2;
-    pdf.addImage(imgData, 'PNG', 0, marginTop, imgWidth, imgHeight);
-    pdf.setFontSize(12);
-    pdf.setTextColor(255, 255, 255);
-    pdf.text("scorelect.com", pdfWidth - 40, pdfHeight - 10);
-    pdf.save('dashboard.pdf');
-  } catch (error) {
-    Swal.fire('Error', 'Failed to generate PDF.', 'error');
-  }
-  setIsDownloading(false);
+// ---------- Modal Styling ----------
+const customModalStyles = {
+  content: {
+    top: '50%',
+    left: '50%',
+    right: 'auto',
+    bottom: 'auto',
+    transform: 'translate(-50%, -50%)',
+    width: '600px',
+    maxHeight: '80vh',
+    padding: '30px',
+    borderRadius: '10px',
+    backgroundColor: '#2e2e2e',
+    color: '#fff',
+    overflow: 'auto',
+  },
+  overlay: {
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    zIndex: 9999,
+  },
 };
+
+// ---------- ErrorBoundary Component ----------
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return <h2 style={{ textAlign: 'center', color: 'red' }}>Something went wrong.</h2>;
+    }
+    return this.props.children;
+  }
+}
 
 // ---------- Modular Components ----------
 
@@ -396,50 +395,57 @@ function PitchView({ allShots, xScale, yScale, halfLineX, goalX, goalY, onShotCl
   );
 }
 
-// ---------- Updated Modal Styling ----------
-// Updated customModalStyles for a nicely styled and well-sized modal.
-const customModalStyles = {
-  content: {
-    top: '50%',
-    left: '50%',
-    right: 'auto',
-    bottom: 'auto',
-    transform: 'translate(-50%, -50%)',
-    width: '600px',
-    maxHeight: '80vh',
-    padding: '30px',
-    borderRadius: '10px',
-    backgroundColor: '#2e2e2e',
-    color: '#fff',
-    overflow: 'auto',
-  },
-  overlay: {
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    zIndex: 9999,
-  },
-};
+// ---------- Helper Functions ----------
 
-// ---------- ErrorBoundary Component ----------
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError(error) {
-    return { hasError: true };
-  }
-  componentDidCatch(error, errorInfo) {
-    console.error("ErrorBoundary caught an error", error, errorInfo);
-  }
-  render() {
-    if (this.state.hasError) {
-      return <h2 style={{ textAlign: 'center', color: 'red' }}>Something went wrong.</h2>;
-    }
-    return this.props.children;
-  }
+function flattenShots(games = []) {
+  return games.flatMap((game) => game.gameData || []);
 }
 
+function translateShotToGoal(shot, fullPitch, pitchHeight) {
+  const leftGoalCentre = { x: 0, y: pitchHeight / 2 };
+  const rightGoalCentre = { x: fullPitch, y: pitchHeight / 2 };
+  const originalX = shot.x || 0;
+  const originalY = shot.y || 0;
+  const goalCentre = originalX < fullPitch / 2 ? leftGoalCentre : rightGoalCentre;
+  const dx = originalX - goalCentre.x;
+  const dy = originalY - goalCentre.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  return { ...shot, distMeters: dist };
+}
+
+const downloadPDF = async (setIsDownloading) => {
+  setIsDownloading(true);
+  const input = document.getElementById('pdf-content');
+  if (!input) {
+    Swal.fire('Error', 'Could not find content to export.', 'error');
+    setIsDownloading(false);
+    return;
+  }
+  try {
+    const canvas = await html2canvas(input, { scale: 2 });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('l', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    pdf.setFillColor(50, 50, 50);
+    pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
+    const imgProps = pdf.getImageProperties(imgData);
+    const imgWidth = pdfWidth;
+    const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+    const marginTop = (pdfHeight - imgHeight) / 2;
+    pdf.addImage(imgData, 'PNG', 0, marginTop, imgWidth, imgHeight);
+    pdf.setFontSize(12);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("scorelect.com", pdfWidth - 40, pdfHeight - 10);
+    pdf.save('dashboard.pdf');
+  } catch (error) {
+    Swal.fire('Error', 'Failed to generate PDF.', 'error');
+  }
+  setIsDownloading(false);
+};
+
 // ---------- Main Component: GAAAnalysisDashboard ----------
+
 export default function GAAAnalysisDashboard() {
   const { state } = useLocation();
   const { file, sport, filters } = state || {};
@@ -773,18 +779,21 @@ export default function GAAAnalysisDashboard() {
         {/* PDF Content: Half Pitch and Team Stats (landscape) */}
         <Section id="pdf-content">
           <PdfContentWrapper id="pdf-content">
-            {/* <Watermark>scorelect.com</Watermark> */}
             <PitchAndTeamStatsWrapper>
-              <PitchView
-                allShots={allShots}
-                xScale={xScale}
-                yScale={yScale}
-                halfLineX={halfLineX}
-                goalX={goalX}
-                goalY={goalY}
-                onShotClick={handleShotClick}
-              />
-              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'nowrap', justifyContent: 'center' }}>
+              {/* Fixed Pitch */}
+              <PitchWrapper>
+                <PitchView
+                  allShots={allShots}
+                  xScale={xScale}
+                  yScale={yScale}
+                  halfLineX={halfLineX}
+                  goalX={goalX}
+                  goalY={goalY}
+                  onShotClick={handleShotClick}
+                />
+              </PitchWrapper>
+              {/* Scrollable Team Stats Container */}
+              <StatsScrollContainer>
                 {Object.keys(teamAggregatedData).map((tmName) => {
                   const tStats = teamAggregatedData[tmName];
                   const scorersObj = teamScorers[tmName] || {};
@@ -798,7 +807,7 @@ export default function GAAAnalysisDashboard() {
                     />
                   );
                 })}
-              </div>
+              </StatsScrollContainer>
             </PitchAndTeamStatsWrapper>
           </PdfContentWrapper>
         </Section>
@@ -835,5 +844,3 @@ export default function GAAAnalysisDashboard() {
     </ErrorBoundary>
   );
 }
-
-

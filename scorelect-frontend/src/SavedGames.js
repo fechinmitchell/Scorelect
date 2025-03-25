@@ -59,7 +59,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     }
   };
 
-  // Delete a single game using DELETE instead of POST
+  // Delete a single game using DELETE method and reading response once
   const handleDeleteGame = async (gameId, gameName) => {
     const user = auth.currentUser;
     if (!user) {
@@ -81,7 +81,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
         try {
           const token = await user.getIdToken();
           const response = await fetch(`${apiUrl}/delete-game`, {
-            method: 'DELETE', // Use DELETE method here
+            method: 'DELETE', // Use DELETE method
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`,
@@ -89,14 +89,13 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
             body: JSON.stringify({ uid: user.uid, gameId }),
           });
 
-          // Try parsing the response as JSON
+          // Read the response text once
+          const responseText = await response.text();
           let resultData;
           try {
-            resultData = await response.json();
-          } catch (jsonError) {
-            // If parsing fails, get the raw text (likely HTML)
-            const text = await response.text();
-            throw new Error(text || 'Unknown error occurred.');
+            resultData = JSON.parse(responseText);
+          } catch (error) {
+            throw new Error(responseText || 'Unknown error occurred.');
           }
 
           if (response.ok) {
@@ -240,7 +239,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
       }
       const datasetsRef = collection(db, 'datasets');
       const snapshot = await getDocs(datasetsRef);
-      // Optionally process new datasets
+      // Optionally process new datasets here
       fetchSavedGames();
       fetchPublishedDatasets();
 

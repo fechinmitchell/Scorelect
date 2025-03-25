@@ -1,5 +1,4 @@
 // src/components/SavedGames.js
-
 import React, { useEffect, useState, useContext } from 'react';
 import { getAuth } from 'firebase/auth';
 import Swal from 'sweetalert2';
@@ -60,7 +59,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     }
   };
 
-  // Delete a single game
+  // Delete a single game using DELETE instead of POST
   const handleDeleteGame = async (gameId, gameName) => {
     const user = auth.currentUser;
     if (!user) {
@@ -82,7 +81,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
         try {
           const token = await user.getIdToken();
           const response = await fetch(`${apiUrl}/delete-game`, {
-            method: 'POST',
+            method: 'DELETE', // Use DELETE method here
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`,
@@ -90,7 +89,16 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
             body: JSON.stringify({ uid: user.uid, gameId }),
           });
 
-          const resultData = await parseJSONNoNaN(response);
+          // Try parsing the response as JSON
+          let resultData;
+          try {
+            resultData = await response.json();
+          } catch (jsonError) {
+            // If parsing fails, get the raw text (likely HTML)
+            const text = await response.text();
+            throw new Error(text || 'Unknown error occurred.');
+          }
+
           if (response.ok) {
             Swal.fire('Deleted!', `Game "${gameName}" has been deleted.`, 'success');
             fetchSavedGames();
@@ -232,9 +240,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
       }
       const datasetsRef = collection(db, 'datasets');
       const snapshot = await getDocs(datasetsRef);
-      // Not specifically used here, but you can do something with newDatasets if needed
-      // or rely on fetchSavedGames/fetchPublishedDatasets below
-
+      // Optionally process new datasets
       fetchSavedGames();
       fetchPublishedDatasets();
 
@@ -252,7 +258,6 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     fetchPublishedDatasets();
   };
 
-  // Loading?
   if (loading) {
     return (
       <div className="saved-games-container">
@@ -261,7 +266,6 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     );
   }
 
-  // Fetch error?
   if (fetchError) {
     return (
       <div className="saved-games-container">
@@ -270,7 +274,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     );
   }
 
-  // Filter to only datasets containing the selectedSport
+  // Filter datasets to only include games for the selected sport
   const filteredDatasets = Object.entries(datasets).reduce((acc, [datasetName, datasetInfo]) => {
     const { games, isPublished } = datasetInfo;
     const sportFilteredGames = games.filter((g) => g.sport === selectedSport);
@@ -293,7 +297,6 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
         <button className="refresh-button" onClick={handleRefresh}>Refresh</button>
       </div>
 
-      {/* Publish Dataset Modal */}
       {isPublishModalOpen && selectedDataset && (
         <PublishDataset
           isOpen={isPublishModalOpen}
@@ -305,7 +308,6 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
         />
       )}
 
-      {/* Update Dataset Modal */}
       {isUpdateModalOpen && selectedDataset && (
         <UpdateDataset
           isOpen={isUpdateModalOpen}

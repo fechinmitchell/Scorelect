@@ -11,6 +11,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 // Import pitch rendering functions from GAAPitchComponents.js
+// (We will fix the object color handling in there.)
 import { renderLegendOneSideShots, renderOneSidePitchShots } from './GAAPitchComponents';
 
 // ----- Environment-based API URLs -----
@@ -32,13 +33,12 @@ const defaultMapping = {
   "fortyfive short": "setplaymiss"
 };
 
-// ---------- Fallback Colors for Outcomes ----------
+// ---------- Fallback Colors ----------
 const fallbackColors = {
   "goal": "#FFFF33",
   "point": "#39FF14",
   "miss": "red",
-  // Note: setplayscore is originally defined as a string, but we now use an object for dynamic styling.
-  "setplayscore": "#39FF14",
+  "setplayscore": "#39FF14", // fallback if no dynamic color
   "setplaymiss": { fill: "red", stroke: "white" },
   "penalty goal": "#FF8C00",
   "blocked": "orange"
@@ -299,7 +299,12 @@ function GearSettingsModal({
 }) {
   const mappingKeys = Object.keys(actionMapping);
   return (
-    <Modal isOpen={isOpen} onRequestClose={onRequestClose} style={customModalStyles} contentLabel="Gear Settings">
+    <Modal
+      isOpen={isOpen}
+      onRequestClose={onRequestClose}
+      style={customModalStyles}
+      contentLabel="Gear Settings"
+    >
       <h2>Settings</h2>
       <div style={{ marginBottom: '1rem' }}>
         <h3>Action Mapping Settings</h3>
@@ -309,7 +314,9 @@ function GearSettingsModal({
               <MappingLabel>{key}</MappingLabel>
               <MappingSelect
                 value={actionMapping[key]}
-                onChange={(e) => setActionMapping((prev) => ({ ...prev, [key]: e.target.value }))}
+                onChange={(e) =>
+                  setActionMapping((prev) => ({ ...prev, [key]: e.target.value }))
+                }
               >
                 {[
                   { value: 'setplayscore', label: 'Set Play Score (scored)' },
@@ -337,7 +344,9 @@ function GearSettingsModal({
             <input
               type="color"
               value={markerColors.point}
-              onChange={(e) => setMarkerColors((prev) => ({ ...prev, point: e.target.value }))}
+              onChange={(e) =>
+                setMarkerColors((prev) => ({ ...prev, point: e.target.value }))
+              }
             />
           </div>
           <div>
@@ -345,7 +354,9 @@ function GearSettingsModal({
             <input
               type="color"
               value={markerColors.setplayscore}
-              onChange={(e) => setMarkerColors((prev) => ({ ...prev, setplayscore: e.target.value }))}
+              onChange={(e) =>
+                setMarkerColors((prev) => ({ ...prev, setplayscore: e.target.value }))
+              }
             />
           </div>
         </div>
@@ -361,7 +372,10 @@ function GearSettingsModal({
         >
           Save Settings
         </RecalcButton>
-        <RecalcButton onClick={onRequestClose} style={{ backgroundColor: '#444', marginLeft: '1rem' }}>
+        <RecalcButton
+          onClick={onRequestClose}
+          style={{ backgroundColor: '#444', marginLeft: '1rem' }}
+        >
           Close
         </RecalcButton>
       </div>
@@ -392,7 +406,17 @@ const getRenderType = (rawAction, mapping) => {
 };
 
 // ---------- Pitch Rendering ----------
-function PitchView({ allShots, xScale, yScale, halfLineX, goalX, goalY, onShotClick, colors, legendColors }) {
+function PitchView({
+  allShots,
+  xScale,
+  yScale,
+  halfLineX,
+  goalX,
+  goalY,
+  onShotClick,
+  colors,
+  legendColors,
+}) {
   return (
     <PitchSection>
       <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -473,7 +497,9 @@ class ErrorBoundary extends React.Component {
   }
   render() {
     if (this.state.hasError) {
-      return <h2 style={{ textAlign: 'center', color: 'red' }}>Something went wrong.</h2>;
+      return (
+        <h2 style={{ textAlign: 'center', color: 'red' }}>Something went wrong.</h2>
+      );
     }
     return this.props.children;
   }
@@ -488,8 +514,10 @@ function FiltersBar({ appliedFilters, handleFilterChange, filterOptions }) {
         onChange={(e) => handleFilterChange('match', e.target.value)}
       >
         <option value="">All Matches</option>
-        {filterOptions.matches.map(match => (
-          <option key={match} value={match}>{match}</option>
+        {filterOptions.matches.map((match) => (
+          <option key={match} value={match}>
+            {match}
+          </option>
         ))}
       </FilterSelect>
       <FilterSelect
@@ -497,8 +525,10 @@ function FiltersBar({ appliedFilters, handleFilterChange, filterOptions }) {
         onChange={(e) => handleFilterChange('team', e.target.value)}
       >
         <option value="">All Teams</option>
-        {filterOptions.teams.map(team => (
-          <option key={team} value={team}>{team}</option>
+        {filterOptions.teams.map((team) => (
+          <option key={team} value={team}>
+            {team}
+          </option>
         ))}
       </FilterSelect>
       <FilterSelect
@@ -506,8 +536,10 @@ function FiltersBar({ appliedFilters, handleFilterChange, filterOptions }) {
         onChange={(e) => handleFilterChange('player', e.target.value)}
       >
         <option value="">All Players</option>
-        {filterOptions.players.map(player => (
-          <option key={player} value={player}>{player}</option>
+        {filterOptions.players.map((player) => (
+          <option key={player} value={player}>
+            {player}
+          </option>
         ))}
       </FilterSelect>
       <FilterSelect
@@ -515,8 +547,10 @@ function FiltersBar({ appliedFilters, handleFilterChange, filterOptions }) {
         onChange={(e) => handleFilterChange('action', e.target.value)}
       >
         <option value="">All Actions</option>
-        {filterOptions.actions.map(action => (
-          <option key={action} value={action}>{action}</option>
+        {filterOptions.actions.map((action) => (
+          <option key={action} value={action}>
+            {action}
+          </option>
         ))}
       </FilterSelect>
     </FiltersContainer>
@@ -555,10 +589,30 @@ function StatsCard({ teamName, stats, scorers, formatCategory }) {
       <p>Points: {stats.points}</p>
       <p>Goals: {stats.goals}</p>
       <p>Misses: {stats.misses}</p>
-      <p>Offensive Marks: {formatCategory(stats.offensiveMarkAttempts || 0, stats.offensiveMarkScored || 0)}</p>
-      <p>Frees: {formatCategory(stats.freeAttempts || 0, stats.freeScored || 0)}</p>
-      <p>45s: {formatCategory(stats.fortyFiveAttempts || 0, stats.fortyFiveScored || 0)}</p>
-      <p>2-Pointers: {formatCategory(stats.twoPointerAttempts || 0, stats.twoPointerScored || 0)}</p>
+      <p>
+        Offensive Marks:{" "}
+        {formatCategory(
+          stats.offensiveMarkAttempts || 0,
+          stats.offensiveMarkScored || 0
+        )}
+      </p>
+      <p>
+        Frees: {formatCategory(stats.freeAttempts || 0, stats.freeScored || 0)}
+      </p>
+      <p>
+        45s:{" "}
+        {formatCategory(
+          stats.fortyFiveAttempts || 0,
+          stats.fortyFiveScored || 0
+        )}
+      </p>
+      <p>
+        2-Pointers:{" "}
+        {formatCategory(
+          stats.twoPointerAttempts || 0,
+          stats.twoPointerScored || 0
+        )}
+      </p>
       <p>Avg Distance from Goal (m): {stats.avgDistance}</p>
       <h4 style={{ marginTop: '1rem', color: '#fff' }}>Scorers</h4>
       {Object.keys(scorers).length === 0 ? (
@@ -566,7 +620,9 @@ function StatsCard({ teamName, stats, scorers, formatCategory }) {
       ) : (
         Object.entries(scorers).map(([playerName, val]) => (
           <p key={playerName} style={{ margin: 0 }}>
-            {playerName}: {val.goals > 0 && `${val.goals} goal(s)`} {val.points > 0 && `${val.points} point(s)`}
+            {playerName}:{" "}
+            {val.goals > 0 && `${val.goals} goal(s)`}{" "}
+            {val.points > 0 && `${val.points} point(s)`}
           </p>
         ))
       )}
@@ -588,7 +644,7 @@ export default function GAAAnalysisDashboard() {
   });
   const [isGearModalOpen, setIsGearModalOpen] = useState(false);
 
-  // New marker colors state
+  // Marker colors state
   const [markerColors, setMarkerColors] = useState({
     point: "#39FF14",
     setplayscore: "#39FF14",
@@ -627,25 +683,26 @@ export default function GAAAnalysisDashboard() {
   const goalX = 0;
   const goalY = pitchHeight / 2;
 
-  // Create dynamic colors based on markerColors state.
-  // Note: For "setplayscore", we now pass an object with a fill property.
+  // Create dynamic colors that handle "setplayscore" as an object
+  // with fill and stroke both set to markerColors.setplayscore:
   const dynamicColors = useMemo(() => ({
     "goal": fallbackColors.goal,
     "point": markerColors.point,
     "miss": fallbackColors.miss,
-    "setplayscore": { fill: markerColors.setplayscore },
+    "setplayscore": {
+      fill: markerColors.setplayscore,
+      stroke: markerColors.setplayscore
+    },
     "setplaymiss": fallbackColors.setplaymiss,
     "penalty goal": fallbackColors["penalty goal"],
     "blocked": fallbackColors.blocked,
   }), [markerColors]);
 
-  // Create dynamic legend colors for consistency.
   const dynamicLegendColors = useMemo(() => ({
     "goal": fallbackLegendColors.goal,
     "point": markerColors.point,
     "miss": fallbackLegendColors.miss,
-    // For legend, a simple string is expected.
-    "setplayscore": markerColors.setplayscore,
+    "setplayscore": markerColors.setplayscore, // for the legend, a string is enough
     "setplaymiss": fallbackLegendColors.setplaymiss,
     "penalty goal": fallbackLegendColors["penalty goal"],
     "blocked": fallbackLegendColors.blocked,
@@ -657,7 +714,9 @@ export default function GAAAnalysisDashboard() {
 
   useEffect(() => {
     if (!file || sport !== 'GAA') {
-      Swal.fire('No Data', 'Invalid or no GAA dataset found.', 'error').then(() => navigate('/analysis'));
+      Swal.fire('No Data', 'Invalid or no GAA dataset found.', 'error').then(() =>
+        navigate('/analysis')
+      );
       return;
     }
     setGames(file.games || []);
@@ -770,13 +829,17 @@ export default function GAAAnalysisDashboard() {
         aggregator[tm].goals++;
         aggregator[tm].successfulShots++;
         const pName = shot.playerName || 'NoName';
-        if (!scorersMap[tm][pName]) scorersMap[tm][pName] = { goals: 0, points: 0 };
+        if (!scorersMap[tm][pName]) {
+          scorersMap[tm][pName] = { goals: 0, points: 0 };
+        }
         scorersMap[tm][pName].goals++;
       } else if (action === 'point') {
         aggregator[tm].points++;
         aggregator[tm].successfulShots++;
         const pName = shot.playerName || 'NoName';
-        if (!scorersMap[tm][pName]) scorersMap[tm][pName] = { goals: 0, points: 0 };
+        if (!scorersMap[tm][pName]) {
+          scorersMap[tm][pName] = { goals: 0, points: 0 };
+        }
         scorersMap[tm][pName].points++;
       } else if (action === 'offensive mark') {
         aggregator[tm].offensiveMarkAttempts++;
@@ -824,7 +887,9 @@ export default function GAAAnalysisDashboard() {
     });
     Object.keys(aggregator).forEach(tm => {
       const tStats = aggregator[tm];
-      tStats.avgDistance = tStats.totalShots > 0 ? (teamDistance[tm] / tStats.totalShots).toFixed(2) : '0.00';
+      tStats.avgDistance = tStats.totalShots > 0
+        ? (teamDistance[tm] / tStats.totalShots).toFixed(2)
+        : '0.00';
     });
     return { aggregator, scorersMap };
   }, [games, pitchWidth, pitchHeight]);
@@ -906,13 +971,21 @@ export default function GAAAnalysisDashboard() {
 
         {/* Top Controls Bar: Filters + Download/Gear */}
         <ControlsBar style={{ justifyContent: 'center' }}>
-          <div style={{ padding: '2px', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <div
+            style={{
+              padding: '2px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              flexWrap: 'wrap'
+            }}
+          >
             <FilterSelect
               value={appliedFilters.match}
               onChange={(e) => handleFilterChange('match', e.target.value)}
             >
               <option value="">All Matches</option>
-              {filterOptions.matches.map(match => (
+              {filterOptions.matches.map((match) => (
                 <option key={match} value={match}>
                   {match}
                 </option>
@@ -923,7 +996,7 @@ export default function GAAAnalysisDashboard() {
               onChange={(e) => handleFilterChange('team', e.target.value)}
             >
               <option value="">All Teams</option>
-              {filterOptions.teams.map(team => (
+              {filterOptions.teams.map((team) => (
                 <option key={team} value={team}>
                   {team}
                 </option>
@@ -934,7 +1007,7 @@ export default function GAAAnalysisDashboard() {
               onChange={(e) => handleFilterChange('player', e.target.value)}
             >
               <option value="">All Players</option>
-              {filterOptions.players.map(player => (
+              {filterOptions.players.map((player) => (
                 <option key={player} value={player}>
                   {player}
                 </option>
@@ -945,7 +1018,7 @@ export default function GAAAnalysisDashboard() {
               onChange={(e) => handleFilterChange('action', e.target.value)}
             >
               <option value="">All Actions</option>
-              {filterOptions.actions.map(action => (
+              {filterOptions.actions.map((action) => (
                 <option key={action} value={action}>
                   {action}
                 </option>
@@ -999,26 +1072,49 @@ export default function GAAAnalysisDashboard() {
                   goalX={goalX}
                   goalY={goalY}
                   onShotClick={handleShotClick}
-                  colors={dynamicColors} // Dynamic marker colors (with setplayscore as an object)
-                  legendColors={dynamicLegendColors} // Dynamic legend colors
+                  colors={dynamicColors}      // <-- pass dynamic object-based colors
+                  legendColors={dynamicLegendColors}
                 />
               </PitchWrapper>
               <StatsScrollContainer>
-                {Object.keys(teamAggregatedData).map(tmName => {
+                {Object.keys(teamAggregatedData).map((tmName) => {
                   const tStats = teamAggregatedData[tmName];
                   const scorersObj = teamScorers[tmName] || {};
                   return (
                     <TeamStatsCard key={tmName}>
-                      <h3 style={{ marginTop: 0, marginBottom: '1rem', color: '#fff' }}>{tmName} Stats</h3>
+                      <h3 style={{ marginTop: 0, marginBottom: '1rem', color: '#fff' }}>
+                        {tmName} Stats
+                      </h3>
                       <p>Total Shots: {tStats.totalShots}</p>
                       <p>Successful Shots: {tStats.successfulShots || 0}</p>
                       <p>Points: {tStats.points}</p>
                       <p>Goals: {tStats.goals}</p>
                       <p>Misses: {tStats.misses}</p>
-                      <p>Offensive Marks: {formatCategory(tStats.offensiveMarkAttempts || 0, tStats.offensiveMarkScored || 0)}</p>
-                      <p>Frees: {formatCategory(tStats.freeAttempts || 0, tStats.freeScored || 0)}</p>
-                      <p>45s: {formatCategory(tStats.fortyFiveAttempts || 0, tStats.fortyFiveScored || 0)}</p>
-                      <p>2-Pointers: {formatCategory(tStats.twoPointerAttempts || 0, tStats.twoPointerScored || 0)}</p>
+                      <p>
+                        Offensive Marks:{" "}
+                        {formatCategory(
+                          tStats.offensiveMarkAttempts || 0,
+                          tStats.offensiveMarkScored || 0
+                        )}
+                      </p>
+                      <p>
+                        Frees:{" "}
+                        {formatCategory(tStats.freeAttempts || 0, tStats.freeScored || 0)}
+                      </p>
+                      <p>
+                        45s:{" "}
+                        {formatCategory(
+                          tStats.fortyFiveAttempts || 0,
+                          tStats.fortyFiveScored || 0
+                        )}
+                      </p>
+                      <p>
+                        2-Pointers:{" "}
+                        {formatCategory(
+                          tStats.twoPointerAttempts || 0,
+                          tStats.twoPointerScored || 0
+                        )}
+                      </p>
                       <p>Avg Distance from Goal (m): {tStats.avgDistance}</p>
                       <h4 style={{ marginTop: '1rem', color: '#fff' }}>Scorers</h4>
                       {Object.keys(scorersObj).length === 0 ? (
@@ -1026,7 +1122,9 @@ export default function GAAAnalysisDashboard() {
                       ) : (
                         Object.entries(scorersObj).map(([playerName, val]) => (
                           <p key={playerName} style={{ margin: 0 }}>
-                            {playerName}: {val.goals > 0 && `${val.goals} goal(s)`} {val.points > 0 && `${val.points} point(s)`}
+                            {playerName}:{" "}
+                            {val.goals > 0 && `${val.goals} goal(s)`}{" "}
+                            {val.points > 0 && `${val.points} point(s)`}
                           </p>
                         ))
                       )}

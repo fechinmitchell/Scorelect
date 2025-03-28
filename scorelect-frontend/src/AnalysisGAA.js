@@ -1,3 +1,4 @@
+// AnalysisGAA.js
 import React, { useState, useEffect, useContext } from 'react';
 import styled from 'styled-components';
 import { useDropzone } from 'react-dropzone';
@@ -6,11 +7,12 @@ import Swal from 'sweetalert2';
 import { FaUpload } from 'react-icons/fa';
 import { useAuth } from './AuthContext';
 import { SavedGamesContext } from './components/SavedGamesContext';
-import SportButton from './SportButton';
-import Modal from 'react-modal';
 import './Analysis.css';
+import { useUser } from './UserContext';
+import { doc, getDoc } from 'firebase/firestore';
+import { firestore } from './firebase';
 
-// Styled Components for a dark-themed analysis page
+// Styled Components
 const Container = styled.div`
   display: flex;
   flex-direction: column;
@@ -123,6 +125,7 @@ const ResetButton = styled.button`
   }
 `;
 
+// Define the missing Select styled component
 const Select = styled.select`
   width: 100%;
   max-width: 300px;
@@ -132,29 +135,22 @@ const Select = styled.select`
   border: 1px solid #ccc;
 `;
 
-Modal.setAppElement('#root');
-
 const AnalysisGAA = () => {
+  const { userRole } = useUser();
+  const { currentUser, loading } = useAuth();
   const navigate = useNavigate();
-  const { currentUser, userData, loading } = useAuth();
   const { datasets } = useContext(SavedGamesContext);
 
-  // Always set the current sport to "GAA"
   const [currentSport] = useState('GAA');
   const [uploadedFile, setUploadedFile] = useState(null);
   const [parsedData, setParsedData] = useState(null);
-
-  // Saved dataset selection state (only one dropdown for dataset selection)
   const [selectedUserDataset, setSelectedUserDataset] = useState('');
-  // New state: for match selection dropdown; default is "all" (i.e., all matches)
   const [selectedMatch, setSelectedMatch] = useState('all');
-
-  // Additional filters – these dropdowns will be populated from the dataset data
   const [selectedTeam, setSelectedTeam] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState('');
   const [selectedAction, setSelectedAction] = useState('');
-  // State to hold unique filter options extracted from the dataset
   const [filterOptions, setFilterOptions] = useState({ teams: [], players: [], actions: [] });
+  const [analysisPermission, setAnalysisPermission] = useState(0);
 
   // Dropzone file upload handler
   const onDrop = (acceptedFiles) => {
@@ -184,16 +180,48 @@ const AnalysisGAA = () => {
     multiple: false,
   });
 
-  // Check authentication only; premium check removed so all signed-in users have access
+  // Check authentication and permissions for accessing the Analysis page.
+  // If analysisPermission is 0, anonymous access is allowed.
   useEffect(() => {
-    if (loading) return;
-    if (!currentUser) {
-      Swal.fire('Authentication Required', 'Please sign in to access this page.', 'warning')
-        .then(() => navigate('/signin'));
-    }
-  }, [currentUser, loading, navigate]);
+    if (loading) return; // Wait for auth state resolution
 
-  // Extract unique filter options (teams, players, actions) from the dataset once available
+    const checkPermission = async () => {
+      try {
+        const settingsRef = doc(firestore, 'adminSettings', 'config');
+        const settingsSnap = await getDoc(settingsRef);
+        let perm = 0;
+        if (settingsSnap.exists()) {
+          const perms = settingsSnap.data().permissions || {};
+          perm = perms['analysis'] || 0;
+        }
+        setAnalysisPermission(perm);
+
+        // If permission > 0 and no user is logged in, force sign in.
+        if (perm > 0 && !currentUser) {
+          Swal.fire('Authentication Required', 'Please sign in to access this page.', 'warning')
+            .then(() => navigate('/signin'));
+        }
+        // Additional check: if user is logged in but their role doesn't match.
+        else if (currentUser) {
+          if (perm === 1 && userRole !== 'free') {
+            Swal.fire('Access Denied', 'This page is available only to free users.', 'error')
+              .then(() => navigate('/'));
+          } else if (perm === 2 && userRole !== 'premium') {
+            Swal.fire('Access Denied', 'This page is available only to premium users.', 'error')
+              .then(() => navigate('/'));
+          }
+        }
+      } catch (error) {
+        console.error('Error checking permissions:', error);
+        Swal.fire('Error', 'Could not verify permissions. Please try again later.', 'error')
+          .then(() => navigate('/'));
+      }
+    };
+
+    checkPermission();
+  }, [currentUser, loading, userRole, navigate]);
+
+  // Extract unique filter options from dataset
   useEffect(() => {
     let dataset = parsedData || (selectedUserDataset && datasets[selectedUserDataset]);
     if (dataset && dataset.games && Array.isArray(dataset.games)) {
@@ -217,7 +245,7 @@ const AnalysisGAA = () => {
     }
   }, [parsedData, selectedUserDataset, datasets]);
 
-  // Handler for Continue button: Build the dataset and filters then navigate to the GAA analysis dashboard
+  // Handler for Continue button
   const handleContinue = () => {
     let dataset;
     if (parsedData) {
@@ -229,7 +257,6 @@ const AnalysisGAA = () => {
       return;
     }
 
-    // If a specific match is chosen (i.e. not "all"), filter the dataset's games accordingly
     if (selectedMatch !== 'all' && dataset.games) {
       dataset = {
         ...dataset,
@@ -239,18 +266,16 @@ const AnalysisGAA = () => {
       };
     }
     
-    // Build filters object based on dropdown selections
     const filters = {
       team: selectedTeam || null,
       player: selectedPlayer || null,
       action: selectedAction || null,
     };
 
-    // Navigate to your dedicated GAA analysis dashboard page
     navigate('/analysis/gaa-dashboard', { state: { file: dataset, sport: 'GAA', filters } });
   };
 
-  // Handler for Reset button: Clear selections
+  // Handler for Reset button
   const handleReset = () => {
     setUploadedFile(null);
     setParsedData(null);
@@ -269,19 +294,15 @@ const AnalysisGAA = () => {
         Select a saved dataset or upload a new one to analyze your GAA match data. Then use the filters below.
       </InstructionText>
 
-      {/* Saved Datasets Section (accessible to all authenticated users) */}
+      {/* Saved Datasets Section */}
       {Object.keys(datasets).length > 0 ? (
         <SavedDatasetsContainer>
           <SectionTitle>Analyze from Your Saved Datasets</SectionTitle>
           <InstructionText>Select one of your saved datasets.</InstructionText>
-          <Select
-            value={selectedUserDataset}
-            onChange={(e) => {
-              setSelectedUserDataset(e.target.value);
-              // Reset match selection when dataset changes
-              setSelectedMatch('all');
-            }}
-          >
+          <Select value={selectedUserDataset} onChange={(e) => {
+            setSelectedUserDataset(e.target.value);
+            setSelectedMatch('all');
+          }}>
             <option value="">Select a Dataset</option>
             {Object.keys(datasets).map((datasetName) => (
               <option key={datasetName} value={datasetName}>
@@ -293,10 +314,7 @@ const AnalysisGAA = () => {
             datasets[selectedUserDataset]?.games &&
             datasets[selectedUserDataset].games.length > 0 && (
               <>
-                <Select
-                  value={selectedMatch}
-                  onChange={(e) => setSelectedMatch(e.target.value)}
-                >
+                <Select value={selectedMatch} onChange={(e) => setSelectedMatch(e.target.value)}>
                   <option value="all">All Matches</option>
                   {datasets[selectedUserDataset].games.map((game) => {
                     const id = game.gameId || game.gameName;
@@ -336,7 +354,7 @@ const AnalysisGAA = () => {
         <p style={{ color: '#501387' }}>Uploaded File: {uploadedFile.name}</p>
       )}
 
-      {/* Additional Filters as Dropdowns */}
+      {/* Additional Filters */}
       <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', width: '800px', maxWidth: '90%', marginTop: '40px' }}>
         <SectionTitle style={{ color: '#501387' }}>Additional Filters</SectionTitle>
         <Select value={selectedTeam} onChange={(e) => setSelectedTeam(e.target.value)}>
@@ -365,7 +383,7 @@ const AnalysisGAA = () => {
         </Select>
       </div>
 
-      {/* Bottom Buttons Group */}
+      {/* Bottom Buttons */}
       <ButtonGroup>
         <ContinueButton onClick={handleContinue}>Continue</ContinueButton>
         <ResetButton onClick={handleReset}>Reset</ResetButton>

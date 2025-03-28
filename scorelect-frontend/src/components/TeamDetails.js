@@ -1,18 +1,15 @@
-// src/components/TeamDetails.js
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from '../firebase';
 import Swal from 'sweetalert2';
-import { Stage, Layer, Group, Text } from 'react-konva';
+import { Stage } from 'react-konva';
 import Modal from 'react-modal';
-import { Radar } from 'react-chartjs-2';
-import 'chart.js/auto';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import PropTypes from 'prop-types';
 import styled from 'styled-components';
 import './TeamDetails.css';
-
-// Import shared pitch components and helper functions
 import { 
   renderGAAPitch, 
   renderOneSidePitchShots, 
@@ -21,36 +18,28 @@ import {
   getShotCategory 
 } from './GAAPitchComponents';
 
-// ------------------------
-// STYLED COMPONENTS
-// ------------------------
+Modal.setAppElement('#root');
 
-// 1) Top-level page container for a consistent background and spacing.
+/* ─── Styled Components ───────────────────────────────────────────── */
 const PageContainer = styled.div`
   position: relative;
-  color: #f0f0f0; 
-  background: #1c1c1c; 
+  color: #f0f0f0;
+  background: #1c1c1c;
   min-height: 100vh;
   padding: 2rem;
 `;
-
-// 2) Section to group content (filters, pitch, stats, etc.).
-const Section = styled.div`
+const Section = styled.section`
   background: #2a2a2a;
   border-radius: 10px;
   padding: 1.5rem;
   margin-bottom: 2rem;
 `;
-
-// 3) A universal title style (for page headings or sub-headings).
 const Title = styled.h2`
   text-align: center;
-  font-weight: 600;
   margin-bottom: 1rem;
-  color: #ffc107; /* bright accent color */
+  font-weight: 600;
+  color: #ffc107;
 `;
-
-// 4) Container for the filters.
 const FiltersContainer = styled.div`
   background: #3a3a3a;
   padding: 1rem;
@@ -63,15 +52,11 @@ const FiltersContainer = styled.div`
   justify-content: center;
   align-items: center;
 `;
-
-// 5) Filter label (optional, if you want consistent label styling).
 const FilterLabel = styled.label`
   color: #fff;
   font-weight: bold;
   margin-right: 0.5rem;
 `;
-
-// 6) Styled select for filter dropdowns.
 const Select = styled.select`
   padding: 0.5rem;
   border-radius: 5px;
@@ -81,17 +66,13 @@ const Select = styled.select`
   min-width: 150px;
   font-size: 0.9rem;
 `;
-
-// 7) A container to hold the pitch and the stats side-by-side.
 const PitchAndStatsContainer = styled.div`
   display: flex;
   gap: 2rem;
   justify-content: center;
   align-items: flex-start;
-  flex-wrap: wrap; /* allows wrapping on smaller screens */
+  flex-wrap: wrap;
 `;
-
-// 8) A container for the stats card / panel on the right.
 const StatsCard = styled.div`
   background: #333;
   padding: 1rem;
@@ -99,21 +80,15 @@ const StatsCard = styled.div`
   min-width: 250px;
   max-width: 350px;
 `;
-
-// 9) Card heading for the stats panel.
 const StatsHeading = styled.h3`
   margin-top: 0;
   margin-bottom: 1rem;
   font-weight: 600;
-  color: #ffc107; /* bright accent color */
+  color: #ffc107;
 `;
-
-// 10) Simple text for labels in the stats panel.
 const StatItem = styled.p`
   margin: 0.25rem 0;
 `;
-
-// 11) A reusable styled button (optional).
 const StyledButton = styled.button`
   background-color: #4f8ef7;
   color: #fff;
@@ -125,156 +100,280 @@ const StyledButton = styled.button`
   cursor: pointer;
   box-shadow: 0 3px 5px rgba(0,0,0,0.2);
   transition: background 0.3s ease;
-
+  margin: 0 0.5rem;
   &:hover {
     background-color: #357ad2;
   }
 `;
-
-// 12) GraphTitle is retained from your code, or replaced by the new Title styled component.
-const GraphTitle = styled.h2`
-  text-align: center;
-  margin-bottom: 10px;
-  color: #f0f0f0;
+const GearButton = styled.button`
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #ffc107;
+  cursor: pointer;
+`;
+const GearBox = styled.div`
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 0.25rem;
+  display: inline-flex;
+  align-items: center;
+`;
+const PdfContentWrapper = styled.div`
+  position: relative;
+  background-color: #333;
+  padding: 1rem;
 `;
 
-// Make Modal accessible
-Modal.setAppElement('#root');
+/* ─── Constants ───────────────────────────────────────────────────────── */
+const pitchWidthConst = 145;
+const pitchHeightConst = 88;
+const canvasSizeMainConst = { width: 930, height: 530 };
 
-// Default colors and canvas size
-const defaultPitchColor = '#006400';
-const defaultLineColor = '#FFFFFF';
-const defaultLightStripeColor = '#228B22';
-const defaultDarkStripeColor = '#006400';
-const canvasSize = { width: 930, height: 530 };
+const defaultPitchColor = "#000000";
+const defaultLightStripeColor = "#228B22";
+const defaultDarkStripeColor = "#006400";
+const defaultLineColor = "#FFFFFF";
 
-// InfoIcon Component for tooltips
-const InfoIcon = ({ text }) => (
-  <span style={{ marginLeft: '6px', position: 'relative' }}>
-    <span
-      style={{
-        display: 'inline-block',
-        width: '14px',
-        height: '14px',
-        borderRadius: '50%',
-        backgroundColor: '#666',
-        color: '#fff',
-        textAlign: 'center',
-        fontSize: '10px',
-        cursor: 'pointer',
-        fontWeight: 'bold',
-        lineHeight: '14px',
-      }}
-      title={text}
-    >
-      i
-    </span>
-  </span>
-);
-InfoIcon.propTypes = {
-  text: PropTypes.string.isRequired,
+const defaultMapping = {
+  "free": "setplayscore",
+  "free miss": "setplaymiss",
+  "free wide": "setplaymiss",
+  "free short": "setplaymiss",
+  "fortyfive": "setplayscore",
+  "fortyfive wide": "setplaymiss",
+  "fortyfive short": "setplaymiss"
 };
 
-// Loading and Error Components
-function LoadingIndicator() {
-  return (
-    <div className="loading-container">
-      <div className="spinner"></div>
-      <p>Loading team data...</p>
-    </div>
-  );
-}
-
-function ErrorMessage({ message }) {
-  return (
-    <div className="error-container">
-      <p>{message}</p>
-    </div>
-  );
-}
-ErrorMessage.propTypes = {
-  message: PropTypes.string.isRequired,
+const fallbackColors = {
+  "goal": "#FFFF33",
+  "point": "#39FF14",
+  "miss": "red",
+  "setplayscore": "#39FF14",
+  "setplaymiss": "red",
+  "penalty goal": "#FF8C00",
+  "blocked": "red"
 };
 
-// Custom modal styles
+const fallbackLegendColors = {
+  "goal": "#FFFF33",
+  "point": "#39FF14",
+  "miss": "red",
+  "setplayscore": "#39FF14",
+  "setplaymiss": "red",
+  "penalty goal": "#FF8C00",
+  "blocked": "red"
+};
+
 const customModalStyles = {
   content: {
-    maxWidth: '500px',
-    margin: 'auto',
-    padding: '20px',
-    borderRadius: '8px',
-    backgroundColor: '#2e2e2e',
+    top: '50%',
+    left: '50%',
+    right: 'auto',
+    bottom: 'auto',
+    transform: 'translate(-50%, -50%)',
+    width: '600px',
+    maxHeight: '80vh',
+    padding: '30px',
+    borderRadius: '10px',
+    backgroundColor: '#2e2a2a',
     color: '#fff',
+    overflow: 'auto'
   },
   overlay: {
     backgroundColor: 'rgba(0,0,0,0.5)',
-    zIndex: 9999,
-  },
+    zIndex: 9999
+  }
 };
 
+/* ─── Helper: Compute renderType ─────────────────────────────────────── */
+function getRenderType(rawAction, mapping) {
+  const lowerAction = (rawAction || "").toLowerCase().trim();
+  if (lowerAction === "offensive mark" || lowerAction === "free") return "setplayscore";
+  if (mapping.hasOwnProperty(lowerAction)) return mapping[lowerAction];
+  if (
+    lowerAction === "miss" ||
+    lowerAction === "wide" ||
+    lowerAction === "short" ||
+    lowerAction === "post" ||
+    lowerAction.includes(" miss")
+  ) {
+    return "miss";
+  }
+  return lowerAction;
+}
+
+/* ─── Settings Modal Component ───────────────────────────────────────── */
+function SettingsModal({ isOpen, onRequestClose, actionMapping, setActionMapping, markerColors, setMarkerColors }) {
+  const mappingKeys = Object.keys(actionMapping);
+  return (
+    <Modal isOpen={isOpen} onRequestClose={onRequestClose} style={customModalStyles} contentLabel="Settings">
+      <h2>Settings</h2>
+      <div style={{ marginBottom: '1rem' }}>
+        <h3>Action Mapping Settings</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {mappingKeys.map((key) => (
+            <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ flex: 1 }}>{key}</span>
+              <Select
+                value={actionMapping[key]}
+                onChange={(e) => setActionMapping((prev) => ({ ...prev, [key]: e.target.value }))}
+                style={{ flex: 1, marginLeft: '1rem' }}
+              >
+                {[
+                  { value: 'setplayscore', label: 'Set Play Score (scored)' },
+                  { value: 'setplaymiss', label: 'Set Play Miss (miss)' },
+                  { value: 'goal', label: 'Goal' },
+                  { value: 'point', label: 'Point' },
+                  { value: 'miss', label: 'Miss' },
+                  { value: 'penalty goal', label: 'Penalty Goal' },
+                  { value: 'blocked', label: 'Blocked' },
+                ].map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </Select>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ marginBottom: '1rem' }}>
+        <h3>Marker Color Settings</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {Object.keys(fallbackColors).map((key) => (
+            <div key={key}>
+              <label style={{ color: '#fff' }}>
+                {key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase())}:
+              </label>
+              <input
+                type="color"
+                value={markerColors[key]}
+                onChange={(e) => setMarkerColors((prev) => ({ ...prev, [key]: e.target.value }))}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ textAlign: 'right', marginTop: '1rem' }}>
+        <StyledButton
+          onClick={() => {
+            localStorage.setItem('teamDetailsActionMapping', JSON.stringify(actionMapping));
+            localStorage.setItem('teamDetailsMarkerColors', JSON.stringify(markerColors));
+            Swal.fire('Settings Saved', 'Your settings have been saved.', 'success');
+            onRequestClose();
+          }}
+          style={{ backgroundColor: '#007bff' }}
+        >
+          Save Settings
+        </StyledButton>
+        <StyledButton onClick={onRequestClose} style={{ backgroundColor: '#607d8b', marginLeft: '1rem' }}>
+          Close
+        </StyledButton>
+      </div>
+    </Modal>
+  );
+}
+
+/* ─── PDF Download Helper ───────────────────────────────────────────── */
+const downloadPDFHandler = async (setIsDownloading, teamName) => {
+  setIsDownloading(true);
+  const input = document.getElementById('pdf-content');
+  if (!input) {
+    Swal.fire('Error', 'Could not find content to export.', 'error');
+    setIsDownloading(false);
+    return;
+  }
+  try {
+    const canvas = await html2canvas(input, { scale: 2 });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('l', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    pdf.setFillColor(50, 50, 50);
+    pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
+    const imgProps = pdf.getImageProperties(imgData);
+    const imgWidth = pdfWidth;
+    const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+    const marginTop = (pdfHeight - imgHeight) / 2;
+    pdf.addImage(imgData, 'PNG', 0, marginTop, imgWidth, imgHeight);
+    pdf.setFontSize(12);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("scorelect.com", pdfWidth - 40, pdfHeight - 10);
+    pdf.save(`${teamName}_shot_map.pdf`);
+  } catch (error) {
+    Swal.fire('Error', 'Failed to generate PDF.', 'error');
+  }
+  setIsDownloading(false);
+};
+
+/* ─── Main Component ─────────────────────────────────────────────────── */
 export default function TeamDetails() {
   const { teamName } = useParams();
   const navigate = useNavigate();
   const stageRef = useRef(null);
 
-  // State declarations
-  const [pitchColorState, setPitchColorState] = useState(defaultPitchColor);
-  const [lineColorState, setLineColorState] = useState(defaultLineColor);
-  const [lightStripeColorState, setLightStripeColorState] = useState(defaultLightStripeColor);
-  const [darkStripeColorState, setDarkStripeColorState] = useState(defaultDarkStripeColor);
-  const [colorGoal, setColorGoal] = useState('#FFFF33');
-  const [colorPoint, setColorPoint] = useState('#39FF14');
-  const [colorMiss, setColorMiss] = useState('red');
-  const [colorSetPlayScore, setColorSetPlayScore] = useState('#39FF14');
-  const [colorSetPlayMiss, setColorSetPlayMiss] = useState('red');
+  const [markerColors, setMarkerColors] = useState(() => {
+    const saved = localStorage.getItem('teamDetailsMarkerColors');
+    return saved ? JSON.parse(saved) : fallbackColors;
+  });
+  const [actionMapping, setActionMapping] = useState(() => {
+    const saved = localStorage.getItem('teamDetailsActionMapping');
+    return saved ? JSON.parse(saved) : defaultMapping;
+  });
   const [shotsData, setShotsData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, content: '' });
   const [selectedShot, setSelectedShot] = useState(null);
-  const [shotFilter, setShotFilter] = useState('All');
-  const [showXP, setShowXP] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [allShots, setAllShots] = useState([]);
-  const [teams, setTeams] = useState([]);
-  const [selectedTeam, setSelectedTeam] = useState('');
-  const [playersInTeam, setPlayersInTeam] = useState([]);
-  const [selectedTeams, setSelectedTeams] = useState([]);
   const [aggregatedData, setAggregatedData] = useState({});
-  const [showColorModal, setShowColorModal] = useState(false);
-  const [primaryTeam, setPrimaryTeam] = useState(teamName);
+  const [appliedFilters, setAppliedFilters] = useState({ player: '', action: '' });
+  const [filterOptions, setFilterOptions] = useState({ players: [], actions: [] });
+  const [isDownloading, setIsDownloading] = useState(false);
 
-  // Filter state
-  const [appliedFilters, setAppliedFilters] = useState({
-    player: '',
-    action: ''
-  });
-  const [filterOptions, setFilterOptions] = useState({
-    players: [],
-    actions: []
-  });
+  const xScale = canvasSizeMainConst.width / pitchWidthConst;
+  const yScale = canvasSizeMainConst.height / pitchHeightConst;
+  const halfLineX = pitchWidthConst / 2;
+  const goalX = 0;
+  const goalY = pitchHeightConst / 2;
 
-  // Dimensions
-  const canvasSizeMain = { width: 930, height: 530 };
-  const pitchWidth = 145;
-  const pitchHeight = 88;
-  const xScale = canvasSizeMain.width / pitchWidth;
-  const yScale = canvasSizeMain.height / pitchHeight;
-  const halfLineX = pitchWidth / 2;
-  const goalXRight = pitchWidth;
-  const goalY = pitchHeight / 2;
+  const filteredShots = useMemo(() => {
+    return shotsData.filter((shot) => {
+      const playerMatch = appliedFilters.player
+        ? (shot.playerName || '').toLowerCase().includes(appliedFilters.player.toLowerCase())
+        : true;
+      const actionMatch = appliedFilters.action
+        ? (shot.action || '').toLowerCase().includes(appliedFilters.action.toLowerCase())
+        : true;
+      return playerMatch && actionMatch;
+    });
+  }, [shotsData, appliedFilters]);
 
-  // Compute filtered shots from shotsData based on applied filters
-  const filteredShots = shotsData.filter((shot) => {
-    const playerMatch = appliedFilters.player
-      ? (shot.playerName || '').toLowerCase().includes(appliedFilters.player.toLowerCase())
-      : true;
-    const actionMatch = appliedFilters.action
-      ? (shot.action || '').toLowerCase().includes(appliedFilters.action.toLowerCase())
-      : true;
-    return playerMatch && actionMatch;
-  });
+  const dynamicColors = useMemo(() => ({
+    "goal": markerColors.goal || "#FFFF33",
+    "point": markerColors.point || "#39FF14",
+    "miss": markerColors.miss || "red",
+    "setplayscore": { 
+      fill: markerColors.setplayscore || "#39FF14", 
+      stroke: "white" 
+    },
+    "setplaymiss": { 
+      fill: markerColors.setplaymiss || "red", 
+      stroke: "white" 
+    },
+    "penalty goal": markerColors["penalty goal"] || "#FF8C00",
+    "blocked": markerColors.blocked || "red",
+  }), [markerColors]);
 
-  // Build filter options from shotsData
+  const dynamicLegendColors = useMemo(() => ({
+    "goal": markerColors.goal || "#FFFF33",
+    "point": markerColors.point || "#39FF14",
+    "miss": markerColors.miss || "red",
+    "setplayscore": markerColors.setplayscore || "#39FF14",
+    "setplaymiss": markerColors.setplaymiss || "red",
+    "penalty goal": markerColors["penalty goal"] || "#FF8C00",
+    "blocked": markerColors.blocked || "red",
+  }), [markerColors]);
+
   useEffect(() => {
     if (shotsData.length === 0) return;
     const playersSet = new Set();
@@ -289,7 +388,6 @@ export default function TeamDetails() {
     });
   }, [shotsData]);
 
-  // Fetch shots data from Firestore
   useEffect(() => {
     async function fetchAllShots() {
       try {
@@ -299,45 +397,32 @@ export default function TeamDetails() {
         const docRef = doc(firestore, `savedGames/${USER_ID}/games`, DATASET_NAME);
         const docSnap = await getDoc(docRef);
         if (!docSnap.exists()) {
-          Swal.fire({
-            title: 'No Data',
-            text: 'Could not find "All Shots GAA" dataset!',
-            icon: 'info',
-            confirmButtonText: 'OK'
-          });
+          Swal.fire({ title: 'No Data', text: 'Could not find "All Shots GAA" dataset!', icon: 'info', confirmButtonText: 'OK' });
           navigate('/');
           return;
         }
         const { gameData } = docSnap.data() || {};
         if (!gameData || !Array.isArray(gameData)) {
-          Swal.fire({
-            title: 'No Data',
-            text: 'No shots in "All Shots GAA".',
-            icon: 'info',
-            confirmButtonText: 'OK'
-          });
+          Swal.fire({ title: 'No Data', text: 'No shots in "All Shots GAA".', icon: 'info', confirmButtonText: 'OK' });
           navigate('/');
           return;
         }
         setAllShots(gameData);
-        const teamShots = gameData.filter(
-          (s) => (s.team || '').toLowerCase() === teamName.toLowerCase()
-        );
+        const teamShots = gameData.filter((s) => (s.team || '').toLowerCase() === teamName.toLowerCase());
         if (!teamShots.length) {
-          Swal.fire({
-            title: 'No Data',
-            text: `No shots found for team: ${teamName}`,
-            icon: 'info',
-            confirmButtonText: 'OK'
-          });
+          Swal.fire({ title: 'No Data', text: `No shots found for team: ${teamName}`, icon: 'info', confirmButtonText: 'OK' });
           navigate(-1);
           return;
         }
-        // Translate to one side
         const translated = teamShots.map((shot) =>
-          translateShotToOneSide(shot, halfLineX, goalXRight, goalY)
+          translateShotToOneSide(shot, halfLineX, goalX, goalY)
         );
-        setShotsData(translated);
+        const shotsWithRenderType = translated.map((shot) => {
+          const renderType = getRenderType(shot.action, actionMapping);
+          console.log(`Action: ${shot.action}, RenderType: ${renderType}`);
+          return { ...shot, renderType };
+        });
+        setShotsData(shotsWithRenderType);
       } catch (err) {
         setError(err.message);
         Swal.fire('Error', err.message, 'error');
@@ -346,16 +431,13 @@ export default function TeamDetails() {
       }
     }
     fetchAllShots();
-  }, [teamName, navigate, halfLineX, goalXRight, goalY]);
+  }, [teamName, navigate, halfLineX, goalX, goalY, actionMapping]);
 
-  // Aggregate data for stats
   useEffect(() => {
     if (!allShots.length) return;
     const aggregator = {};
-    const uniqueTeams = new Set();
     allShots.forEach((s) => {
-      const tmName = s.team || 'Unknown Team';
-      uniqueTeams.add(tmName);
+      const tmName = s.team || 'Unknown';
       if (!aggregator[tmName]) {
         aggregator[tmName] = {
           team: tmName,
@@ -380,7 +462,7 @@ export default function TeamDetails() {
       if (act === 'point') {
         entry.points += 1;
         entry.successfulShots += 1;
-        const translatedShot = translateShotToOneSide(s, halfLineX, goalXRight, goalY);
+        const translatedShot = translateShotToOneSide(s, halfLineX, goalX, goalY);
         if (typeof translatedShot.distMeters === 'number' && translatedShot.distMeters >= 40) {
           entry.twoPointers += 1;
         }
@@ -402,22 +484,11 @@ export default function TeamDetails() {
       ) {
         entry.misses += 1;
       }
-      if (
-        act.includes('offensive mark') &&
-        !act.includes('wide') &&
-        !act.includes('short') &&
-        !act.includes('miss')
-      ) {
+      if (act.includes('offensive mark') && !act.includes('wide') && !act.includes('short') && !act.includes('miss')) {
         entry.offensiveMarks += 1;
         entry.successfulShots += 1;
       }
-      if (
-        act === 'free' ||
-        act === 'missed free' ||
-        act === 'free wide' ||
-        act === 'free short' ||
-        act === 'free post'
-      ) {
+      if (act === 'free' || act === 'missed free' || act === 'free wide' || act === 'free short' || act === 'free post') {
         entry.frees += 1;
         entry.totalFrees += 1;
         if (act === 'free') {
@@ -435,121 +506,19 @@ export default function TeamDetails() {
       }
     });
     setAggregatedData(aggregator);
-    setTeams([...uniqueTeams]);
-  }, [allShots, halfLineX, goalXRight, goalY]);
+  }, [allShots, halfLineX, goalX, goalY]);
 
-  // (Optional) Update players based on selectedTeam
-  useEffect(() => {
-    if (!selectedTeam || !aggregatedData) {
-      setPlayersInTeam([]);
-      return;
-    }
-    const result = Object.entries(aggregatedData)
-      .filter(([tmName]) => tmName === selectedTeam)
-      .map(([tmName]) => tmName);
-    setPlayersInTeam(result);
-  }, [selectedTeam, aggregatedData]);
-
-  // Handler for shot click and modal
   function handleShotClick(shot) {
     setSelectedShot(shot);
   }
   function closeModal() {
     setSelectedShot(null);
   }
-
-  // For export
-  function renderShotsLayer() {
-    return (
-      <Layer>
-        {filteredShots.map((shot, i) => {
-          const handleMouseEnter = (e) => {
-            const stage = e.target.getStage();
-            if (stage) stage.container().style.cursor = 'pointer';
-            const cat = getShotCategory(shot.action);
-            const isGoal = cat === 'goal';
-            const label = isGoal ? 'xG' : 'xP';
-            const xpOrXg = isGoal
-              ? (typeof shot.xGoals === 'number' ? shot.xGoals.toFixed(2) : 'N/A')
-              : (typeof shot.xPoints === 'number' ? shot.xPoints.toFixed(2) : 'N/A');
-            const distVal =
-              typeof shot.distMeters === 'number'
-                ? `${shot.distMeters.toFixed(1)}m`
-                : 'N/A';
-            const pressureVal = shot.pressure || 'N/A';
-            setTooltip({
-              visible: true,
-              x: e.evt.layerX,
-              y: e.evt.layerY,
-              content: `${label}: ${xpOrXg}\nDistance: ${distVal}\nPressure: ${pressureVal}`
-            });
-          };
-          const handleMouseLeave = () => {
-            if (stageRef.current) stageRef.current.container().style.cursor = 'default';
-            setTooltip((prev) => ({ ...prev, visible: false }));
-          };
-          const handleClick = () => {
-            handleShotClick(shot);
-          };
-          const shotX = (shot.x || 0) * xScale;
-          const shotY = (shot.y || 0) * yScale;
-          return (
-            <Group key={i}>
-              <Text
-                x={shotX}
-                y={shotY - 14}
-                text={`xP: ${
-                  typeof shot.xPoints === 'number' ? shot.xPoints.toFixed(2) : 'N/A'
-                }`}
-                fontSize={12}
-                fill="#fff"
-                offsetX={15}
-                shadowColor="#000"
-                shadowBlur={2}
-                onMouseEnter={handleMouseEnter}
-                onMouseLeave={handleMouseLeave}
-                onClick={handleClick}
-              />
-            </Group>
-          );
-        })}
-      </Layer>
-    );
-  }
-
-  // Tooltip
-  function renderTooltip() {
-    if (!tooltip.visible) return null;
-    return (
-      <div
-        className="tooltip"
-        style={{
-          position: 'absolute',
-          top: tooltip.y,
-          left: tooltip.x,
-          backgroundColor: 'rgba(0,0,0,0.7)',
-          color: '#fff',
-          padding: '6px 8px',
-          borderRadius: '4px',
-          pointerEvents: 'none',
-          whiteSpace: 'pre-line',
-          zIndex: 10
-        }}
-      >
-        {tooltip.content}
-      </div>
-    );
-  }
-
-  // Modal shot details
   function renderSelectedShotDetails() {
     if (!selectedShot) return null;
     const cat = getShotCategory(selectedShot.action);
     const isGoal = cat === 'goal';
-    const distMeters =
-      typeof selectedShot.distMeters === 'number'
-        ? selectedShot.distMeters.toFixed(1)
-        : 'N/A';
+    const distMeters = typeof selectedShot.distMeters === 'number' ? selectedShot.distMeters.toFixed(1) : 'N/A';
     const foot = selectedShot.foot || 'N/A';
     const pressure = selectedShot.pressure || 'N/A';
     const position = selectedShot.position || 'N/A';
@@ -560,360 +529,154 @@ export default function TeamDetails() {
     } else {
       metricValue = 'N/A';
     }
-    const advValue =
-      typeof selectedShot.xP_adv === 'number'
-        ? selectedShot.xP_adv.toFixed(2)
-        : 'N/A';
+    const advValue = typeof selectedShot.xP_adv === 'number' ? selectedShot.xP_adv.toFixed(2) : 'N/A';
     return (
       <div style={{ lineHeight: '1.6' }}>
-        <p>
-          <strong>Action:</strong> {selectedShot.action}
-        </p>
-        <p>
-          <strong>Distance (m):</strong> {distMeters}
-        </p>
-        <p>
-          <strong>Foot:</strong> {foot}
-        </p>
-        <p>
-          <strong>Pressure:</strong> {pressure}
-        </p>
-        <p>
-          <strong>Position:</strong> {position}
-        </p>
-        <p>
-          <strong>{metricLabel}:</strong> {metricValue}
-        </p>
-        <p>
-          <strong>xP_ADV:</strong> {advValue}
-        </p>
+        <p><strong>Action:</strong> {selectedShot.action}</p>
+        <p><strong>Category:</strong> {cat}</p>
+        <p><strong>Distance (m):</strong> {distMeters}</p>
+        <p><strong>Foot:</strong> {foot}</p>
+        <p><strong>Pressure:</strong> {pressure}</p>
+        <p><strong>Position:</strong> {position}</p>
+        <p><strong>{metricLabel}:</strong> {metricValue}</p>
+        <p><strong>xP_ADV:</strong> {advValue}</p>
       </div>
     );
   }
 
-  // Team toggling (optional)
-  function toggleTeam(team) {
-    if (selectedTeams.includes(team)) {
-      setSelectedTeams(selectedTeams.filter((x) => x !== team));
-    } else {
-      setSelectedTeams([...selectedTeams, team]);
-    }
+  if (loading) {
+    return (
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <p>Loading team data...</p>
+      </div>
+    );
   }
-
-  // Export pitch as image
-  function handleExport() {
-    if (stageRef.current) {
-      stageRef.current.toDataURL({
-        pixelRatio: 2,
-        callback: (dataUrl) => {
-          const link = document.createElement('a');
-          link.download = `${teamName}_shot_map.png`;
-          link.href = dataUrl;
-          link.click();
-        },
-      });
-    }
-  }
-
-  if (loading) return <LoadingIndicator />;
-  if (error) return <ErrorMessage message={error} />;
-  if (!filteredShots.length)
-    return <ErrorMessage message="No shots found for this filter or team." />;
+  if (error) return <div className="error-container"><p>{error}</p></div>;
+  if (!filteredShots.length) return <div className="error-container"><p>No shots found for this filter or team.</p></div>;
 
   return (
     <PageContainer>
-      {/* Main Title */}
       <Title>{teamName} Shot Analysis</Title>
-
-      {/* FILTERS SECTION */}
       <Section>
         <FiltersContainer>
-          {/* Example label, if you want a label for each select */}
           <div>
             <FilterLabel htmlFor="playerSelect">Player:</FilterLabel>
             <Select
               id="playerSelect"
               value={appliedFilters.player}
-              onChange={(e) =>
-                setAppliedFilters((prev) => ({ ...prev, player: e.target.value }))
-              }
+              onChange={(e) => setAppliedFilters((prev) => ({ ...prev, player: e.target.value }))}
             >
               <option value="">All Players</option>
               {filterOptions.players.map((player) => (
-                <option key={player} value={player}>
-                  {player}
-                </option>
+                <option key={player} value={player}>{player}</option>
               ))}
             </Select>
           </div>
-
           <div>
             <FilterLabel htmlFor="actionSelect">Action:</FilterLabel>
             <Select
               id="actionSelect"
               value={appliedFilters.action}
-              onChange={(e) =>
-                setAppliedFilters((prev) => ({ ...prev, action: e.target.value }))
-              }
+              onChange={(e) => setAppliedFilters((prev) => ({ ...prev, action: e.target.value }))}
             >
               <option value="">All Actions</option>
               {filterOptions.actions.map((action) => (
-                <option key={action} value={action}>
-                  {action}
-                </option>
+                <option key={action} value={action}>{action}</option>
               ))}
             </Select>
           </div>
+          <StyledButton onClick={() => downloadPDFHandler(setIsDownloading, teamName)}>
+            {isDownloading ? 'Downloading PDF...' : 'Download PDF'}
+          </StyledButton>
+          <GearBox>
+            <GearButton onClick={() => setShowSettingsModal(true)} title="Settings">⚙️</GearButton>
+          </GearBox>
         </FiltersContainer>
       </Section>
-
-      {/* PITCH + STATS SECTION */}
-      <Section>
-        <PitchAndStatsContainer>
-          {/* PITCH */}
-          <div style={{ textAlign: 'center' }}>
-            <Stage
-              width={xScale * (pitchWidth / 2)}
-              height={yScale * pitchHeight}
-              style={{
-                border: '2px solid #444',
-                borderRadius: '8px',
-                backgroundColor: '#111',
-              }}
-            >
-              {renderGAAPitch({
-                canvasSizeMain,
-                pitchColorState,
-                lightStripeColorState,
-                darkStripeColorState,
-                lineColorState,
-                xScale,
-                yScale,
-              })}
-              {renderOneSidePitchShots({
-                shots: filteredShots,
-                colors: {
-                  goal: colorGoal,
-                  point: colorPoint,
-                  miss: colorMiss,
-                  setPlayScore: colorSetPlayScore,
-                  setPlayMiss: colorSetPlayMiss,
-                },
-                xScale,
-                yScale,
-                onShotClick: handleShotClick,
-                halfLineX: pitchWidth / 2,
-                goalX: goalXRight,
-                goalY: goalY,
-              })}
-              {renderLegendOneSideShots(
-                {
-                goal: colorGoal,
-                point: colorPoint,
-                miss: colorMiss,
-                setPlayScore: colorSetPlayScore,
-                setPlayMiss: colorSetPlayMiss
-                },
-                xScale * (pitchWidth / 2),   // stageWidth
-                yScale * pitchHeight         // stageHeight
-            )}
-            </Stage>
-          </div>
-
-          {/* STATS CARD */}
-          <StatsCard>
-            <StatsHeading>{teamName} Stats</StatsHeading>
-            <StatItem>
-              <strong>Total Shots:</strong> {aggregatedData[teamName]?.totalShots || 0}
-            </StatItem>
-            <StatItem>
-              <strong>Successful Shots:</strong>{' '}
-              {aggregatedData[teamName]?.successfulShots || 0}
-            </StatItem>
-            <StatItem>
-              <strong>Points:</strong> {aggregatedData[teamName]?.points || 0}
-            </StatItem>
-            <StatItem>
-              <strong>Goals:</strong> {aggregatedData[teamName]?.goals || 0}
-            </StatItem>
-            <StatItem>
-              <strong>Misses:</strong> {aggregatedData[teamName]?.misses || 0}
-            </StatItem>
-            <StatItem>
-              <strong>Offensive Marks:</strong>{' '}
-              {aggregatedData[teamName]?.offensiveMarks || 0}
-            </StatItem>
-            <StatItem>
-              <strong>Frees:</strong> {aggregatedData[teamName]?.frees || 0}
-            </StatItem>
-            <StatItem>
-              <strong>45s:</strong> {aggregatedData[teamName]?.fortyFives || 0}
-            </StatItem>
-            <StatItem>
-              <strong>2-Pointers:</strong> {aggregatedData[teamName]?.twoPointers || 0}
-            </StatItem>
-            <StatItem>
-              <strong>Avg Distance (m):</strong>{' '}
-              {((aggregatedData[teamName]?.totalShots || 0) > 0
-                ? aggregatedData[teamName].successfulShots &&
-                  aggregatedData[teamName].totalShots
-                  ? (
-                      aggregatedData[teamName].successfulShots /
-                      aggregatedData[teamName].totalShots
-                    ).toFixed(2)
-                  : '0.00'
-                : '0.00')}
-            </StatItem>
-            {/* Example button to export or open color modal */}
-            {/* <div style={{ marginTop: '1rem' }}>
-              <StyledButton onClick={handleExport}>Export Shot Map</StyledButton>
-              <StyledButton
-                style={{ marginLeft: '0.5rem', backgroundColor: '#555' }}
-                onClick={() => setShowColorModal(true)}
+      <Section id="pdf-content">
+        <PdfContentWrapper id="pdf-content">
+          <PitchAndStatsContainer>
+            <div style={{ textAlign: 'center' }}>
+              <Stage
+                ref={stageRef}
+                width={xScale * (pitchWidthConst / 2)}
+                height={yScale * pitchHeightConst}
+                style={{ border: '2px solid #444', borderRadius: '8px', backgroundColor: '#111' }}
               >
-                Customize Colors
-              </StyledButton>
-            </div> */}
-          </StatsCard>
-        </PitchAndStatsContainer>
+                {renderGAAPitch({
+                  canvasSizeMain: canvasSizeMainConst,
+                  pitchColorState: defaultPitchColor,
+                  lightStripeColorState: defaultLightStripeColor,
+                  darkStripeColorState: defaultDarkStripeColor,
+                  lineColorState: defaultLineColor,
+                  xScale,
+                  yScale,
+                })}
+                {renderOneSidePitchShots({
+                  shots: filteredShots,
+                  colors: dynamicColors,
+                  xScale,
+                  yScale,
+                  onShotClick: handleShotClick,
+                  halfLineX,
+                  goalX,
+                  goalY,
+                  actionMapping
+                })}
+                {renderLegendOneSideShots(
+                  dynamicLegendColors,
+                  xScale * (pitchWidthConst / 2),
+                  yScale * pitchHeightConst
+                )}
+              </Stage>
+            </div>
+            <StatsCard>
+              <StatsHeading>{teamName} Stats</StatsHeading>
+              <StatItem><strong>Total Shots:</strong> {aggregatedData[teamName]?.totalShots || 0}</StatItem>
+              <StatItem><strong>Successful Shots:</strong> {aggregatedData[teamName]?.successfulShots || 0}</StatItem>
+              <StatItem><strong>Points:</strong> {aggregatedData[teamName]?.points || 0}</StatItem>
+              <StatItem><strong>Goals:</strong> {aggregatedData[teamName]?.goals || 0}</StatItem>
+              <StatItem><strong>Misses:</strong> {aggregatedData[teamName]?.misses || 0}</StatItem>
+              <StatItem><strong>Offensive Marks:</strong> {aggregatedData[teamName]?.offensiveMarks || 0}</StatItem>
+              <StatItem><strong>Frees:</strong> {aggregatedData[teamName]?.frees || 0}</StatItem>
+              <StatItem><strong>45s:</strong> {aggregatedData[teamName]?.fortyFives || 0}</StatItem>
+              <StatItem><strong>2-Pointers:</strong> {aggregatedData[teamName]?.twoPointers || 0}</StatItem>
+              <StatItem>
+                <strong>Avg Success Rate:</strong>{' '}
+                {((aggregatedData[teamName]?.totalShots || 0) > 0
+                  ? (aggregatedData[teamName].successfulShots / aggregatedData[teamName].totalShots).toFixed(2)
+                  : '0.00')}
+              </StatItem>
+            </StatsCard>
+          </PitchAndStatsContainer>
+        </PdfContentWrapper>
       </Section>
-
-      {/* (Optional) Additional sections, e.g., Radar chart */}
-      {/* 
-      <Section>
-        <Title>Radar Analysis</Title>
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <Radar data={...} options={...} />
-        </div>
-      </Section>
-      */}
-
-      {renderTooltip()}
-
-      {/* Shot Details Modal */}
       {selectedShot && (
         <Modal
           isOpen={!!selectedShot}
-          onRequestClose={() => setSelectedShot(null)}
+          onRequestClose={closeModal}
           style={customModalStyles}
-          contentLabel="Shot Details"
+          contentLabel="Shot Details Modal"
         >
-          <h2 style={{ marginTop: 0 }}>Shot Details</h2>
-          {renderSelectedShotDetails()}
-          <div style={{ marginTop: '1rem', textAlign: 'right' }}>
-            <StyledButton
-              onClick={closeModal}
-              style={{ backgroundColor: '#607d8b', marginLeft: 'auto' }}
-            >
-              Close
-            </StyledButton>
+          <div style={{ lineHeight: '1.6' }}>
+            {renderSelectedShotDetails()}
+          </div>
+          <div style={{ textAlign: 'right', marginTop: '1rem' }}>
+            <StyledButton onClick={closeModal} style={{ backgroundColor: '#607d8b' }}>Close</StyledButton>
           </div>
         </Modal>
       )}
-
-      {/* Color Modal */}
-      {showColorModal && (
-        <Modal
-          isOpen={showColorModal}
-          onRequestClose={() => setShowColorModal(false)}
-          style={customModalStyles}
-          contentLabel="Customize Colors"
-        >
-          <h2 className="color-modal-header">Customize Colors</h2>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '1rem',
-            }}
-          >
-            <div>
-              <label style={{ color: '#fff' }}>Pitch Color:</label>
-              <input
-                type="color"
-                value={pitchColorState}
-                onChange={(e) => setPitchColorState(e.target.value)}
-              />
-            </div>
-            <div>
-              <label style={{ color: '#fff' }}>Line Color:</label>
-              <input
-                type="color"
-                value={lineColorState}
-                onChange={(e) => setLineColorState(e.target.value)}
-              />
-            </div>
-            <div>
-              <label style={{ color: '#fff' }}>Light Stripe Color:</label>
-              <input
-                type="color"
-                value={lightStripeColorState}
-                onChange={(e) => setLightStripeColorState(e.target.value)}
-              />
-            </div>
-            <div>
-              <label style={{ color: '#fff' }}>Dark Stripe Color:</label>
-              <input
-                type="color"
-                value={darkStripeColorState}
-                onChange={(e) => setDarkStripeColorState(e.target.value)}
-              />
-            </div>
-            <div>
-              <label style={{ color: '#fff' }}>Goal Color:</label>
-              <input
-                type="color"
-                value={colorGoal}
-                onChange={(e) => setColorGoal(e.target.value)}
-              />
-            </div>
-            <div>
-              <label style={{ color: '#fff' }}>Point Color:</label>
-              <input
-                type="color"
-                value={colorPoint}
-                onChange={(e) => setColorPoint(e.target.value)}
-              />
-            </div>
-            <div>
-              <label style={{ color: '#fff' }}>Miss Color:</label>
-              <input
-                type="color"
-                value={colorMiss}
-                onChange={(e) => setColorMiss(e.target.value)}
-              />
-            </div>
-            <div>
-              <label style={{ color: '#fff' }}>SetPlay Score Color:</label>
-              <input
-                type="color"
-                value={colorSetPlayScore}
-                onChange={(e) => setColorSetPlayScore(e.target.value)}
-              />
-            </div>
-            <div>
-              <label style={{ color: '#fff' }}>SetPlay Miss Color:</label>
-              <input
-                type="color"
-                value={colorSetPlayMiss}
-                onChange={(e) => setColorSetPlayMiss(e.target.value)}
-              />
-            </div>
-          </div>
-          <div style={{ marginTop: '1rem', textAlign: 'right' }}>
-            <StyledButton
-              onClick={() => setShowColorModal(false)}
-              style={{ backgroundColor: '#607d8b' }}
-            >
-              Save
-            </StyledButton>
-          </div>
-        </Modal>
-      )}
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onRequestClose={() => setShowSettingsModal(false)}
+        actionMapping={actionMapping}
+        setActionMapping={setActionMapping}
+        markerColors={markerColors}
+        setMarkerColors={setMarkerColors}
+      />
     </PageContainer>
   );
 }
 
-TeamDetails.propTypes = {
-  // No props expected at this time.
-};
+TeamDetails.propTypes = {};

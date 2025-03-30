@@ -1,5 +1,3 @@
-// src/pages/HowTo.js
-
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import {
@@ -24,8 +22,6 @@ import BballCollectMain from './images/basketball_collect_main.png';
 import SoccerCollectMain from './images/soccer_collect_main.png';
 import GAACollectMain from './images/gaa_collect_main.png';
 import AMFCollectMain from './images/amfootball_collect_main.png';
-
-
 
 // Styled Components
 const Container = styled.div`
@@ -82,23 +78,23 @@ const tutorialsData = [
     link: '/blog/SoccerCollect',
   },
   {
-  id: 4,
-  title: 'How to Simply Collect GAA Statistics',
-  description: 'A guide to collecting and analyzing GAA stats for any game.',
-  category: 'gaa',
-  type: 'blog',
-  thumbnail: GAACollectMain,
-  link: '/blog/GAACollect',
-},
-{
-  id: 5,
-  title: 'How to Simply Collect American Football Statistics',
-  description: 'A guide to collecting and analyzing American Footballs stats for any game.',
-  category: 'american_football',
-  type: 'blog',
-  thumbnail: AMFCollectMain,
-  link: '/blog/AmericanFootballCollect',
-},
+    id: 4,
+    title: 'How to Simply Collect GAA Statistics',
+    description: 'A guide to collecting and analyzing GAA stats for any game.',
+    category: 'gaa',
+    type: 'blog',
+    thumbnail: GAACollectMain,
+    link: '/blog/GAACollect',
+  },
+  {
+    id: 5,
+    title: 'How to Simply Collect American Football Statistics',
+    description: 'A guide to collecting and analyzing American Football stats for any game.',
+    category: 'american_football',
+    type: 'blog',
+    thumbnail: AMFCollectMain,
+    link: '/blog/AmericanFootballCollect',
+  },
   // Add more tutorial objects here
 ];
 
@@ -118,11 +114,9 @@ const HowTo = () => {
 
   const filterTutorials = () => {
     let tutorials = tutorialsData;
-
     if (value !== 'all') {
       tutorials = tutorials.filter((tutorial) => tutorial.category === value);
     }
-
     if (searchTerm) {
       tutorials = tutorials.filter(
         (tutorial) =>
@@ -130,13 +124,13 @@ const HowTo = () => {
           tutorial.description.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-
     setFilteredTutorials(tutorials);
   };
 
   return (
     <Container>
-      <Typography variant="h4" gutterBottom>
+      {/* Title in purple */}
+      <Typography variant="h4" gutterBottom sx={{ color: 'white' }}>
         How-To Guides and Tutorials
       </Typography>
       <Box sx={{ width: '100%', bgcolor: 'background.paper', marginBottom: '20px' }}>
@@ -159,10 +153,21 @@ const HowTo = () => {
           placeholder="Search tutorials..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
+          // Here we override the MUI styles for a purple search box:
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              "& fieldset": { borderColor: 'white' },
+              "&:hover fieldset": { borderColor: 'white' },
+              "&.Mui-focused fieldset": { borderColor: 'white' },
+            },
+            "& .MuiInputBase-input": {
+              color: 'white'
+            }
+          }}
           InputProps={{
             endAdornment: (
               <InputAdornment position="end">
-                <IconButton onClick={filterTutorials} aria-label="search">
+                <IconButton onClick={filterTutorials} aria-label="search" sx={{ color: 'white' }}>
                   <SearchIcon />
                 </IconButton>
               </InputAdornment>

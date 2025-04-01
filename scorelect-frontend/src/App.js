@@ -1,8 +1,11 @@
+// src/App.js
 import React, { useState, useEffect, useContext } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { getAuth, signOut } from 'firebase/auth';
-import { firestore } from './firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { firestore } from './firebase';
+
+// Existing imports...
 import SignIn from './SignIn';
 import SignUp from './SignUp';
 import PitchGraphic from './PitchGraphic';
@@ -22,11 +25,11 @@ import SoccerAnalysisDashboard from './components/SoccerAnalysisDashboard';
 import HeatmapPage from './pages/HeatmapPage';
 import HeatmapGAA from './pages/HeatmapGAA';
 import HeatmapAF from './pages/HeatMapAF';
+import HeatmapBBall from './pages/HeatmapBBall';
 import BballCollect from './blogs/BballCollect';
 import SoccerCollect from './blogs/SoccerCollect';
 import GAACollect from './blogs/GAACollect';
 import AmericanFootballCollect from './blogs/AmericanFootballCollect';
-import HeatmapBBall from './pages/HeatmapBBall';
 import { ToastContainer, toast } from 'react-toastify';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -48,6 +51,9 @@ import AnalysisGAA from './AnalysisGAA';
 import GAAAnalysisDashboard from './components/GAAAnalysisDashboard';
 import AdminLogin from './AdminLogin';
 import AdminSettings from './AdminSettings';
+import Sessions from './Sessions';
+import SessionEditor from './SessionEditor';
+import SessionDetail from './SessionDetail';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
@@ -57,12 +63,10 @@ const App = () => {
   const navigate = useNavigate();
   const { loadedCoords, setLoadedCoords } = useContext(GameContext);
 
-  // Initialize selectedSport from localStorage or default to null
   const [selectedSport, setSelectedSport] = useState(() => {
     return localStorage.getItem('selectedSport') || null;
   });
 
-  // Firebase auth listener to update user and role
   useEffect(() => {
     const auth = getAuth();
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
@@ -127,7 +131,6 @@ const App = () => {
     localStorage.removeItem('selectedSport');
   };
 
-  // Render the pitch or sport view based on selectedSport
   const renderSelectedSport = () => {
     if (!selectedSport) return <Navigate replace to="/select-sport" />;
     switch (selectedSport) {
@@ -164,10 +167,19 @@ const App = () => {
               <ErrorBoundary>
                 <Routes>
                   <Route path="/" element={renderSelectedSport()} />
-                  <Route path="/select-sport" element={<SportSelectionPage onSportSelect={handleSportChange} />} />
+                  <Route
+                    path="/select-sport"
+                    element={<SportSelectionPage onSportSelect={handleSportChange} />}
+                  />
                   <Route path="/upgrade" element={<Upgrade setUserRole={setUserRole} />} />
-                  <Route path="/saved-games" element={<SavedGames userType={userRole} onLoadGame={loadGame} selectedSport={selectedSport} />} />
-                  <Route path="/profile" element={user ? <Profile onLogout={handleLogout} apiUrl={API_BASE_URL} /> : <Navigate replace to="/signin" />} />
+                  <Route
+                    path="/saved-games"
+                    element={<SavedGames userType={userRole} onLoadGame={loadGame} selectedSport={selectedSport} />}
+                  />
+                  <Route
+                    path="/profile"
+                    element={user ? <Profile onLogout={handleLogout} apiUrl={API_BASE_URL} /> : <Navigate replace to="/signin" />}
+                  />
                   <Route path="/signin" element={<SignIn apiUrl={API_BASE_URL} />} />
                   <Route path="/signup" element={<SignUp apiUrl={API_BASE_URL} />} />
                   <Route path="/success" element={<Success setUserRole={setUserRole} />} />
@@ -176,8 +188,8 @@ const App = () => {
                   <Route path="/sports-datahub" element={<SportsDataHub />} />
                   <Route path="/publish-dataset" element={<PublishDataset />} />
                   <Route path="/training/*" element={<Training selectedSport={selectedSport} onSportChange={handleSportChange} />} />
-                  <Route path="/analysis" element={<Analysis onSportSelect={(sport) => setSelectedSport(sport)} selectedSport={selectedSport} />} />
-                  <Route path="/analysis-gaa" element={<AnalysisGAA onSportSelect={(sport) => setSelectedSport(sport)} selectedSport={selectedSport} />} />
+                  <Route path="/analysis" element={<Analysis onSportSelect={setSelectedSport} selectedSport={selectedSport} />} />
+                  <Route path="/analysis-gaa" element={<AnalysisGAA onSportSelect={setSelectedSport} selectedSport={selectedSport} />} />
                   <Route path="/analysis/gaa-dashboard" element={<GAAAnalysisDashboard />} />
                   <Route path="/analysis/soccer-filter" element={<SoccerFilterPage />} />
                   <Route path="/analysis/soccer-dashboard" element={<SoccerAnalysisDashboard />} />
@@ -193,9 +205,11 @@ const App = () => {
                   <Route path="/blog/americanfootballCollect" element={<AmericanFootballCollect />} />
                   <Route path="/team/:teamName" element={<TeamDetails />} />
                   <Route path="/team-data-gaa" element={<TeamDataGAA />} />
-                  {/* New Admin Routes */}
                   <Route path="/admin-login" element={<AdminLogin />} />
                   <Route path="/admin-settings" element={<AdminSettings />} />
+                  <Route path="/sessions" element={<Sessions selectedSport={selectedSport} />} />
+                  <Route path="/session-editor/:sessionId" element={<SessionEditor selectedSport={selectedSport} />} /> {/* Pass selectedSport */}
+                  <Route path="/session-detail/:sessionId" element={<SessionDetail />} />
                   <Route path="*" element={<Navigate replace to="/select-sport" />} />
                 </Routes>
               </ErrorBoundary>

@@ -100,6 +100,14 @@
   font-size: 0.9rem;
 }
 
+.mini-leaderboard-table th,
+.mini-leaderboard-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+  color: #000; /* Explicitly set text color to black */
+}
+
 .mini-leaderboard-table thead th {
   background-color: #f4f4f4;
   position: sticky;

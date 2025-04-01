@@ -117,6 +117,14 @@
   flex-direction: column;
 }
 
+.mini-leaderboard-table th,
+.mini-leaderboard-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+  color: #000; /* Ensure text is black */
+}
+
 .mini-leaderboard-title {
   margin: 0 0 10px 0;
   text-align: center;

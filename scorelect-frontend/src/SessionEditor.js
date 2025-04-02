@@ -1,4 +1,3 @@
-// src/SessionEditor.js
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { firestore } from './firebase';
@@ -12,7 +11,6 @@ import {
   Text,
   Image as KonvaImage,
   Group,
-  Transformer,
 } from 'react-konva';
 import useImage from 'use-image';
 import {
@@ -20,7 +18,6 @@ import {
   Button,
   TextField,
   Typography,
-  Modal,
   FormControl,
   InputLabel,
   Select,
@@ -32,7 +29,7 @@ import {
 import { styled } from '@mui/material/styles';
 import Swal from 'sweetalert2';
 import jsPDF from 'jspdf';
-import { FaPlus, FaTrash, FaSave, FaFileExport, FaTextHeight, FaSquare, FaImage } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaSave, FaFileExport, FaTextHeight, FaSquare, FaImage, FaArrowsAlt, FaRedo, FaParagraph } from 'react-icons/fa';
 
 // Import images
 import coneImg from './images/cone.png';
@@ -62,7 +59,8 @@ const CanvasArea = styled(Box)(({ theme }) => ({
   display: 'flex',
   justifyContent: 'center',
   alignItems: 'center',
-  overflow: 'hidden', // Prevent overflow
+  overflow: 'hidden',
+  position: 'relative', // For positioning the edit field
 }));
 
 const Sidebar = styled(Box)(({ theme }) => ({
@@ -81,6 +79,12 @@ const SidebarSection = styled(Box)(({ theme }) => ({
   gap: theme.spacing(1),
 }));
 
+const ToolRow = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: theme.spacing(1),
+}));
+
 const SessionEditor = ({ selectedSport = 'GAA' }) => {
   const { sessionId } = useParams();
   const navigate = useNavigate();
@@ -93,6 +97,10 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
   const [selectedObjectId, setSelectedObjectId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [orientation, setOrientation] = useState('landscape');
+  const [selectedNode, setSelectedNode] = useState(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [editingObjectId, setEditingObjectId] = useState(null);
+  const [editText, setEditText] = useState('');
 
   // A4 dimensions in pixels at 72 DPI
   const A4_LANDSCAPE = { width: 842, height: 595 };
@@ -100,6 +108,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
 
   // Refs for dynamic sizing
   const canvasAreaRef = useRef(null);
+  const stageRef = useRef(null);
 
   // Calculate stage dimensions to fit container
   const getStageDimensions = () => {
@@ -109,7 +118,6 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     const containerHeight = canvasAreaRef.current.offsetHeight;
     const baseDimensions = orientation === 'landscape' ? A4_LANDSCAPE : A4_PORTRAIT;
 
-    // Calculate scale to fit container while preserving aspect ratio
     const scaleX = containerWidth / baseDimensions.width;
     const scaleY = containerHeight / baseDimensions.height;
     const scale = Math.min(scaleX, scaleY);
@@ -117,7 +125,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     return {
       width: baseDimensions.width * scale,
       height: baseDimensions.height * scale,
-      scale, // Store scale for object adjustments if needed
+      scale,
     };
   };
 
@@ -138,16 +146,6 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
   const [tempLine, setTempLine] = useState(null);
   const [squareStartPoint, setSquareStartPoint] = useState(null);
   const [tempSquare, setTempSquare] = useState(null);
-
-  // For modal
-  const [showModal, setShowModal] = useState(false);
-  const [modalLabel, setModalLabel] = useState('');
-  const [modalSize, setModalSize] = useState(25);
-  const [modalColor, setModalColor] = useState('#000000');
-
-  // Konva refs
-  const transformerRef = useRef();
-  const stageRef = useRef();
 
   // Load images
   const [coneImage] = useImage(coneImg);
@@ -204,6 +202,14 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     const pointer = stage.getPointerPosition();
     const id = Date.now();
 
+    // Check if click is on an object
+    const clickedObject = stage.getIntersection(pointer);
+    if (!clickedObject || !clickedObject.getParent().id().startsWith('object-')) {
+      setSelectedObjectId(null);
+      setSelectedNode(null);
+      setEditingObjectId(null); // Exit edit mode if clicking outside
+    }
+
     if (selectedTool === 'line') {
       if (!lineStartPoint) {
         setLineStartPoint(pointer);
@@ -257,6 +263,22 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
         scaleY: 1,
       };
       setObjects([...objects, newText]);
+      setSelectedTool(null);
+    } else if (selectedTool === 'paragraph') {
+      const newParagraph = {
+        id,
+        type: 'paragraph',
+        x: pointer.x,
+        y: pointer.y,
+        text: 'New Paragraph\nAdd your text here',
+        fontSize: 16,
+        fill: '#000000',
+        width: 200,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+      };
+      setObjects([...objects, newParagraph]);
       setSelectedTool(null);
     } else if (selectedTool === 'pitch') {
       const pitchImage = {
@@ -332,16 +354,13 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
   // Select object
   const handleSelectObject = (id) => {
     setSelectedObjectId(id);
-    setShowModal(true);
-
     const stage = stageRef.current;
     if (!stage) return;
     const layer = stage.findOne('#objects-layer');
     if (!layer) return;
     const node = layer.findOne(`#object-${id}`);
     if (node) {
-      transformerRef.current.nodes([node]);
-      transformerRef.current.getLayer().batchDraw();
+      setSelectedNode(node);
     }
   };
 
@@ -356,53 +375,25 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     setObjects(updated);
   };
 
-  // Transform object
-  const handleTransformObject = (e, id) => {
-    const node = e.target;
-    const updated = objects.map((obj) => {
-      if (obj.id === id) {
-        if (obj.type === 'square' || obj.type === 'pitch') {
-          return {
-            ...obj,
-            x: node.x(),
-            y: node.y(),
-            width: Math.max(10, node.width() * node.scaleX()),
-            height: Math.max(10, node.height() * node.scaleY()),
-            rotation: node.rotation(),
-            scaleX: 1,
-            scaleY: 1,
-          };
-        } else if (obj.type === 'text') {
-          return {
-            ...obj,
-            x: node.x(),
-            y: node.y(),
-            rotation: node.rotation(),
-            scaleX: node.scaleX(),
-            scaleY: node.scaleY(),
-          };
-        }
-        return {
-          ...obj,
-          x: node.x(),
-          y: node.y(),
-          scaleX: node.scaleX(),
-          scaleY: node.scaleY(),
-          rotation: node.rotation(),
-        };
-      }
-      return obj;
-    });
-    setObjects(updated);
+  // Start editing text
+  const startEditing = (id) => {
+    const obj = objects.find((o) => o.id === id);
+    if (obj && (obj.type === 'text' || obj.type === 'paragraph')) {
+      setEditingObjectId(id);
+      setEditText(obj.text);
+    }
   };
 
-  // Delete object
-  const handleDeleteObject = () => {
-    setObjects(objects.filter((o) => o.id !== selectedObjectId));
-    setSelectedObjectId(null);
-    setShowModal(false);
-    transformerRef.current.nodes([]);
-    transformerRef.current.getLayer().batchDraw();
+  // Save edited text
+  const saveEdit = () => {
+    if (editingObjectId !== null) {
+      const updatedObjects = objects.map((obj) =>
+        obj.id === editingObjectId ? { ...obj, text: editText } : obj
+      );
+      setObjects(updatedObjects);
+      setEditingObjectId(null);
+      setEditText('');
+    }
   };
 
   // Render objects
@@ -422,7 +413,6 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
               onClick={() => handleSelectObject(obj.id)}
               onTap={() => handleSelectObject(obj.id)}
               onDragEnd={(e) => handleDragObject(e, obj.id)}
-              onTransformEnd={(e) => handleTransformObject(e, obj.id)}
               rotation={obj.rotation}
               scaleX={obj.scaleX}
               scaleY={obj.scaleY}
@@ -461,7 +451,6 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
               onClick={() => handleSelectObject(obj.id)}
               onTap={() => handleSelectObject(obj.id)}
               onDragEnd={(e) => handleDragObject(e, obj.id)}
-              onTransformEnd={(e) => handleTransformObject(e, obj.id)}
               rotation={obj.rotation}
               scaleX={obj.scaleX}
               scaleY={obj.scaleY}
@@ -492,7 +481,6 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
               onClick={() => handleSelectObject(obj.id)}
               onTap={() => handleSelectObject(obj.id)}
               onDragEnd={(e) => handleDragObject(e, obj.id)}
-              onTransformEnd={(e) => handleTransformObject(e, obj.id)}
             />
           );
         case 'square':
@@ -511,7 +499,6 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
               onClick={() => handleSelectObject(obj.id)}
               onTap={() => handleSelectObject(obj.id)}
               onDragEnd={(e) => handleDragObject(e, obj.id)}
-              onTransformEnd={(e) => handleTransformObject(e, obj.id)}
               rotation={obj.rotation}
               scaleX={obj.scaleX}
               scaleY={obj.scaleY}
@@ -533,8 +520,30 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
               scaleY={obj.scaleY}
               onClick={() => handleSelectObject(obj.id)}
               onTap={() => handleSelectObject(obj.id)}
+              onDblClick={() => startEditing(obj.id)}
               onDragEnd={(e) => handleDragObject(e, obj.id)}
-              onTransformEnd={(e) => handleTransformObject(e, obj.id)}
+            />
+          );
+        case 'paragraph':
+          return (
+            <Text
+              key={obj.id}
+              id={`object-${obj.id}`}
+              x={obj.x}
+              y={obj.y}
+              text={obj.text}
+              fontSize={obj.fontSize}
+              fill={obj.fill || '#000000'}
+              width={obj.width}
+              wrap="word"
+              draggable
+              rotation={obj.rotation}
+              scaleX={obj.scaleX}
+              scaleY={obj.scaleY}
+              onClick={() => handleSelectObject(obj.id)}
+              onTap={() => handleSelectObject(obj.id)}
+              onDblClick={() => startEditing(obj.id)}
+              onDragEnd={(e) => handleDragObject(e, obj.id)}
             />
           );
         case 'pitch':
@@ -548,7 +557,6 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
               onClick={() => handleSelectObject(obj.id)}
               onTap={() => handleSelectObject(obj.id)}
               onDragEnd={(e) => handleDragObject(e, obj.id)}
-              onTransformEnd={(e) => handleTransformObject(e, obj.id)}
               rotation={obj.rotation}
               scaleX={obj.scaleX}
               scaleY={obj.scaleY}
@@ -568,6 +576,49 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     });
   };
 
+  // Render edit field
+  const renderEditField = () => {
+    if (!editingObjectId) return null;
+
+    const obj = objects.find((o) => o.id === editingObjectId);
+    if (!obj) return null;
+
+    const stage = stageRef.current;
+    const scale = stageDimensions.scale || 1;
+    const canvasRect = canvasAreaRef.current.getBoundingClientRect();
+
+    // Convert Konva coordinates to screen coordinates
+    const left = (obj.x * scale) + canvasRect.left - window.scrollX;
+    const top = (obj.y * scale) + canvasRect.top - window.scrollY;
+    const width = obj.type === 'paragraph' ? obj.width * scale : undefined;
+
+    return (
+      <TextField
+        value={editText}
+        onChange={(e) => setEditText(e.target.value)}
+        onBlur={saveEdit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            saveEdit();
+          }
+        }}
+        multiline={obj.type === 'paragraph'}
+        autoFocus
+        sx={{
+          position: 'absolute',
+          left: `${left}px`,
+          top: `${top}px`,
+          width: width ? `${width}px` : 'auto',
+          backgroundColor: '#fff',
+          '& .MuiInputBase-root': {
+            fontSize: `${obj.fontSize * scale}px`,
+            color: obj.fill || '#000000',
+          },
+        }}
+      />
+    );
+  };
+
   // Handle orientation change
   const handleOrientationChange = (event, newOrientation) => {
     if (newOrientation) {
@@ -575,56 +626,183 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     }
   };
 
-  // Modal setup
-  const selectedObject = objects.find((o) => o.id === selectedObjectId);
-  useEffect(() => {
-    if (selectedObject) {
-      setModalLabel(selectedObject.label || selectedObject.text || '');
-      setModalSize(selectedObject.size || selectedObject.fontSize || (selectedObject.type === 'pitch' ? selectedObject.width : 25));
-      setModalColor(selectedObject.color || selectedObject.fill || '#000000');
-    }
-  }, [selectedObject]);
-
-  const handleModalSubmit = (e) => {
+  // Drag-and-drop handlers
+  const handleDragOver = (e) => {
     e.preventDefault();
-    if (!selectedObject) return;
-    const updated = objects.map((obj) => {
-      if (obj.id === selectedObjectId) {
-        if (obj.type === 'text') {
-          return {
-            ...obj,
-            text: modalLabel,
-            fontSize: modalSize,
-            fill: modalColor,
-          };
-        } else if (obj.type === 'pitch') {
-          return {
-            ...obj,
-            width: modalSize,
-            height: (modalSize / 4) * 3,
-          };
-        }
-        return {
-          ...obj,
-          label: modalLabel,
-          size: modalSize,
-          color: modalColor,
-        };
-      }
-      return obj;
-    });
-    setObjects(updated);
-    setShowModal(false);
-    setSelectedObjectId(null);
-    transformerRef.current.nodes([]);
-    transformerRef.current.getLayer().batchDraw();
+    setIsDraggingOver(true);
   };
 
-  const handleModalCancel = () => {
-    setShowModal(false);
-    setSelectedObjectId(null);
-    transformerRef.current.nodes([]);
-    transformerRef.current.getLayer().batchDraw();
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    const tool = e.dataTransfer.getData('tool');
+    if (!tool || ['line', 'square'].includes(tool)) return;
+
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const canvas = stage.getContent();
+    const rect = canvas.getBoundingClientRect();
+
+    const stageX = e.clientX - rect.left;
+    const stageY = e.clientY - rect.top;
+
+    if (stageX < 0 || stageX > stage.width() || stageY < 0 || stageY > stage.height()) return;
+
+    const id = Date.now();
+    let newObj;
+
+    switch (tool) {
+      case 'text':
+        newObj = {
+          id,
+          type: 'text',
+          x: stageX,
+          y: stageY,
+          text: 'New Text',
+          fontSize: 20,
+          fill: '#000000',
+          rotation: 0,
+          scaleX: 1,
+          scaleY: 1,
+        };
+        break;
+      case 'paragraph':
+        newObj = {
+          id,
+          type: 'paragraph',
+          x: stageX,
+          y: stageY,
+          text: 'New Paragraph\nAdd your text here',
+          fontSize: 16,
+          fill: '#000000',
+          width: 200,
+          rotation: 0,
+          scaleX: 1,
+          scaleY: 1,
+        };
+        break;
+      case 'pitch':
+        const pitchImage = {
+          GAA: gaaPitchImage,
+          Soccer: soccerPitchImage,
+          Basketball: basketballCourtImage,
+          AmericanFootball: amFootballPitchImage,
+        }[sport] || gaaPitchImage;
+        newObj = {
+          id,
+          type: 'pitch',
+          subtype: sport,
+          x: stageX,
+          y: stageY,
+          width: 200,
+          height: 150,
+          image: pitchImage,
+          rotation: 0,
+          scaleX: 1,
+          scaleY: 1,
+        };
+        break;
+      default:
+        newObj = {
+          id,
+          type: tool,
+          x: stageX,
+          y: stageY,
+          rotation: 0,
+          scaleX: 1,
+          scaleY: 1,
+          size: 25,
+          label: '',
+          color: tool === 'player' ? '#000000' : null,
+        };
+    }
+
+    setObjects([...objects, newObj]);
+  };
+
+  const handleDragLeave = () => {
+    setIsDraggingOver(false);
+  };
+
+  // Render controls for selected object
+  const renderControls = () => {
+    if (!selectedNode || !selectedObjectId || editingObjectId) return null;
+
+    const obj = objects.find((o) => o.id === selectedObjectId);
+    if (!obj) return null;
+
+    const boundingBox = selectedNode.getClientRect();
+    const centerX = boundingBox.x + boundingBox.width / 2;
+    const centerY = boundingBox.y + boundingBox.height / 2;
+    const offset = boundingBox.width / 2 + 20;
+
+    return (
+      <Group>
+        <KonvaImage
+          image={(() => {
+            const img = new window.Image();
+            img.src = 'data:image/svg+xml,' + encodeURIComponent(
+              `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="#5e2e8f" d="${FaArrowsAlt().props.children.props.d}"/></svg>`
+            );
+            return img;
+          })()}
+          x={centerX - 12}
+          y={centerY - offset - 12}
+          width={24}
+          height={24}
+          draggable
+          onDragMove={(e) => {
+            const newX = e.target.x() + 12;
+            const newY = e.target.y() + offset + 12;
+            selectedNode.position({ x: newX - boundingBox.width / 2, y: newY - boundingBox.height / 2 });
+            selectedNode.getLayer().batchDraw();
+          }}
+          onDragEnd={(e) => {
+            const newX = e.target.x() + 12;
+            const newY = e.target.y() + offset + 12;
+            const updated = objects.map((o) =>
+              o.id === selectedObjectId
+                ? { ...o, x: newX - boundingBox.width / 2, y: newY - boundingBox.height / 2 }
+                : o
+            );
+            setObjects(updated);
+            e.target.position({ x: centerX - 12, y: centerY - offset - 12 });
+          }}
+        />
+        <KonvaImage
+          image={(() => {
+            const img = new window.Image();
+            img.src = 'data:image/svg+xml,' + encodeURIComponent(
+              `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="#5e2e8f" d="${FaRedo().props.children.props.d}"/></svg>`
+            );
+            return img;
+          })()}
+          x={centerX + offset}
+          y={centerY - 12}
+          width={24}
+          height={24}
+          draggable
+          onDragMove={(e) => {
+            const dx = e.target.x() - centerX;
+            const dy = e.target.y() - centerY;
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            selectedNode.rotation(angle);
+            selectedNode.getLayer().batchDraw();
+          }}
+          onDragEnd={(e) => {
+            const dx = e.target.x() - centerX;
+            const dy = e.target.y() - centerY;
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            const updated = objects.map((o) =>
+              o.id === selectedObjectId ? { ...o, rotation: angle } : o
+            );
+            setObjects(updated);
+            e.target.position({ x: centerX + offset, y: centerY - 12 });
+          }}
+        />
+      </Group>
+    );
   };
 
   // Save session
@@ -702,27 +880,90 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
         <SidebarSection>
           <Typography variant="subtitle1" sx={{ color: '#fff' }}>Tools</Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <IconButton onClick={() => addObject('cone')} sx={{ color: '#fff' }} title="Add Cone">
-              <img src={coneImg} alt="Cone" style={{ width: 24, height: 24 }} />
-            </IconButton>
-            <IconButton onClick={() => addObject('ball')} sx={{ color: '#fff' }} title="Add Ball">
-              <img src={ballImg} alt="Ball" style={{ width: 24, height: 24 }} />
-            </IconButton>
-            <IconButton onClick={() => addObject('player')} sx={{ color: '#fff' }} title="Add Player">
-              <img src={playerImg} alt="Player" style={{ width: 24, height: 24 }} />
-            </IconButton>
-            <IconButton onClick={() => addObject('line')} sx={{ color: '#fff' }} title="Add Line">
-              <FaPlus />
-            </IconButton>
-            <IconButton onClick={() => addObject('square')} sx={{ color: '#fff' }} title="Add Square">
-              <FaSquare />
-            </IconButton>
-            <IconButton onClick={() => addObject('text')} sx={{ color: '#fff' }} title="Add Text">
-              <FaTextHeight />
-            </IconButton>
-            <IconButton onClick={() => addObject('pitch')} sx={{ color: '#fff' }} title="Add Pitch">
-              <FaImage />
-            </IconButton>
+            <ToolRow>
+              <IconButton
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('tool', 'cone')}
+                onClick={() => addObject('cone')}
+                sx={{ color: '#fff', cursor: 'grab' }}
+                title="Add Cone"
+              >
+                <img src={coneImg} alt="Cone" style={{ width: 24, height: 24 }} />
+              </IconButton>
+              <Typography sx={{ color: '#fff' }}>Cone</Typography>
+            </ToolRow>
+            <ToolRow>
+              <IconButton
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('tool', 'ball')}
+                onClick={() => addObject('ball')}
+                sx={{ color: '#fff', cursor: 'grab' }}
+                title="Add Ball"
+              >
+                <img src={ballImg} alt="Ball" style={{ width: 24, height: 24 }} />
+              </IconButton>
+              <Typography sx={{ color: '#fff' }}>Ball</Typography>
+            </ToolRow>
+            <ToolRow>
+              <IconButton
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('tool', 'player')}
+                onClick={() => addObject('player')}
+                sx={{ color: '#fff', cursor: 'grab' }}
+                title="Add Player"
+              >
+                <img src={playerImg} alt="Player" style={{ width: 24, height: 24 }} />
+              </IconButton>
+              <Typography sx={{ color: '#fff' }}>Player</Typography>
+            </ToolRow>
+            <ToolRow>
+              <IconButton onClick={() => addObject('line')} sx={{ color: '#fff' }} title="Add Line">
+                <FaPlus />
+              </IconButton>
+              <Typography sx={{ color: '#fff' }}>Line</Typography>
+            </ToolRow>
+            <ToolRow>
+              <IconButton onClick={() => addObject('square')} sx={{ color: '#fff' }} title="Add Square">
+                <FaSquare />
+              </IconButton>
+              <Typography sx={{ color: '#fff' }}>Square</Typography>
+            </ToolRow>
+            <ToolRow>
+              <IconButton
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('tool', 'text')}
+                onClick={() => addObject('text')}
+                sx={{ color: '#fff', cursor: 'grab' }}
+                title="Add Text"
+              >
+                <FaTextHeight />
+              </IconButton>
+              <Typography sx={{ color: '#fff' }}>Text</Typography>
+            </ToolRow>
+            <ToolRow>
+              <IconButton
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('tool', 'paragraph')}
+                onClick={() => addObject('paragraph')}
+                sx={{ color: '#fff', cursor: 'grab' }}
+                title="Add Paragraph"
+              >
+                <FaParagraph />
+              </IconButton>
+              <Typography sx={{ color: '#fff' }}>Paragraph</Typography>
+            </ToolRow>
+            <ToolRow>
+              <IconButton
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('tool', 'pitch')}
+                onClick={() => addObject('pitch')}
+                sx={{ color: '#fff', cursor: 'grab' }}
+                title="Add Pitch"
+              >
+                <FaImage />
+              </IconButton>
+              <Typography sx={{ color: '#fff' }}>Pitch</Typography>
+            </ToolRow>
           </Box>
         </SidebarSection>
 
@@ -821,7 +1062,15 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
         </SidebarSection>
       </Sidebar>
 
-      <CanvasArea ref={canvasAreaRef}>
+      <CanvasArea
+        ref={canvasAreaRef}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        sx={{
+          border: isDraggingOver ? '2px dashed #5e2e8f' : 'none',
+        }}
+      >
         <Stage
           ref={stageRef}
           width={stageDimensions.width}
@@ -863,104 +1112,11 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
             )}
           </Layer>
           <Layer>
-            <Transformer ref={transformerRef} />
+            {renderControls()}
           </Layer>
         </Stage>
+        {renderEditField()}
       </CanvasArea>
-
-      <Modal open={showModal} onClose={handleModalCancel}>
-        <Box
-          component="form"
-          onSubmit={handleModalSubmit}
-          sx={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            bgcolor: '#333',
-            p: 4,
-            borderRadius: 1,
-            width: 300,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 2,
-          }}
-        >
-          <Typography variant="h6" sx={{ color: '#fff' }}>
-            Edit {selectedObject?.type}
-          </Typography>
-          {selectedObject?.type !== 'pitch' && (
-            <TextField
-              label={selectedObject?.type === 'text' ? 'Text' : 'Label'}
-              value={modalLabel}
-              onChange={(e) => setModalLabel(e.target.value)}
-              fullWidth
-              sx={{
-                input: { color: '#fff' },
-                label: { color: '#fff' },
-                '& .MuiOutlinedInput-root': {
-                  '& fieldset': { borderColor: '#5e2e8f' },
-                },
-              }}
-            />
-          )}
-          <TextField
-            label={
-              selectedObject?.type === 'text'
-                ? 'Font Size'
-                : selectedObject?.type === 'pitch'
-                ? 'Width'
-                : 'Size'
-            }
-            type="number"
-            value={modalSize}
-            onChange={(e) => setModalSize(Number(e.target.value))}
-            fullWidth
-            sx={{
-              input: { color: '#fff' },
-              label: { color: '#fff' },
-              '& .MuiOutlinedInput-root': {
-                '& fieldset': { borderColor: '#5e2e8f' },
-              },
-            }}
-          />
-          {(selectedObject?.type === 'player' ||
-            selectedObject?.type === 'line' ||
-            selectedObject?.type === 'square' ||
-            selectedObject?.type === 'text') && (
-            <FormControl fullWidth>
-              <InputLabel sx={{ color: '#fff' }}>Color</InputLabel>
-              <Select
-                value={modalColor}
-                onChange={(e) => setModalColor(e.target.value)}
-                sx={{
-                  color: '#fff',
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#5e2e8f' },
-                }}
-              >
-                <MenuItem value="#FF0000">Red</MenuItem>
-                <MenuItem value="#00FF00">Green</MenuItem>
-                <MenuItem value="#0000FF">Blue</MenuItem>
-                <MenuItem value="#FFFF00">Yellow</MenuItem>
-                <MenuItem value="#FFA500">Orange</MenuItem>
-                <MenuItem value="#000000">Black</MenuItem>
-                <MenuItem value="#FFFFFF">White</MenuItem>
-              </Select>
-            </FormControl>
-          )}
-          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Button variant="contained" color="error" onClick={handleDeleteObject}>
-              Delete
-            </Button>
-            <Button variant="contained" onClick={handleModalCancel}>
-              Cancel
-            </Button>
-            <Button variant="contained" type="submit" sx={{ backgroundColor: '#5e2e8f' }}>
-              Save
-            </Button>
-          </Box>
-        </Box>
-      </Modal>
     </EditorContainer>
   );
 };

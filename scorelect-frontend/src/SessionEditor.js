@@ -29,7 +29,7 @@ import {
 import { styled } from '@mui/material/styles';
 import Swal from 'sweetalert2';
 import jsPDF from 'jspdf';
-import { FaPlus, FaTrash, FaSave, FaFileExport, FaTextHeight, FaSquare, FaImage, FaArrowsAlt, FaRedo, FaParagraph } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaSave, FaFileExport, FaTextHeight, FaSquare, FaImage, FaParagraph } from 'react-icons/fa';
 
 // Import images
 import coneImg from './images/cone.png';
@@ -39,6 +39,10 @@ import gaaPitchImg from './images/gaa-pitch.png';
 import soccerPitchImg from './images/soccer_collect_main.png';
 import basketballCourtImg from './images/basketball_collect_main.png';
 import amFootballPitchImg from './images/amfootball_collect_main.png';
+import moveIcon from './images/move-icon.png';
+import rotateIcon from './images/rotate-icon.png';
+import resizeIcon from './images/resize-icon.png';
+import deleteIcon from './images/delete-icon.png';
 
 // Styled Components
 const EditorContainer = styled(Box)(({ theme }) => ({
@@ -49,6 +53,7 @@ const EditorContainer = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'row',
   gap: theme.spacing(4),
+  position: 'relative', // For absolute positioning of edit field
 }));
 
 const CanvasArea = styled(Box)(({ theme }) => ({
@@ -60,7 +65,7 @@ const CanvasArea = styled(Box)(({ theme }) => ({
   justifyContent: 'center',
   alignItems: 'center',
   overflow: 'hidden',
-  position: 'relative', // For positioning the edit field
+  position: 'relative',
 }));
 
 const Sidebar = styled(Box)(({ theme }) => ({
@@ -83,7 +88,28 @@ const ToolRow = styled(Box)(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   gap: theme.spacing(1),
+  position: 'relative',
 }));
+
+const ColorSquare = styled(Box)(({ color }) => ({
+  width: 20,
+  height: 20,
+  backgroundColor: color,
+  border: '1px solid #fff',
+  cursor: 'pointer',
+}));
+
+const ColorPickerWrapper = styled(Box)({
+  position: 'relative',
+  '& input[type="color"]': {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    width: '20px',
+    height: '20px',
+    opacity: 0,
+  },
+});
 
 const SessionEditor = ({ selectedSport = 'GAA' }) => {
   const { sessionId } = useParams();
@@ -102,15 +128,20 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
   const [editingObjectId, setEditingObjectId] = useState(null);
   const [editText, setEditText] = useState('');
 
-  // A4 dimensions in pixels at 72 DPI
+  const [toolColors, setToolColors] = useState({
+    player: '#000000',
+    line: '#FFA500',
+    square: '#FFFF00',
+    text: '#000000',
+    paragraph: '#000000',
+  });
+
   const A4_LANDSCAPE = { width: 842, height: 595 };
   const A4_PORTRAIT = { width: 595, height: 842 };
 
-  // Refs for dynamic sizing
   const canvasAreaRef = useRef(null);
   const stageRef = useRef(null);
 
-  // Calculate stage dimensions to fit container
   const getStageDimensions = () => {
     if (!canvasAreaRef.current) return orientation === 'landscape' ? A4_LANDSCAPE : A4_PORTRAIT;
 
@@ -131,7 +162,6 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
 
   const [stageDimensions, setStageDimensions] = useState(getStageDimensions());
 
-  // Update dimensions on orientation change or resize
   useEffect(() => {
     const updateDimensions = () => {
       setStageDimensions(getStageDimensions());
@@ -141,13 +171,11 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     return () => window.removeEventListener('resize', updateDimensions);
   }, [orientation]);
 
-  // For line/square drawing
   const [lineStartPoint, setLineStartPoint] = useState(null);
   const [tempLine, setTempLine] = useState(null);
   const [squareStartPoint, setSquareStartPoint] = useState(null);
   const [tempSquare, setTempSquare] = useState(null);
 
-  // Load images
   const [coneImage] = useImage(coneImg);
   const [ballImage] = useImage(ballImg);
   const [playerImage] = useImage(playerImg);
@@ -155,8 +183,11 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
   const [soccerPitchImage] = useImage(soccerPitchImg);
   const [basketballCourtImage] = useImage(basketballCourtImg);
   const [amFootballPitchImage] = useImage(amFootballPitchImg);
+  const [moveImage] = useImage(moveIcon);
+  const [rotateImage] = useImage(rotateIcon);
+  const [resizeImage] = useImage(resizeIcon);
+  const [deleteImage] = useImage(deleteIcon);
 
-  // Load or pre-fill session
   useEffect(() => {
     const fetchOrInitSession = async () => {
       if (sessionId === 'new' && location.state) {
@@ -191,23 +222,20 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     fetchOrInitSession();
   }, [sessionId, navigate, location.state, selectedSport]);
 
-  // Add object
   const addObject = (type) => {
     setSelectedTool(type);
   };
 
-  // Handle canvas click
   const handleCanvasClick = (e) => {
     const stage = e.target.getStage();
     const pointer = stage.getPointerPosition();
     const id = Date.now();
 
-    // Check if click is on an object
     const clickedObject = stage.getIntersection(pointer);
     if (!clickedObject || !clickedObject.getParent().id().startsWith('object-')) {
       setSelectedObjectId(null);
       setSelectedNode(null);
-      setEditingObjectId(null); // Exit edit mode if clicking outside
+      setEditingObjectId(null);
     }
 
     if (selectedTool === 'line') {
@@ -218,7 +246,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
           id,
           type: 'line',
           points: [lineStartPoint.x, lineStartPoint.y, pointer.x, pointer.y],
-          color: '#FFA500',
+          color: toolColors.line,
           size: 3,
         };
         setObjects([...objects, newLine]);
@@ -239,7 +267,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
           y: height < 0 ? pointer.y : squareStartPoint.y,
           width: Math.abs(width),
           height: Math.abs(height),
-          color: '#FFFF00',
+          color: toolColors.square,
           rotation: 0,
           scaleX: 1,
           scaleY: 1,
@@ -257,7 +285,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
         y: pointer.y,
         text: 'New Text',
         fontSize: 20,
-        fill: '#000000',
+        fill: toolColors.text,
         rotation: 0,
         scaleX: 1,
         scaleY: 1,
@@ -272,7 +300,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
         y: pointer.y,
         text: 'New Paragraph\nAdd your text here',
         fontSize: 16,
-        fill: '#000000',
+        fill: toolColors.paragraph,
         width: 200,
         rotation: 0,
         scaleX: 1,
@@ -293,8 +321,8 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
         subtype: sport,
         x: pointer.x,
         y: pointer.y,
-        width: 200,
-        height: 150,
+        width: 150,
+        height: 200,
         image: pitchImage,
         rotation: 0,
         scaleX: 1,
@@ -313,14 +341,13 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
         scaleY: 1,
         size: 25,
         label: '',
-        color: selectedTool === 'player' ? '#000000' : null,
+        color: selectedTool === 'player' ? toolColors.player : null,
       };
       setObjects([...objects, newObj]);
       setSelectedTool(null);
     }
   };
 
-  // Handle mouse move for preview
   const handleMouseMove = (e) => {
     if (!selectedTool || !stageRef.current) return;
     const stage = e.target.getStage();
@@ -329,7 +356,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     if (selectedTool === 'line' && lineStartPoint) {
       setTempLine({
         points: [lineStartPoint.x, lineStartPoint.y, pointer.x, pointer.y],
-        color: '#FFA500',
+        color: toolColors.line,
         size: 3,
       });
     } else if (selectedTool === 'square' && squareStartPoint) {
@@ -340,7 +367,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
         y: height < 0 ? pointer.y : squareStartPoint.y,
         width: Math.abs(width),
         height: Math.abs(height),
-        color: '#FFFF00',
+        color: toolColors.square,
         size: 2,
       });
     }
@@ -351,7 +378,6 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     setTempSquare(null);
   };
 
-  // Select object
   const handleSelectObject = (id) => {
     setSelectedObjectId(id);
     const stage = stageRef.current;
@@ -364,7 +390,6 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     }
   };
 
-  // Drag object
   const handleDragObject = (e, id) => {
     const updated = objects.map((obj) => {
       if (obj.id === id) {
@@ -375,16 +400,16 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     setObjects(updated);
   };
 
-  // Start editing text
   const startEditing = (id) => {
     const obj = objects.find((o) => o.id === id);
     if (obj && (obj.type === 'text' || obj.type === 'paragraph')) {
       setEditingObjectId(id);
       setEditText(obj.text);
+      setSelectedObjectId(null);
+      setSelectedNode(null);
     }
   };
 
-  // Save edited text
   const saveEdit = () => {
     if (editingObjectId !== null) {
       const updatedObjects = objects.map((obj) =>
@@ -396,7 +421,6 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     }
   };
 
-  // Render objects
   const renderObjects = () => {
     return objects.map((obj) => {
       switch (obj.type) {
@@ -505,6 +529,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
             />
           );
         case 'text':
+          if (obj.id === editingObjectId) return null;
           return (
             <Text
               key={obj.id}
@@ -525,6 +550,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
             />
           );
         case 'paragraph':
+          if (obj.id === editingObjectId) return null;
           return (
             <Text
               key={obj.id}
@@ -576,21 +602,11 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     });
   };
 
-  // Render edit field
   const renderEditField = () => {
     if (!editingObjectId) return null;
 
     const obj = objects.find((o) => o.id === editingObjectId);
     if (!obj) return null;
-
-    const stage = stageRef.current;
-    const scale = stageDimensions.scale || 1;
-    const canvasRect = canvasAreaRef.current.getBoundingClientRect();
-
-    // Convert Konva coordinates to screen coordinates
-    const left = (obj.x * scale) + canvasRect.left - window.scrollX;
-    const top = (obj.y * scale) + canvasRect.top - window.scrollY;
-    const width = obj.type === 'paragraph' ? obj.width * scale : undefined;
 
     return (
       <TextField
@@ -606,27 +622,31 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
         autoFocus
         sx={{
           position: 'absolute',
-          left: `${left}px`,
-          top: `${top}px`,
-          width: width ? `${width}px` : 'auto',
-          backgroundColor: '#fff',
+          top: '50px', // Fixed position above the canvas
+          left: '60%',
+          transform: 'translateX(-50%)', // Center horizontally
+          width: obj.type === 'paragraph' ? '400px' : '200px', // Fixed width for consistency
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
           '& .MuiInputBase-root': {
-            fontSize: `${obj.fontSize * scale}px`,
+            fontSize: `${obj.fontSize}px`, // Use original font size without scaling
             color: obj.fill || '#000000',
+            padding: '8px',
           },
+          '& .MuiOutlinedInput-notchedOutline': {
+            border: '1px solid #5e2e8f', // Add a subtle border for visibility
+          },
+          zIndex: 10, // Ensure it’s above the canvas
         }}
       />
     );
   };
 
-  // Handle orientation change
   const handleOrientationChange = (event, newOrientation) => {
     if (newOrientation) {
       setOrientation(newOrientation);
     }
   };
 
-  // Drag-and-drop handlers
   const handleDragOver = (e) => {
     e.preventDefault();
     setIsDraggingOver(true);
@@ -661,7 +681,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
           y: stageY,
           text: 'New Text',
           fontSize: 20,
-          fill: '#000000',
+          fill: toolColors.text,
           rotation: 0,
           scaleX: 1,
           scaleY: 1,
@@ -675,7 +695,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
           y: stageY,
           text: 'New Paragraph\nAdd your text here',
           fontSize: 16,
-          fill: '#000000',
+          fill: toolColors.paragraph,
           width: 200,
           rotation: 0,
           scaleX: 1,
@@ -695,8 +715,8 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
           subtype: sport,
           x: stageX,
           y: stageY,
-          width: 200,
-          height: 150,
+          width: 150,
+          height: 200,
           image: pitchImage,
           rotation: 0,
           scaleX: 1,
@@ -714,7 +734,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
           scaleY: 1,
           size: 25,
           label: '',
-          color: tool === 'player' ? '#000000' : null,
+          color: tool === 'player' ? toolColors.player : null,
         };
     }
 
@@ -725,7 +745,6 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     setIsDraggingOver(false);
   };
 
-  // Render controls for selected object
   const renderControls = () => {
     if (!selectedNode || !selectedObjectId || editingObjectId) return null;
 
@@ -740,15 +759,9 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     return (
       <Group>
         <KonvaImage
-          image={(() => {
-            const img = new window.Image();
-            img.src = 'data:image/svg+xml,' + encodeURIComponent(
-              `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="#5e2e8f" d="${FaArrowsAlt().props.children.props.d}"/></svg>`
-            );
-            return img;
-          })()}
+          image={moveImage}
           x={centerX - 12}
-          y={centerY - offset - 12}
+          y={centerY - offset - 6}
           width={24}
           height={24}
           draggable
@@ -763,7 +776,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
             const newY = e.target.y() + offset + 12;
             const updated = objects.map((o) =>
               o.id === selectedObjectId
-                ? { ...o, x: newX - boundingBox.width / 2, y: newY - boundingBox.height / 2 }
+                ? { ...obj, x: newX - boundingBox.width / 2, y: newY - boundingBox.height / 2 }
                 : o
             );
             setObjects(updated);
@@ -771,17 +784,11 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
           }}
         />
         <KonvaImage
-          image={(() => {
-            const img = new window.Image();
-            img.src = 'data:image/svg+xml,' + encodeURIComponent(
-              `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="#5e2e8f" d="${FaRedo().props.children.props.d}"/></svg>`
-            );
-            return img;
-          })()}
-          x={centerX + offset}
-          y={centerY - 12}
-          width={24}
-          height={24}
+          image={rotateImage}
+          x={centerX + offset - 4}
+          y={centerY - 8}
+          width={14}
+          height={14}
           draggable
           onDragMove={(e) => {
             const dx = e.target.x() - centerX;
@@ -795,17 +802,65 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
             const dy = e.target.y() - centerY;
             const angle = Math.atan2(dy, dx) * (180 / Math.PI);
             const updated = objects.map((o) =>
-              o.id === selectedObjectId ? { ...o, rotation: angle } : o
+              o.id === selectedObjectId ? { ...obj, rotation: angle } : o
             );
             setObjects(updated);
             e.target.position({ x: centerX + offset, y: centerY - 12 });
+          }}
+        />
+        <KonvaImage
+          image={resizeImage}
+          x={centerX + offset - 40}
+          y={centerY + offset - 12}
+          width={14}
+          height={14}
+          draggable
+          onDragMove={(e) => {
+            const dx = e.target.x() - centerX;
+            const dy = e.target.y() - centerY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const originalDistance = offset;
+            const newScale = Math.max(0.1, distance / originalDistance);
+            selectedNode.scaleX(newScale);
+            selectedNode.scaleY(newScale);
+            selectedNode.getLayer().batchDraw();
+          }}
+          onDragEnd={(e) => {
+            const dx = e.target.x() - centerX;
+            const dy = e.target.y() - centerY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const originalDistance = offset;
+            const newScale = Math.max(0.1, distance / originalDistance);
+            const updated = objects.map((o) =>
+              o.id === selectedObjectId ? { ...obj, scaleX: newScale, scaleY: newScale } : o
+            );
+            setObjects(updated);
+            e.target.position({ x: centerX + offset + 50, y: centerY + offset - 12 });
+          }}
+        />
+        <KonvaImage
+          image={deleteImage}
+          x={centerX - offset - 8}
+          y={centerY - 12}
+          width={14}
+          height={14}
+          onClick={() => {
+            const updatedObjects = objects.filter((o) => o.id !== selectedObjectId);
+            setObjects(updatedObjects);
+            setSelectedObjectId(null);
+            setSelectedNode(null);
+          }}
+          onTap={() => {
+            const updatedObjects = objects.filter((o) => o.id !== selectedObjectId);
+            setObjects(updatedObjects);
+            setSelectedObjectId(null);
+            setSelectedNode(null);
           }}
         />
       </Group>
     );
   };
 
-  // Save session
   const saveSession = async () => {
     if (!title.trim()) {
       Swal.fire('Error', 'Please enter a session title.', 'warning');
@@ -845,7 +900,6 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     }
   };
 
-  // Export to PDF
   const exportToPDF = async () => {
     const stage = stageRef.current;
     if (!stage) return;
@@ -915,18 +969,54 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
                 <img src={playerImg} alt="Player" style={{ width: 24, height: 24 }} />
               </IconButton>
               <Typography sx={{ color: '#fff' }}>Player</Typography>
+              <ColorPickerWrapper>
+                <ColorSquare
+                  color={toolColors.player}
+                  onClick={() => document.getElementById('color-player').click()}
+                />
+                <input
+                  type="color"
+                  id="color-player"
+                  value={toolColors.player}
+                  onChange={(e) => setToolColors({ ...toolColors, player: e.target.value })}
+                />
+              </ColorPickerWrapper>
             </ToolRow>
             <ToolRow>
               <IconButton onClick={() => addObject('line')} sx={{ color: '#fff' }} title="Add Line">
                 <FaPlus />
               </IconButton>
               <Typography sx={{ color: '#fff' }}>Line</Typography>
+              <ColorPickerWrapper>
+                <ColorSquare
+                  color={toolColors.line}
+                  onClick={() => document.getElementById('color-line').click()}
+                />
+                <input
+                  type="color"
+                  id="color-line"
+                  value={toolColors.line}
+                  onChange={(e) => setToolColors({ ...toolColors, line: e.target.value })}
+                />
+              </ColorPickerWrapper>
             </ToolRow>
             <ToolRow>
               <IconButton onClick={() => addObject('square')} sx={{ color: '#fff' }} title="Add Square">
                 <FaSquare />
               </IconButton>
               <Typography sx={{ color: '#fff' }}>Square</Typography>
+              <ColorPickerWrapper>
+                <ColorSquare
+                  color={toolColors.square}
+                  onClick={() => document.getElementById('color-square').click()}
+                />
+                <input
+                  type="color"
+                  id="color-square"
+                  value={toolColors.square}
+                  onChange={(e) => setToolColors({ ...toolColors, square: e.target.value })}
+                />
+              </ColorPickerWrapper>
             </ToolRow>
             <ToolRow>
               <IconButton
@@ -939,6 +1029,18 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
                 <FaTextHeight />
               </IconButton>
               <Typography sx={{ color: '#fff' }}>Text</Typography>
+              <ColorPickerWrapper>
+                <ColorSquare
+                  color={toolColors.text}
+                  onClick={() => document.getElementById('color-text').click()}
+                />
+                <input
+                  type="color"
+                  id="color-text"
+                  value={toolColors.text}
+                  onChange={(e) => setToolColors({ ...toolColors, text: e.target.value })}
+                />
+              </ColorPickerWrapper>
             </ToolRow>
             <ToolRow>
               <IconButton
@@ -951,6 +1053,18 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
                 <FaParagraph />
               </IconButton>
               <Typography sx={{ color: '#fff' }}>Paragraph</Typography>
+              <ColorPickerWrapper>
+                <ColorSquare
+                  color={toolColors.paragraph}
+                  onClick={() => document.getElementById('color-paragraph').click()}
+                />
+                <input
+                  type="color"
+                  id="color-paragraph"
+                  value={toolColors.paragraph}
+                  onChange={(e) => setToolColors({ ...toolColors, paragraph: e.target.value })}
+                />
+              </ColorPickerWrapper>
             </ToolRow>
             <ToolRow>
               <IconButton
@@ -1115,8 +1229,8 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
             {renderControls()}
           </Layer>
         </Stage>
-        {renderEditField()}
       </CanvasArea>
+      {renderEditField()}
     </EditorContainer>
   );
 };

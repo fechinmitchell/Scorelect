@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
 import {
   Stage,
@@ -26,6 +26,11 @@ import {
   Divider,
   IconButton,
   Tooltip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import jsPDF from 'jspdf';
@@ -35,7 +40,8 @@ import {
   FaArrowRight, 
   FaHome, 
   FaInfoCircle,
-  FaChevronLeft
+  FaChevronLeft,
+  FaTrash
 } from 'react-icons/fa';
 
 // Import images (same as before)
@@ -170,6 +176,9 @@ const SessionDetail = () => {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
   const [showInfo, setShowInfo] = useState(true);
+  const [isCreator, setIsCreator] = useState(false);
+  const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const canvasAreaRef = useRef(null);
 
@@ -222,7 +231,16 @@ const SessionDetail = () => {
         const sessionRef = doc(firestore, 'public_sessions', sessionId);
         const sessionSnap = await getDoc(sessionRef);
         if (sessionSnap.exists()) {
-          setSession(sessionSnap.data());
+          const sessionData = sessionSnap.data();
+          setSession(sessionData);
+          
+          // Check if current user is the creator
+          // Assuming you have some auth context or service to get current user
+          // This is a placeholder - replace with your actual auth implementation
+          const currentUser = getCurrentUser(); // Replace with your auth method
+          if (currentUser && sessionData.createdBy === currentUser.uid) {
+            setIsCreator(true);
+          }
         } else {
           console.error('Session not found:', sessionId);
           navigate('/sessions');
@@ -233,6 +251,16 @@ const SessionDetail = () => {
       }
       setLoading(false);
     };
+    
+    // Placeholder function - replace with your actual auth implementation
+    const getCurrentUser = () => {
+      // This is just a placeholder, replace with your actual auth logic
+      // For example, if using Firebase Auth:
+      // return auth.currentUser;
+      const user = localStorage.getItem('user');
+      return user ? JSON.parse(user) : null;
+    };
+    
     fetchSession();
   }, [sessionId, navigate]);
 
@@ -397,6 +425,39 @@ const SessionDetail = () => {
     });
   };
 
+  if (loading) {
+    return (
+      <DetailContainer>
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+          <CircularProgress sx={{ color: '#a67fcc' }} size={60} thickness={4} />
+        </Box>
+      </DetailContainer>
+    );
+  }
+
+  const handleDeleteSession = async () => {
+    try {
+      setDeleteLoading(true);
+      await deleteDoc(doc(firestore, 'public_sessions', sessionId));
+      setDeleteLoading(false);
+      setOpenDeleteDialog(false);
+      navigate('/sessions', { state: { message: 'Session deleted successfully!' } });
+    } catch (error) {
+      console.error('Error deleting session:', error);
+      setDeleteLoading(false);
+      setOpenDeleteDialog(false);
+      // Consider adding a toast or notification here to show the error
+    }
+  };
+  
+  const openDeleteConfirmation = () => {
+    setOpenDeleteDialog(true);
+  };
+  
+  const closeDeleteConfirmation = () => {
+    setOpenDeleteDialog(false);
+  };
+  
   const exportToPDF = async () => {
     if (!session || !session.pages) return;
 
@@ -421,16 +482,6 @@ const SessionDetail = () => {
     pdf.save(`${session.title || 'session'}.pdf`);
     setCurrentPage(0);
   };
-
-  if (loading) {
-    return (
-      <DetailContainer>
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
-          <CircularProgress sx={{ color: '#a67fcc' }} size={60} thickness={4} />
-        </Box>
-      </DetailContainer>
-    );
-  }
 
   if (!session) {
     return (
@@ -463,12 +514,27 @@ const SessionDetail = () => {
               {session.description}
             </Typography>
           </Box>
-          <BackButton
-            startIcon={<FaChevronLeft />}
-            onClick={() => navigate('/sessions')}
-          >
-            Back to Sessions
-          </BackButton>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            {isCreator && (
+              <Button
+                variant="contained"
+                startIcon={<FaTrash />}
+                onClick={openDeleteConfirmation}
+                sx={{ 
+                  backgroundColor: '#c53030', 
+                  '&:hover': { backgroundColor: '#e53e3e' }
+                }}
+              >
+                Delete
+              </Button>
+            )}
+            <BackButton
+              startIcon={<FaChevronLeft />}
+              onClick={() => navigate('/sessions')}
+            >
+              Back to Sessions
+            </BackButton>
+          </Box>
         </Box>
       </HeaderSection>
 
@@ -615,6 +681,52 @@ const SessionDetail = () => {
           </Box>
         </CanvasControls>
       </CanvasContainer>
+      
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={openDeleteDialog}
+        onClose={closeDeleteConfirmation}
+        PaperProps={{
+          sx: {
+            backgroundColor: '#2c2c2c',
+            color: '#e0e0e0',
+            borderRadius: '8px',
+            maxWidth: '500px'
+          }
+        }}
+      >
+        <DialogTitle sx={{ color: '#e53e3e', fontWeight: 600 }}>
+          Delete Session
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ color: '#e0e0e0' }}>
+            Are you sure you want to delete this training session? This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ padding: '16px 24px' }}>
+          <Button 
+            onClick={closeDeleteConfirmation} 
+            sx={{ 
+              color: '#a67fcc',
+              '&:hover': { backgroundColor: 'rgba(166, 127, 204, 0.1)' }
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDeleteSession}
+            disabled={deleteLoading}
+            sx={{ 
+              backgroundColor: '#c53030', 
+              color: 'white',
+              '&:hover': { backgroundColor: '#e53e3e' }
+            }}
+            startIcon={deleteLoading ? <CircularProgress size={16} color="inherit" /> : <FaTrash />}
+          >
+            {deleteLoading ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </DetailContainer>
   );
 };

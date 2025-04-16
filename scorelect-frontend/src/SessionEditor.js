@@ -29,7 +29,7 @@ import {
 import { styled } from '@mui/material/styles';
 import Swal from 'sweetalert2';
 import jsPDF from 'jspdf';
-import { FaPlus, FaTrash, FaSave, FaFileExport, FaTextHeight, FaSquare, FaImage, FaParagraph } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaSave, FaFileExport, FaTextHeight, FaSquare, FaImage, FaParagraph, FaArrowRight } from 'react-icons/fa';
 
 // Import images
 import coneImg from './images/cone.png';
@@ -53,7 +53,7 @@ const EditorContainer = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'row',
   gap: theme.spacing(4),
-  position: 'relative', // For absolute positioning of edit field
+  position: 'relative',
 }));
 
 const CanvasArea = styled(Box)(({ theme }) => ({
@@ -118,7 +118,8 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [sport, setSport] = useState(selectedSport);
-  const [objects, setObjects] = useState([]);
+  const [pages, setPages] = useState([{ objects: [], canvasColor: '#FFFFFF' }]);
+  const [currentPage, setCurrentPage] = useState(0);
   const [selectedTool, setSelectedTool] = useState(null);
   const [selectedObjectId, setSelectedObjectId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -191,11 +192,12 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
   useEffect(() => {
     const fetchOrInitSession = async () => {
       if (sessionId === 'new' && location.state) {
-        const { title, description, sport, type, creator, price, image } = location.state;
+        const { title, description, sport, type, creator, price, image, orientation } = location.state;
         setTitle(title || '');
         setDescription(description || '');
         setSport(sport || selectedSport);
-        setObjects([]);
+        setOrientation(orientation || 'landscape');
+        setPages([{ objects: [], canvasColor: '#FFFFFF' }]);
       } else if (sessionId !== 'new') {
         try {
           const sessionRef = doc(firestore, 'public_sessions', sessionId);
@@ -205,7 +207,14 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
             setTitle(data.title || '');
             setDescription(data.description || '');
             setSport(data.sport || selectedSport);
-            setObjects(data.objects || []);
+            // Sanitize pages to remove image objects
+            const sanitizedPages = (data.pages || [{ objects: data.objects || [], canvasColor: data.canvasColor || '#FFFFFF' }]).map(page => ({
+              ...page,
+              objects: page.objects.map(obj => 
+                obj.type === 'pitch' ? { ...obj, image: undefined } : obj
+              ),
+            }));
+            setPages(sanitizedPages);
             setOrientation(data.orientation || 'landscape');
           } else {
             Swal.fire('Error', 'Session not found.', 'error');
@@ -232,7 +241,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     const id = Date.now();
 
     const clickedObject = stage.getIntersection(pointer);
-    if (!clickedObject || !clickedObject.getParent().id().startsWith('object-')) {
+    if (!clickedObject || !clickedObject.getParent()?.id().startsWith('object-')) {
       setSelectedObjectId(null);
       setSelectedNode(null);
       setEditingObjectId(null);
@@ -249,7 +258,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
           color: toolColors.line,
           size: 3,
         };
-        setObjects([...objects, newLine]);
+        updatePageObjects([...pages[currentPage].objects, newLine]);
         setLineStartPoint(null);
         setTempLine(null);
         setSelectedTool(null);
@@ -272,7 +281,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
           scaleX: 1,
           scaleY: 1,
         };
-        setObjects([...objects, newSquare]);
+        updatePageObjects([...pages[currentPage].objects, newSquare]);
         setSquareStartPoint(null);
         setTempSquare(null);
         setSelectedTool(null);
@@ -290,7 +299,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
         scaleX: 1,
         scaleY: 1,
       };
-      setObjects([...objects, newText]);
+      updatePageObjects([...pages[currentPage].objects, newText]);
       setSelectedTool(null);
     } else if (selectedTool === 'paragraph') {
       const newParagraph = {
@@ -306,15 +315,9 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
         scaleX: 1,
         scaleY: 1,
       };
-      setObjects([...objects, newParagraph]);
+      updatePageObjects([...pages[currentPage].objects, newParagraph]);
       setSelectedTool(null);
     } else if (selectedTool === 'pitch') {
-      const pitchImage = {
-        GAA: gaaPitchImage,
-        Soccer: soccerPitchImage,
-        Basketball: basketballCourtImage,
-        AmericanFootball: amFootballPitchImage,
-      }[sport] || gaaPitchImage;
       const newPitch = {
         id,
         type: 'pitch',
@@ -323,12 +326,11 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
         y: pointer.y,
         width: 150,
         height: 200,
-        image: pitchImage,
         rotation: 0,
         scaleX: 1,
         scaleY: 1,
       };
-      setObjects([...objects, newPitch]);
+      updatePageObjects([...pages[currentPage].objects, newPitch]);
       setSelectedTool(null);
     } else if (selectedTool) {
       const newObj = {
@@ -343,7 +345,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
         label: '',
         color: selectedTool === 'player' ? toolColors.player : null,
       };
-      setObjects([...objects, newObj]);
+      updatePageObjects([...pages[currentPage].objects, newObj]);
       setSelectedTool(null);
     }
   };
@@ -387,21 +389,36 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
     const node = layer.findOne(`#object-${id}`);
     if (node) {
       setSelectedNode(node);
+    } else {
+      setSelectedObjectId(null);
+      setSelectedNode(null);
     }
   };
 
   const handleDragObject = (e, id) => {
-    const updated = objects.map((obj) => {
+    const updatedObjects = pages[currentPage].objects.map((obj) => {
       if (obj.id === id) {
+        if (obj.type === 'line') {
+          const dx = e.target.x();
+          const dy = e.target.y();
+          const centerX = (obj.points[0] + obj.points[2]) / 2;
+          const centerY = (obj.points[1] + obj.points[3]) / 2;
+          const offsetX = dx - centerX;
+          const offsetY = dy - centerY;
+          return {
+            ...obj,
+            points: obj.points.map((p, i) => (i % 2 === 0 ? p + offsetX : p + offsetY)),
+          };
+        }
         return { ...obj, x: e.target.x(), y: e.target.y() };
       }
       return obj;
     });
-    setObjects(updated);
+    updatePageObjects(updatedObjects);
   };
 
   const startEditing = (id) => {
-    const obj = objects.find((o) => o.id === id);
+    const obj = pages[currentPage].objects.find((o) => o.id === id);
     if (obj && (obj.type === 'text' || obj.type === 'paragraph')) {
       setEditingObjectId(id);
       setEditText(obj.text);
@@ -412,17 +429,30 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
 
   const saveEdit = () => {
     if (editingObjectId !== null) {
-      const updatedObjects = objects.map((obj) =>
+      const updatedObjects = pages[currentPage].objects.map((obj) =>
         obj.id === editingObjectId ? { ...obj, text: editText } : obj
       );
-      setObjects(updatedObjects);
+      updatePageObjects(updatedObjects);
       setEditingObjectId(null);
       setEditText('');
     }
   };
 
+  const updatePageObjects = (newObjects) => {
+    const updatedPages = [...pages];
+    updatedPages[currentPage] = { ...updatedPages[currentPage], objects: newObjects };
+    setPages(updatedPages);
+  };
+
   const renderObjects = () => {
-    return objects.map((obj) => {
+    const pitchImageMap = {
+      GAA: gaaPitchImage,
+      Soccer: soccerPitchImage,
+      Basketball: basketballCourtImage,
+      AmericanFootball: amFootballPitchImage,
+    };
+
+    return pages[currentPage].objects.map((obj) => {
       switch (obj.type) {
         case 'cone':
         case 'ball': {
@@ -520,12 +550,12 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
               stroke={obj.color || '#FFFF00'}
               strokeWidth={2}
               draggable
-              onClick={() => handleSelectObject(obj.id)}
-              onTap={() => handleSelectObject(obj.id)}
-              onDragEnd={(e) => handleDragObject(e, obj.id)}
               rotation={obj.rotation}
               scaleX={obj.scaleX}
               scaleY={obj.scaleY}
+              onClick={() => handleSelectObject(obj.id)}
+              onTap={() => handleSelectObject(obj.id)}
+              onDragEnd={(e) => handleDragObject(e, obj.id)}
             />
           );
         case 'text':
@@ -573,6 +603,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
             />
           );
         case 'pitch':
+          const pitchImage = pitchImageMap[obj.subtype] || gaaPitchImage;
           return (
             <Group
               key={obj.id}
@@ -588,7 +619,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
               scaleY={obj.scaleY}
             >
               <KonvaImage
-                image={obj.image}
+                image={pitchImage}
                 x={0}
                 y={0}
                 width={obj.width}
@@ -605,7 +636,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
   const renderEditField = () => {
     if (!editingObjectId) return null;
 
-    const obj = objects.find((o) => o.id === editingObjectId);
+    const obj = pages[currentPage].objects.find((o) => o.id === editingObjectId);
     if (!obj) return null;
 
     return (
@@ -622,20 +653,20 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
         autoFocus
         sx={{
           position: 'absolute',
-          top: '50px', // Fixed position above the canvas
+          top: '50px',
           left: '60%',
-          transform: 'translateX(-50%)', // Center horizontally
-          width: obj.type === 'paragraph' ? '400px' : '200px', // Fixed width for consistency
+          transform: 'translateX(-50%)',
+          width: obj.type === 'paragraph' ? '400px' : '200px',
           backgroundColor: 'rgba(255, 255, 255, 0.9)',
           '& .MuiInputBase-root': {
-            fontSize: `${obj.fontSize}px`, // Use original font size without scaling
+            fontSize: `${obj.fontSize}px`,
             color: obj.fill || '#000000',
             padding: '8px',
           },
           '& .MuiOutlinedInput-notchedOutline': {
-            border: '1px solid #5e2e8f', // Add a subtle border for visibility
+            border: '1px solid #5e2e8f',
           },
-          zIndex: 10, // Ensure it’s above the canvas
+          zIndex: 10,
         }}
       />
     );
@@ -703,12 +734,6 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
         };
         break;
       case 'pitch':
-        const pitchImage = {
-          GAA: gaaPitchImage,
-          Soccer: soccerPitchImage,
-          Basketball: basketballCourtImage,
-          AmericanFootball: amFootballPitchImage,
-        }[sport] || gaaPitchImage;
         newObj = {
           id,
           type: 'pitch',
@@ -717,7 +742,6 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
           y: stageY,
           width: 150,
           height: 200,
-          image: pitchImage,
           rotation: 0,
           scaleX: 1,
           scaleY: 1,
@@ -738,7 +762,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
         };
     }
 
-    setObjects([...objects, newObj]);
+    updatePageObjects([...pages[currentPage].objects, newObj]);
   };
 
   const handleDragLeave = () => {
@@ -748,76 +772,87 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
   const renderControls = () => {
     if (!selectedNode || !selectedObjectId || editingObjectId) return null;
 
-    const obj = objects.find((o) => o.id === selectedObjectId);
+    const obj = pages[currentPage].objects.find((o) => o.id === selectedObjectId);
     if (!obj) return null;
 
     const boundingBox = selectedNode.getClientRect();
     const centerX = boundingBox.x + boundingBox.width / 2;
     const centerY = boundingBox.y + boundingBox.height / 2;
-    const offset = boundingBox.width / 2 + 20;
+    const offset = Math.max(boundingBox.width, boundingBox.height) / 2 + 20;
 
     return (
       <Group>
         <KonvaImage
           image={moveImage}
           x={centerX - 12}
-          y={centerY - offset - 6}
+          y={centerY - offset - 12}
           width={24}
           height={24}
           draggable
           onDragMove={(e) => {
             const newX = e.target.x() + 12;
-            const newY = e.target.y() + offset + 12;
+            const newY = e.target.y() + 12 + offset;
             selectedNode.position({ x: newX - boundingBox.width / 2, y: newY - boundingBox.height / 2 });
             selectedNode.getLayer().batchDraw();
           }}
           onDragEnd={(e) => {
             const newX = e.target.x() + 12;
-            const newY = e.target.y() + offset + 12;
-            const updated = objects.map((o) =>
-              o.id === selectedObjectId
-                ? { ...obj, x: newX - boundingBox.width / 2, y: newY - boundingBox.height / 2 }
-                : o
-            );
-            setObjects(updated);
+            const newY = e.target.y() + 12 + offset;
+            const updated = pages[currentPage].objects.map((o) => {
+              if (o.id === selectedObjectId) {
+                if (o.type === 'line') {
+                  const centerX = (o.points[0] + o.points[2]) / 2;
+                  const centerY = (o.points[1] + o.points[3]) / 2;
+                  const dx = newX - boundingBox.width / 2 - centerX;
+                  const dy = newY - boundingBox.height / 2 - centerY;
+                  return {
+                    ...o,
+                    points: o.points.map((p, i) => (i % 2 === 0 ? p + dx : p + dy)),
+                  };
+                }
+                return { ...o, x: newX - boundingBox.width / 2, y: newY - boundingBox.height / 2 };
+              }
+              return o;
+            });
+            updatePageObjects(updated);
             e.target.position({ x: centerX - 12, y: centerY - offset - 12 });
           }}
         />
         <KonvaImage
           image={rotateImage}
-          x={centerX + offset - 4}
-          y={centerY - 8}
+          x={centerX + offset}
+          y={centerY - 12}
           width={14}
           height={14}
           draggable
           onDragMove={(e) => {
-            const dx = e.target.x() - centerX;
-            const dy = e.target.y() - centerY;
+            const dx = e.target.x() + 7 - centerX;
+            const dy = e.target.y() + 7 - centerY;
             const angle = Math.atan2(dy, dx) * (180 / Math.PI);
             selectedNode.rotation(angle);
             selectedNode.getLayer().batchDraw();
           }}
           onDragEnd={(e) => {
-            const dx = e.target.x() - centerX;
-            const dy = e.target.y() - centerY;
+            const dx = e.target.x() + 7 - centerX;
+            const dy = e.target.y() + 7 - centerY;
             const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-            const updated = objects.map((o) =>
-              o.id === selectedObjectId ? { ...obj, rotation: angle } : o
+            const updated = pages[currentPage].objects.map((o) =>
+              o.id === selectedObjectId ? { ...o, rotation: angle } : o
             );
-            setObjects(updated);
+            updatePageObjects(updated);
             e.target.position({ x: centerX + offset, y: centerY - 12 });
           }}
         />
         <KonvaImage
           image={resizeImage}
-          x={centerX + offset - 40}
+          x={centerX + offset}
           y={centerY + offset - 12}
           width={14}
           height={14}
           draggable
           onDragMove={(e) => {
-            const dx = e.target.x() - centerX;
-            const dy = e.target.y() - centerY;
+            const dx = e.target.x() + 7 - centerX;
+            const dy = e.target.y() + 7 - centerY;
             const distance = Math.sqrt(dx * dx + dy * dy);
             const originalDistance = offset;
             const newScale = Math.max(0.1, distance / originalDistance);
@@ -826,39 +861,81 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
             selectedNode.getLayer().batchDraw();
           }}
           onDragEnd={(e) => {
-            const dx = e.target.x() - centerX;
-            const dy = e.target.y() - centerY;
+            const dx = e.target.x() + 7 - centerX;
+            const dy = e.target.y() + 7 - centerY;
             const distance = Math.sqrt(dx * dx + dy * dy);
             const originalDistance = offset;
             const newScale = Math.max(0.1, distance / originalDistance);
-            const updated = objects.map((o) =>
-              o.id === selectedObjectId ? { ...obj, scaleX: newScale, scaleY: newScale } : o
+            const updated = pages[currentPage].objects.map((o) =>
+              o.id === selectedObjectId ? { ...o, scaleX: newScale, scaleY: newScale } : o
             );
-            setObjects(updated);
-            e.target.position({ x: centerX + offset + 50, y: centerY + offset - 12 });
+            updatePageObjects(updated);
+            e.target.position({ x: centerX + offset, y: centerY + offset - 12 });
           }}
         />
         <KonvaImage
           image={deleteImage}
-          x={centerX - offset - 8}
+          x={centerX - offset - 12}
           y={centerY - 12}
           width={14}
           height={14}
           onClick={() => {
-            const updatedObjects = objects.filter((o) => o.id !== selectedObjectId);
-            setObjects(updatedObjects);
+            const updatedObjects = pages[currentPage].objects.filter((o) => o.id !== selectedObjectId);
+            updatePageObjects(updatedObjects);
             setSelectedObjectId(null);
             setSelectedNode(null);
           }}
           onTap={() => {
-            const updatedObjects = objects.filter((o) => o.id !== selectedObjectId);
-            setObjects(updatedObjects);
+            const updatedObjects = pages[currentPage].objects.filter((o) => o.id !== selectedObjectId);
+            updatePageObjects(updatedObjects);
             setSelectedObjectId(null);
             setSelectedNode(null);
           }}
         />
       </Group>
     );
+  };
+
+  const addNewPage = () => {
+    setPages([...pages, { objects: [], canvasColor: '#FFFFFF' }]);
+    setCurrentPage(pages.length);
+  };
+
+  const deletePage = () => {
+    if (pages.length <= 1) {
+      Swal.fire('Warning', 'Cannot delete the last page.', 'warning');
+      return;
+    }
+    const updatedPages = pages.filter((_, index) => index !== currentPage);
+    setPages(updatedPages);
+    setCurrentPage(currentPage >= updatedPages.length ? updatedPages.length - 1 : currentPage);
+    setSelectedObjectId(null);
+    setSelectedNode(null);
+    setEditingObjectId(null);
+  };
+
+  const nextPage = () => {
+    if (currentPage < pages.length - 1) {
+      setCurrentPage(currentPage + 1);
+      setSelectedObjectId(null);
+      setSelectedNode(null);
+      setEditingObjectId(null);
+    }
+  };
+
+  const prevPage = () => {
+    if (currentPage > 0) {
+      setCurrentPage(currentPage - 1);
+      setSelectedObjectId(null);
+      setSelectedNode(null);
+      setEditingObjectId(null);
+    }
+  };
+
+  const setPageCanvasColor = (color) => {
+    const updatedPages = [...pages];
+    updatedPages[currentPage] = { ...updatedPages[currentPage], canvasColor: color };
+    setPages(updatedPages);
   };
 
   const saveSession = async () => {
@@ -878,48 +955,53 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
       createdAt: sessionId === 'new' ? new Date().toISOString() : undefined,
       updatedAt: new Date().toISOString(),
       sport,
-      objects,
-      orientation,
+      pages,
+      orientation: orientation || 'landscape',
     };
 
     try {
+      let savedSessionId = sessionId;
       if (sessionId === 'new') {
         const docRef = await addDoc(collection(firestore, 'public_sessions'), sessionData);
-        console.log('Session created with ID:', docRef.id);
-        await Swal.fire('Success', 'Session saved!', 'success');
-        navigate('/sessions');
+        savedSessionId = docRef.id;
+        console.log('Session created:', { id: savedSessionId, data: sessionData });
       } else {
         const sessionRef = doc(firestore, 'public_sessions', sessionId);
         await updateDoc(sessionRef, sessionData);
-        await Swal.fire('Success', 'Session updated!', 'success');
-        navigate('/sessions');
+        console.log('Session updated:', { id: sessionId, data: sessionData });
       }
+      await Swal.fire('Success', 'Session saved!', 'success');
+      // Delay navigation to ensure Firestore write propagates
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      navigate(`/session-detail/${savedSessionId}`);
     } catch (error) {
-      console.error('Error saving session:', error);
+      console.error('Error saving session:', error, { sessionData, sessionId });
       Swal.fire('Error', `Failed to save session: ${error.message}`, 'error');
     }
   };
 
   const exportToPDF = async () => {
-    const stage = stageRef.current;
-    if (!stage) return;
-    try {
+    const pdf = new jsPDF({
+      orientation: orientation,
+      unit: 'mm',
+      format: 'a4',
+    });
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const baseDimensions = orientation === 'landscape' ? A4_LANDSCAPE : A4_PORTRAIT;
+    const scale = Math.min(pdfWidth / (baseDimensions.width / 72), pdfHeight / (baseDimensions.height / 72));
+
+    for (let i = 0; i < pages.length; i++) {
+      if (i > 0) pdf.addPage();
+      const stage = stageRef.current;
+      setCurrentPage(i);
+      await new Promise((resolve) => setTimeout(resolve, 100));
       const uri = stage.toDataURL({ pixelRatio: 2 });
-      const pdf = new jsPDF({
-        orientation: orientation,
-        unit: 'mm',
-        format: 'a4',
-      });
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const baseDimensions = orientation === 'landscape' ? A4_LANDSCAPE : A4_PORTRAIT;
-      const scale = Math.min(pdfWidth / (baseDimensions.width / 72), pdfHeight / (baseDimensions.height / 72));
       pdf.addImage(uri, 'PNG', 0, 0, baseDimensions.width * scale, baseDimensions.height * scale);
-      pdf.save(`${title || 'session'}.pdf`);
-    } catch (error) {
-      console.error('Error exporting PDF:', error);
-      Swal.fire('Error', 'Failed to export PDF.', 'error');
     }
+
+    pdf.save(`${title || 'session'}.pdf`);
+    setCurrentPage(0);
   };
 
   if (loading) return <Typography>Loading...</Typography>;
@@ -1082,6 +1164,63 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
         </SidebarSection>
 
         <SidebarSection>
+          <Typography variant="subtitle1" sx={{ color: '#fff' }}>Canvas</Typography>
+          <ToolRow>
+            <Typography sx={{ color: '#fff' }}>Background Color</Typography>
+            <ColorPickerWrapper>
+              <ColorSquare
+                color={pages[currentPage].canvasColor}
+                onClick={() => document.getElementById('color-canvas').click()}
+              />
+              <input
+                type="color"
+                id="color-canvas"
+                value={pages[currentPage].canvasColor}
+                onChange={(e) => setPageCanvasColor(e.target.value)}
+              />
+            </ColorPickerWrapper>
+          </ToolRow>
+        </SidebarSection>
+
+        <SidebarSection>
+          <Typography variant="subtitle1" sx={{ color: '#fff' }}>Pages</Typography>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Button
+              variant="contained"
+              onClick={addNewPage}
+              sx={{ backgroundColor: '#5e2e8f' }}
+            >
+              Add Page
+            </Button>
+            <Button
+              variant="contained"
+              onClick={deletePage}
+              sx={{ backgroundColor: '#5e2e8f' }}
+            >
+              Delete Page
+            </Button>
+            <Button
+              variant="contained"
+              onClick={prevPage}
+              disabled={currentPage === 0}
+              sx={{ backgroundColor: '#5e2e8f' }}
+            >
+            </Button>
+            <Button
+              variant="contained"
+              onClick={nextPage}
+              disabled={currentPage === pages.length - 1}
+              sx={{ backgroundColor: '#5e2e8f' }}
+            >
+              <FaArrowRight />
+            </Button>
+            <Typography sx={{ color: '#fff' }}>
+              Page {currentPage + 1} of {pages.length}
+            </Typography>
+          </Box>
+        </SidebarSection>
+
+        <SidebarSection>
           <Typography variant="subtitle1" sx={{ color: '#fff' }}>Orientation</Typography>
           <ToggleButtonGroup
             value={orientation}
@@ -1199,7 +1338,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
               y={0}
               width={stageDimensions.width}
               height={stageDimensions.height}
-              fill="#FFFFFF"
+              fill={pages[currentPage].canvasColor}
             />
           </Layer>
           <Layer id="objects-layer">

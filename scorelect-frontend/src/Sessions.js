@@ -1,4 +1,3 @@
-// src/Sessions.js
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -62,10 +61,16 @@ const SportLabel = styled(Box)(({ theme }) => ({
   position: 'absolute',
   top: theme.spacing(2),
   right: theme.spacing(2),
-  backgroundColor: 'rgba(0,0,0,0.6)',
+  backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  color: '#ffffff',
   padding: theme.spacing(0.5, 1),
   borderRadius: theme.spacing(0.5),
   fontSize: '0.9rem',
+  border: '1px solid #5e2e8f',
+  transition: 'background-color 0.3s ease',
+  '&:hover': {
+    backgroundColor: 'rgba(94, 46, 143, 0.8)',
+  },
 }));
 
 const SectionContainer = styled(Box)(({ theme }) => ({
@@ -418,6 +423,8 @@ const GenerateSessionForm = ({ selectedSport }) => {
           '& .MuiOutlinedInput-root': {
             '& fieldset': { borderColor: '#5e2e8f' },
           },
+          flexGrow: 1,
+          minWidth: 200,
         }}
       />
       <Button
@@ -546,12 +553,11 @@ const Sessions = ({ selectedSport = 'GAA' }) => {
       <Tabs
         value={tab}
         onChange={handleTabChange}
-        centered
         sx={{
-          borderBottom: 1,
-          borderColor: 'divider',
-          '& .MuiTab-root': { color: '#ffffff' },
-          '& .MuiTabs-indicator': { backgroundColor: '#5e2e8f' },
+          bgcolor: '#2c2c2c',
+          '.MuiTab-root': { color: '#ffffff' },
+          '.Mui-selected': { color: '#5e2e8f !important' },
+          '.MuiTabs-indicator': { backgroundColor: '#5e2e8f' },
         }}
       >
         <Tab label="View Sessions" />

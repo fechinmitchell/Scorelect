@@ -4,27 +4,37 @@
   box-sizing: border-box;
   font-family: Arial, sans-serif;
   background-color: #333; /* Subtle background */
+  position: relative; /* Needed for positioning the loading overlay */
+  min-height: 400px; /* Ensure min height for loading state */
 }
 
-/* Loading and Error Containers */
+/* Loading and Error Containers - Improved */
 .loading-container,
 .error-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100vh;
-  margin-left: -155px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(51, 51, 51, 0.95); /* Dark background with slight transparency */
+  z-index: 1000; /* Ensure it appears above other content */
+  border-radius: 8px; /* Rounded corners for overlay */
 }
 
+/* Improved spinner */
 .spinner {
-  border: 8px solid #f3f3f3;
-  border-top: 8px solid #36a2eb;
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top: 4px solid #7a3db8; /* Purple to match your theme */
   border-radius: 50%;
   width: 60px;
   height: 60px;
-  animation: spin 2s linear infinite;
+  animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
   margin-bottom: 20px;
+  box-shadow: 0 0 20px rgba(122, 61, 184, 0.3); /* Subtle glow effect */
 }
 
 @keyframes spin {
@@ -32,9 +42,33 @@
   100% { transform: rotate(360deg); }
 }
 
-.error-container p {
-  color: red;
+/* Loading text */
+.loading-container p {
+  color: #fff;
   font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  margin: 0;
+  padding: 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Error container styling */
+.error-container p {
+  color: #ff6b6b;
+  font-size: 18px;
+  max-width: 80%;
+  text-align: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  padding: 15px 20px;
+  border-radius: 8px;
+  border-left: 4px solid #ff6b6b;
 }
 
 /* Year Filter */
@@ -45,7 +79,7 @@
 .year-filter label {
   margin-right: 10px;
   font-weight: bold;
-  color: #333;
+  color: #fff;
 }
 
 .year-filter select {
@@ -115,31 +149,17 @@
   z-index: 1;
 }
 
-.mini-leaderboard-table th,
-.mini-leaderboard-table td {
-  padding: 6px 8px;
-  border-bottom: 1px solid #ddd;
-  text-align: left;
-}
-
-/* We might not be using the toggle, but we keep styles for reference */
-.mini-leaderboard-toggle {
-  margin-top: 5px;
-  background-color: #36a2eb;
-  color: #fff;
-  border: none;
-  cursor: pointer;
-  border-radius: 3px;
-  padding: 5px 10px;
-}
-.mini-leaderboard-toggle:hover {
-  background-color: #2396da;
-}
-
 /* Main leaderboard container */
 .leaderboard-container {
   width: 100%;
   padding: 20px 0;
+}
+
+/* Ensure the leaderboard heading is black */
+.leaderboard-container h2 {
+  color: #000 !important; /* Override inline styles */
+  font-size: 1.5rem;
+  margin-bottom: 10px;
 }
 
 /* Search bar */
@@ -173,6 +193,7 @@
   padding: 12px 15px;
   text-align: left;
   border-bottom: 1px solid #ddd;
+  color: #000 !important; /* Explicitly black for visibility */
 }
 
 .leaderboard th {
@@ -204,6 +225,7 @@
   padding: 6px 10px;
   text-align: left;
   border: 1px solid #ccc;
+  color: #000; /* Black text for nested table */
 }
 
 .nested-table th {
@@ -226,6 +248,7 @@
   border-radius: 5px;
   cursor: pointer;
 }
+
 .recalculate-button:hover {
   background-color: #45a049;
 }

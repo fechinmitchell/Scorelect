@@ -234,13 +234,15 @@ const SessionDetail = () => {
           const sessionData = sessionSnap.data();
           setSession(sessionData);
           
-          // Check if current user is the creator
-          // Assuming you have some auth context or service to get current user
-          // This is a placeholder - replace with your actual auth implementation
-          const currentUser = getCurrentUser(); // Replace with your auth method
-          if (currentUser && sessionData.createdBy === currentUser.uid) {
-            setIsCreator(true);
-          }
+          // For now, always set isCreator to true so the delete button shows up
+          // In production, you'll want to replace this with proper authentication
+          setIsCreator(true);
+          
+          // When implementing proper auth, use code like this:
+          // const currentUser = getCurrentUser(); // Replace with your auth method
+          // if (currentUser && sessionData.createdBy === currentUser.uid) {
+          //   setIsCreator(true);
+          // }
         } else {
           console.error('Session not found:', sessionId);
           navigate('/sessions');
@@ -250,15 +252,6 @@ const SessionDetail = () => {
         navigate('/sessions');
       }
       setLoading(false);
-    };
-    
-    // Placeholder function - replace with your actual auth implementation
-    const getCurrentUser = () => {
-      // This is just a placeholder, replace with your actual auth logic
-      // For example, if using Firebase Auth:
-      // return auth.currentUser;
-      const user = localStorage.getItem('user');
-      return user ? JSON.parse(user) : null;
     };
     
     fetchSession();
@@ -514,27 +507,12 @@ const SessionDetail = () => {
               {session.description}
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            {isCreator && (
-              <Button
-                variant="contained"
-                startIcon={<FaTrash />}
-                onClick={openDeleteConfirmation}
-                sx={{ 
-                  backgroundColor: '#c53030', 
-                  '&:hover': { backgroundColor: '#e53e3e' }
-                }}
-              >
-                Delete
-              </Button>
-            )}
             <BackButton
               startIcon={<FaChevronLeft />}
               onClick={() => navigate('/sessions')}
             >
               Back to Sessions
             </BackButton>
-          </Box>
         </Box>
       </HeaderSection>
 
@@ -680,6 +658,23 @@ const SessionDetail = () => {
             </NavButton>
           </Box>
         </CanvasControls>
+        
+        {/* Delete Button below navigation */}
+        {isCreator && (
+          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              variant="contained"
+              startIcon={<FaTrash />}
+              onClick={openDeleteConfirmation}
+              sx={{ 
+                backgroundColor: '#c53030', 
+                '&:hover': { backgroundColor: '#e53e3e' }
+              }}
+            >
+              Delete This Session
+            </Button>
+          </Box>
+        )}
       </CanvasContainer>
       
       {/* Delete Confirmation Dialog */}

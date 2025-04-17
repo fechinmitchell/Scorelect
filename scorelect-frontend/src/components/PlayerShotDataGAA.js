@@ -487,23 +487,32 @@ export default function PlayerShotDataGAA() {
   // Early returns
   if (loading)
     return (
-      <div className="loading-screen">
-        <h2 className="loading-text">Loading player data...</h2>
-        <div className="spinner"></div>
+      <div className="player-shot-data-container">
+        <div className="player-shot-loading-container">
+          <div className="player-shot-loading-text">Loading player data...</div>
+          <div className="player-shot-spinner"></div>
+        </div>
       </div>
     );
+  
   if (error)
     return (
-      <div className="error-container">
-        <p>{error}</p>
+      <div className="player-shot-data-container">
+        <div className="error-container">
+          <p>{error}</p>
+        </div>
       </div>
     );
+  
   if (!playerShots.length)
     return (
-      <div className="error-container">
-        <p>No shots found for this player.</p>
+      <div className="player-shot-data-container">
+        <div className="error-container">
+          <p>No shots found for this player.</p>
+        </div>
       </div>
     );
+
 
   // Define dynamic marker colors (ensuring setPlay markers are objects with a white stroke)
   const dynamicColors = {

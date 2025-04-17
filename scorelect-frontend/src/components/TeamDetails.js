@@ -544,16 +544,37 @@ export default function TeamDetails() {
     );
   }
 
+  // loading and error sections
   if (loading) {
     return (
-      <div className="loading-container">
-        <div className="spinner"></div>
-        <p>Loading team data...</p>
-      </div>
+      <PageContainer>
+        <div className="team-details-loading-container">
+          <p>Loading team data...</p>
+          <div className="team-details-spinner"></div>
+        </div>
+      </PageContainer>
     );
   }
-  if (error) return <div className="error-container"><p>{error}</p></div>;
-  if (!filteredShots.length) return <div className="error-container"><p>No shots found for this filter or team.</p></div>;
+  
+  if (error) {
+    return (
+      <PageContainer>
+        <div className="error-container">
+          <p>{error}</p>
+        </div>
+      </PageContainer>
+    );
+  }
+  
+  if (!filteredShots.length) {
+    return (
+      <PageContainer>
+        <div className="error-container">
+          <p>No shots found for this filter or team.</p>
+        </div>
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer>

@@ -57,9 +57,10 @@ function useFetchDataset(collectionPath, documentPath) {
  *******************************************/
 function LoadingIndicator() {
   return (
-    <div className="loading-container">
-      <div className="spinner"></div>
-      <p>Loading data...</p>
+    <div className="player-data-loading-container">
+      <div className="player-data-loading-text">Loading data...</div>
+      <div className="player-data-spinner"></div>
+
     </div>
   );
 }

@@ -1,120 +1,156 @@
-/* src/components/TeamDetails.css */
-
-/* 
-  If you no longer need a "team-shot-data-container" class
-  because you've replaced it with styled-components (e.g.,
-  <PageContainer>), you can remove or adapt it.
-  Otherwise, here is a darker, more consistent style:
-*/
+/* Team shot data container */
 .team-shot-data-container {
-    position: relative;
-    background-color: #1c1c1c; /* matches the new PageContainer background */
-    color: #f0f0f0;            /* lighter text for dark backgrounds */
-    font-family: 'Inter', sans-serif; /* or Arial, sans-serif */
-    min-height: 100vh;
-    padding: 2rem;
+  position: relative;
+  background-color: #1c1c1c;
+  color: #f0f0f0;
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+/* Stage pitch container */
+.stage-pitch-container {
+  border: 2px solid #444;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* Loading and Error Containers */
+.team-details-loading-container,
+.error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(51, 51, 51, 0.95);
+  z-index: 1000;
+  border-radius: 8px;
+}
+
+/* Spinner */
+.team-details-spinner {
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top: 4px solid #7a3db8; /* Purple to match theme */
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  animation: team-details-spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+  margin-bottom: 20px;
+  box-shadow: 0 0 20px rgba(122, 61, 184, 0.3);
+}
+
+@keyframes team-details-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Loading text */
+.team-details-loading-container p {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  animation: team-details-pulse 1.5s infinite;
+}
+
+@keyframes team-details-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Error container styling */
+.error-container p {
+  color: #ff6b6b;
+  font-size: 18px;
+  max-width: 80%;
+  text-align: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  padding: 15px 20px;
+  border-radius: 8px;
+  border-left: 4px solid #ff6b6b;
+}
+
+/* Tooltip styling */
+.tooltip {
+  pointer-events: none;
+}
+
+/* Modal styling */
+.color-modal-header {
+  color: #f0f0f0;
+  text-align: center;
+}
+
+.color-modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.color-modal-grid div {
+  display: flex;
+  flex-direction: column;
+}
+
+.color-modal-grid label {
+  margin-bottom: 0.5rem;
+  color: #f0f0f0;
+}
+
+/* Back button styling */
+.back-button {
+  padding: 8px 16px;
+  background-color: #ff7043;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.back-button:hover {
+  background-color: #f4511e;
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 768px) {
+  .team-details-spinner {
+    width: 50px;
+    height: 50px;
+    border-width: 3px;
   }
   
-  /*
-    The pitch container can still have a border and box shadow,
-    but let's match it with #444 or #555 (consistent with the new theme).
-    If you're now styling <Stage> directly in the component with inline
-    styles or styled-components, you can remove or tweak these rules.
-  */
-  .stage-pitch-container {
-    border: 2px solid #444;  /* updated from #fff to match the dark theme */
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  .team-details-loading-container p {
+    font-size: 16px;
   }
   
-  /*
-    Loading & Error containers: unify them with the new theme.
-    (We changed background from #222 to #1c1c1c for consistency.)
-  */
-  .loading-container,
-  .error-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    background-color: #1c1c1c; /* unify with the rest of the app's background */
-    color: #f0f0f0; /* ensure text is visible on dark BG */
-    font-family: 'Inter', sans-serif;
+  .error-container p {
+    font-size: 16px;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .team-details-spinner {
+    width: 40px;
+    height: 40px;
+    border-width: 3px;
   }
   
-  /*
-    Spinner color can match accent colors if you prefer.
-    Currently uses #f3f3f3 for border and #36a2eb for the top.
-    You could switch #36a2eb to something like #ffc107 to match your stats heading.
-  */
-  .spinner {
-    border: 8px solid #f3f3f3;
-    border-top: 8px solid #36a2eb; /* or #ffc107 if you want gold. */
-    border-radius: 50%;
-    width: 60px;
-    height: 60px;
-    animation: spin 2s linear infinite;
-    margin: 20px auto;
+  .team-details-loading-container p {
+    font-size: 14px;
   }
   
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+  .error-container p {
+    font-size: 14px;
   }
-  
-  /* 
-    Tooltip styling is mostly inline in the component, 
-    but you could add more here if needed 
-  */
-  .tooltip {
-    /* e.g., if you want to override or add transitions */
-  }
-  
-  /* 
-    Modal styling for the color-picker modal. 
-    Much is handled in customModalStyles in JS, 
-    but these classes can refine text or layout inside.
-  */
-  .color-modal-header {
-    color: #f0f0f0;
-    text-align: center;
-  }
-  
-  .color-modal-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    margin-top: 1rem;
-  }
-  
-  .color-modal-grid div {
-    display: flex;
-    flex-direction: column;
-  }
-  
-  .color-modal-grid label {
-    margin-bottom: 0.5rem;
-    color: #f0f0f0; /* unify label color with the dark theme */
-  }
-  
-  /*
-    Example back-button styling (if still used).
-    Otherwise, remove it if replaced by styled-components.
-  */
-  .back-button {
-    padding: 8px 16px;
-    background-color: #ff7043;
-    color: #fff;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-  }
-  
-  .back-button:hover {
-    background-color: #f4511e;
-  }
-  
-  /* Add or remove more styles as needed */
-  
+}

@@ -5,7 +5,7 @@ import Swal from 'sweetalert2';
 import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from './firebase'; // Ensure Firebase is correctly initialized
 
-import '../src/TeamDataGAA.css'; // Updated to correct CSS file
+import './TeamDataGAA.css'; // Updated to correct CSS file
 
 /*******************************************
  * 1) HELPER: parseJSONNoNaN
@@ -68,9 +68,10 @@ function useFetchDataset(collectionPath, documentPath) {
  *******************************************/
 function LoadingIndicator() {
   return (
-    <div className="loading-container">
-      <div className="spinner"></div>
-      <p>Loading data...</p>
+    <div className="team-data-loading-container">
+      <div className="team-data-loading-text">Loading data...</div>
+      <div className="team-data-spinner"></div>
+
     </div>
   );
 }

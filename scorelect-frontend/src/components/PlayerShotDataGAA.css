@@ -1,5 +1,3 @@
-/* src/components/PlayerShotDataGAA.css */
-
 /* Import a font (Poppins) for a cleaner look */
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap');
 
@@ -19,6 +17,7 @@
   background-color: #2e2e2e;
   min-height: 100vh;
   padding: 20px;
+  position: relative; /* Needed for positioning the loading overlay */
 }
 
 /* Navigation / export buttons */
@@ -39,19 +38,68 @@
   background-color: #0056b3; 
 }
 
-
-
-/* --------------
-   ERROR CONTAINER
-   -------------- */
+/* Loading and Error Containers - Consistent with other components */
+.player-shot-loading-container,
 .error-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 80vh;  
-  text-align: center;
+  position: absolute; /* Changed to absolute to stay within container */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(51, 51, 51, 0.95); /* Dark background with slight transparency */
+  z-index: 1000; /* Ensure it appears above other content */
+  border-radius: 8px; /* Rounded corners for overlay */
+}
+
+/* Improved spinner - matches other components */
+.player-shot-spinner {
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top: 4px solid #7a3db8; /* Purple to match your theme */
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  animation: player-shot-spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+  margin-bottom: 20px;
+  box-shadow: 0 0 20px rgba(122, 61, 184, 0.3); /* Subtle glow effect */
+}
+
+@keyframes player-shot-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Loading text - matches other components */
+.player-shot-loading-text {
   color: #fff;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  margin: 0;
+  padding: 0;
+  text-align: center; /* Center the text */
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  animation: player-shot-pulse 1.5s infinite;
+}
+
+@keyframes player-shot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Error container styling */
+.error-container p {
+  color: #ff6b6b;
+  font-size: 18px;
+  max-width: 80%;
+  text-align: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  padding: 15px 20px;
+  border-radius: 8px;
+  border-left: 4px solid #ff6b6b;
 }
 
 /* Headings inside the page container */
@@ -98,48 +146,27 @@
   background-color: #444;
 }
 
-
-.loading-screen {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;             /* full viewport width */
-  height: 100vh;            /* full viewport height */
-  background: linear-gradient(135deg, #1a1a1a, #000); /* subtle dark gradient */
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;  /* center vertically */
-  align-items: center;      /* center horizontally */
-}
-
-.loading-text {
-  font-family: 'Poppins', sans-serif;
-  color: rgb(172, 73, 206);                   /* neon cyan color */
-  font-size: 1.6rem;
-  margin-bottom: 20px;
-  text-align: center;
-  text-shadow: 0 0 10px rgb(192, 68, 216), 0 0 20px rgb(206, 90, 230); /* glowing effect */
-  padding: 0 10px;
-}
-
-.spinner {
-  width: 60px;
-  height: 60px;
-  border: 6px solid rgba(255, 255, 255, 0.1);
-  border-top: 6px solid rgb(178, 52, 210);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  box-shadow: 0 0 15px rgb(161, 25, 206), 0 0 30px rgb(165, 92, 217);
-  margin-left: -50px;  /* shifts the spinner 50px to the left */
-}
-
-@keyframes spin {
-  0% {
-    transform: translateX(-50px) rotate(0deg);
+/* Responsive adjustments */
+@media screen and (max-width: 768px) {
+  .player-shot-spinner {
+    width: 50px;
+    height: 50px;
+    border-width: 3px;
   }
-  100% {
-    transform: translateX(-50px) rotate(360deg);
+  
+  .player-shot-loading-text {
+    font-size: 16px;
   }
 }
 
+@media screen and (max-width: 480px) {
+  .player-shot-spinner {
+    width: 40px;
+    height: 40px;
+    border-width: 3px;
+  }
+  
+  .player-shot-loading-text {
+    font-size: 14px;
+  }
+}

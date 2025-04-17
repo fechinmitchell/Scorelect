@@ -34,6 +34,7 @@
   height: 60px;
   animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
   margin-bottom: 20px;
+  margin-right: 150px;
   box-shadow: 0 0 20px rgba(122, 61, 184, 0.3); /* Subtle glow effect */
 }
 
@@ -50,6 +51,8 @@
   letter-spacing: 0.5px;
   margin: 0;
   padding: 0;
+  /* Removed margin-right: -100px that was causing misalignment */
+  text-align: center; /* Ensure text is centered */
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
   animation: pulse 1.5s infinite;
 }
@@ -74,6 +77,10 @@
 /* Year Filter */
 .year-filter {
   margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap; /* Better for small screens */
+  gap: 10px;
 }
 
 .year-filter label {
@@ -87,19 +94,20 @@
   font-size: 16px;
   border: 1px solid #ccc;
   border-radius: 4px;
+  min-width: 120px; /* Better touch target */
 }
 
 /* Mini leaderboards (top and second row) */
 .mini-leaderboards-row {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap; /* Changed to wrap for better responsiveness */
   gap: 20px;
   margin-bottom: 20px;
 }
 
 /* Single mini leaderboard container */
 .mini-leaderboard {
-  flex: 1 1 0;
+  flex: 1 1 300px; /* Min width for better mobile layout */
   background-color: #fff;
   border: 1px solid #ddd;
   border-radius: 5px;
@@ -255,38 +263,89 @@
 
 /* Responsive adjustments */
 @media screen and (max-width: 768px) {
+  .player-data-container {
+    padding: 15px; /* Reduce padding on smaller screens */
+  }
+  
   .mini-leaderboard-title {
     font-size: 0.85rem;
   }
+  
   .mini-leaderboard-table th,
   .mini-leaderboard-table td {
     font-size: 0.75rem;
   }
+  
   .leaderboard th,
   .leaderboard td {
     padding: 8px 10px;
     font-size: 14px;
   }
+  
   .search-input {
     font-size: 14px;
+  }
+  
+  /* Adjust spinner for medium screens */
+  .spinner {
+    width: 50px;
+    height: 50px;
+    border-width: 3px;
+  }
+  
+  .loading-container p {
+    font-size: 16px;
   }
 }
 
 @media screen and (max-width: 480px) {
-  .mini-leaderboards-row {
-    flex-direction: column;
+  .player-data-container {
+    padding: 10px; /* Even less padding on mobile */
   }
+  
+  .mini-leaderboards-row {
+    flex-direction: column; /* Stack on mobile */
+  }
+  
+  .mini-leaderboard {
+    flex: none; /* Full width on mobile */
+  }
+  
+  .year-filter {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .year-filter select {
+    width: 100%;
+    margin-top: 5px;
+  }
+  
   .leaderboard th,
   .leaderboard td {
     padding: 6px 8px;
     font-size: 12px;
   }
+  
   .search-input {
     font-size: 12px;
   }
+  
   .recalculate-button {
     font-size: 14px;
     padding: 8px 16px;
+    width: 100%; /* Full width on mobile */
+  }
+  
+  /* Smaller spinner on mobile */
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border-width: 3px;
+  }
+  
+  .loading-container p {
+    font-size: 14px;
   }
 }
 

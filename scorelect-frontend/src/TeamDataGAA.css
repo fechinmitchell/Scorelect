@@ -1,22 +1,40 @@
-/* src/components/TeamShotDataGAA.css */
+.team-data-container {
+  width: 100%;
+  padding: 20px;
+  box-sizing: border-box;
+  font-family: Arial, sans-serif;
+  background-color: #333; /* Subtle background */
+  position: relative; /* Needed for positioning the loading overlay */
+  min-height: 500px; /* Ensure min height for loading state */
+}
 
+/* Loading and Error Containers */
 .loading-container,
 .error-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100vh;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(51, 51, 51, 0.95); /* Dark background with slight transparency */
+  z-index: 1000; /* Ensure it appears above other content */
+  border-radius: 8px; /* Rounded corners for overlay */
 }
 
+/* Improved spinner */
 .spinner {
-  border: 8px solid #f3f3f3;
-  border-top: 8px solid #36a2eb;
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top: 4px solid #7a3db8; /* Purple to match your theme */
   border-radius: 50%;
   width: 60px;
   height: 60px;
-  animation: spin 2s linear infinite;
+  animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
   margin-bottom: 20px;
+  box-shadow: 0 0 20px rgba(122, 61, 184, 0.3); /* Subtle glow effect */
 }
 
 @keyframes spin {
@@ -24,9 +42,35 @@
   100% { transform: rotate(360deg); }
 }
 
-.error-container p {
-  color: red;
+/* Loading text */
+.loading-container p {
+  color: #fff;
   font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  margin: 0;
+  padding: 0;
+  text-align: center; /* Ensure text is centered */
+  margin-left: 80px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Error container styling */
+.error-container p {
+  color: #ff6b6b; /* Match PlayerDataGAA.css */
+  font-size: 18px;
+  max-width: 80%;
+  text-align: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  padding: 15px 20px;
+  border-radius: 8px;
+  border-left: 4px solid #ff6b6b;
 }
 
 /* Tooltip Styling */
@@ -71,19 +115,12 @@
   cursor: pointer;
 }
 
-/* Leaderboards and Tables */
-.team-data-container {
-  width: 100%;
-  padding: 20px;
-  box-sizing: border-box;
-  font-family: Arial, sans-serif;
-  background-color: #333; /* Subtle background */
-}
-
+/* Year Filter */
 .year-filter {
   margin-bottom: 20px;
   display: flex;
   align-items: center;
+  flex-wrap: wrap; /* Added for better responsive behavior */
   gap: 10px;
 }
 
@@ -98,8 +135,10 @@
   font-size: 16px;
   border: 1px solid #ccc;
   border-radius: 4px;
+  min-width: 120px; /* Better mobile experience */
 }
 
+/* Mini leaderboards */
 .mini-leaderboards-row {
   display: flex;
   flex-wrap: wrap;
@@ -115,14 +154,6 @@
   padding: 10px;
   display: flex;
   flex-direction: column;
-}
-
-.mini-leaderboard-table th,
-.mini-leaderboard-table td {
-  padding: 6px 8px;
-  border-bottom: 1px solid #ddd;
-  text-align: left;
-  color: #000; /* Ensure text is black */
 }
 
 .mini-leaderboard-title {
@@ -148,6 +179,14 @@
   font-size: 0.9rem;
 }
 
+.mini-leaderboard-table th,
+.mini-leaderboard-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+  color: #000; /* Ensure text is black */
+}
+
 .mini-leaderboard-table thead th {
   background-color: #f4f4f4;
   position: sticky;
@@ -155,18 +194,13 @@
   z-index: 1;
 }
 
-.mini-leaderboard-table th,
-.mini-leaderboard-table td {
-  padding: 6px 8px;
-  border-bottom: 1px solid #ddd;
-  text-align: left;
-}
-
+/* Leaderboard container */
 .leaderboard-container {
   width: 100%;
   padding: 20px 0;
 }
 
+/* Search bar */
 .search-input {
   width: 100%;
   padding: 8px;
@@ -177,6 +211,7 @@
   border-radius: 4px;
 }
 
+/* Scrollable main leaderboard */
 .table-wrapper {
   overflow-y: auto;
   border: 1px solid #ddd;
@@ -185,6 +220,7 @@
   background-color: #fff;
 }
 
+/* Main Leaderboard Table */
 .leaderboard {
   width: 100%;
   border-collapse: collapse;
@@ -205,6 +241,7 @@
   cursor: pointer;
 }
 
+/* Striped rows */
 .team-row.even {
   background-color: #f9f9f9;
 }
@@ -213,6 +250,7 @@
   background-color: #ffffff;
 }
 
+/* Nested table */
 .nested-table {
   width: 100%;
   border-collapse: collapse;
@@ -230,6 +268,7 @@
   background-color: #eaeaea;
 }
 
+/* Recalculate button */
 .recalculate-button {
   margin-top: 20px;
   padding: 10px 20px;
@@ -247,42 +286,96 @@
 
 /* Responsive Adjustments */
 @media screen and (max-width: 768px) {
+  .team-data-container {
+    padding: 15px;
+  }
+  
   .mini-leaderboard-title {
     font-size: 0.85rem;
   }
+  
   .mini-leaderboard-table th,
   .mini-leaderboard-table td {
     font-size: 0.75rem;
+    padding: 5px 6px;
   }
+  
   .leaderboard th,
   .leaderboard td {
     padding: 8px 10px;
     font-size: 14px;
   }
+  
   .search-input {
     font-size: 14px;
   }
+  
   .recalculate-button {
     font-size: 14px;
     padding: 8px 16px;
   }
+  
+  /* Ensure loading remains centered on smaller screens */
+  .spinner {
+    width: 50px;
+    height: 50px;
+  }
+  
+  .loading-container p {
+    font-size: 16px;
+  }
 }
 
 @media screen and (max-width: 480px) {
+  .team-data-container {
+    padding: 10px;
+    min-height: 400px;
+  }
+  
+  .year-filter {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .year-filter select {
+    width: 100%;
+  }
+  
   .mini-leaderboards-row {
     flex-direction: column;
+    gap: 15px;
   }
+  
+  .mini-leaderboard {
+    flex: none;
+  }
+  
   .leaderboard th,
   .leaderboard td {
     padding: 6px 8px;
     font-size: 12px;
   }
+  
   .search-input {
     font-size: 12px;
+    padding: 6px;
   }
+  
   .recalculate-button {
     font-size: 14px;
     padding: 8px 16px;
+    width: 100%;
+  }
+  
+  /* Further adjustments for very small screens */
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border-width: 3px;
+  }
+  
+  .loading-container p {
+    font-size: 14px;
   }
 }
 

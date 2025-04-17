@@ -1,5 +1,3 @@
-// src/components/TeamDataGAA.js
-
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
@@ -7,7 +5,7 @@ import Swal from 'sweetalert2';
 import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from './firebase'; // Ensure Firebase is correctly initialized
 
-import './TeamDataGAA.css'; // Ensure this CSS file exists and is correctly styled
+import '../src/TeamDataGAA.css'; // Updated to correct CSS file
 
 /*******************************************
  * 1) HELPER: parseJSONNoNaN
@@ -72,7 +70,7 @@ function LoadingIndicator() {
   return (
     <div className="loading-container">
       <div className="spinner"></div>
-      <p>Loading team data...</p>
+      <p>Loading data...</p>
     </div>
   );
 }
@@ -344,7 +342,6 @@ function SetPlaysLeaderboard({ title, data }) {
    
                   {/* Frees */}
                   <td>{item.frees.toFixed(2)}</td>
-
                 </tr>
               );
             })}
@@ -501,7 +498,7 @@ function LeaderboardTable({ data }) {
 
   return (
     <div className="leaderboard-container">
-      <h2 style={{ color: '#fff' }}>Team Leaderboard</h2>
+      <h2>Team Leaderboard</h2> {/* Removed style={{ color: '#fff' }} */}
 
       {/* Search box */}
       <input
@@ -926,10 +923,24 @@ export default function TeamDataGAA() {
   }
 
   // Loading or error or no data
-  if (loading) return <LoadingIndicator />;
-  if (error) return <ErrorMessage message={error} />;
+  if (loading) return (
+    <div className="team-data-container">
+      <LoadingIndicator />
+    </div>
+  );
+
+  if (error) return (
+    <div className="team-data-container">
+      <ErrorMessage message={error} />
+    </div>
+  );
+
   if (!data || !data.gameData || formattedLeaderboard.length === 0) {
-    return <ErrorMessage message="No data available to display." />;
+    return (
+      <div className="team-data-container">
+        <ErrorMessage message="No data available to display." />
+      </div>
+    );
   }
 
   return (

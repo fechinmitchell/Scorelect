@@ -74,8 +74,13 @@ const PitchGraphic = () => {
   const [displayPlayerNumber, setDisplayPlayerNumber] = useState(true);
   const [displayPlayerName, setDisplayPlayerName] = useState(true);
   const [isSetupTeamsModalOpen, setIsSetupTeamsModalOpen] = useState(false);
-  const [team1Players, setTeam1Players] = useState(Array(30).fill({ name: '' }));
-  const [team2Players, setTeam2Players] = useState(Array(30).fill({ name: '' }));
+  // helper that builds 30 independent objects
+  const buildEmptyTeam = () =>
+    Array.from({ length: 30 }, (_, i) => ({ name: '', number: i + 1 }));
+
+  const [team1Players, setTeam1Players] = useState(buildEmptyTeam());
+  const [team2Players, setTeam2Players] = useState(buildEmptyTeam());
+  
   const [team1Color, setTeam1Color] = useState({ main: '#581830', secondary: '#FFFFFF' }); // Galway 
   const [team2Color, setTeam2Color] = useState({ main: '#008000', secondary: '#FF0000' }); // Mayo 
   const [isSetupTeamModalOpen, setIsSetupTeamModalOpen] = useState(false); // State for Setup Team modal
@@ -1541,19 +1546,15 @@ const handleSaveToDataset = async () => {
     setTeam2Players([...team2Players, { name: '', number: '' }]);
   };
   
-  const updatePlayerInTeam1 = (index, field, value) => {
-    const updatedPlayers = team1Players.map((player, i) =>
-      i === index ? { ...player, [field]: value } : player
+  const updatePlayerInTeam1 = (index, field, value) =>
+    setTeam1Players(prev =>
+      prev.map((p, i) => (i === index ? { ...p, [field]: value } : p))
     );
-    setTeam1Players(updatedPlayers);
-  };
   
-  const updatePlayerInTeam2 = (index, field, value) => {
-    const updatedPlayers = team2Players.map((player, i) =>
-      i === index ? { ...player, [field]: value } : player
-    );
-    setTeam2Players(updatedPlayers);
-  };
+  const updatePlayerInTeam2 = (index, field, value) =>
+    setTeam2Players(prev =>
+      prev.map((p, i) => (i === index ? { ...p, [field]: value } : p))
+    );  
   
   const removePlayerFromTeam1 = (index) => {
     const updatedPlayers = team1Players.filter((_, i) => i !== index);

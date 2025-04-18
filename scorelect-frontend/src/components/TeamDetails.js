@@ -1,26 +1,38 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
-import { firestore } from '../firebase';
-import Swal from 'sweetalert2';
-import { Stage } from 'react-konva';
-import Modal from 'react-modal';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-import PropTypes from 'prop-types';
-import styled from 'styled-components';
-import './TeamDetails.css';
-import { 
-  renderGAAPitch, 
-  renderOneSidePitchShots, 
+/***********************************************************************
+ *  TeamDetails.jsx
+ *  -----------------------------------------------------------
+ *  Shows **one‑sided** team shot map with distances measured only to
+ *  the left‑hand goal. Uses the same translate helpers as the player
+ *  file, but keeps the x/y *un‑mirrored* so the Konva renderer can
+ *  mirror each dot only once.
+ *
+ *  Dependencies: React 18, styled‑components, react‑konva, Konva 9,
+ *  jspdf, html2canvas, SweetAlert2, Firebase v9 modular SDK.
+ **********************************************************************/
+import React, { useEffect, useState, useRef, useMemo } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { doc, getDoc } from "firebase/firestore";
+import { firestore } from "../firebase";
+import Swal from "sweetalert2";
+import { Stage } from "react-konva";
+import Modal from "react-modal";
+import styled from "styled-components";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+
+import {
+  renderGAAPitch,
+  renderOneSidePitchShots,
   renderLegendOneSideShots,
-  translateShotToOneSide, 
-  getShotCategory 
-} from './GAAPitchComponents';
+  translateShotToOneSide,
+  translateShotToLeftSide,   // ★ newly imported
+  getShotCategory
+} from "./GAAPitchComponents";
 
-Modal.setAppElement('#root');
+/* ───────────────────────── Modal root */
+Modal.setAppElement("#root");
 
-/* ─── Styled Components ───────────────────────────────────────────── */
+/* ─── Styled UI helpers ─────────────────────────────────────────────── */
 const PageContainer = styled.div`
   position: relative;
   color: #f0f0f0;
@@ -81,8 +93,7 @@ const StatsCard = styled.div`
   max-width: 350px;
 `;
 const StatsHeading = styled.h3`
-  margin-top: 0;
-  margin-bottom: 1rem;
+  margin: 0 0 1rem;
   font-weight: 600;
   color: #ffc107;
 `;
@@ -99,11 +110,10 @@ const StyledButton = styled.button`
   font-weight: bold;
   cursor: pointer;
   box-shadow: 0 3px 5px rgba(0,0,0,0.2);
-  transition: background 0.3s ease;
+  transition: background 0.3s;
   margin: 0 0.5rem;
-  &:hover {
-    background-color: #357ad2;
-  }
+
+  &:hover { background-color: #357ad2; }
 `;
 const GearButton = styled.button`
   background: none;
@@ -125,579 +135,424 @@ const PdfContentWrapper = styled.div`
   padding: 1rem;
 `;
 
-/* ─── Constants ───────────────────────────────────────────────────────── */
-const pitchWidthConst = 145;
-const pitchHeightConst = 88;
-const canvasSizeMainConst = { width: 930, height: 530 };
+/* ─── Pitch metrics ─────────────────────────────────────────────────── */
+const pitchW = 145;
+const pitchH = 88;
+const halfX  = pitchW / 2;   // 72.5 m
+const goalX  = 0;            // always measure to left goal
+const goalY  = pitchH / 2;   // 44 m
+const canvas = { width: 930, height: 530 };
 
-const defaultPitchColor = "#000000";
-const defaultLightStripeColor = "#228B22";
-const defaultDarkStripeColor = "#006400";
-const defaultLineColor = "#FFFFFF";
+/* ─── Colour defaults ──────────────────────────────────────────────── */
+const fallbackColors = {
+  goal: "#FFFF33",
+  point: "#39FF14",
+  miss: "red",
+  setplayscore: "#39FF14",
+  setplaymiss: "red",
+  "penalty goal": "#FF8C00",
+  blocked: "red"
+};
 
 const defaultMapping = {
-  "free": "setplayscore",
+  free: "setplayscore",
   "free miss": "setplaymiss",
   "free wide": "setplaymiss",
   "free short": "setplaymiss",
-  "fortyfive": "setplayscore",
+  fortyfive: "setplayscore",
   "fortyfive wide": "setplaymiss",
   "fortyfive short": "setplaymiss"
 };
 
-const fallbackColors = {
-  "goal": "#FFFF33",
-  "point": "#39FF14",
-  "miss": "red",
-  "setplayscore": "#39FF14",
-  "setplaymiss": "red",
-  "penalty goal": "#FF8C00",
-  "blocked": "red"
-};
-
-const fallbackLegendColors = {
-  "goal": "#FFFF33",
-  "point": "#39FF14",
-  "miss": "red",
-  "setplayscore": "#39FF14",
-  "setplaymiss": "red",
-  "penalty goal": "#FF8C00",
-  "blocked": "red"
-};
-
-const customModalStyles = {
-  content: {
-    top: '50%',
-    left: '50%',
-    right: 'auto',
-    bottom: 'auto',
-    transform: 'translate(-50%, -50%)',
-    width: '600px',
-    maxHeight: '80vh',
-    padding: '30px',
-    borderRadius: '10px',
-    backgroundColor: '#2e2a2a',
-    color: '#fff',
-    overflow: 'auto'
-  },
-  overlay: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    zIndex: 9999
-  }
-};
-
-/* ─── Helper: Compute renderType ─────────────────────────────────────── */
-function getRenderType(rawAction, mapping) {
-  const lowerAction = (rawAction || "").toLowerCase().trim();
-  if (lowerAction === "offensive mark" || lowerAction === "free") return "setplayscore";
-  if (mapping.hasOwnProperty(lowerAction)) return mapping[lowerAction];
-  if (
-    lowerAction === "miss" ||
-    lowerAction === "wide" ||
-    lowerAction === "short" ||
-    lowerAction === "post" ||
-    lowerAction.includes(" miss")
-  ) {
-    return "miss";
-  }
-  return lowerAction;
-}
-
-/* ─── Settings Modal Component ───────────────────────────────────────── */
-function SettingsModal({ isOpen, onRequestClose, actionMapping, setActionMapping, markerColors, setMarkerColors }) {
+/* ─── Settings modal (unchanged) ────────────────────────────────────── */
+function SettingsModal({
+  isOpen,
+  onRequestClose,
+  actionMapping,
+  setActionMapping,
+  markerColors,
+  setMarkerColors
+}) {
   const mappingKeys = Object.keys(actionMapping);
+  const colorKeys   = Object.keys(markerColors);
+
   return (
-    <Modal isOpen={isOpen} onRequestClose={onRequestClose} style={customModalStyles} contentLabel="Settings">
-      <h2>Settings</h2>
-      <div style={{ marginBottom: '1rem' }}>
-        <h3>Action Mapping Settings</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {mappingKeys.map((key) => (
-            <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ flex: 1 }}>{key}</span>
-              <Select
-                value={actionMapping[key]}
-                onChange={(e) => setActionMapping((prev) => ({ ...prev, [key]: e.target.value }))}
-                style={{ flex: 1, marginLeft: '1rem' }}
-              >
-                {[
-                  { value: 'setplayscore', label: 'Set Play Score (scored)' },
-                  { value: 'setplaymiss', label: 'Set Play Miss (miss)' },
-                  { value: 'goal', label: 'Goal' },
-                  { value: 'point', label: 'Point' },
-                  { value: 'miss', label: 'Miss' },
-                  { value: 'penalty goal', label: 'Penalty Goal' },
-                  { value: 'blocked', label: 'Blocked' },
-                ].map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </Select>
-            </div>
-          ))}
+    <Modal isOpen={isOpen} onRequestClose={onRequestClose}
+           style={{
+             content: {
+               top:"50%",left:"50%",transform:"translate(-50%,-50%)",
+               width:"600px",maxHeight:"80vh",padding:"30px",
+               borderRadius:"10px",background:"#2e2a2a",color:"#fff",overflow:"auto"
+             },
+             overlay:{ backgroundColor:"rgba(0,0,0,0.5)",zIndex:9999 }
+           }}
+           contentLabel="Settings">
+      <h2 style={{ marginTop: 0 }}>Settings</h2>
+
+      {/* mapping */}
+      <h3>Action Mapping</h3>
+      {mappingKeys.map((k) => (
+        <div key={k} style={{ display:"flex",justifyContent:"space-between",marginBottom:"0.5rem" }}>
+          <span>{k}</span>
+          <Select value={actionMapping[k]}
+                  onChange={(e)=>setActionMapping({...actionMapping,[k]:e.target.value})}>
+            <option value="setplayscore">Set‑Play Score</option>
+            <option value="setplaymiss">Set‑Play Miss</option>
+            <option value="goal">Goal</option>
+            <option value="point">Point</option>
+            <option value="miss">Miss</option>
+            <option value="penalty goal">Penalty Goal</option>
+            <option value="blocked">Blocked</option>
+          </Select>
         </div>
-      </div>
-      <div style={{ marginBottom: '1rem' }}>
-        <h3>Marker Color Settings</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {Object.keys(fallbackColors).map((key) => (
-            <div key={key}>
-              <label style={{ color: '#fff' }}>
-                {key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase())}:
-              </label>
-              <input
-                type="color"
-                value={markerColors[key]}
-                onChange={(e) => setMarkerColors((prev) => ({ ...prev, [key]: e.target.value }))}
-              />
-            </div>
-          ))}
+      ))}
+
+      {/* colours */}
+      <h3 style={{ marginTop:"1.5rem" }}>Marker Colours</h3>
+      {colorKeys.map((k)=>(
+        <div key={k} style={{ display:"flex",justifyContent:"space-between",marginBottom:"0.5rem" }}>
+          <span>{k}</span>
+          <input type="color"
+                 value={markerColors[k]?.fill ?? markerColors[k]}
+                 onChange={(e)=>{
+                   const v=e.target.value;
+                   setMarkerColors(p=>({
+                     ...p,
+                     [k]: typeof p[k]==="object" ? {...p[k],fill:v} : v
+                   }));
+                 }}/>
         </div>
-      </div>
-      <div style={{ textAlign: 'right', marginTop: '1rem' }}>
+      ))}
+
+      <div style={{ textAlign:"right", marginTop:"1rem" }}>
         <StyledButton
-          onClick={() => {
-            localStorage.setItem('teamDetailsActionMapping', JSON.stringify(actionMapping));
-            localStorage.setItem('teamDetailsMarkerColors', JSON.stringify(markerColors));
-            Swal.fire('Settings Saved', 'Your settings have been saved.', 'success');
+          onClick={()=>{
+            localStorage.setItem("teamDetailsActionMapping",JSON.stringify(actionMapping));
+            localStorage.setItem("teamDetailsMarkerColors",JSON.stringify(markerColors));
+            Swal.fire("Saved","Settings saved.","success");
             onRequestClose();
-          }}
-          style={{ backgroundColor: '#007bff' }}
-        >
-          Save Settings
-        </StyledButton>
-        <StyledButton onClick={onRequestClose} style={{ backgroundColor: '#607d8b', marginLeft: '1rem' }}>
-          Close
-        </StyledButton>
+          }}>Save</StyledButton>
+        <StyledButton style={{ background:"#607d8b",marginLeft:"0.75rem" }}
+                      onClick={onRequestClose}>Close</StyledButton>
       </div>
     </Modal>
   );
 }
 
-/* ─── PDF Download Helper ───────────────────────────────────────────── */
-const downloadPDFHandler = async (setIsDownloading, teamName) => {
-  setIsDownloading(true);
-  const input = document.getElementById('pdf-content');
-  if (!input) {
-    Swal.fire('Error', 'Could not find content to export.', 'error');
-    setIsDownloading(false);
-    return;
-  }
-  try {
-    const canvas = await html2canvas(input, { scale: 2 });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('l', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    pdf.setFillColor(50, 50, 50);
-    pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
-    const imgProps = pdf.getImageProperties(imgData);
-    const imgWidth = pdfWidth;
-    const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-    const marginTop = (pdfHeight - imgHeight) / 2;
-    pdf.addImage(imgData, 'PNG', 0, marginTop, imgWidth, imgHeight);
-    pdf.setFontSize(12);
-    pdf.setTextColor(255, 255, 255);
-    pdf.text("scorelect.com", pdfWidth - 40, pdfHeight - 10);
-    pdf.save(`${teamName}_shot_map.pdf`);
-  } catch (error) {
-    Swal.fire('Error', 'Failed to generate PDF.', 'error');
-  }
-  setIsDownloading(false);
-};
+/* ─── Render‑type helper ───────────────────────────────────────────── */
+function getRenderType(raw, map) {
+  const a=(raw||"").toLowerCase().trim();
+  if(a==="offensive mark"||a==="free")return"setplayscore";
+  if(map[a])return map[a];
+  if(/miss|wide|short|post/.test(a))return"miss";
+  return a;
+}
 
-/* ─── Main Component ─────────────────────────────────────────────────── */
+/* ─── PDF helper ───────────────────────────────────────────────────── */
+async function downloadPDFHandler(setBusy, team) {
+  setBusy(true);
+  try{
+    const el=document.getElementById("pdf-content");
+    if(!el)throw new Error("Nothing to export");
+    const cnv=await html2canvas(el,{scale:2});
+    const img=cnv.toDataURL("image/png");
+    const pdf=new jsPDF("l","mm","a4");
+    const W=pdf.internal.pageSize.getWidth();
+    const H=pdf.internal.pageSize.getHeight();
+    pdf.setFillColor(50,50,50); pdf.rect(0,0,W,H,"F");
+    const p=pdf.getImageProperties(img);
+    pdf.addImage(img,"PNG",0,(H-(p.height*W)/p.width)/2,W,(p.height*W)/p.width);
+    pdf.setFontSize(12); pdf.setTextColor(255,255,255);
+    pdf.text("scorelect.com",W-40,H-10);
+    pdf.save(`${team}_shot_map.pdf`);
+  }catch(e){ Swal.fire("Error",e.message,"error"); }
+  setBusy(false);
+}
+
+/* ─── Main component ──────────────────────────────────────────────── */
 export default function TeamDetails() {
   const { teamName } = useParams();
-  const navigate = useNavigate();
-  const stageRef = useRef(null);
+  const navigate      = useNavigate();
+  const stageRef      = useRef(null);
 
-  const [markerColors, setMarkerColors] = useState(() => {
-    const saved = localStorage.getItem('teamDetailsMarkerColors');
-    return saved ? JSON.parse(saved) : fallbackColors;
-  });
-  const [actionMapping, setActionMapping] = useState(() => {
-    const saved = localStorage.getItem('teamDetailsActionMapping');
-    return saved ? JSON.parse(saved) : defaultMapping;
-  });
-  const [shotsData, setShotsData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [selectedShot, setSelectedShot] = useState(null);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [allShots, setAllShots] = useState([]);
-  const [aggregatedData, setAggregatedData] = useState({});
-  const [appliedFilters, setAppliedFilters] = useState({ player: '', action: '' });
-  const [filterOptions, setFilterOptions] = useState({ players: [], actions: [] });
-  const [isDownloading, setIsDownloading] = useState(false);
+  /* state */
+  const [markerColors,setMarkerColors]=useState(
+    JSON.parse(localStorage.getItem("teamDetailsMarkerColors")||"null")||fallbackColors
+  );
+  const [actionMapping,setActionMapping]=useState(
+    JSON.parse(localStorage.getItem("teamDetailsActionMapping")||"null")||defaultMapping
+  );
+  const [allShots,setAllShots]=useState([]);
+  const [shotsData,setShotsData]=useState([]);
+  const [agg,setAgg]=useState({});
+  const [filterOpt,setFilterOpt]=useState({players:[],actions:[]});
+  const [applied,setApplied]=useState({player:"",action:""});
+  const [selected,setSelected]=useState(null);
+  const [showSettings,setShowSettings]=useState(false);
+  const [busy,setBusy]=useState(false);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState(null);
 
-  const xScale = canvasSizeMainConst.width / pitchWidthConst;
-  const yScale = canvasSizeMainConst.height / pitchHeightConst;
-  const halfLineX = pitchWidthConst / 2;
-  const goalX = 0;
-  const goalY = pitchHeightConst / 2;
+  /* scales */
+  const xScale=canvas.width/pitchW;
+  const yScale=canvas.height/pitchH;
 
-  const filteredShots = useMemo(() => {
-    return shotsData.filter((shot) => {
-      const playerMatch = appliedFilters.player
-        ? (shot.playerName || '').toLowerCase().includes(appliedFilters.player.toLowerCase())
-        : true;
-      const actionMatch = appliedFilters.action
-        ? (shot.action || '').toLowerCase().includes(appliedFilters.action.toLowerCase())
-        : true;
-      return playerMatch && actionMatch;
-    });
-  }, [shotsData, appliedFilters]);
+  /* filtered list */
+  const filtered=useMemo(()=>shotsData.filter(s=>{
+    const pOK=applied.player ? (s.playerName||"").toLowerCase().includes(applied.player.toLowerCase()):true;
+    const aOK=applied.action ? (s.action||"").toLowerCase().includes(applied.action.toLowerCase()):true;
+    return pOK&&aOK;
+  }),[shotsData,applied]);
 
-  const dynamicColors = useMemo(() => ({
-    "goal": markerColors.goal || "#FFFF33",
-    "point": markerColors.point || "#39FF14",
-    "miss": markerColors.miss || "red",
-    "setplayscore": { 
-      fill: markerColors.setplayscore || "#39FF14", 
-      stroke: "white" 
-    },
-    "setplaymiss": { 
-      fill: markerColors.setplaymiss || "red", 
-      stroke: "white" 
-    },
-    "penalty goal": markerColors["penalty goal"] || "#FF8C00",
-    "blocked": markerColors.blocked || "red",
-  }), [markerColors]);
+  /* dynamic colours */
+  const dynamic=useMemo(()=>({
+    goal:markerColors.goal,
+    point:markerColors.point,
+    miss:markerColors.miss,
+    setplayscore:{ fill:markerColors.setplayscore, stroke:"white" },
+    setplaymiss:{ fill:markerColors.setplaymiss, stroke:"white" },
+    "penalty goal":markerColors["penalty goal"],
+    blocked:markerColors.blocked
+  }),[markerColors]);
 
-  const dynamicLegendColors = useMemo(() => ({
-    "goal": markerColors.goal || "#FFFF33",
-    "point": markerColors.point || "#39FF14",
-    "miss": markerColors.miss || "red",
-    "setplayscore": markerColors.setplayscore || "#39FF14",
-    "setplaymiss": markerColors.setplaymiss || "red",
-    "penalty goal": markerColors["penalty goal"] || "#FF8C00",
-    "blocked": markerColors.blocked || "red",
-  }), [markerColors]);
+  const legendColors=useMemo(()=>({
+    goal:dynamic.goal,
+    point:dynamic.point,
+    miss:dynamic.miss,
+    setplayscore:dynamic.setplayscore.fill,
+    setplaymiss:dynamic.setplaymiss.fill,
+    "penalty goal":dynamic["penalty goal"],
+    blocked:dynamic.blocked
+  }),[dynamic]);
 
-  useEffect(() => {
-    if (shotsData.length === 0) return;
-    const playersSet = new Set();
-    const actionsSet = new Set();
-    shotsData.forEach((shot) => {
-      if (shot.playerName) playersSet.add(shot.playerName);
-      if (shot.action) actionsSet.add(shot.action);
-    });
-    setFilterOptions({
-      players: Array.from(playersSet),
-      actions: Array.from(actionsSet)
-    });
-  }, [shotsData]);
-
-  useEffect(() => {
-    async function fetchAllShots() {
-      try {
+  /* ───── Fetch & prep shots */
+  useEffect(()=>{
+    (async()=>{
+      try{
         setLoading(true);
-        const USER_ID = 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2';
-        const DATASET_NAME = 'All Shots GAA';
-        const docRef = doc(firestore, `savedGames/${USER_ID}/games`, DATASET_NAME);
-        const docSnap = await getDoc(docRef);
-        if (!docSnap.exists()) {
-          Swal.fire({ title: 'No Data', text: 'Could not find "All Shots GAA" dataset!', icon: 'info', confirmButtonText: 'OK' });
-          navigate('/');
-          return;
-        }
-        const { gameData } = docSnap.data() || {};
-        if (!gameData || !Array.isArray(gameData)) {
-          Swal.fire({ title: 'No Data', text: 'No shots in "All Shots GAA".', icon: 'info', confirmButtonText: 'OK' });
-          navigate('/');
-          return;
-        }
-        setAllShots(gameData);
-        const teamShots = gameData.filter((s) => (s.team || '').toLowerCase() === teamName.toLowerCase());
-        if (!teamShots.length) {
-          Swal.fire({ title: 'No Data', text: `No shots found for team: ${teamName}`, icon: 'info', confirmButtonText: 'OK' });
-          navigate(-1);
-          return;
-        }
-        const translated = teamShots.map((shot) =>
-          translateShotToOneSide(shot, halfLineX, goalX, goalY)
+        const snap=await getDoc(
+          doc(firestore,"savedGames/w9ZkqaYVM3dKSqqjWHLDVyh5sVg2/games","All Shots GAA")
         );
-        const shotsWithRenderType = translated.map((shot) => {
-          const renderType = getRenderType(shot.action, actionMapping);
-          console.log(`Action: ${shot.action}, RenderType: ${renderType}`);
-          return { ...shot, renderType };
+        if(!snap.exists()) throw new Error("Dataset missing");
+        const list=snap.data().gameData||[];
+        setAllShots(list);
+        const mine=list.filter(s=>(s.team||"").toLowerCase()===teamName.toLowerCase());
+        if(!mine.length){
+          Swal.fire("No Data",`No shots for ${teamName}`,"info").then(()=>navigate(-1));
+          return;
+        }
+
+        /* build display objects */
+        const prepared=mine.map(s=>{
+          const mirrored=translateShotToLeftSide(s,halfX);
+          const { distMeters }=translateShotToOneSide(mirrored,halfX,goalX,goalY);
+          return {
+            ...s,
+            distMeters,
+            renderType:getRenderType(s.action,actionMapping)
+          };
         });
-        setShotsData(shotsWithRenderType);
-      } catch (err) {
-        setError(err.message);
-        Swal.fire('Error', err.message, 'error');
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchAllShots();
-  }, [teamName, navigate, halfLineX, goalX, goalY, actionMapping]);
+        setShotsData(prepared);
+      }catch(e){ setError(e.message); }
+      finally{ setLoading(false); }
+    })();
+  },[teamName,navigate,actionMapping]);
 
-  useEffect(() => {
-    if (!allShots.length) return;
-    const aggregator = {};
-    allShots.forEach((s) => {
-      const tmName = s.team || 'Unknown';
-      if (!aggregator[tmName]) {
-        aggregator[tmName] = {
-          team: tmName,
-          points: 0,
-          twoPointers: 0,
-          goals: 0,
-          offensiveMarks: 0,
-          frees: 0,
-          fortyFives: 0,
-          totalShots: 0,
-          successfulShots: 0,
-          totalFrees: 0,
-          successfulFrees: 0,
-          total45s: 0,
-          successful45s: 0,
-          misses: 0
-        };
-      }
-      const entry = aggregator[tmName];
-      const act = (s.action || '').toLowerCase().trim();
-      entry.totalShots += 1;
-      if (act === 'point') {
-        entry.points += 1;
-        entry.successfulShots += 1;
-        const translatedShot = translateShotToOneSide(s, halfLineX, goalX, goalY);
-        if (typeof translatedShot.distMeters === 'number' && translatedShot.distMeters >= 40) {
-          entry.twoPointers += 1;
-        }
-      }
-      if (act === 'goal' || act === 'penalty goal') {
-        entry.goals += 1;
-        entry.successfulShots += 1;
-      }
-      if (
-        act === 'miss' ||
-        act === 'wide' ||
-        act === 'short' ||
-        act.includes('miss') ||
-        act.includes('wide') ||
-        act.includes('short') ||
-        act.includes('post') ||
-        act === 'goal miss' ||
-        act === 'pen miss'
-      ) {
-        entry.misses += 1;
-      }
-      if (act.includes('offensive mark') && !act.includes('wide') && !act.includes('short') && !act.includes('miss')) {
-        entry.offensiveMarks += 1;
-        entry.successfulShots += 1;
-      }
-      if (act === 'free' || act === 'missed free' || act === 'free wide' || act === 'free short' || act === 'free post') {
-        entry.frees += 1;
-        entry.totalFrees += 1;
-        if (act === 'free') {
-          entry.successfulShots += 1;
-          entry.successfulFrees += 1;
-        }
-      }
-      if (act.includes('fortyfive') || act.includes('45')) {
-        entry.fortyFives += 1;
-        entry.total45s += 1;
-        if (act === 'fortyfive' || act === '45') {
-          entry.successfulShots += 1;
-          entry.successful45s += 1;
-        }
-      }
+  /* build dropdown opts */
+  useEffect(()=>{
+    const players=new Set(), actions=new Set();
+    shotsData.forEach(s=>{
+      if(s.playerName)players.add(s.playerName);
+      if(s.action) actions.add(s.action);
     });
-    setAggregatedData(aggregator);
-  }, [allShots, halfLineX, goalX, goalY]);
+    setFilterOpt({players:Array.from(players),actions:Array.from(actions)});
+  },[shotsData]);
 
-  function handleShotClick(shot) {
-    setSelectedShot(shot);
-  }
-  function closeModal() {
-    setSelectedShot(null);
-  }
-  function renderSelectedShotDetails() {
-    if (!selectedShot) return null;
-    const cat = getShotCategory(selectedShot.action);
-    const isGoal = cat === 'goal';
-    const distMeters = typeof selectedShot.distMeters === 'number' ? selectedShot.distMeters.toFixed(1) : 'N/A';
-    const foot = selectedShot.foot || 'N/A';
-    const pressure = selectedShot.pressure || 'N/A';
-    const position = selectedShot.position || 'N/A';
-    let metricLabel = isGoal ? 'xG' : 'xP';
-    let metricValue = isGoal ? selectedShot.xGoals : selectedShot.xPoints;
-    if (typeof metricValue === 'number') {
-      metricValue = metricValue.toFixed(2);
-    } else {
-      metricValue = 'N/A';
-    }
-    const advValue = typeof selectedShot.xP_adv === 'number' ? selectedShot.xP_adv.toFixed(2) : 'N/A';
+  /* aggregate stats per team */
+  useEffect(()=>{
+    if(!allShots.length) return;
+    const out={};
+    allShots.forEach(s=>{
+      const tm=s.team||"Unknown";
+      if(!out[tm]) out[tm]={
+        points:0,twoPointers:0,goals:0,offensiveMarks:0,
+        frees:0,fortyFives:0,totalShots:0,successfulShots:0,
+        totalFrees:0,successfulFrees:0,total45s:0,successful45s:0,misses:0
+      };
+      const a=(s.action||"").toLowerCase().trim();
+      const rec=out[tm]; rec.totalShots++;
+
+      const tr=translateShotToOneSide(
+        translateShotToLeftSide(s,halfX),halfX,goalX,goalY
+      );
+
+      if(a==="point"){ rec.points++; rec.successfulShots++;
+        if(tr.distMeters>=40) rec.twoPointers++;
+      }
+      if(a==="goal"||a==="penalty goal"){ rec.goals++; rec.successfulShots++; }
+      if(/miss|wide|short|post/.test(a)) rec.misses++;
+      if(/offensive mark/.test(a)&&!/(wide|short|miss)/.test(a)){
+        rec.offensiveMarks++; rec.successfulShots++;
+      }
+      if(/free/.test(a)){ rec.frees++; rec.totalFrees++; if(a==="free"){ rec.successfulShots++; rec.successfulFrees++; } }
+      if(/45|fortyfive/.test(a)){ rec.fortyFives++; rec.total45s++; if(a==="45"||a==="fortyfive"){ rec.successfulShots++; rec.successful45s++; } }
+    });
+    setAgg(out);
+  },[allShots]);
+
+  /* shot‑details modal body */
+  function shotDetails() {
+    if(!selected) return null;
+    const cat=getShotCategory(selected.action);
+    const isGoal=cat==="goal";
+    const dist=typeof selected.distMeters==="number"?selected.distMeters.toFixed(1):"N/A";
     return (
-      <div style={{ lineHeight: '1.6' }}>
-        <p><strong>Action:</strong> {selectedShot.action}</p>
+      <div style={{ lineHeight:"1.6" }}>
+        <p><strong>Action:</strong> {selected.action}</p>
         <p><strong>Category:</strong> {cat}</p>
-        <p><strong>Distance (m):</strong> {distMeters}</p>
-        <p><strong>Foot:</strong> {foot}</p>
-        <p><strong>Pressure:</strong> {pressure}</p>
-        <p><strong>Position:</strong> {position}</p>
-        <p><strong>{metricLabel}:</strong> {metricValue}</p>
-        <p><strong>xP_ADV:</strong> {advValue}</p>
+        <p><strong>Distance (m):</strong> {dist}</p>
+        <p><strong>Foot:</strong> {selected.foot||"N/A"}</p>
+        <p><strong>Pressure:</strong> {selected.pressure||"N/A"}</p>
+        <p><strong>Position:</strong> {selected.position||"N/A"}</p>
+        <p><strong>{isGoal?"xG":"xP"}:</strong>{" "}
+          {typeof(isGoal?selected.xGoals:selected.xPoints)==="number"
+            ? (isGoal?selected.xGoals:selected.xPoints).toFixed(2)
+            : "N/A"}
+        </p>
+        <p><strong>xP_ADV:</strong> {typeof selected.xP_adv==="number"
+          ? selected.xP_adv.toFixed(2):"N/A"}</p>
       </div>
     );
   }
 
-  // loading and error sections
-  if (loading) {
-    return (
-      <PageContainer>
-        <div className="team-details-loading-container">
-          <p>Loading team data...</p>
-          <div className="team-details-spinner"></div>
-        </div>
-      </PageContainer>
-    );
-  }
-  
-  if (error) {
-    return (
-      <PageContainer>
-        <div className="error-container">
-          <p>{error}</p>
-        </div>
-      </PageContainer>
-    );
-  }
-  
-  if (!filteredShots.length) {
-    return (
-      <PageContainer>
-        <div className="error-container">
-          <p>No shots found for this filter or team.</p>
-        </div>
-      </PageContainer>
-    );
-  }
+  /* ─── conditional UI guards */
+  if(loading) return <PageContainer><p style={{textAlign:"center"}}>Loading…</p></PageContainer>;
+  if(error)   return <PageContainer><p style={{color:"red",textAlign:"center"}}>{error}</p></PageContainer>;
+  if(!filtered.length) return <PageContainer><p style={{textAlign:"center"}}>No shots for this filter.</p></PageContainer>;
 
+  /* ─── MAIN JSX ───────────────────────────────────────────────────── */
   return (
     <PageContainer>
       <Title>{teamName} Shot Analysis</Title>
+
+      {/* filters & controls */}
       <Section>
         <FiltersContainer>
+          {/* player */}
           <div>
-            <FilterLabel htmlFor="playerSelect">Player:</FilterLabel>
-            <Select
-              id="playerSelect"
-              value={appliedFilters.player}
-              onChange={(e) => setAppliedFilters((prev) => ({ ...prev, player: e.target.value }))}
-            >
+            <FilterLabel htmlFor="ply">Player:</FilterLabel>
+            <Select id="ply" value={applied.player}
+                    onChange={e=>setApplied({...applied,player:e.target.value})}>
               <option value="">All Players</option>
-              {filterOptions.players.map((player) => (
-                <option key={player} value={player}>{player}</option>
+              {filterOpt.players.map(p=>(
+                <option key={p} value={p}>{p}</option>
               ))}
             </Select>
           </div>
+          {/* action */}
           <div>
-            <FilterLabel htmlFor="actionSelect">Action:</FilterLabel>
-            <Select
-              id="actionSelect"
-              value={appliedFilters.action}
-              onChange={(e) => setAppliedFilters((prev) => ({ ...prev, action: e.target.value }))}
-            >
+            <FilterLabel htmlFor="act">Action:</FilterLabel>
+            <Select id="act" value={applied.action}
+                    onChange={e=>setApplied({...applied,action:e.target.value})}>
               <option value="">All Actions</option>
-              {filterOptions.actions.map((action) => (
-                <option key={action} value={action}>{action}</option>
+              {filterOpt.actions.map(a=>(
+                <option key={a} value={a}>{a}</option>
               ))}
             </Select>
           </div>
-          <StyledButton onClick={() => downloadPDFHandler(setIsDownloading, teamName)}>
-            {isDownloading ? 'Downloading PDF...' : 'Download PDF'}
+          {/* export */}
+          <StyledButton onClick={()=>downloadPDFHandler(setBusy,teamName)}>
+            {busy?"Downloading…":"Download PDF"}
           </StyledButton>
-          <GearBox>
-            <GearButton onClick={() => setShowSettingsModal(true)} title="Settings">⚙️</GearButton>
-          </GearBox>
+          {/* gear */}
+          <GearBox><GearButton title="Settings" onClick={()=>setShowSettings(true)}>⚙️</GearButton></GearBox>
         </FiltersContainer>
       </Section>
+
+      {/* pitch & stats */}
       <Section id="pdf-content">
-        <PdfContentWrapper id="pdf-content">
+        <PdfContentWrapper>
           <PitchAndStatsContainer>
-            <div style={{ textAlign: 'center' }}>
-              <Stage
-                ref={stageRef}
-                width={xScale * (pitchWidthConst / 2)}
-                height={yScale * pitchHeightConst}
-                style={{ border: '2px solid #444', borderRadius: '8px', backgroundColor: '#111' }}
-              >
+            {/* Konva half‑pitch */}
+            <div style={{ textAlign:"center" }}>
+              <Stage ref={stageRef}
+                     width={xScale*(pitchW/2)}
+                     height={yScale*pitchH}
+                     style={{ border:"2px solid #444",borderRadius:"8px",background:"#111" }}>
                 {renderGAAPitch({
-                  canvasSizeMain: canvasSizeMainConst,
-                  pitchColorState: defaultPitchColor,
-                  lightStripeColorState: defaultLightStripeColor,
-                  darkStripeColorState: defaultDarkStripeColor,
-                  lineColorState: defaultLineColor,
-                  xScale,
-                  yScale,
+                  canvasSizeMain:canvas,
+                  pitchColorState:"#000",
+                  lightStripeColorState:"#228B22",
+                  darkStripeColorState:"#006400",
+                  lineColorState:"#fff",
+                  xScale,yScale
                 })}
                 {renderOneSidePitchShots({
-                  shots: filteredShots,
-                  colors: dynamicColors,
-                  xScale,
-                  yScale,
-                  onShotClick: handleShotClick,
-                  halfLineX,
+                  shots:filtered,
+                  colors:dynamic,
+                  xScale,yScale,
+                  onShotClick:setSelected,
+                  halfLineX:halfX,
                   goalX,
                   goalY,
                   actionMapping
                 })}
                 {renderLegendOneSideShots(
-                  dynamicLegendColors,
-                  xScale * (pitchWidthConst / 2),
-                  yScale * pitchHeightConst
+                  legendColors,
+                  xScale*(pitchW/2),
+                  yScale*pitchH
                 )}
               </Stage>
             </div>
+
+            {/* stats card */}
             <StatsCard>
               <StatsHeading>{teamName} Stats</StatsHeading>
-              <StatItem><strong>Total Shots:</strong> {aggregatedData[teamName]?.totalShots || 0}</StatItem>
-              <StatItem><strong>Successful Shots:</strong> {aggregatedData[teamName]?.successfulShots || 0}</StatItem>
-              <StatItem><strong>Points:</strong> {aggregatedData[teamName]?.points || 0}</StatItem>
-              <StatItem><strong>Goals:</strong> {aggregatedData[teamName]?.goals || 0}</StatItem>
-              <StatItem><strong>Misses:</strong> {aggregatedData[teamName]?.misses || 0}</StatItem>
-              <StatItem><strong>Offensive Marks:</strong> {aggregatedData[teamName]?.offensiveMarks || 0}</StatItem>
-              <StatItem><strong>Frees:</strong> {aggregatedData[teamName]?.frees || 0}</StatItem>
-              <StatItem><strong>45s:</strong> {aggregatedData[teamName]?.fortyFives || 0}</StatItem>
-              <StatItem><strong>2-Pointers:</strong> {aggregatedData[teamName]?.twoPointers || 0}</StatItem>
+              <StatItem><strong>Total Shots:</strong> {agg[teamName]?.totalShots||0}</StatItem>
+              <StatItem><strong>Successful:</strong> {agg[teamName]?.successfulShots||0}</StatItem>
+              <StatItem><strong>Points:</strong> {agg[teamName]?.points||0}</StatItem>
+              <StatItem><strong>Goals:</strong> {agg[teamName]?.goals||0}</StatItem>
+              <StatItem><strong>Misses:</strong> {agg[teamName]?.misses||0}</StatItem>
+              <StatItem><strong>Off. Marks:</strong> {agg[teamName]?.offensiveMarks||0}</StatItem>
+              <StatItem><strong>Frees:</strong> {agg[teamName]?.frees||0}</StatItem>
+              <StatItem><strong>45s:</strong> {agg[teamName]?.fortyFives||0}</StatItem>
+              <StatItem><strong>2‑Pointers (≥40 m):</strong> {agg[teamName]?.twoPointers||0}</StatItem>
               <StatItem>
-                <strong>Avg Success Rate:</strong>{' '}
-                {((aggregatedData[teamName]?.totalShots || 0) > 0
-                  ? (aggregatedData[teamName].successfulShots / aggregatedData[teamName].totalShots).toFixed(2)
-                  : '0.00')}
+                <strong>Avg Success:</strong>{" "}
+                {(agg[teamName]?.totalShots
+                  ? (agg[teamName].successfulShots/agg[teamName].totalShots).toFixed(2)
+                  : "0.00")}
               </StatItem>
             </StatsCard>
           </PitchAndStatsContainer>
         </PdfContentWrapper>
       </Section>
-      {selectedShot && (
-        <Modal
-          isOpen={!!selectedShot}
-          onRequestClose={closeModal}
-          style={customModalStyles}
-          contentLabel="Shot Details Modal"
-        >
-          <div style={{ lineHeight: '1.6' }}>
-            {renderSelectedShotDetails()}
-          </div>
-          <div style={{ textAlign: 'right', marginTop: '1rem' }}>
-            <StyledButton onClick={closeModal} style={{ backgroundColor: '#607d8b' }}>Close</StyledButton>
+
+      {/* shot details */}
+      {selected&&(
+        <Modal isOpen onRequestClose={()=>setSelected(null)}
+               style={{
+                 content:{
+                   maxWidth:"500px",margin:"auto",padding:"20px",
+                   borderRadius:"8px",background:"#2e2e2e",color:"#fff"
+                 }
+               }}>
+          {shotDetails()}
+          <div style={{ textAlign:"right",marginTop:"1rem" }}>
+            <StyledButton style={{ background:"#607d8b" }}
+                          onClick={()=>setSelected(null)}>Close</StyledButton>
           </div>
         </Modal>
       )}
+
+      {/* settings */}
       <SettingsModal
-        isOpen={showSettingsModal}
-        onRequestClose={() => setShowSettingsModal(false)}
+        isOpen={showSettings}
+        onRequestClose={()=>setShowSettings(false)}
         actionMapping={actionMapping}
         setActionMapping={setActionMapping}
         markerColors={markerColors}
-        setMarkerColors={setMarkerColors}
-      />
+        setMarkerColors={setMarkerColors}/>
     </PageContainer>
   );
 }
-
-TeamDetails.propTypes = {};

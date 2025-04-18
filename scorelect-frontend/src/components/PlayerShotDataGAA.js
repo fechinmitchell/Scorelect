@@ -1,32 +1,29 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
-import { firestore } from '../firebase';
-import Swal from 'sweetalert2';
-import { Stage } from 'react-konva';
-import Modal from 'react-modal';
-import { Radar } from 'react-chartjs-2';
-import 'chart.js/auto';
-import styled from 'styled-components';
-import './PlayerShotDataGAA.css';
+/***********************************************************************
+ *  PlayerShotDataGAA.jsx
+ *  Full component – copy/paste directly into your project
+ *  (React 18, styled‑components, react‑konva, Konva Stage)
+ **********************************************************************/
+import React, { useEffect, useState, useRef, useMemo } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { doc, getDoc } from "firebase/firestore";
+import { firestore } from "../firebase";
+import Swal from "sweetalert2";
+import { Stage } from "react-konva";
+import Modal from "react-modal";
+import styled from "styled-components";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
-// Import missing libraries:
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-
-// Import pitch renderers & helpers
 import {
-  renderGAAPitch,
   renderOneSidePitchShots,
-  renderLegendOneSideShots,
   translateShotToOneSide,
   getShotCategory
-} from './GAAPitchComponents';
-import { Layer, Group, Rect, Circle, Text } from 'react-konva';
+} from "./GAAPitchComponents";
 
-Modal.setAppElement('#root');
+/* ───────────────────────── Modal root */
+Modal.setAppElement("#root");
 
-/* ─── Styled Components ───────────────────────────────────────────── */
+/* ─────────────────────────── Styled */
 const PageContainer = styled.div`
   min-height: 100vh;
   background: #1c1c1c;
@@ -43,22 +40,23 @@ const Title = styled.h2`
   text-align: center;
   font-weight: 600;
   margin-bottom: 1rem;
-  color: #ffc107;  
+  color: #ffc107;
 `;
 const FiltersContainer = styled.div`
   background: #3a3a3a;
   padding: 1rem;
   border-radius: 8px;
-  max-width: 600px;
-  margin: 0 auto 2rem auto;
+  max-width: 900px;
+  margin: 0 auto 2rem;
   display: flex;
   gap: 1rem;
   flex-wrap: wrap;
   justify-content: center;
+  align-items: center;
 `;
 const FilterLabel = styled.label`
   margin-right: 0.5rem;
-  font-weight: bold;
+  font-weight: 600;
 `;
 const FilterSelect = styled.select`
   padding: 0.5rem;
@@ -66,10 +64,10 @@ const FilterSelect = styled.select`
   border: 1px solid #777;
   background: #fff;
   color: #000;
-  min-width: 120px;
+  min-width: 150px;
   font-size: 0.9rem;
 `;
-const PitchAndStatsContainer = styled.div`
+const PitchAndStats = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 2rem;
@@ -84,16 +82,15 @@ const StatsCard = styled.div`
   max-width: 350px;
 `;
 const StatsHeading = styled.h3`
-  margin-top: 0;
-  margin-bottom: 1rem;
+  margin: 0 0 1rem;
   font-weight: 600;
   color: #ffc107;
 `;
-const StatItem = styled.p`
+const Stat = styled.p`
   margin: 0.25rem 0;
 `;
-const StyledButton = styled.button`
-  background-color: #4f8ef7;
+const Button = styled.button`
+  background: #4f8ef7;
   color: #fff;
   border: none;
   padding: 0.6rem 1.2rem;
@@ -101,12 +98,46 @@ const StyledButton = styled.button`
   font-size: 0.9rem;
   font-weight: bold;
   cursor: pointer;
-  box-shadow: 0 3px 5px rgba(0,0,0,0.2);
-  transition: background 0.3s ease;
+  box-shadow: 0 3px 5px rgba(0, 0, 0, 0.2);
+  transition: background 0.3s;
+
   &:hover {
-    background-color: #357ad2;
+    background: #357ad2;
   }
 `;
+
+/* Legend */
+const PitchWrapper = styled.div`
+  position: relative;
+`;
+const LegendContainer = styled.div`
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.65);
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  backdrop-filter: blur(4px);
+`;
+const LegendItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+`;
+const LegendMarker = styled.span`
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid #fff;
+  background: ${({ color }) => color};
+  display: inline-block;
+`;
+
+/* Gear icon */
 const GearButton = styled.button`
   background: none;
   border: none;
@@ -121,175 +152,208 @@ const GearBox = styled.div`
   display: inline-flex;
   align-items: center;
 `;
-const PdfContentWrapper = styled.div`
-  position: relative;
-  background-color: #333;
-  padding: 1rem;
-`;
 
-/* ─── Constants ───────────────────────────────────────────────────────── */
-const canvasSize = { width: 930, height: 530 };
-const pitchWidth = 145;
-const pitchHeight = 88;
+/* ─────────────────────────── Const */
+const canvas = { w: 930, h: 530 };
+const pitchW = 145;
+const pitchH = 88;
 
-const defaultPitchColor = '#006400';
-const defaultLineColor = '#FFFFFF';
-const defaultLightStripeColor = '#228B22';
-const defaultDarkStripeColor = '#006400';
-
-// Default marker colors; note that for set play markers we use objects with a fill and a white stroke.
-const defaultMarkerColors = {
-  goal: '#FFFF33',
-  point: '#39FF14',
-  miss: 'red',
-  setPlayScore: { fill: '#39FF14', stroke: 'white' },
-  setPlayMiss: { fill: 'red', stroke: 'white' }
+const defaultColors = {
+  goal: "#FFFF33",
+  point: "#39FF14",
+  miss: "red",
+  setPlayScore: { fill: "#39FF14", stroke: "white" },
+  setPlayMiss: { fill: "red", stroke: "white" }
 };
 
-const customModalStyles = {
-  content: {
-    maxWidth: '500px',
-    margin: 'auto',
-    padding: '20px',
-    borderRadius: '8px',
-    backgroundColor: '#2e2e2e',
-    color: '#fff'
-  },
-  overlay: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    zIndex: 9999
-  }
+/* map of verbose shots that should fall into canonical buckets */
+const verboseToCanonical = {
+  free: "free",
+  "free miss": "miss",
+  "free wide": "miss",
+  "free short": "miss",
+  fortyfive: "45",
+  "fortyfive wide": "miss",
+  "fortyfive short": "miss",
+  blocked: "miss",
+  post: "miss"
 };
 
-/* ─── Helper: Compute renderType ─────────────────────────────────────── */
-// Force "offensive mark" and "free" to be rendered as setPlayScore.
-function getRenderType(rawAction, mapping) {
-  const lowerAction = (rawAction || "").toLowerCase().trim();
-  if (lowerAction === "offensive mark" || lowerAction === "free") return "setPlayScore";
-  if (mapping.hasOwnProperty(lowerAction)) return mapping[lowerAction];
-  if (
-    lowerAction.includes("wide") ||
-    lowerAction.includes("short") ||
-    lowerAction.includes("miss") ||
-    lowerAction.includes("post")
-  ) {
-    return "miss";
-  }
-  return lowerAction;
+/* Canonical categories we care about for filtering/legend */
+const canonicalOrder = [
+  "goal",
+  "point",
+  "miss",
+  "free",
+  "45",
+  "offensive mark",
+  "penalty goal"
+];
+
+/* ─────────────────────────── Helpers */
+function canonicalAction(actionRaw = "") {
+  const x = actionRaw.toLowerCase().trim();
+  if (verboseToCanonical[x]) return verboseToCanonical[x];
+  if (/^point/.test(x)) return "point";
+  if (/^(goal|penalty goal)/.test(x))
+    return x.startsWith("penalty") ? "penalty goal" : "goal";
+  if (/free/.test(x)) return "free";
+  if (/45|fortyfive/.test(x)) return "45";
+  if (/offensive mark/.test(x)) return "offensive mark";
+  if (/wide|short|miss|post|blocked/.test(x)) return "miss";
+  return x;
 }
 
-/* ─── Settings Modal Component for PlayerShotDataGAA ─────────────────── */
-function SettingsModalPlayer({ isOpen, onRequestClose, markerColors, setMarkerColors }) {
+function renderType(actionRaw = "") {
+  const cat = canonicalAction(actionRaw);
+  switch (cat) {
+    case "free":
+    case "45":
+      return "setPlayScore";
+    case "miss":
+      return "miss";
+    default:
+      return cat; // goal, point, offensive mark, etc.
+  }
+}
+
+/* PDF export */
+async function savePdf(setDownloading, name) {
+  setDownloading(true);
+  try {
+    const el = document.getElementById("pdf-content");
+    if (!el) throw new Error("Nothing to export");
+    const cnv = await html2canvas(el, { scale: 2 });
+    const img = cnv.toDataURL("image/png");
+    const pdf = new jsPDF("l", "mm", "a4");
+    const W = pdf.internal.pageSize.getWidth();
+    const H = pdf.internal.pageSize.getHeight();
+    pdf.setFillColor(50, 50, 50);
+    pdf.rect(0, 0, W, H, "F");
+    const props = pdf.getImageProperties(img);
+    pdf.addImage(
+      img,
+      "PNG",
+      0,
+      (H - (props.height * W) / props.width) / 2,
+      W,
+      (props.height * W) / props.width
+    );
+    pdf.setFontSize(12);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("scorelect.com", W - 40, H - 10);
+    pdf.save(`${name}_shot_map.pdf`);
+  } catch (e) {
+    Swal.fire("Error", e.message, "error");
+  }
+  setDownloading(false);
+}
+
+/* Settings modal */
+function SettingsModal({ isOpen, onRequestClose, markerColors, setMarkerColors }) {
+  const colorKeys = Object.keys(markerColors);
   return (
-    <Modal isOpen={isOpen} onRequestClose={onRequestClose} style={customModalStyles} contentLabel="Settings">
-      <h2>Settings</h2>
-      <div style={{ marginBottom: '1rem' }}>
-        <h3>Marker Color Settings</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {Object.keys(defaultMarkerColors).map((key) => (
-            <div key={key}>
-              <label style={{ color: '#fff' }}>
-                {key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase())}:
-              </label>
-              <input
-                type="color"
-                value={
-                  typeof markerColors[key] === 'object'
-                    ? markerColors[key].fill
-                    : markerColors[key]
-                }
-                onChange={(e) =>
-                  setMarkerColors((prev) => ({
-                    ...prev,
-                    [key]:
-                      key === 'setPlayScore' || key === 'setPlayMiss'
-                        ? { fill: e.target.value, stroke: 'white' }
-                        : e.target.value
-                  }))
-                }
-              />
-            </div>
-          ))}
-        </div>
+    <Modal
+      isOpen={isOpen}
+      onRequestClose={onRequestClose}
+      style={{
+        content: {
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: "420px",
+          maxHeight: "80vh",
+          padding: "30px",
+          borderRadius: "10px",
+          backgroundColor: "#2e2a2a",
+          color: "#fff",
+          overflow: "auto"
+        },
+        overlay: { backgroundColor: "rgba(0,0,0,0.5)", zIndex: 9999 }
+      }}
+      contentLabel="Settings"
+    >
+      <h2 style={{ marginTop: 0 }}>Marker Color Settings</h2>
+      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        {colorKeys.map((key) => (
+          <div
+            key={key}
+            style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+          >
+            <span>{key}</span>
+            <input
+              type="color"
+              value={
+                markerColors[key] && markerColors[key].fill
+                  ? markerColors[key].fill
+                  : markerColors[key]
+              }
+              onChange={(e) => {
+                const val = e.target.value;
+                setMarkerColors((prev) => ({
+                  ...prev,
+                  [key]:
+                    typeof prev[key] === "object"
+                      ? { ...prev[key], fill: val }
+                      : val
+                }));
+              }}
+            />
+          </div>
+        ))}
       </div>
-      <div style={{ textAlign: 'right', marginTop: '1rem' }}>
-        <StyledButton
+      <div style={{ textAlign: "right", marginTop: "1rem" }}>
+        <Button
           onClick={() => {
-            localStorage.setItem('playerShotMarkerColors', JSON.stringify(markerColors));
-            Swal.fire('Settings Saved', 'Your marker settings have been saved.', 'success');
+            localStorage.setItem("playerShotMarkerColors", JSON.stringify(markerColors));
+            Swal.fire("Settings Saved", "Your color settings have been saved.", "success");
             onRequestClose();
           }}
-          style={{ backgroundColor: '#007bff' }}
         >
-          Save Settings
-        </StyledButton>
-        <StyledButton onClick={onRequestClose} style={{ backgroundColor: '#607d8b', marginLeft: '1rem' }}>
+          Save
+        </Button>
+        <Button
+          style={{ background: "#607d8b", marginLeft: "1rem" }}
+          onClick={onRequestClose}
+        >
           Close
-        </StyledButton>
+        </Button>
       </div>
     </Modal>
   );
 }
 
-/* ─── Download PDF Helper ───────────────────────────────────────────── */
-const downloadPDFHandler = async (setIsDownloading, playerName) => {
-  setIsDownloading(true);
-  const input = document.getElementById('pdf-content');
-  if (!input) {
-    Swal.fire('Error', 'Could not find content to export.', 'error');
-    setIsDownloading(false);
-    return;
-  }
-  try {
-    const canvas = await html2canvas(input, { scale: 2 });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('l', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    pdf.setFillColor(50, 50, 50);
-    pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
-    const imgProps = pdf.getImageProperties(imgData);
-    const imgWidth = pdfWidth;
-    const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-    const marginTop = (pdfHeight - imgHeight) / 2;
-    pdf.addImage(imgData, 'PNG', 0, marginTop, imgWidth, imgHeight);
-    pdf.setFontSize(12);
-    pdf.setTextColor(255, 255, 255);
-    pdf.text("scorelect.com", pdfWidth - 40, pdfHeight - 10);
-    pdf.save(`${playerName}_shot_map.pdf`);
-  } catch (error) {
-    Swal.fire('Error', 'Failed to generate PDF.', 'error');
-  }
-  setIsDownloading(false);
-};
+/* ─────────────────────────── Format helpers for modal */
+const fmt = (v, d = 2) => (typeof v === "number" ? v.toFixed(d) : v);
+const yesNo = (v) => (v === undefined || v === null ? "" : v ? "Yes" : "No");
 
-/* ─── Main Component ─────────────────────────────────────────────────── */
+/* Fields to show inside the Shot Details modal, in order */
+const DETAIL_FIELDS = [
+  { key: "action", label: "Action", format: (v) => v },
+  { key: "renderType", label: "Category", format: (v) => v },
+  { key: "distMeters", label: "Distance (m)", format: (v) => fmt(v, 1) },
+  { key: "foot", label: "Foot", format: (v) => v },
+  { key: "pressure", label: "Pressure", format: yesNo },
+  { key: "position", label: "Position", format: (v) => v },
+  { key: "xPoints", label: "xP", format: fmt },
+  { key: "xpAdv", label: "xP_ADV", format: fmt }
+];
+
+/* ─────────────────────────── Main component */
 export default function PlayerShotDataGAA() {
   const { playerName } = useParams();
   const navigate = useNavigate();
   const stageRef = useRef(null);
 
-  // Pitch states
-  const [pitchColorState] = useState(defaultPitchColor);
-  const [lineColorState] = useState(defaultLineColor);
-  const [lightStripeColorState] = useState(defaultLightStripeColor);
-  const [darkStripeColorState] = useState(defaultDarkStripeColor);
-
-  // Marker colors state
-  const [markerColors, setMarkerColors] = useState(() => {
-    const saved = localStorage.getItem('playerShotMarkerColors');
-    return saved ? JSON.parse(saved) : defaultMarkerColors;
-  });
-
-  // Shots data
-  const [allShots, setAllShots] = useState([]);
+  const [colors, setColors] = useState(
+    JSON.parse(localStorage.getItem("playerShotMarkerColors") || "null") ||
+      defaultColors
+  );
   const [playerShots, setPlayerShots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  // Aggregated stats for the player
   const [stats, setStats] = useState({
-    team: 'N/A',
+    team: "N/A",
     totalShots: 0,
     successfulShots: 0,
     points: 0,
@@ -302,72 +366,72 @@ export default function PlayerShotDataGAA() {
     successful45s: 0,
     totalXP: 0,
     totalXG: 0,
-    totalDist: 0
+    avgDist: 0
   });
+  const [filter, setFilter] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [downloading, setDownloading] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
-  // Shot type filter
-  const [shotTypeFilter, setShotTypeFilter] = useState('');
+  const xScale = canvas.w / pitchW;
+  const yScale = canvas.h / pitchH;
+  const half = pitchW / 2;
+  const goalX = pitchW;
+  const goalY = pitchH / 2;
 
-  // Modal states
-  const [selectedShot, setSelectedShot] = useState(null);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
-
-  // Konva canvas configuration
-  const xScale = canvasSize.width / pitchWidth;
-  const yScale = canvasSize.height / pitchHeight;
-  const halfLineX = pitchWidth / 2;
-  const goalXRight = pitchWidth;
-  const goalY = pitchHeight / 2;
-
-  // Fetch shots from Firestore
+  /* ───── Fetch player shots */
   useEffect(() => {
-    async function fetchShots() {
+    (async () => {
       try {
-        setLoading(true);
-        const USER_ID = 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2';
-        const DATASET_NAME = 'All Shots GAA';
-        const docRef = doc(firestore, `savedGames/${USER_ID}/games`, DATASET_NAME);
-        const docSnap = await getDoc(docRef);
-        if (!docSnap.exists()) {
-          Swal.fire('No Data', 'Could not find "All Shots GAA" dataset!', 'info')
-            .then(() => navigate('/'));
-          return;
-        }
-        const { gameData } = docSnap.data() || {};
-        if (!gameData || !Array.isArray(gameData)) {
-          Swal.fire('No Shots', 'No shot data found in "All Shots GAA".', 'info')
-            .then(() => navigate('/'));
-          return;
-        }
-        setAllShots(gameData);
-        const theseShots = gameData.filter(
-          (s) => (s.playerName || '').toLowerCase() === playerName.toLowerCase()
+        const snap = await getDoc(
+          doc(
+            firestore,
+            "savedGames/w9ZkqaYVM3dKSqqjWHLDVyh5sVg2/games",
+            "All Shots GAA"
+          )
         );
-        if (!theseShots.length) {
-          Swal.fire('No Data', `No shots found for player: ${playerName}`, 'info')
-            .then(() => navigate(-1));
+        if (!snap.exists()) throw new Error("Dataset missing");
+        const list = snap.data().gameData || [];
+        const mine = list.filter(
+          (s) => (s.playerName || "").toLowerCase() === playerName.toLowerCase()
+        );
+        if (!mine.length) {
+          Swal.fire("No Data", `No shots for ${playerName}`, "info").then(() =>
+            navigate(-1)
+          );
           return;
         }
-        const translated = theseShots.map((shot) =>
-          translateShotToOneSide(shot, halfLineX, goalXRight, goalY)
-        );
-        setPlayerShots(translated);
-      } catch (err) {
-        setError(err.message);
-        Swal.fire('Error', err.message, 'error');
+        const fixed = mine.map((s) => ({
+          ...translateShotToOneSide(s, half, goalX, goalY),
+          renderType: renderType(s.action),
+          canonical: canonicalAction(s.action)
+        }));
+        setPlayerShots(fixed);
+      } catch (e) {
+        setError(e.message);
       } finally {
         setLoading(false);
       }
-    }
-    fetchShots();
-  }, [playerName, navigate, halfLineX, goalXRight, goalY]);
+    })();
+  }, [playerName, navigate, half, goalX, goalY]);
 
-  // Compute aggregated stats
+  /* ───── build dropdown options */
+  const availableActions = useMemo(() => {
+    const set = new Set();
+    playerShots.forEach(({ canonical }) => set.add(canonical));
+    const arr = Array.from(set).sort((a, b) => {
+      const ia = canonicalOrder.indexOf(a);
+      const ib = canonicalOrder.indexOf(b);
+      return ia === -1 || ib === -1 ? a.localeCompare(b) : ia - ib;
+    });
+    return arr;
+  }, [playerShots]);
+
+  /* ───── aggregate stats */
   useEffect(() => {
     if (!playerShots.length) return;
-    let aggregator = {
-      team: 'N/A',
+    const agg = {
+      team: "N/A",
       totalShots: 0,
       successfulShots: 0,
       points: 0,
@@ -382,272 +446,278 @@ export default function PlayerShotDataGAA() {
       totalXG: 0,
       totalDist: 0
     };
+    playerShots.forEach((s) => {
+      if (s.team && agg.team === "N/A") agg.team = s.team;
+      agg.totalShots++;
+      agg.totalXP += s.xPoints || 0;
+      agg.totalXG += s.xGoals || 0;
+      agg.totalDist += typeof s.distMeters === "number" ? s.distMeters : 0;
 
-    playerShots.forEach((shot) => {
-      if (shot.team && aggregator.team === 'N/A') {
-        aggregator.team = shot.team;
+      const cat = canonicalAction(s.action);
+      switch (cat) {
+        case "goal":
+        case "penalty goal":
+          agg.goals++;
+          agg.successfulShots++;
+          break;
+        case "point":
+          agg.points++;
+          agg.successfulShots++;
+          break;
+        case "miss":
+          agg.misses++;
+          break;
+        default:
+          break;
       }
-      aggregator.totalShots++;
-      aggregator.totalXP += (shot.xPoints || 0);
-      aggregator.totalXG += (shot.xGoals || 0);
-      aggregator.totalDist += (typeof shot.distMeters === 'number' ? shot.distMeters : 0);
-
-      const cat = getShotCategory(shot.action);
-
-      if (cat === 'goal' || cat === 'penaltyGoal') {
-        aggregator.goals++;
-        aggregator.successfulShots++;
-      } else if (cat === 'point') {
-        aggregator.points++;
-        aggregator.successfulShots++;
-      } else if (cat === 'miss') {
-        aggregator.misses++;
+      const a = s.action.toLowerCase();
+      if (a.includes("offensive mark") && !/(wide|short|miss)/.test(a)) {
+        agg.offensiveMarks++;
+        agg.successfulShots++;
       }
-
-      const act = (shot.action || '').toLowerCase();
-      if (act.includes('offensive mark') && !act.includes('wide') && !act.includes('short') && !act.includes('miss')) {
-        aggregator.offensiveMarks++;
-        aggregator.successfulShots++;
-      }
-      if (act.includes('free')) {
-        aggregator.totalFrees++;
-        if (act.trim() === 'free') {
-          aggregator.successfulFrees++;
-          aggregator.successfulShots++;
+      if (a.includes("free")) {
+        agg.totalFrees++;
+        if (canonicalAction(a) === "free") {
+          agg.successfulFrees++;
+          agg.successfulShots++;
         }
       }
-      if (act.includes('45') || act.includes('fortyfive')) {
-        aggregator.total45s++;
-        if (act.trim() === '45' || act.trim() === 'fortyfive') {
-          aggregator.successful45s++;
-          aggregator.successfulShots++;
+      if (/45|fortyfive/.test(a)) {
+        agg.total45s++;
+        if (canonicalAction(a) === "45") {
+          agg.successful45s++;
+          agg.successfulShots++;
         }
       }
     });
-
-    let avgDist = aggregator.totalShots > 0 ? aggregator.totalDist / aggregator.totalShots : 0;
-    setStats({
-      ...aggregator,
-      avgDist
-    });
+    agg.avgDist = agg.totalShots ? agg.totalDist / agg.totalShots : 0;
+    setStats(agg);
   }, [playerShots]);
 
-  // Filter shots by shotTypeFilter
-  const filteredShots = playerShots.filter((shot) => {
-    if (!shotTypeFilter) return true;
-    const act = (shot.action || '').toLowerCase();
-    return act.includes(shotTypeFilter.toLowerCase());
-  });
+  const shown = useMemo(
+    () => playerShots.filter((s) => !filter || s.canonical === filter),
+    [playerShots, filter]
+  );
 
-  // Modal handlers
-  function handleShotClick(shot) {
-    setSelectedShot(shot);
-  }
-  function closeModal() {
-    setSelectedShot(null);
-  }
-  function renderSelectedShotDetails() {
-    if (!selectedShot) return null;
-    const cat = getShotCategory(selectedShot.action);
-    const isGoal = cat === 'goal' || cat === 'penaltyGoal';
-    const distVal = typeof selectedShot.distMeters === 'number'
-      ? `${selectedShot.distMeters.toFixed(2)} m`
-      : 'N/A';
-    const metricLabel = isGoal ? 'xG' : 'xP';
-    const metricValueRaw = isGoal ? selectedShot.xGoals : selectedShot.xPoints;
-    const metricVal = typeof metricValueRaw === 'number'
-      ? metricValueRaw.toFixed(2)
-      : 'N/A';
-
-    return (
-      <div style={{ lineHeight: '1.6' }}>
-        <p><strong>Action:</strong> {selectedShot.action}</p>
-        <p><strong>Team:</strong> {selectedShot.team || 'N/A'}</p>
-        <p><strong>Distance:</strong> {distVal}</p>
-        <p><strong>{metricLabel}:</strong> {metricVal}</p>
-      </div>
-    );
-  }
-
-  // Download full pitch export
-  function handleExport() {
-    if (stageRef.current) {
-      stageRef.current.toDataURL({
-        pixelRatio: 2,
-        callback: (dataUrl) => {
-          const link = document.createElement('a');
-          link.download = `${playerName}_full_pitch_map.png`;
-          link.href = dataUrl;
-          link.click();
-        }
-      });
-    }
-  }
-
-  // Early returns
-  if (loading)
-    return (
-      <div className="player-shot-data-container">
-        <div className="player-shot-loading-container">
-          <div className="player-shot-loading-text">Loading player data...</div>
-          <div className="player-shot-spinner"></div>
-        </div>
-      </div>
-    );
-  
-  if (error)
-    return (
-      <div className="player-shot-data-container">
-        <div className="error-container">
-          <p>{error}</p>
-        </div>
-      </div>
-    );
-  
-  if (!playerShots.length)
-    return (
-      <div className="player-shot-data-container">
-        <div className="error-container">
-          <p>No shots found for this player.</p>
-        </div>
-      </div>
-    );
-
-
-  // Define dynamic marker colors (ensuring setPlay markers are objects with a white stroke)
-  const dynamicColors = {
-    goal: markerColors.goal,
-    point: markerColors.point,
-    miss: markerColors.miss,
-    setPlayScore: typeof markerColors.setPlayScore === 'object'
-      ? markerColors.setPlayScore
-      : { fill: markerColors.setPlayScore, stroke: 'white' },
-    setPlayMiss: typeof markerColors.setPlayMiss === 'object'
-      ? markerColors.setPlayMiss
-      : { fill: markerColors.setPlayMiss, stroke: 'white' }
+  const dynamic = {
+    goal: colors.goal,
+    point: colors.point,
+    miss: colors.miss,
+    setPlayScore:
+      typeof colors.setPlayScore === "object"
+        ? colors.setPlayScore
+        : { fill: colors.setPlayScore, stroke: "white" },
+    setPlayMiss:
+      typeof colors.setPlayMiss === "object"
+        ? colors.setPlayMiss
+        : { fill: colors.setPlayMiss, stroke: "white" }
   };
 
+  /* ───── Loading / error UI */
+  if (loading)
+    return <div style={{ textAlign: "center", marginTop: "3rem" }}>Loading…</div>;
+  if (error)
+    return (
+      <div style={{ color: "red", textAlign: "center", marginTop: "3rem" }}>
+        {error}
+      </div>
+    );
+
+  /* Legend labels */
+  const legendItems = [
+    { label: "Goal", key: "goal" },
+    { label: "Point", key: "point" },
+    { label: "Miss", key: "miss" },
+    { label: "Set‑Play Score", key: "setPlayScore" },
+    { label: "Set‑Play Miss", key: "setPlayMiss" }
+  ];
+
+  /* ───── JSX */
   return (
     <PageContainer>
       <Title>{playerName}'s Shot Data</Title>
 
-      {/* Shot Type Filter */}
+      {/* ───────── FILTER + CONTROLS */}
       <FiltersContainer>
+        {/* dropdown */}
         <div>
-          <FilterLabel htmlFor="shotTypeFilter">Shot Type:</FilterLabel>
+          <FilterLabel htmlFor="shotType">Shot Type:</FilterLabel>
           <FilterSelect
-            id="shotTypeFilter"
-            value={shotTypeFilter}
-            onChange={(e) => setShotTypeFilter(e.target.value)}
+            id="shotType"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
           >
-            <option value="">All Shots</option>
-            <option value="free">Free</option>
-            <option value="45">45</option>
-            <option value="offensive mark">Offensive Mark</option>
-            <option value="penalty goal">Penalty Goal</option>
-            <option value="miss">Miss (Wide/Short/Post)</option>
+            <option value="">All</option>
+            {availableActions.map((act) => (
+              <option key={act} value={act}>
+                {act.charAt(0).toUpperCase() + act.slice(1)}
+              </option>
+            ))}
           </FilterSelect>
         </div>
+
+        {filter && (
+          <Button style={{ background: "#6c757d" }} onClick={() => setFilter("")}>
+            Clear
+          </Button>
+        )}
+
+        {/* download / export */}
+        <Button onClick={() => savePdf(setDownloading, playerName)}>
+          {downloading ? "Downloading…" : "Download PDF"}
+        </Button>
+        <Button
+          onClick={() =>
+            stageRef.current?.toDataURL({
+              pixelRatio: 2,
+              callback: (url) => {
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${playerName}_pitch.png`;
+                a.click();
+              }
+            })
+          }
+        >
+          Export PNG
+        </Button>
+
+        {/* settings gear */}
+        <GearBox>
+          <GearButton title="Settings" onClick={() => setShowSettings(true)}>
+            ⚙️
+          </GearButton>
+        </GearBox>
       </FiltersContainer>
 
-      {/* Pitch and Stats */}
-      <Section>
-        <PitchAndStatsContainer>
-          <div style={{ textAlign: 'center' }}>
+      {/* ───────── MAIN CANVAS + STATS */}
+      <Section id="pdf-content">
+        <PitchAndStats>
+          {/* pitch */}
+          <PitchWrapper>
             <Stage
-              width={xScale * (pitchWidth / 2)}
-              height={yScale * pitchHeight}
-              style={{
-                background: '#111',
-                border: '2px solid #444',
-                borderRadius: '8px',
-                boxShadow: '0 4px 6px rgba(0,0,0,0.3)'
-              }}
               ref={stageRef}
+              width={xScale * (pitchW / 2)}
+              height={yScale * pitchH}
+              style={{
+                background: "#111",
+                border: "2px solid #444",
+                borderRadius: "8px",
+                boxShadow: "0 4px 6px rgba(0,0,0,0.3)"
+              }}
             >
               {renderOneSidePitchShots({
-                shots: filteredShots,
-                colors: dynamicColors,
+                shots: shown,
+                colors: dynamic,
                 xScale,
                 yScale,
-                onShotClick: handleShotClick,
-                halfLineX,
-                goalX: goalXRight,
+                onShotClick: setSelected,
+                halfLineX: half,
+                goalX,
                 goalY
               })}
-              {renderLegendOneSideShots(
-                {
-                  goal: dynamicColors.goal,
-                  point: dynamicColors.point,
-                  miss: dynamicColors.miss,
-                  setPlayScore: dynamicColors.setPlayScore,
-                  setPlayMiss: dynamicColors.setPlayMiss
-                },
-                xScale * (pitchWidth / 2),
-                yScale * pitchHeight
-              )}
             </Stage>
-          </div>
+
+            {/* legend */}
+            <LegendContainer>
+              {legendItems.map(({ label, key }) => {
+                const col = dynamic[key];
+                const fill = typeof col === "string" ? col : col.fill;
+                return (
+                  <LegendItem key={key}>
+                    <LegendMarker color={fill} />
+                    {label}
+                  </LegendItem>
+                );
+              })}
+            </LegendContainer>
+          </PitchWrapper>
+
+          {/* stats card */}
           <StatsCard>
-            <StatsHeading>{playerName}'s Stats</StatsHeading>
-            <StatItem><strong>Team:</strong> {stats.team}</StatItem>
-            <StatItem><strong>Shots:</strong> {stats.successfulShots}/{stats.totalShots}</StatItem>
-            <StatItem><strong>Points:</strong> {stats.points}</StatItem>
-            <StatItem><strong>Goals:</strong> {stats.goals}</StatItem>
-            <StatItem><strong>Misses:</strong> {stats.misses}</StatItem>
-            <StatItem><strong>Off. Marks:</strong> {stats.offensiveMarks}</StatItem>
-            <StatItem><strong>Frees:</strong> {stats.successfulFrees}/{stats.totalFrees}</StatItem>
-            <StatItem><strong>45s:</strong> {stats.successful45s}/{stats.total45s}</StatItem>
-            <StatItem>
-              <strong>Total xP:</strong> {(stats.totalXP || 0).toFixed(2)}
-            </StatItem>
-            <StatItem>
-              <strong>Total xG:</strong> {(stats.totalXG || 0).toFixed(2)}
-            </StatItem>
-            <StatItem>
-              <strong>Avg Dist:</strong> {(stats.avgDist || 0).toFixed(2)} m
-            </StatItem>
+            <StatsHeading>{playerName} Stats</StatsHeading>
+            <Stat>
+              <strong>Team:</strong> {stats.team}
+            </Stat>
+            <Stat>
+              <strong>Shots:</strong> {stats.successfulShots}/{stats.totalShots}
+            </Stat>
+            <Stat>
+              <strong>Points:</strong> {stats.points}
+            </Stat>
+            <Stat>
+              <strong>Goals:</strong> {stats.goals}
+            </Stat>
+            <Stat>
+              <strong>Misses:</strong> {stats.misses}
+            </Stat>
+            <Stat>
+              <strong>Off. Marks:</strong> {stats.offensiveMarks}
+            </Stat>
+            <Stat>
+              <strong>Frees:</strong> {stats.successfulFrees}/{stats.totalFrees}
+            </Stat>
+            <Stat>
+              <strong>45s:</strong> {stats.successful45s}/{stats.total45s}
+            </Stat>
+            <Stat>
+              <strong>Total xP:</strong> {stats.totalXP.toFixed(2)}
+            </Stat>
+            <Stat>
+              <strong>Total xG:</strong> {stats.totalXG.toFixed(2)}
+            </Stat>
+            <Stat>
+              <strong>Avg Dist:</strong> {stats.avgDist.toFixed(2)} m
+            </Stat>
           </StatsCard>
-        </PitchAndStatsContainer>
+        </PitchAndStats>
       </Section>
 
-      {/* Download & Settings Buttons */}
-      <Section>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
-          <StyledButton onClick={() => downloadPDFHandler(setIsDownloading, playerName)}>
-            {isDownloading ? 'Downloading PDF...' : 'Download PDF'}
-          </StyledButton>
-          <GearBox>
-            <GearButton onClick={() => setShowSettingsModal(true)} title="Settings">
-              ⚙️
-            </GearButton>
-          </GearBox>
-          <StyledButton onClick={handleExport}>Export Pitch</StyledButton>
-        </div>
-      </Section>
-
-      {/* Shot Details Modal */}
-      {selectedShot && (
-        <Modal isOpen={!!selectedShot} onRequestClose={closeModal} style={customModalStyles} contentLabel="Shot Details">
+      {/* ───────── Shot‑details modal */}
+      {selected && (
+        <Modal
+          isOpen
+          onRequestClose={() => setSelected(null)}
+          style={{
+            content: {
+              maxWidth: "500px",
+              margin: "auto",
+              padding: "20px",
+              borderRadius: "8px",
+              background: "#2e2e2e",
+              color: "#fff"
+            }
+          }}
+        >
           <h2 style={{ marginTop: 0 }}>Shot Details</h2>
-          {renderSelectedShotDetails()}
-          <div style={{ marginTop: '1rem', textAlign: 'right' }}>
-            <StyledButton onClick={closeModal} style={{ backgroundColor: '#607d8b' }}>
+          {DETAIL_FIELDS.map(({ key, label, format }) => {
+            const valRaw = selected[key];
+            if (valRaw === undefined || valRaw === null || valRaw === "") return null;
+            return (
+              <p key={key}>
+                <strong>{label}:</strong> {format(valRaw)}
+              </p>
+            );
+          })}
+
+          <div style={{ textAlign: "right", marginTop: "1rem" }}>
+            <Button
+              style={{ background: "#607d8b" }}
+              onClick={() => setSelected(null)}
+            >
               Close
-            </StyledButton>
+            </Button>
           </div>
         </Modal>
       )}
 
-      {/* Settings Modal */}
-      {showSettingsModal && (
-        <SettingsModalPlayer
-          isOpen={showSettingsModal}
-          onRequestClose={() => setShowSettingsModal(false)}
-          markerColors={markerColors}
-          setMarkerColors={setMarkerColors}
-        />
-      )}
+      {/* ───────── Settings modal */}
+      <SettingsModal
+        isOpen={showSettings}
+        onRequestClose={() => setShowSettings(false)}
+        markerColors={colors}
+        setMarkerColors={setColors}
+      />
     </PageContainer>
   );
 }

@@ -132,7 +132,7 @@ const LegendMarker = styled.span`
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  border: 1px solid #fff;
+  border: ${({ $border }) => ($border ? "1px solid #fff" : "none")};
   background: ${({ color }) => color};
   display: inline-block;
 `;
@@ -621,16 +621,18 @@ export default function PlayerShotDataGAA() {
             {/* legend */}
             <LegendContainer>
               {legendItems.map(({ label, key }) => {
-                const col = dynamic[key];
+                const col  = dynamic[key];
                 const fill = typeof col === "string" ? col : col.fill;
+                const needsBorder = key === "setPlayScore" || key === "setPlayMiss";
                 return (
                   <LegendItem key={key}>
-                    <LegendMarker color={fill} />
+                  <LegendMarker color={fill} $border={needsBorder} />
                     {label}
                   </LegendItem>
                 );
               })}
             </LegendContainer>
+
           </PitchWrapper>
 
           {/* stats card */}

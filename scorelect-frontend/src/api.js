@@ -1,62 +1,74 @@
 // src/api.js
 
-const apiUrl = process.env.REACT_APP_API_URL;
+// First try localhost, then fallback to your Render URL
+const PRIMARY  = process.env.REACT_APP_API_LOCAL;
+const FALLBACK = process.env.REACT_APP_API_URL;
 
-export const loadGames = async (uid) => {
-  const response = await fetch(`${apiUrl}/load-games`, {
+// Generic fetch helper: primary → fallback
+async function fetchWithFallback(path, opts) {
+  const makeUrl = base =>
+    base.replace(/\/$/, '') +
+    (path.startsWith('/') ? path : '/' + path);
+
+  // 1) Try primary (localhost)
+  try {
+    const res = await fetch(makeUrl(PRIMARY), opts);
+    if (!res.ok) throw new Error(`Local API returned ${res.status}`);
+    return res;
+  } catch (e) {
+    console.warn(`Local API failed (${PRIMARY}):`, e.message);
+    // 2) Try fallback (Render)
+    const res2 = await fetch(makeUrl(FALLBACK), opts);
+    if (!res2.ok) throw new Error(`Render API returned ${res2.status}`);
+    return res2;
+  }
+}
+
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+export async function loadGames(uid) {
+  const res = await fetchWithFallback('/load-games', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: JSON_HEADERS,
     body: JSON.stringify({ uid }),
   });
-  if (!response.ok) {
-    throw new Error('Failed to load games.');
-  }
-  return response.json();
-};
+  return res.json();
+}
 
-export const deleteGame = async (uid, gameId) => {
-  const response = await fetch(`${apiUrl}/delete-game`, {
+export async function deleteGame(uid, gameId) {
+  const res = await fetchWithFallback('/delete-game', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: JSON_HEADERS,
     body: JSON.stringify({ uid, gameId }),
   });
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Failed to delete game.');
-  }
-  return response.json();
-};
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to delete game.');
+  return data;
+}
 
-export const deleteDataset = async (uid, datasetName) => {
-  const response = await fetch(`${apiUrl}/delete-dataset`, {
+export async function deleteDataset(uid, datasetName) {
+  const res = await fetchWithFallback('/delete-dataset', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: JSON_HEADERS,
     body: JSON.stringify({ uid, datasetName }),
   });
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Failed to delete dataset.');
-  }
-  return response.json();
-};
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to delete dataset.');
+  return data;
+}
 
-export const downloadDataset = async (uid, datasetName) => {
-  const response = await fetch(`${apiUrl}/download-dataset`, {
+export async function downloadDataset(uid, datasetName) {
+  const res = await fetchWithFallback('/download-dataset', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: JSON_HEADERS,
     body: JSON.stringify({ uid, datasetName }),
   });
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Failed to download dataset.');
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Failed to download dataset.');
   }
-  return response.blob();
-};
+  return res.blob();
+}
+
+// Export the helper for other manual calls
+export { fetchWithFallback };

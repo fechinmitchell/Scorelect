@@ -2153,6 +2153,89 @@ def recalculate_xpoints():
         logging.error(f"Error recalculating xpoints: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
+@app.route('/recalculate-knn-xpoints', methods=['POST'])
+def recalculate_knn_xpoints():
+    """
+    Recalculates xP/xG for a target dataset by averaging the k nearest neighbors
+    from the historical "All Shots GAA" training set.
+    """
+    data = request.get_json()
+    user_id = data.get('user_id')
+    training_dataset = 'All Shots GAA'    # hard‑coded
+    target_dataset   = 'All Shots GAA'    # hard‑coded
+
+    if not user_id:
+        return jsonify({'success': False, 'error': 'No user_id provided.'}), 400
+
+    # 1) Load training games and shots
+    training_docs = db.collection('savedGames').document(user_id) \
+                          .collection('games') \
+                          .where('datasetName', '==', training_dataset) \
+                          .stream()
+    training_games = [doc.to_dict() for doc in training_docs]
+    train_shots = flattenShots(training_games)
+    if not train_shots:
+        return jsonify({'success': False, 'error': 'No training data found.'}), 404
+
+    df_train = pd.DataFrame(train_shots)
+    # ensure numeric
+    df_train['x'] = pd.to_numeric(df_train['x'], errors='coerce').fillna(0)
+    df_train['y'] = pd.to_numeric(df_train['y'], errors='coerce').fillna(0)
+    df_train['xPoints'] = pd.to_numeric(df_train['xPoints'], errors='coerce').fillna(0)
+    df_train['xGoals']  = pd.to_numeric(df_train['xGoals'], errors='coerce').fillna(0)
+
+    # 2) Build KDTree on (x,y)
+    coords = df_train[['x','y']].values
+    tree = KDTree(coords, leaf_size=40)
+
+    # 3) Load target games and shots
+    target_docs = list(db.collection('savedGames').document(user_id) \
+                             .collection('games') \
+                             .where('datasetName', '==', target_dataset) \
+                             .stream())
+    target_games = [doc.to_dict() for doc in target_docs]
+    target_shots = flattenShots(target_games)
+    if not target_shots:
+        return jsonify({'success': False, 'error': 'No target data found.'}), 404
+
+    df_target = pd.DataFrame(target_shots)
+    df_target['x'] = pd.to_numeric(df_target['x'], errors='coerce').fillna(0)
+    df_target['y'] = pd.to_numeric(df_target['y'], errors='coerce').fillna(0)
+
+    # 4) Query KNN for each new shot
+    k = 10
+    dists, idxs = tree.query(df_target[['x','y']].values, k=k)
+    xp_preds = np.mean(df_train['xPoints'].values[idxs], axis=1)
+    xg_preds = np.mean(df_train['xGoals'].values[idxs], axis=1)
+
+    # 5) Attach preds to df_target
+    df_target['xPoints_Final'] = xp_preds
+    df_target['xGoals_Final']  = xg_preds
+
+    # 6) Write back to Firestore
+    batch = db.batch()
+    shot_idx = 0
+    for doc_ref in target_docs:
+        game = doc_ref.to_dict()
+        game_data = game.get('gameData', [])
+        for i in range(len(game_data)):
+            game_data[i]['xPoints'] = float(df_target.iloc[shot_idx]['xPoints_Final'])
+            game_data[i]['xGoals']  = float(df_target.iloc[shot_idx]['xGoals_Final'])
+            shot_idx += 1
+        batch.update(doc_ref.reference, {'gameData': game_data})
+    batch.commit()
+
+    # 7) (Optional) Recompute summary
+    summary = {
+        'totalShots': len(df_target),
+        'successfulShots': int((df_target['xPoints_Final'] > 0.5).sum()),
+        'points': int((df_target['action'].str.lower().str.strip() == 'point').sum()),
+        'goals': int((df_target['action'].str.lower().str.strip() == 'goal').sum()),
+        'misses': int(len(df_target) - (df_target['xPoints_Final'] > 0.5).sum())
+    }
+
+    return jsonify({'success': True, 'summary': summary}), 200
+
     
 if __name__ == '__main__':
     app.run(port=5001, debug=True)

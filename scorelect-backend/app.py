@@ -1691,17 +1691,21 @@ def sitemap():
 # ---------------------------
 # Endpoint: /recalculate-target-xpoints
 # ---------------------------
+import requests
+import json
+import time
+import pandas as pd
+import matplotlib.pyplot as plt
+from tabulate import tabulate
+
+
 @app.route('/recalculate-target-xpoints', methods=['POST'])
 def recalculate_target_xpoints():
     """
     Recalculates xP and xG for a target dataset using a model trained on historical "all shots" data.
-    Expected JSON payload:
-      {
-        "user_id": "w9ZkqaYVM3dKSqqjWHLDVyh5sVg2",
-        "training_dataset": "GAA All Shots",
-        "target_dataset": "CurrentMatchDataset"
-      }
-    Returns updated summary stats for the target dataset.
+    Optimized for accuracy and speed.
+    
+    Includes detailed accuracy reporting in backend terminal logs.
     """
     try:
         import numpy as np
@@ -1709,105 +1713,544 @@ def recalculate_target_xpoints():
         from sklearn.linear_model import LogisticRegression
         from sklearn.preprocessing import StandardScaler
         from sklearn.model_selection import train_test_split
-        from sklearn.metrics import accuracy_score
+        from sklearn.metrics import accuracy_score, roc_auc_score
         from sklearn.calibration import CalibratedClassifierCV
         from imblearn.over_sampling import SMOTE
-
+        import joblib
+        import time
+        
+        # Start timing
+        start_time = time.time()
+        
+        # Get request data
         data = request.get_json()
         user_id = data.get('user_id')
         training_dataset = data.get('training_dataset', "GAA All Shots")
         target_dataset = data.get('target_dataset')
-
+        use_cached_model = data.get('use_cached_model', True)  # Allow opting out of cached model
+        
         if not user_id or not target_dataset:
             return jsonify({'error': 'user_id and target_dataset are required.'}), 400
-
-        # --- Step 1: Fetch training data ---
-        training_games_ref = db.collection('savedGames').document(user_id) \
-                              .collection('games') \
-                              .where('datasetName', '==', training_dataset)
-        training_games = [doc.to_dict() for doc in training_games_ref.stream()]
-        training_shots = flattenShots(training_games)
-        if not training_shots:
-            return jsonify({'error': 'No training data found.'}), 404
-
-        df_train = pd.DataFrame(training_shots)
-        df_train['x'] = pd.to_numeric(df_train['x'], errors='coerce').fillna(0)
-        df_train['y'] = pd.to_numeric(df_train['y'], errors='coerce').fillna(0)
-        X_train = df_train[['x', 'y']].values
-        df_train['target'] = df_train['action'].apply(lambda a: 1 if a.lower().strip() == 'point' else 0)
-        y_train = df_train['target'].values
-
-        scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-
-        sm = SMOTE(random_state=42)
-        X_train_res, y_train_res = sm.fit_resample(X_train_scaled, y_train)
-
-        model = LogisticRegression(random_state=42, max_iter=1000)
-        model.fit(X_train_res, y_train_res)
-
-        cal_model = CalibratedClassifierCV(model, method='isotonic', cv='prefit')
-        cal_model.fit(X_train_scaled, y_train)
-
-        # --- Step 2: Fetch target data ---
+            
+        logging.info(f"Starting xP/xG recalculation for user: {user_id}, target: {target_dataset}")
+        
+        # Check for cached model first to save time
+        model_cache_ref = db.collection('modelCache').document(f"{user_id}_{training_dataset}")
+        model_cache_doc = model_cache_ref.get()
+        
+        if use_cached_model and model_cache_doc.exists:
+            cache_data = model_cache_doc.to_dict()
+            model_path = cache_data.get('model_path')
+            scaler_path = cache_data.get('scaler_path')
+            
+            # Check if files exist on disk
+            if os.path.exists(model_path) and os.path.exists(scaler_path):
+                logging.info(f"Using cached model for {training_dataset}")
+                
+                # Load models and scaler
+                points_model = joblib.load(model_path + "_points")
+                goals_model = joblib.load(model_path + "_goals")
+                scaler = joblib.load(scaler_path)
+                
+                # Skip training and proceed directly to target data processing
+                cached_models_loaded = True
+            else:
+                cached_models_loaded = False
+                logging.info("Cached model files not found, training new models")
+        else:
+            cached_models_loaded = False
+            logging.info("No cached model found, training new models")
+        
+        # If we couldn't load cached models, train new ones
+        if not cached_models_loaded:
+            # --- Step 1: Fetch training data ---
+            training_games_ref = db.collection('savedGames').document(user_id) \
+                                .collection('games') \
+                                .where('datasetName', '==', training_dataset)
+            training_games = [doc.to_dict() for doc in training_games_ref.stream()]
+            training_shots = flattenShots(training_games)
+            
+            if not training_shots:
+                return jsonify({'error': 'No training data found.'}), 404
+                
+            logging.info(f"Loaded {len(training_shots)} training shots")
+            
+            # --- Step 2: Feature Engineering ---
+            df_train = pd.DataFrame(training_shots)
+            
+            # Clean and normalize data
+            df_train['x'] = pd.to_numeric(df_train['x'], errors='coerce').fillna(0)
+            df_train['y'] = pd.to_numeric(df_train['y'], errors='coerce').fillna(0)
+            
+            # Add target variables
+            goalOutcomes = {'goal', 'scores goal', 'made goal', 'hit goal', 'penalty goal'}
+            pointOutcomes = {'point', 'over', 'scores point', 'made point', 'offensive mark', 'fortyfive', 'free'}
+            
+            df_train['target_points'] = df_train['action'].apply(
+                lambda a: 1 if str(a).lower().strip() in pointOutcomes else 0
+            )
+            df_train['target_goals'] = df_train['action'].apply(
+                lambda a: 1 if str(a).lower().strip() in goalOutcomes else 0
+            )
+            
+            # Calculate goal distance and angle
+            goal_x, goal_y = 145, 44
+            df_train['dist_to_goal'] = np.sqrt((goal_x - df_train['x'])**2 + (goal_y - df_train['y'])**2)
+            
+            df_train['shot_angle'] = df_train.apply(
+                lambda row: np.degrees(np.arctan2(goal_y - row['y'], goal_x - row['x'])) 
+                if goal_x - row['x'] != 0 else 90.0, 
+                axis=1
+            )
+            
+            # Add advanced features
+            df_train['shot_angle_abs'] = df_train['shot_angle'].abs()
+            df_train['dist_squared'] = df_train['dist_to_goal'] ** 2
+            df_train['dist_angle_interaction'] = df_train['dist_to_goal'] * df_train['shot_angle_abs']
+            
+            # One-hot encode categorical features
+            df_train['is_setplay'] = df_train['action'].apply(
+                lambda x: 1 if any(w in str(x).lower() for w in ['free', 'fortyfive', 'penalty', 'offensive mark']) else 0
+            )
+            
+            # Map pressure values
+            pressure_map = {'none': 0, 'low': 0.3, 'medium': 0.6, 'high': 1.0}
+            df_train['pressure_value'] = df_train['pressure'].apply(
+                lambda p: pressure_map.get(str(p).lower(), 0)
+            )
+            
+            # Get player position encoding
+            position_map = {'goalkeeper': 0, 'back': 1, 'midfielder': 2, 'forward': 3}
+            df_train['position_value'] = df_train['position'].apply(
+                lambda pos: position_map.get(str(pos).lower(), 2)  # Default to midfielder
+            )
+            
+            # Select features
+            feature_cols = [
+                'x', 'y', 'dist_to_goal', 'shot_angle', 'shot_angle_abs',
+                'dist_squared', 'dist_angle_interaction', 'is_setplay',
+                'pressure_value', 'position_value'
+            ]
+            
+            # Split data
+            X = df_train[feature_cols].values
+            y_points = df_train['target_points'].values
+            y_goals = df_train['target_goals'].values
+            
+            # Scale features
+            scaler = StandardScaler()
+            X_scaled = scaler.fit_transform(X)
+            
+            # Create train/validation/test splits (70/15/15)
+            X_train, X_temp, y_points_train, y_points_temp, y_goals_train, y_goals_temp = train_test_split(
+                X_scaled, y_points, y_goals, test_size=0.3, random_state=42, stratify=y_points
+            )
+            
+            X_val, X_test, y_points_val, y_points_test, y_goals_val, y_goals_test = train_test_split(
+                X_temp, y_points_temp, y_goals_temp, test_size=0.5, random_state=42, stratify=y_points_temp
+            )
+            
+            # --- Step 3: Train Points Model ---
+            logging.info("Training points model")
+            # Handle class imbalance with SMOTE
+            if len(np.unique(y_points_train)) < 2:
+                logging.warning("All Points labels are the same in training data, using fallback model")
+                # Fallback model - simple LogisticRegression that always predicts base rate
+                points_model = LogisticRegression()
+                points_model.fit(X_train[:1], y_points_train[:1])  # Fit with minimal data
+            else:
+                # Apply SMOTE if classes are imbalanced
+                class_counts = np.bincount(y_points_train)
+                if min(class_counts) / max(class_counts) < 0.3:  # If imbalanced
+                    smote = SMOTE(random_state=42)
+                    X_train_resampled, y_points_train_resampled = smote.fit_resample(X_train, y_points_train)
+                else:
+                    X_train_resampled, y_points_train_resampled = X_train, y_points_train
+                
+                # Train base LogisticRegression (fast and effective)
+                base_model = LogisticRegression(
+                    max_iter=1000,
+                    class_weight='balanced',
+                    random_state=42
+                )
+                base_model.fit(X_train_resampled, y_points_train_resampled)
+                
+                # Calibrate using isotonic regression
+                points_model = CalibratedClassifierCV(
+                    base_model, method='isotonic', cv='prefit'
+                )
+                points_model.fit(X_val, y_points_val)
+                
+                # Evaluate
+                y_points_pred = points_model.predict(X_test)
+                y_points_proba = points_model.predict_proba(X_test)[:, 1]
+                acc = accuracy_score(y_points_test, y_points_pred)
+                auc = roc_auc_score(y_points_test, y_points_proba)
+                
+                # Calculate more detailed metrics
+                from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score
+                tn, fp, fn, tp = confusion_matrix(y_points_test, y_points_pred).ravel()
+                precision = precision_score(y_points_test, y_points_pred)
+                recall = recall_score(y_points_test, y_points_pred)
+                f1 = f1_score(y_points_test, y_points_pred)
+                
+                # Print detailed accuracy report to terminal
+                print("\n" + "="*50)
+                print("POINTS MODEL ACCURACY REPORT")
+                print("="*50)
+                print(f"Total test samples: {len(y_points_test)}")
+                print(f"Accuracy: {acc:.3f}")
+                print(f"AUC: {auc:.3f}")
+                print(f"Precision: {precision:.3f}")
+                print(f"Recall: {recall:.3f}")
+                print(f"F1 Score: {f1:.3f}")
+                print(f"True Positives: {tp} | False Positives: {fp}")
+                print(f"True Negatives: {tn} | False Negatives: {fn}")
+                print("="*50)
+                
+                logging.info(f"Points model: Test accuracy = {acc:.3f}, AUC = {auc:.3f}, F1 = {f1:.3f}")
+            
+            # --- Step 4: Train Goals Model ---
+            logging.info("Training goals model")
+            # Handle class imbalance with SMOTE
+            if len(np.unique(y_goals_train)) < 2:
+                logging.warning("All Goals labels are the same in training data, using fallback model")
+                # Fallback model - simple LogisticRegression that always predicts base rate
+                goals_model = LogisticRegression()
+                goals_model.fit(X_train[:1], y_goals_train[:1])  # Fit with minimal data
+            else:
+                # Goals are usually more rare, use higher sampling rate
+                smote = SMOTE(random_state=42, sampling_strategy=0.5)  # Create fewer synthetic samples
+                X_train_resampled, y_goals_train_resampled = smote.fit_resample(X_train, y_goals_train)
+                
+                # Train base LogisticRegression
+                base_model = LogisticRegression(
+                    max_iter=1000,
+                    class_weight={0: 1, 1: 3},  # Favor detecting goals
+                    random_state=42
+                )
+                base_model.fit(X_train_resampled, y_goals_train_resampled)
+                
+                # Calibrate using isotonic regression
+                goals_model = CalibratedClassifierCV(
+                    base_model, method='isotonic', cv='prefit'
+                )
+                goals_model.fit(X_val, y_goals_val)
+                
+                # Evaluate
+                if sum(y_goals_test) > 0:  # Only evaluate if we have positive samples
+                    y_goals_pred = goals_model.predict(X_test)
+                    y_goals_proba = goals_model.predict_proba(X_test)[:, 1]
+                    acc = accuracy_score(y_goals_test, y_goals_pred)
+                    auc = roc_auc_score(y_goals_test, y_goals_proba) if sum(y_goals_test) > 0 else 0
+                    
+                    # Calculate more detailed metrics
+                    from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score
+                    tn, fp, fn, tp = confusion_matrix(y_goals_test, y_goals_pred).ravel()
+                    precision = precision_score(y_goals_test, y_goals_pred, zero_division=0)
+                    recall = recall_score(y_goals_test, y_goals_pred, zero_division=0)
+                    f1 = f1_score(y_goals_test, y_goals_pred, zero_division=0)
+                    
+                    # Print detailed accuracy report to terminal
+                    print("\n" + "="*50)
+                    print("GOALS MODEL ACCURACY REPORT")
+                    print("="*50)
+                    print(f"Total test samples: {len(y_goals_test)}")
+                    print(f"Accuracy: {acc:.3f}")
+                    print(f"AUC: {auc:.3f}")
+                    print(f"Precision: {precision:.3f}")
+                    print(f"Recall: {recall:.3f}")
+                    print(f"F1 Score: {f1:.3f}")
+                    print(f"True Positives: {tp} | False Positives: {fp}")
+                    print(f"True Negatives: {tn} | False Negatives: {fn}")
+                    print("="*50)
+                    
+                    logging.info(f"Goals model: Test accuracy = {acc:.3f}, AUC = {auc:.3f}, F1 = {f1:.3f}")
+            
+            # --- Step 5: Save models for future use ---
+            directory = f"models/{user_id}"
+            os.makedirs(directory, exist_ok=True)
+            model_path = f"{directory}/{training_dataset.replace(' ', '_')}"
+            scaler_path = f"{directory}/{training_dataset.replace(' ', '_')}_scaler.joblib"
+            
+            joblib.dump(points_model, model_path + "_points")
+            joblib.dump(goals_model, model_path + "_goals")
+            joblib.dump(scaler, scaler_path)
+            
+            # Store paths in Firestore for quick lookup
+            model_cache_ref.set({
+                'model_path': model_path,
+                'scaler_path': scaler_path,
+                'created_at': firestore.SERVER_TIMESTAMP
+            })
+        
+        # --- Step 6: Fetch target data ---
+        logging.info(f"Processing target dataset: {target_dataset}")
         target_games_ref = db.collection('savedGames').document(user_id) \
             .collection('games') \
             .where('datasetName', '==', target_dataset)
         target_games_docs = list(target_games_ref.stream())
         target_games = [doc.to_dict() for doc in target_games_docs]
-        target_shots = flattenShots(target_games)
-        if not target_shots:
+        
+        if not target_games:
             return jsonify({'error': 'No target data found.'}), 404
-
-        df_target = pd.DataFrame(target_shots)
+            
+        logging.info(f"Loaded {len(target_games)} target games")
+        
+        # --- Step 7: Process target shots in batches ---
+        all_target_shots = []
+        for game in target_games:
+            shots = game.get('gameData', [])
+            all_target_shots.extend(shots)
+            
+        logging.info(f"Processing {len(all_target_shots)} target shots")
+        
+        # Convert to DataFrame for easier processing
+        df_target = pd.DataFrame(all_target_shots)
+        
+        # Clean and process the same way as training data
         df_target['x'] = pd.to_numeric(df_target['x'], errors='coerce').fillna(0)
         df_target['y'] = pd.to_numeric(df_target['y'], errors='coerce').fillna(0)
-        X_target = df_target[['x', 'y']].values
+        
+        # Calculate the same features
+        goal_x, goal_y = 145, 44
+        df_target['dist_to_goal'] = np.sqrt((goal_x - df_target['x'])**2 + (goal_y - df_target['y'])**2)
+        
+        df_target['shot_angle'] = df_target.apply(
+            lambda row: np.degrees(np.arctan2(goal_y - row['y'], goal_x - row['x'])) 
+            if goal_x - row['x'] != 0 else 90.0, 
+            axis=1
+        )
+        
+        df_target['shot_angle_abs'] = df_target['shot_angle'].abs()
+        df_target['dist_squared'] = df_target['dist_to_goal'] ** 2
+        df_target['dist_angle_interaction'] = df_target['dist_to_goal'] * df_target['shot_angle_abs']
+        
+        df_target['is_setplay'] = df_target['action'].apply(
+            lambda x: 1 if any(w in str(x).lower() for w in ['free', 'fortyfive', 'penalty', 'offensive mark']) else 0
+        )
+        
+        pressure_map = {'none': 0, 'low': 0.3, 'medium': 0.6, 'high': 1.0}
+        df_target['pressure_value'] = df_target['pressure'].apply(
+            lambda p: pressure_map.get(str(p).lower(), 0)
+        )
+        
+        position_map = {'goalkeeper': 0, 'back': 1, 'midfielder': 2, 'forward': 3}
+        df_target['position_value'] = df_target['position'].apply(
+            lambda pos: position_map.get(str(pos).lower(), 2)
+        )
+        
+        # Extract features in same order
+        feature_cols = [
+            'x', 'y', 'dist_to_goal', 'shot_angle', 'shot_angle_abs',
+            'dist_squared', 'dist_angle_interaction', 'is_setplay',
+            'pressure_value', 'position_value'
+        ]
+        
+        # Fill missing columns with defaults if needed
+        for col in feature_cols:
+            if col not in df_target.columns:
+                df_target[col] = 0
+                
+        # Get feature matrix
+        X_target = df_target[feature_cols].values
+        
+        # Scale using the same scaler
         X_target_scaled = scaler.transform(X_target)
-
-        # --- Step 3: Predict xP and xG ---
-        xP_preds = cal_model.predict_proba(X_target_scaled)[:, 1]
-        xG_preds = xP_preds * 0.5  # Dummy logic for xG
-
-        df_target['xPoints_Final'] = xP_preds
-        df_target['xGoals_Final'] = xG_preds
-
-        # --- Step 4: Compute summary statistics ---
+        
+        # --- Step 8: Predict xP and xG ---
+        batch_size = 500  # Process in batches to avoid memory issues
+        all_xp_preds = []
+        all_xg_preds = []
+        
+        for i in range(0, len(X_target_scaled), batch_size):
+            end = min(i + batch_size, len(X_target_scaled))
+            batch = X_target_scaled[i:end]
+            
+            # Get predictions
+            xp_batch = points_model.predict_proba(batch)[:, 1]
+            xg_batch = goals_model.predict_proba(batch)[:, 1]
+            
+            all_xp_preds.extend(xp_batch)
+            all_xg_preds.extend(xg_batch)
+        
+        # Add predictions back to DataFrame
+        df_target['xPoints'] = all_xp_preds
+        df_target['xGoals'] = all_xg_preds
+        
+        # Add derived metrics
+        df_target['xP_adv'] = df_target['xPoints'] * 0.7 + df_target['xGoals'] * 0.3
+        
+        # --- Step 9: Evaluate accuracy on target data ---
+        # First, get actual outcomes for shots where we have them
+        goalOutcomes = {'goal', 'scores goal', 'made goal', 'hit goal', 'penalty goal'}
+        pointOutcomes = {'point', 'over', 'scores point', 'made point', 'offensive mark', 'fortyfive', 'free'}
+        
+        df_target['actual_points'] = df_target['action'].apply(
+            lambda a: 1 if str(a).lower().strip() in pointOutcomes else 0
+        )
+        df_target['actual_goals'] = df_target['action'].apply(
+            lambda a: 1 if str(a).lower().strip() in goalOutcomes else 0
+        )
+        
+        # Evaluate accuracy
+        if sum(df_target['actual_points']) > 0:
+            # Calculate brier score (mean squared error - better for probabilities)
+            from sklearn.metrics import brier_score_loss
+            brier_points = brier_score_loss(df_target['actual_points'], df_target['xPoints'])
+            
+            # Calculate calibration (average predicted vs actual rate)
+            avg_pred_p = df_target['xPoints'].mean()
+            avg_actual_p = df_target['actual_points'].mean()
+            calibration_p = abs(avg_pred_p - avg_actual_p)
+            
+            # Make binary predictions at 0.5 threshold
+            point_preds = (df_target['xPoints'] >= 0.5).astype(int)
+            acc_p = accuracy_score(df_target['actual_points'], point_preds)
+            
+            print("\n" + "="*50)
+            print("TARGET DATASET ACCURACY REPORT (POINTS)")
+            print("="*50)
+            print(f"Total shots: {len(df_target)}")
+            print(f"Actual points: {sum(df_target['actual_points'])}")
+            print(f"Accuracy: {acc_p:.3f}")
+            print(f"Brier score: {brier_points:.3f} (Lower is better)")
+            print(f"Avg predicted points rate: {avg_pred_p:.3f}")
+            print(f"Actual points rate: {avg_actual_p:.3f}")
+            print(f"Calibration error: {calibration_p:.3f}")
+            print("="*50)
+            
+            logging.info(f"Target dataset points accuracy: {acc_p:.3f}, Brier: {brier_points:.3f}")
+        
+        if sum(df_target['actual_goals']) > 0:
+            brier_goals = brier_score_loss(df_target['actual_goals'], df_target['xGoals'])
+            avg_pred_g = df_target['xGoals'].mean()
+            avg_actual_g = df_target['actual_goals'].mean()
+            calibration_g = abs(avg_pred_g - avg_actual_g)
+            
+            goal_preds = (df_target['xGoals'] >= 0.3).astype(int)  # Lower threshold for goals
+            acc_g = accuracy_score(df_target['actual_goals'], goal_preds)
+            
+            print("\n" + "="*50)
+            print("TARGET DATASET ACCURACY REPORT (GOALS)")
+            print("="*50)
+            print(f"Total shots: {len(df_target)}")
+            print(f"Actual goals: {sum(df_target['actual_goals'])}")
+            print(f"Accuracy: {acc_g:.3f}")
+            print(f"Brier score: {brier_goals:.3f} (Lower is better)")
+            print(f"Avg predicted goals rate: {avg_pred_g:.3f}")
+            print(f"Actual goals rate: {avg_actual_g:.3f}")
+            print(f"Calibration error: {calibration_g:.3f}")
+            print("="*50)
+            
+            logging.info(f"Target dataset goals accuracy: {acc_g:.3f}, Brier: {brier_goals:.3f}")
+        
+        # Calculate total xP vs actual points for teams
+        if 'team' in df_target.columns:
+            team_stats = df_target.groupby('team').agg({
+                'xPoints': 'sum',
+                'actual_points': 'sum',
+                'xGoals': 'sum',
+                'actual_goals': 'sum'
+            })
+            
+            print("\n" + "="*50)
+            print("TEAM-LEVEL ACCURACY")
+            print("="*50)
+            for team, row in team_stats.iterrows():
+                print(f"Team: {team}")
+                print(f"Predicted Points: {row['xPoints']:.2f} | Actual: {row['actual_points']}")
+                print(f"Predicted Goals: {row['xGoals']:.2f} | Actual: {row['actual_goals']}")
+                print("-"*30)
+            print("="*50)
+        
+        # --- Step 10: Update target data in Firestore ---
+        logging.info("Updating Firestore with new xP/xG values")
+        batch = db.batch()
+        shot_index = 0
+        
+        for i, doc in enumerate(target_games_docs):
+            game_data = target_games[i].get('gameData', [])
+            for j in range(len(game_data)):
+                if shot_index < len(df_target):
+                    game_data[j]['xPoints'] = float(df_target.iloc[shot_index]['xPoints'])
+                    game_data[j]['xGoals'] = float(df_target.iloc[shot_index]['xGoals'])
+                    game_data[j]['xP_adv'] = float(df_target.iloc[shot_index]['xP_adv'])
+                    game_data[j]['distMeters'] = float(df_target.iloc[shot_index]['dist_to_goal'])
+                    shot_index += 1
+            
+            batch.update(doc.reference, {'gameData': game_data})
+        
+        # Commit all updates
+        batch.commit()
+        
+        # --- Step 11: Compute summary statistics ---
         total_shots = len(df_target)
-        successful_shots = df_target[df_target['xPoints_Final'] > 0.5].shape[0]
-        points = df_target[df_target['action'].str.lower().str.strip() == 'point'].shape[0]
-        goals = df_target[df_target['action'].str.lower().str.strip() == 'goal'].shape[0]
-        offensive_marks = 8  # dummy value
-        frees = 37           # dummy value
-        fortyfives = 11      # dummy value
-        two_pointers = 5     # dummy value
-        avg_distance = df_target['x'].sub(145).abs().mean() / 100
-
+        points = sum(1 for action in df_target['action'] if str(action).lower().strip() in pointOutcomes)
+        goals = sum(1 for action in df_target['action'] if str(action).lower().strip() in goalOutcomes)
+        
+        successful_shots = points + goals
+        misses = total_shots - successful_shots
+        
+        # Overall model quality metrics for dashboard
+        model_quality = {
+            "points_accuracy": round(acc_p, 3) if 'acc_p' in locals() else None,
+            "goals_accuracy": round(acc_g, 3) if 'acc_g' in locals() else None,
+            "points_calibration": round(calibration_p, 3) if 'calibration_p' in locals() else None,
+            "goals_calibration": round(calibration_g, 3) if 'calibration_g' in locals() else None
+        }
+        
+        # Count set play stats
+        free_pattern = r'free'
+        fortyfive_pattern = r'fortyfive|45'
+        offensive_mark_pattern = r'offensive mark'
+        
+        frees = sum(1 for action in df_target['action'] 
+                  if isinstance(action, str) and re.search(free_pattern, action.lower()))
+        fortyfives = sum(1 for action in df_target['action'] 
+                      if isinstance(action, str) and re.search(fortyfive_pattern, action.lower()))
+        offensive_marks = sum(1 for action in df_target['action'] 
+                           if isinstance(action, str) and re.search(offensive_mark_pattern, action.lower()))
+        
+        # Two-pointers (shots from distance > 40m)
+        two_pointers = sum(1 for i, row in df_target.iterrows() 
+                         if row['dist_to_goal'] >= 40 and str(row['action']).lower().strip() in pointOutcomes)
+        
+        avg_distance = df_target['dist_to_goal'].mean()
+        
         target_summary = {
             "totalShots": total_shots,
             "successfulShots": successful_shots,
             "points": points,
             "goals": goals,
-            "misses": total_shots - successful_shots,
+            "misses": misses,
             "offensiveMarks": offensive_marks,
             "frees": frees,
             "45s": fortyfives,
             "2Pointers": two_pointers,
-            "avgDistance": round(avg_distance, 2)
+            "avgDistance": round(avg_distance, 2),
+            "processingTime": round(time.time() - start_time, 2),
+            "modelQuality": model_quality
         }
-
-        # --- Step 5: Update target data in Firestore ---
-        batch = db.batch()
-        for doc in target_games_docs:
-            game_data = doc.to_dict().get('gameData', [])
-            for i in range(len(game_data)):
-                if i < len(df_target):
-                    game_data[i]['xPoints'] = float(df_target.iloc[i]['xPoints_Final'])
-                    game_data[i]['xGoals'] = float(df_target.iloc[i]['xGoals_Final'])
-            batch.update(doc.reference, {'gameData': game_data})
-        batch.commit()
-
-        # --- Step 6: Return summary stats ---
+        
+        # Final report in terminal
+        print("\n" + "="*50)
+        print("FINAL MODEL PERFORMANCE SUMMARY")
+        print("="*50)
+        print(f"Total processing time: {target_summary['processingTime']} seconds")
+        print(f"Training data size: {len(training_shots) if 'training_shots' in locals() else 'N/A'} shots")
+        print(f"Target data size: {total_shots} shots")
+        if 'acc_p' in locals():
+            print(f"Points model accuracy: {acc_p:.3f}")
+        if 'acc_g' in locals():
+            print(f"Goals model accuracy: {acc_g:.3f}")
+        print(f"Expected Points (xP) total: {df_target['xPoints'].sum():.2f}")
+        print(f"Actual Points total: {points}")
+        print(f"Expected Goals (xG) total: {df_target['xGoals'].sum():.2f}")
+        print(f"Actual Goals total: {goals}")
+        print("="*50)
+        
+        logging.info(f"xP/xG calculation completed in {target_summary['processingTime']}s")
         return jsonify({'success': True, 'summary': target_summary}), 200
 
     except Exception as e:
@@ -2152,89 +2595,6 @@ def recalculate_xpoints():
     except Exception as e:
         logging.error(f"Error recalculating xpoints: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
-
-@app.route('/recalculate-knn-xpoints', methods=['POST'])
-def recalculate_knn_xpoints():
-    """
-    Recalculates xP/xG for a target dataset by averaging the k nearest neighbors
-    from the historical "All Shots GAA" training set.
-    """
-    data = request.get_json()
-    user_id = data.get('user_id')
-    training_dataset = 'All Shots GAA'    # hard‑coded
-    target_dataset   = 'All Shots GAA'    # hard‑coded
-
-    if not user_id:
-        return jsonify({'success': False, 'error': 'No user_id provided.'}), 400
-
-    # 1) Load training games and shots
-    training_docs = db.collection('savedGames').document(user_id) \
-                          .collection('games') \
-                          .where('datasetName', '==', training_dataset) \
-                          .stream()
-    training_games = [doc.to_dict() for doc in training_docs]
-    train_shots = flattenShots(training_games)
-    if not train_shots:
-        return jsonify({'success': False, 'error': 'No training data found.'}), 404
-
-    df_train = pd.DataFrame(train_shots)
-    # ensure numeric
-    df_train['x'] = pd.to_numeric(df_train['x'], errors='coerce').fillna(0)
-    df_train['y'] = pd.to_numeric(df_train['y'], errors='coerce').fillna(0)
-    df_train['xPoints'] = pd.to_numeric(df_train['xPoints'], errors='coerce').fillna(0)
-    df_train['xGoals']  = pd.to_numeric(df_train['xGoals'], errors='coerce').fillna(0)
-
-    # 2) Build KDTree on (x,y)
-    coords = df_train[['x','y']].values
-    tree = KDTree(coords, leaf_size=40)
-
-    # 3) Load target games and shots
-    target_docs = list(db.collection('savedGames').document(user_id) \
-                             .collection('games') \
-                             .where('datasetName', '==', target_dataset) \
-                             .stream())
-    target_games = [doc.to_dict() for doc in target_docs]
-    target_shots = flattenShots(target_games)
-    if not target_shots:
-        return jsonify({'success': False, 'error': 'No target data found.'}), 404
-
-    df_target = pd.DataFrame(target_shots)
-    df_target['x'] = pd.to_numeric(df_target['x'], errors='coerce').fillna(0)
-    df_target['y'] = pd.to_numeric(df_target['y'], errors='coerce').fillna(0)
-
-    # 4) Query KNN for each new shot
-    k = 10
-    dists, idxs = tree.query(df_target[['x','y']].values, k=k)
-    xp_preds = np.mean(df_train['xPoints'].values[idxs], axis=1)
-    xg_preds = np.mean(df_train['xGoals'].values[idxs], axis=1)
-
-    # 5) Attach preds to df_target
-    df_target['xPoints_Final'] = xp_preds
-    df_target['xGoals_Final']  = xg_preds
-
-    # 6) Write back to Firestore
-    batch = db.batch()
-    shot_idx = 0
-    for doc_ref in target_docs:
-        game = doc_ref.to_dict()
-        game_data = game.get('gameData', [])
-        for i in range(len(game_data)):
-            game_data[i]['xPoints'] = float(df_target.iloc[shot_idx]['xPoints_Final'])
-            game_data[i]['xGoals']  = float(df_target.iloc[shot_idx]['xGoals_Final'])
-            shot_idx += 1
-        batch.update(doc_ref.reference, {'gameData': game_data})
-    batch.commit()
-
-    # 7) (Optional) Recompute summary
-    summary = {
-        'totalShots': len(df_target),
-        'successfulShots': int((df_target['xPoints_Final'] > 0.5).sum()),
-        'points': int((df_target['action'].str.lower().str.strip() == 'point').sum()),
-        'goals': int((df_target['action'].str.lower().str.strip() == 'goal').sum()),
-        'misses': int(len(df_target) - (df_target['xPoints_Final'] > 0.5).sum())
-    }
-
-    return jsonify({'success': True, 'summary': summary}), 200
 
     
 if __name__ == '__main__':

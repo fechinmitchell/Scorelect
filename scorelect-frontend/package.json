@@ -49,6 +49,7 @@
     "react-scripts": "5.0.1",
     "react-spring": "^9.7.4",
     "react-toastify": "^10.0.5",
+    "react-youtube": "^10.1.0",
     "recharts": "^2.12.7",
     "rrule": "^2.8.1",
     "styled-components": "^6.1.13",

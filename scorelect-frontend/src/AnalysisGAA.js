@@ -1,147 +1,171 @@
-// AnalysisGAA.js
 import React, { useState, useEffect, useContext } from 'react';
-import styled from 'styled-components';
-import { useDropzone } from 'react-dropzone';
 import { useNavigate } from 'react-router-dom';
+import { Box, Typography, Button, Select, MenuItem, Paper, Container, Grid, TextField } from '@mui/material';
+import { styled } from '@mui/material/styles';
+import { useDropzone } from 'react-dropzone';
 import Swal from 'sweetalert2';
-import { FaUpload } from 'react-icons/fa';
 import { useAuth } from './AuthContext';
-import { SavedGamesContext } from './components/SavedGamesContext';
-import './Analysis.css';
 import { useUser } from './UserContext';
+import { SavedGamesContext } from './components/SavedGamesContext';
 import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
 
-// Styled Components
-const Container = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 20px;
-  background-color: #2e2e2e;
-  min-height: 100vh;
-  color: #fff;
-  @media (max-width: 850px) {
-    width: 100%;
-    padding: 10px;
+// Icons
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import SportsSoccerIcon from '@mui/icons-material/SportsSoccer';
+import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import StorageIcon from '@mui/icons-material/Storage';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import EditIcon from '@mui/icons-material/Edit';
+
+// --- Custom Styled Components ---
+const PageContainer = styled(Container)(({ theme }) => ({
+  position: 'relative',
+  minHeight: '100vh',
+  padding: theme.spacing(4, 0),
+  display: 'flex',
+  flexDirection: 'column',
+}));
+
+const TabButton = styled(Button)(({ theme, active }) => ({
+  backgroundColor: active ? '#5e2e8f' : '#1f1f1f',
+  color: '#ffffff',
+  padding: theme.spacing(1.5, 3),
+  borderRadius: theme.spacing(2.5),
+  fontWeight: active ? 'bold' : 'normal',
+  transition: 'all 0.3s ease',
+  '&:hover': {
+    backgroundColor: active ? '#6d3ca1' : '#2d2d2d',
+    transform: 'translateY(-2px)',
+    boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
+  },
+  flex: 1,
+  minWidth: '180px',
+  maxWidth: '240px',
+}));
+
+const SectionCard = styled(Paper)(({ theme }) => ({
+  backgroundColor: '#1a1a1a',
+  color: '#ffffff',
+  padding: theme.spacing(3),
+  borderRadius: theme.spacing(2),
+  boxShadow: '0 8px 16px rgba(0,0,0,0.3)',
+  flexGrow: 1,
+  marginTop: theme.spacing(3),
+  border: '1px solid #333',
+}));
+
+const SectionTitle = styled(Typography)(({ theme }) => ({
+  color: '#5e2e8f',
+  marginBottom: theme.spacing(3),
+  fontWeight: 600,
+  letterSpacing: '0.5px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: theme.spacing(1),
+  '&::after': {
+    content: '""',
+    display: 'block',
+    height: '3px',
+    background: 'linear-gradient(90deg, #5e2e8f 0%, rgba(94, 46, 143, 0.1) 100%)',
+    flexGrow: 1,
+    marginLeft: theme.spacing(2),
   }
-`;
+}));
 
-const InstructionText = styled.p`
-  color: #fff;
-  font-size: 1rem;
-  margin-bottom: 15px;
-`;
+const DropzoneContainer = styled(Box)(({ theme, isDragActive }) => ({
+  padding: theme.spacing(4),
+  border: `2px dashed ${isDragActive ? '#7e4cb8' : '#501387'}`,
+  borderRadius: theme.spacing(2),
+  textAlign: 'center',
+  cursor: 'pointer',
+  backgroundColor: '#232323',
+  transition: 'all 0.3s ease',
+  '&:hover': {
+    backgroundColor: '#282828',
+    borderColor: '#7e4cb8',
+  },
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: theme.spacing(2),
+}));
 
-const SectionTitle = styled.h3`
-  margin-bottom: 20px;
-  font-size: 1.2rem;
-  color: #fff;
-`;
+const FiltersContainer = styled(Box)(({ theme }) => ({
+  marginTop: theme.spacing(4),
+  backgroundColor: '#232323',
+  padding: theme.spacing(3),
+  borderRadius: theme.spacing(2),
+  border: '1px solid #333',
+}));
 
-const SectionTitleUpload = styled.h3`
-  margin-bottom: 20px;
-  font-size: 1.2rem;
-  color: #fff;
-`;
-
-const SavedDatasetsContainer = styled.div`
-  background: #444;
-  border-radius: 10px;
-  padding: 20px;
-  width: 800px;
-  max-width: 90%;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-  margin-bottom: 40px;
-  @media (max-width: 850px) {
-    width: 100%;
+const StyledSelect = styled(Select)(({ theme }) => ({
+  marginBottom: theme.spacing(2),
+  backgroundColor: '#2c2c2c',
+  color: '#ffffff',
+  '& .MuiOutlinedInput-notchedOutline': {
+    borderColor: '#444'
+  },
+  '&:hover .MuiOutlinedInput-notchedOutline': {
+    borderColor: '#5e2e8f'
+  },
+  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+    borderColor: '#5e2e8f'
+  },
+  '& .MuiSelect-icon': {
+    color: '#5e2e8f'
   }
-`;
+}));
 
-const DropzoneContainer = styled.div`
-  margin-top: 30px;
-  width: 800px;
-  height: 480px;
-  border: 2px dashed #501387;
-  border-radius: 10px;
-  display: flex;
-  flex-direction: column; 
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-size: 1.2rem;
-  cursor: pointer;
-  background: #2e2e2e;
-  transition: background 0.3s, opacity 0.3s;
-  @media (max-width: 850px) {
-    width: 100%;
-    height: 300px;
-  }
-`;
+const ActionButton = styled(Button)(({ theme, color }) => ({
+  backgroundColor: color === 'primary' ? '#5e2e8f' : color === 'success' ? '#28a745' : '#dc3545',
+  color: '#ffffff',
+  padding: theme.spacing(1, 3),
+  borderRadius: theme.spacing(1),
+  textTransform: 'none',
+  fontWeight: 600,
+  transition: 'all 0.3s ease',
+  '&:hover': {
+    backgroundColor: color === 'primary' ? '#7e4cb8' : color === 'success' ? '#2fbc4e' : '#e04555',
+    transform: 'translateY(-2px)',
+    boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
+  },
+}));
 
-const DropzoneContent = styled.div`
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  & > p {
-    margin-top: 20px;
-    font-size: 1.2rem;
-  }
-  & > svg {
-    margin-top: 10px;
-  }
-`;
+const UploadIcon = styled(CloudUploadIcon)(({ theme }) => ({
+  fontSize: 48,
+  color: '#5e2e8f',
+  marginBottom: theme.spacing(1)
+}));
 
-const ButtonGroup = styled.div`
-  margin-top: 20px;
-  display: flex;
-  gap: 20px;
-`;
+const FilePreview = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: theme.spacing(1),
+  padding: theme.spacing(1.5),
+  backgroundColor: 'rgba(94, 46, 143, 0.1)',
+  borderRadius: theme.spacing(1),
+  marginTop: theme.spacing(2),
+  border: '1px solid #5e2e8f',
+}));
 
-const ContinueButton = styled.button`
-  background-color: #28a745;
-  color: #fff;
-  border: none;
-  padding: 12px 20px;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 1rem;
-  &:hover {
-    background-color: #218838;
-  }
-`;
+// --- TabPanel Component ---
+const TabPanel = ({ children, value, index }) => (
+  <div role="tabpanel" hidden={value !== index} style={{ width: '100%' }}>
+    {value === index && <Box sx={{ width: '100%' }}>{children}</Box>}
+  </div>
+);
 
-const ResetButton = styled.button`
-  background-color: #dc3545;
-  color: #fff;
-  border: none;
-  padding: 10px 16px;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 1rem;
-  &:hover {
-    background-color: #c82333;
-  }
-`;
-
-// Define the missing Select styled component
-const Select = styled.select`
-  width: 100%;
-  max-width: 300px;
-  padding: 8px;
-  margin-bottom: 15px;
-  border-radius: 5px;
-  border: 1px solid #ccc;
-`;
-
-const AnalysisGAA = () => {
+// --- Dataset Analysis Tab ---
+const DatasetAnalysis = () => {
   const { userRole } = useUser();
   const { currentUser, loading } = useAuth();
   const navigate = useNavigate();
   const { datasets } = useContext(SavedGamesContext);
 
-  const [currentSport] = useState('GAA');
   const [uploadedFile, setUploadedFile] = useState(null);
   const [parsedData, setParsedData] = useState(null);
   const [selectedUserDataset, setSelectedUserDataset] = useState('');
@@ -151,10 +175,11 @@ const AnalysisGAA = () => {
   const [selectedAction, setSelectedAction] = useState('');
   const [filterOptions, setFilterOptions] = useState({ teams: [], players: [], actions: [] });
   const [analysisPermission, setAnalysisPermission] = useState(0);
+  const [showFilters, setShowFilters] = useState(false);
 
-  // Dropzone file upload handler
+  // file drop handler
   const onDrop = (acceptedFiles) => {
-    if (acceptedFiles.length === 0) return;
+    if (!acceptedFiles.length) return;
     const file = acceptedFiles[0];
     setUploadedFile(file);
     const reader = new FileReader();
@@ -162,107 +187,122 @@ const AnalysisGAA = () => {
       try {
         const json = JSON.parse(reader.result);
         if (!json.games || !Array.isArray(json.games)) {
-          Swal.fire('Invalid File', 'The uploaded file does not have the correct structure.', 'error');
+          Swal.fire({
+            title: 'Invalid File',
+            text: 'The uploaded file does not have the correct structure.',
+            icon: 'error',
+            background: '#222',
+            color: '#fff',
+            confirmButtonColor: '#5e2e8f'
+          });
           return;
         }
         setParsedData(json);
-        Swal.fire('File Uploaded', `${file.name} has been uploaded and parsed successfully.`, 'success');
-      } catch (error) {
-        Swal.fire('Error', 'Failed to parse the file. Please check the file format.', 'error');
+        Swal.fire({
+          title: 'File Uploaded',
+          text: `${file.name} has been uploaded and parsed successfully.`,
+          icon: 'success',
+          background: '#222',
+          color: '#fff',
+          confirmButtonColor: '#5e2e8f'
+        });
+      } catch {
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to parse the file. Please check the file format.',
+          icon: 'error',
+          background: '#222',
+          color: '#fff',
+          confirmButtonColor: '#5e2e8f'
+        });
       }
     };
     reader.readAsText(file);
   };
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: '.json',
-    multiple: false,
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
+    onDrop, 
+    accept: { 'application/json': ['.json'] }, 
+    multiple: false 
   });
 
-  // Check authentication and permissions for accessing the Analysis page.
-  // If analysisPermission is 0, anonymous access is allowed.
+  // permissions check
   useEffect(() => {
-    if (loading) return; // Wait for auth state resolution
-
-    const checkPermission = async () => {
-      try {
-        const settingsRef = doc(firestore, 'adminSettings', 'config');
-        const settingsSnap = await getDoc(settingsRef);
-        let perm = 0;
-        if (settingsSnap.exists()) {
-          const perms = settingsSnap.data().permissions || {};
-          perm = perms['analysis'] || 0;
+    if (loading) return;
+    (async () => {
+      const settingsRef = doc(firestore, 'adminSettings', 'config');
+      const settingsSnap = await getDoc(settingsRef);
+      const perms = settingsSnap.exists() ? settingsSnap.data().permissions || {} : {};
+      const perm = perms['analysis'] || 0;
+      setAnalysisPermission(perm);
+      
+      if (perm > 0 && !currentUser) {
+        await Swal.fire({
+          title: 'Authentication Required',
+          text: 'Please sign in to access this page.',
+          icon: 'warning',
+          background: '#222',
+          color: '#fff',
+          confirmButtonColor: '#5e2e8f'
+        });
+        navigate('/signin');
+      } else if (currentUser) {
+        if ((perm === 1 && userRole !== 'free') || (perm === 2 && userRole !== 'premium')) {
+          await Swal.fire({
+            title: 'Access Denied',
+            text: 'You do not have permission to view this page.',
+            icon: 'error',
+            background: '#222',
+            color: '#fff',
+            confirmButtonColor: '#5e2e8f'
+          });
+          navigate('/');
         }
-        setAnalysisPermission(perm);
-
-        // If permission > 0 and no user is logged in, force sign in.
-        if (perm > 0 && !currentUser) {
-          Swal.fire('Authentication Required', 'Please sign in to access this page.', 'warning')
-            .then(() => navigate('/signin'));
-        }
-        // Additional check: if user is logged in but their role doesn't match.
-        else if (currentUser) {
-          if (perm === 1 && userRole !== 'free') {
-            Swal.fire('Access Denied', 'This page is available only to free users.', 'error')
-              .then(() => navigate('/'));
-          } else if (perm === 2 && userRole !== 'premium') {
-            Swal.fire('Access Denied', 'This page is available only to premium users.', 'error')
-              .then(() => navigate('/'));
-          }
-        }
-      } catch (error) {
-        console.error('Error checking permissions:', error);
-        Swal.fire('Error', 'Could not verify permissions. Please try again later.', 'error')
-          .then(() => navigate('/'));
       }
-    };
-
-    checkPermission();
+    })();
   }, [currentUser, loading, userRole, navigate]);
 
-  // Extract unique filter options from dataset
+  // build filter options
   useEffect(() => {
-    let dataset = parsedData || (selectedUserDataset && datasets[selectedUserDataset]);
-    if (dataset && dataset.games && Array.isArray(dataset.games)) {
-      const teamsSet = new Set();
-      const playersSet = new Set();
-      const actionsSet = new Set();
-      dataset.games.forEach(game => {
-        if (game.gameData && Array.isArray(game.gameData)) {
-          game.gameData.forEach(entry => {
-            if (entry.team) teamsSet.add(entry.team);
-            if (entry.playerName) playersSet.add(entry.playerName);
-            if (entry.action) actionsSet.add(entry.action);
-          });
-        }
-      });
-      setFilterOptions({
-        teams: Array.from(teamsSet),
-        players: Array.from(playersSet),
-        actions: Array.from(actionsSet)
+    const source = parsedData || (selectedUserDataset && datasets[selectedUserDataset]);
+    if (source?.games) {
+      const teams = new Set();
+      const players = new Set();
+      const actions = new Set();
+      source.games.forEach(game =>
+        game.gameData?.forEach(e => {
+          if (e.team) teams.add(e.team);
+          if (e.playerName) players.add(e.playerName);
+          if (e.action) actions.add(e.action);
+        })
+      );
+      setFilterOptions({ 
+        teams: [...teams].sort(), 
+        players: [...players].sort(), 
+        actions: [...actions].sort() 
       });
     }
   }, [parsedData, selectedUserDataset, datasets]);
 
-  // Handler for Continue button
+  // continue to dashboard
   const handleContinue = () => {
-    let dataset;
-    if (parsedData) {
-      dataset = parsedData;
-    } else if (selectedUserDataset) {
-      dataset = datasets[selectedUserDataset];
-    } else {
-      Swal.fire('No Dataset Selected', 'Please upload or select a saved dataset first.', 'warning');
+    let data = parsedData || (selectedUserDataset && datasets[selectedUserDataset]);
+    if (!data) {
+      Swal.fire({
+        title: 'No Dataset Selected',
+        text: 'Please upload or select a dataset.',
+        icon: 'warning',
+        background: '#222',
+        color: '#fff',
+        confirmButtonColor: '#5e2e8f'
+      });
       return;
     }
-
-    if (selectedMatch !== 'all' && dataset.games) {
-      dataset = {
-        ...dataset,
-        games: dataset.games.filter(
-          (game) => (game.gameId || game.gameName) === selectedMatch
-        )
+    
+    if (selectedMatch !== 'all') {
+      data = {
+        ...data,
+        games: data.games.filter(g => (g.gameId || g.gameName) === selectedMatch)
       };
     }
     
@@ -271,11 +311,11 @@ const AnalysisGAA = () => {
       player: selectedPlayer || null,
       action: selectedAction || null,
     };
-
-    navigate('/analysis/gaa-dashboard', { state: { file: dataset, sport: 'GAA', filters } });
+    
+    navigate('/analysis/gaa-dashboard', { state: { file: data, sport: 'GAA', filters } });
   };
 
-  // Handler for Reset button
+  // reset all selections
   const handleReset = () => {
     setUploadedFile(null);
     setParsedData(null);
@@ -288,107 +328,428 @@ const AnalysisGAA = () => {
   };
 
   return (
-    <Container>
-      <h2>GAA Analysis Dashboard</h2>
-      <InstructionText>
-        Select a saved dataset or upload a new one to analyze your GAA match data. Then use the filters below.
-      </InstructionText>
+    <SectionCard>
+      <SectionTitle variant="h5">
+        <SportsSoccerIcon /> Dataset Analysis
+      </SectionTitle>
 
-      {/* Saved Datasets Section */}
+      {/* Saved Datasets */}
       {Object.keys(datasets).length > 0 ? (
-        <SavedDatasetsContainer>
-          <SectionTitle>Analyze from Your Saved Datasets</SectionTitle>
-          <InstructionText>Select one of your saved datasets.</InstructionText>
-          <Select value={selectedUserDataset} onChange={(e) => {
-            setSelectedUserDataset(e.target.value);
-            setSelectedMatch('all');
-          }}>
-            <option value="">Select a Dataset</option>
-            {Object.keys(datasets).map((datasetName) => (
-              <option key={datasetName} value={datasetName}>
-                {datasetName}
-              </option>
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="subtitle1" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <StorageIcon fontSize="small" color="primary" /> Select a saved dataset:
+          </Typography>
+          
+          <StyledSelect
+            fullWidth
+            value={selectedUserDataset}
+            onChange={e => {
+              setSelectedUserDataset(e.target.value);
+              setSelectedMatch('all');
+              if (e.target.value) setShowFilters(true);
+            }}
+            displayEmpty
+            sx={{ mb: 2 }}
+          >
+            <MenuItem value=""><em>None</em></MenuItem>
+            {Object.keys(datasets).map(name => (
+              <MenuItem key={name} value={name}>{name}</MenuItem>
             ))}
-          </Select>
-          {selectedUserDataset &&
-            datasets[selectedUserDataset]?.games &&
-            datasets[selectedUserDataset].games.length > 0 && (
-              <>
-                <Select value={selectedMatch} onChange={(e) => setSelectedMatch(e.target.value)}>
-                  <option value="all">All Matches</option>
-                  {datasets[selectedUserDataset].games.map((game) => {
-                    const id = game.gameId || game.gameName;
-                    return (
-                      <option key={id} value={id}>
-                        {game.gameName} ({game.matchDate ? new Date(game.matchDate).toLocaleDateString() : 'N/A'})
-                      </option>
-                    );
-                  })}
-                </Select>
-                <ButtonGroup>
-                  <ContinueButton onClick={handleContinue}>
-                    Continue Without Additional Filters
-                  </ContinueButton>
-                </ButtonGroup>
-              </>
-            )}
-        </SavedDatasetsContainer>
+          </StyledSelect>
+
+          {selectedUserDataset && (
+            <StyledSelect
+              fullWidth
+              value={selectedMatch}
+              onChange={e => setSelectedMatch(e.target.value)}
+            >
+              <MenuItem value="all">All Matches</MenuItem>
+              {datasets[selectedUserDataset].games.map(g => {
+                const id = g.gameId || g.gameName;
+                return (
+                  <MenuItem key={id} value={id}>
+                    {g.gameName} ({g.matchDate ? new Date(g.matchDate).toLocaleDateString() : 'N/A'})
+                  </MenuItem>
+                );
+              })}
+            </StyledSelect>
+          )}
+        </Box>
       ) : (
-        <SavedDatasetsContainer>
-          <SectionTitle>Your Saved Datasets</SectionTitle>
-          <p>No saved datasets available. Please upload and save some games first.</p>
-        </SavedDatasetsContainer>
+        <Typography sx={{ mb: 4 }}>No saved datasets available.</Typography>
       )}
 
-      {/* Upload New Dataset Section */}
-      <SectionTitleUpload>Or Upload a New Dataset</SectionTitleUpload>
-      <DropzoneContainer {...getRootProps()}>
+      {/* Upload JSON Dataset */}
+      <DropzoneContainer {...getRootProps()} isDragActive={isDragActive}>
         <input {...getInputProps()} />
+        <UploadIcon />
         {isDragActive ? (
-          <p>Drop the dataset here...</p>
+          <Typography variant="h6">Drop the JSON here…</Typography>
         ) : (
-          <p>Drag and drop your GAA dataset here, or click to select a file</p>
+          <>
+            <Typography variant="h6">Drag & drop a dataset JSON</Typography>
+            <Typography variant="body2" color="text.secondary">or click to select a file</Typography>
+          </>
         )}
       </DropzoneContainer>
+
       {uploadedFile && (
-        <p style={{ color: '#501387' }}>Uploaded File: {uploadedFile.name}</p>
+        <FilePreview>
+          <StorageIcon color="primary" />
+          <Typography sx={{ color: '#fff' }}>
+            <strong>Uploaded:</strong> {uploadedFile.name}
+          </Typography>
+        </FilePreview>
       )}
 
       {/* Additional Filters */}
-      <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', width: '800px', maxWidth: '90%', marginTop: '40px' }}>
-        <SectionTitle style={{ color: '#501387' }}>Additional Filters</SectionTitle>
-        <Select value={selectedTeam} onChange={(e) => setSelectedTeam(e.target.value)}>
-          <option value="">All Teams</option>
-          {filterOptions.teams.map((team) => (
-            <option key={team} value={team}>
-              {team}
-            </option>
-          ))}
-        </Select>
-        <Select value={selectedPlayer} onChange={(e) => setSelectedPlayer(e.target.value)}>
-          <option value="">All Players</option>
-          {filterOptions.players.map((player) => (
-            <option key={player} value={player}>
-              {player}
-            </option>
-          ))}
-        </Select>
-        <Select value={selectedAction} onChange={(e) => setSelectedAction(e.target.value)}>
-          <option value="">All Actions</option>
-          {filterOptions.actions.map((action) => (
-            <option key={action} value={action}>
-              {action}
-            </option>
-          ))}
-        </Select>
-      </div>
+      <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <FilterListIcon fontSize="small" color="primary" /> Additional Filters
+        </Typography>
+        <Button 
+          onClick={() => setShowFilters(!showFilters)}
+          sx={{ color: '#5e2e8f', textTransform: 'none' }}
+        >
+          {showFilters ? 'Hide Filters' : 'Show Filters'}
+        </Button>
+      </Box>
 
-      {/* Bottom Buttons */}
-      <ButtonGroup>
-        <ContinueButton onClick={handleContinue}>Continue</ContinueButton>
-        <ResetButton onClick={handleReset}>Reset</ResetButton>
-      </ButtonGroup>
-    </Container>
+      {showFilters && (
+        <FiltersContainer>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md= {4}>
+              <Typography variant="body2" sx={{ mb: 1, color: '#aaa' }}>Team</Typography>
+              <StyledSelect
+                fullWidth
+                value={selectedTeam}
+                onChange={e => setSelectedTeam(e.target.value)}
+                displayEmpty
+              >
+                <MenuItem value=""><em>All Teams</em></MenuItem>
+                {filterOptions.teams.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
+              </StyledSelect>
+            </Grid>
+            
+            <Grid item xs={12} md={4}>
+              <Typography variant="body2" sx={{ mb: 1, color: '#aaa' }}>Player</Typography>
+              <StyledSelect
+                fullWidth
+                value={selectedPlayer}
+                onChange={e => setSelectedPlayer(e.target.value)}
+                displayEmpty
+              >
+                <MenuItem value=""><em>All Players</em></MenuItem>
+                {filterOptions.players.map(p => <MenuItem key={p} value={p}>{p}</MenuItem>)}
+              </StyledSelect>
+            </Grid>
+            
+            <Grid item xs={12} md={4}>
+              <Typography variant="body2" sx={{ mb: 1, color: '#aaa' }}>Action</Typography>
+              <StyledSelect
+                fullWidth
+                value={selectedAction}
+                onChange={e => setSelectedAction(e.target.value)}
+                displayEmpty
+              >
+                <MenuItem value=""><em>All Actions</em></MenuItem>
+                {filterOptions.actions.map(a => <MenuItem key={a} value={a}>{a}</MenuItem>)}
+              </StyledSelect>
+            </Grid>
+          </Grid>
+        </FiltersContainer>
+      )}
+
+      {/* Action Buttons */}
+      <Box sx={{ mt: 4, display: 'flex', gap: 2 }}>
+        <ActionButton
+          color="success"
+          onClick={handleContinue}
+          startIcon={<PlayArrowIcon />}
+        >
+          Continue to Analysis
+        </ActionButton>
+        <ActionButton
+          color="error"
+          onClick={handleReset}
+          startIcon={<RestartAltIcon />}
+        >
+          Reset
+        </ActionButton>
+      </Box>
+    </SectionCard>
+  );
+};
+
+// --- Video Analysis Tab ---
+const VideoAnalysis = () => {
+  const [file, setFile] = useState(null);
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [urlError, setUrlError] = useState('');
+  const navigate = useNavigate();
+
+  // Validate YouTube URL
+  const validateYouTubeUrl = (url) => {
+    const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/(watch\?v=|embed\/|v\/|.+\?v=)?([^&=%\?]{11})/;
+    return youtubeRegex.test(url);
+  };
+
+  // Handle URL input change
+  const handleUrlChange = (e) => {
+    const url = e.target.value;
+    setYoutubeUrl(url);
+    if (url) {
+      if (validateYouTubeUrl(url)) {
+        setUrlError('');
+        setFile(null); // Clear file if URL is entered
+      } else {
+        setUrlError('Please enter a valid YouTube URL');
+      }
+    } else {
+      setUrlError('');
+    }
+  };
+
+  // File drop handler
+  const onDrop = (acceptedFiles) => {
+    if (!acceptedFiles.length) return;
+    const f = acceptedFiles[0];
+    setFile(f);
+    setYoutubeUrl(''); // Clear URL if file is dropped
+    setUrlError('');
+    Swal.fire({
+      title: 'Video Uploaded',
+      text: `${f.name} has been successfully uploaded.`,
+      icon: 'success',
+      background: '#222',
+      color: '#fff',
+      confirmButtonColor: '#5e2e8f'
+    });
+  };
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: { 'video/mp4': ['.mp4'] }, // Explicitly accept MP4
+    multiple: false,
+  });
+
+  const handleReset = () => {
+    setFile(null);
+    setYoutubeUrl('');
+    setUrlError('');
+  };
+
+  const handleContinue = () => {
+    if (!file && !youtubeUrl) {
+      Swal.fire({
+        title: 'No Video Selected',
+        text: 'Please upload a video file or enter a YouTube URL.',
+        icon: 'warning',
+        background: '#222',
+        color: '#fff',
+        confirmButtonColor: '#5e2e8f'
+      });
+      return;
+    }
+    if (youtubeUrl && !validateYouTubeUrl(youtubeUrl)) {
+      Swal.fire({
+        title: 'Invalid URL',
+        text: 'Please enter a valid YouTube URL.',
+        icon: 'error',
+        background: '#222',
+        color: '#fff',
+        confirmButtonColor: '#5e2e8f'
+      });
+      return;
+    }
+    navigate('/tagging/manual', { 
+      state: { 
+        file: file || null, 
+        youtubeUrl: youtubeUrl || null, 
+        sport: 'GAA' 
+      }
+    });
+  };
+
+  return (
+    <SectionCard>
+      <SectionTitle variant="h5">
+        <VideoLibraryIcon /> Video Analysis
+      </SectionTitle>
+
+      {/* YouTube URL Input */}
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="subtitle1" sx={{ mb: 1, color: '#eee' }}>
+          Enter YouTube Video URL
+        </Typography>
+        <TextField
+          fullWidth
+          value={youtubeUrl}
+          onChange={handleUrlChange}
+          placeholder="https://www.youtube.com/watch?v=..."
+          error={!!urlError}
+          helperText={urlError}
+          sx={{
+            backgroundColor: '#232323',
+            borderRadius: 1,
+            '& .MuiOutlinedInput-root': {
+              color: '#fff',
+              '& fieldset': { borderColor: '#444' },
+              '&:hover fieldset': { borderColor: '#666' },
+              '&.Mui-focused fieldset': { borderColor: '#5e2e8f' },
+            },
+            '& .MuiInputLabel-root': { color: '#aaa' },
+          }}
+        />
+      </Box>
+
+      {/* Upload Video File */}
+      <DropzoneContainer {...getRootProps()} isDragActive={isDragActive}>
+        <input {...getInputProps()} />
+        <UploadIcon />
+        {isDragActive ? (
+          <Typography variant="h6">Drop the MP4 video here…</Typography>
+        ) : (
+          <>
+            <Typography variant="h6">Drag & drop an MP4 video file</Typography>
+            <Typography variant="body2" color="text.secondary">or click to select</Typography>
+          </>
+        )}
+      </DropzoneContainer>
+
+      {(file || youtubeUrl) && (
+        <>
+          {file && (
+            <FilePreview>
+              <VideoLibraryIcon color="primary" />
+              <Typography sx={{ color: '#fff' }}>
+                <strong>Selected:</strong> {file.name}
+              </Typography>
+            </FilePreview>
+          )}
+          {youtubeUrl && (
+            <FilePreview>
+              <VideoLibraryIcon color="primary" />
+              <Typography sx={{ color: '#fff' }}>
+                <strong>YouTube URL:</strong> {youtubeUrl}
+              </Typography>
+            </FilePreview>
+          )}
+
+          {/* Tagging Mode Selection */}
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="subtitle1" sx={{ mb: 2, color: '#eee' }}>
+              Select tagging method:
+            </Typography>
+
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <ActionButton
+                  color="primary"
+                  fullWidth
+                  onClick={handleContinue}
+                  startIcon={<EditIcon />}
+                >
+                  Manual Tagging
+                </ActionButton>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <ActionButton
+                  color="primary"
+                  fullWidth
+                  disabled
+                  sx={{ 
+                    opacity: 0.5, 
+                    cursor: 'not-allowed',
+                    '&:hover': {
+                      backgroundColor: '#5e2e8f',
+                      transform: 'none',
+                      boxShadow: 'none',
+                    }
+                  }}
+                  title="AI-Assisted Tagging coming soon"
+                  startIcon={<AutoAwesomeIcon />}
+                >
+                  AI-Assisted Tagging
+                </ActionButton>
+              </Grid>
+            </Grid>
+          </Box>
+        </>
+      )}
+
+      <Box sx={{ mt: 4, display: 'flex', gap: 2 }}>
+        <ActionButton
+          color="error"
+          onClick={handleReset}
+          startIcon={<RestartAltIcon />}
+        >
+          Reset
+        </ActionButton>
+      </Box>
+    </SectionCard>
+  );
+};
+
+// --- Main AnalysisGAA Component ---
+const AnalysisGAA = () => {
+  const [tab, setTab] = useState(0);
+  
+  return (
+    <PageContainer maxWidth="lg">
+      <Typography variant="h4" sx={{ 
+        color: '#fff', 
+        mb: 4, 
+        textAlign: 'center',
+        fontWeight: 700,
+        textShadow: '0 2px 4px rgba(0,0,0,0.3)'
+      }}>
+        GAA Performance Analysis
+      </Typography>
+      
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        gap: 2, 
+        mb: 3,
+        maxWidth: '600px',
+        mx: 'auto'
+      }}>
+        <TabButton 
+          active={tab === 0 ? 1 : 0} 
+          onClick={() => setTab(0)}
+          startIcon={<SportsSoccerIcon />}
+        >
+          Dataset Analysis
+        </TabButton>
+        <TabButton 
+          active={tab === 1 ? 1 : 0} 
+          onClick={() => setTab(1)}
+          startIcon={<VideoLibraryIcon />}
+        >
+          Video Analysis
+        </TabButton>
+      </Box>
+
+      <Box sx={{ position: 'relative', minHeight: '500px' }}>
+        {[0, 1].map((index) => (
+          <Box
+            key={index}
+            sx={{
+              position: 'absolute',
+              width: '100%',
+              opacity: tab === index ? 1 : 0,
+              transform: `translateX(${tab === index ? 0 : (tab < index ? '100px' : '-100px')})`,
+              transition: 'all 0.4s ease',
+              visibility: tab === index ? 'visible' : 'hidden',
+            }}
+          >
+            {index === 0 ? <DatasetAnalysis /> : <VideoAnalysis />}
+          </Box>
+        ))}
+      </Box>
+    </PageContainer>
   );
 };
 

@@ -58,7 +58,14 @@ csp = {
         "'self'",  # Allow resources only from the same origin (self)
         'https://js.stripe.com',  # Allow Stripe's JS for payments
         'https://fonts.googleapis.com',  # Allow Google Fonts
-        'https://fonts.gstatic.com'  # Google Fonts API
+        'https://fonts.gstatic.com',
+        'blob:'                     # ← allow blob URIs globally
+     ],
+    'media-src': [
+        "'self'",
+        'blob:'                     # ← allow blobs in <video> & <audio>
+
+  # Google Fonts API
     ],
     'style-src': [
         "'self'",  # Restrict style sheets to same origin

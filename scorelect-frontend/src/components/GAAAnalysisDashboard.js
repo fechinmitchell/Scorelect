@@ -157,11 +157,6 @@ const PitchSection = styled.section`
   padding: 1.5rem;
   box-shadow: 0 4px 8px rgba(0,0,0,0.3);
 `;
-const TilesWrapper = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 1rem;
-`;
 const StatsScrollContainer = styled.div`
   display: flex;
   gap: 1rem;
@@ -194,7 +189,7 @@ const customModalStyles = {
   overlay:{ backgroundColor:'rgba(0,0,0,0.75)', zIndex:9999 }
 };
 
-// ── Predictive “models” for xP and xG ─────────────────────────────────
+// Predictive “models” for xP and xG
 const predictXP = shot => {
   const baseRates = {
     goal: 0.92,
@@ -212,10 +207,8 @@ const predictXP = shot => {
 
   const d = shot.distMeters||30;
   const distFactor = d<20?1:d<30?0.9:d<40?0.7:d<50?0.5:0.3;
-
   const pres = (shot.pressure||'none').toLowerCase();
   const presFactor = pres==='none'?1:pres==='low'?0.9:pres==='medium'?0.75:0.6;
-
   const pos = (shot.position||'').toLowerCase();
   const posFactor = pos.includes('central')?1.1:pos.includes('wide')?0.85:1;
 
@@ -227,10 +220,8 @@ const predictXG = shot => {
   const baseGoalProb = 0.3;
   const d = shot.distMeters||15;
   const distF = d<10?0.9:d<15?0.7:d<20?0.5:d<25?0.3:0.2;
-
   const pres = (shot.pressure||'none').toLowerCase();
   const presF = pres==='none'?0.95:pres==='low'?0.8:pres==='medium'?0.6:0.4;
-
   const pos = (shot.position||'').toLowerCase();
   const posF = pos.includes('central')?0.9:pos.includes('wide')?0.7:0.8;
 
@@ -238,7 +229,7 @@ const predictXG = shot => {
   return Math.min(1, Math.max(0, xg));
 };
 
-// ── Fill in any missing xP / xG on load or recalc ────────────────────
+// Fill in any missing xP / xG on load or recalc
 const calculateMissingMetrics = games =>
   games.map(g => ({
     ...g,
@@ -257,19 +248,15 @@ const calculateMissingMetrics = games =>
     })
   }));
 
-// ── Flatten helper ───────────────────────────────────────────────────
+// Flatten helper
 function flattenShots(games = []) {
   return games.flatMap(g => g.gameData || []);
 }
 const getRenderType = (raw, map) =>
   map[raw?.toLowerCase().trim()] || raw?.toLowerCase().trim();
 
-// ── Pitch view component ─────────────────────────────────────────────
-function PitchView({
-  allShots, xScale, yScale,
-  halfLineX, goalX, goalY,
-  onShotClick, colors, legendColors
-}) {
+// Pitch view component
+function PitchView({ allShots, xScale, yScale, halfLineX, goalX, goalY, onShotClick, colors, legendColors }) {
   return (
     <PitchSection>
       <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -283,24 +270,15 @@ function PitchView({
             boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
           }}
         >
-          {renderOneSidePitchShots({
-            shots: allShots,
-            colors, xScale, yScale,
-            onShotClick,
-            halfLineX, goalX, goalY
-          })}
-          {renderLegendOneSideShots(
-            legendColors,
-            xScale * (pitchWidth / 2),
-            yScale * pitchHeight
-          )}
+          {renderOneSidePitchShots({ shots: allShots, colors, xScale, yScale, onShotClick, halfLineX, goalX, goalY })}
+          {renderLegendOneSideShots(legendColors, xScale * (pitchWidth / 2), yScale * pitchHeight)}
         </Stage>
       </div>
     </PitchSection>
   );
 }
 
-// ── PDF export handler ────────────────────────────────────────────────
+// PDF export handler
 const downloadPDFHandler = async setIsDownloading => {
   setIsDownloading(true);
   const input = document.getElementById('pdf-content');
@@ -330,7 +308,7 @@ const downloadPDFHandler = async setIsDownloading => {
   setIsDownloading(false);
 };
 
-// ── Error boundary ───────────────────────────────────────────────────
+// Error boundary
 class ErrorBoundary extends React.Component {
   constructor(p){ super(p); this.state={ hasError:false }; }
   static getDerivedStateFromError(){ return { hasError:true }; }
@@ -342,7 +320,65 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// ── Main dashboard component ─────────────────────────────────────────
+// Settings modal for marker colors
+function SettingsModal({ isOpen, onRequestClose, markerColors, setMarkerColors }) {
+  const colorKeys = Object.keys(markerColors);
+  return (
+    <Modal
+      isOpen={isOpen}
+      onRequestClose={onRequestClose}
+      style={customModalStyles}
+      contentLabel="Marker Color Settings"
+    >
+      <h2 style={{ marginTop: 0 }}>Marker Color Settings</h2>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        {colorKeys.map(key => (
+          <div
+            key={key}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+          >
+            <span style={{ textTransform: 'capitalize' }}>{key}</span>
+            <input
+              type="color"
+              value={
+                typeof markerColors[key] === 'object'
+                  ? markerColors[key].fill
+                  : markerColors[key]
+              }
+              onChange={e => {
+                const val = e.target.value;
+                setMarkerColors(prev => ({
+                  ...prev,
+                  [key]:
+                    typeof prev[key] === 'object'
+                      ? { ...prev[key], fill: val }
+                      : val
+                }));
+              }}
+            />
+          </div>
+        ))}
+      </div>
+      <div style={{ textAlign: 'right', marginTop: '1rem' }}>
+        <DownloadButton onClick={() => {
+          localStorage.setItem('markerColors', JSON.stringify(markerColors));
+          Swal.fire('Settings Saved', 'Your color settings have been saved.', 'success');
+          onRequestClose();
+        }}>
+          Save
+        </DownloadButton>
+        <DownloadButton
+          style={{ background: '#607d8b', marginLeft: '1rem' }}
+          onClick={onRequestClose}
+        >
+          Close
+        </DownloadButton>
+      </div>
+    </Modal>
+  );
+}
+
+// Main dashboard component
 export default function GAAAnalysisDashboard() {
   const { state } = useLocation();
   const { file, sport, filters } = state || {};
@@ -353,9 +389,13 @@ export default function GAAAnalysisDashboard() {
   const [actionMapping, setActionMapping] = useState(
     () => JSON.parse(localStorage.getItem('actionMapping')) || defaultMapping
   );
-  const [markerColors, setMarkerColors] = useState(
-    () => JSON.parse(localStorage.getItem('markerColors')) || { point:'#39FF14', setplayscore:'#39FF14' }
-  );
+   const [markerColors, setMarkerColors] = useState(() => {
+       const stored = JSON.parse(localStorage.getItem('markerColors') || '{}');
+       return {
+         ...fallbackColors,
+         ...stored
+       };
+     });
 
   // UI state
   const [isGearModalOpen, setIsGearModalOpen] = useState(false);
@@ -405,18 +445,16 @@ export default function GAAAnalysisDashboard() {
     blocked: fallbackLegendColors.blocked
   }), [markerColors]);
 
-  // ── INITIAL LOAD & BACK‑FILL xP/xG ─────────────────────────────────
+  // INITIAL LOAD & BACK‑FILL xP/xG
   useEffect(() => {
     if (!file || sport !== 'GAA') {
       Swal.fire('No Data','Invalid or no GAA dataset found.','error')
         .then(() => navigate('/analysis'));
       return;
     }
-    // back‑fill missing metrics
     const filled = calculateMissingMetrics(file.games || []);
     setGames(filled);
 
-    // rebuild filter options
     const m = new Set(), t = new Set(), p = new Set(), a = new Set();
     filled.forEach(g => {
       g.match && m.add(g.match);
@@ -434,7 +472,7 @@ export default function GAAAnalysisDashboard() {
     });
   }, [file, sport, navigate]);
 
-  // ── APPLY FILTERS & SUMMARY ────────────────────────────────────────
+  // APPLY FILTERS & SUMMARY
   useEffect(() => {
     let filtered = file.games || [];
     if (appliedFilters.match) {
@@ -451,7 +489,6 @@ export default function GAAAnalysisDashboard() {
     filtered = filtered.filter(g => (g.gameData||[]).length);
     setGames(filtered);
 
-    // summary counts
     const shots = flattenShots(filtered);
     const s = { totalShots:0, totalGoals:0, totalPoints:0, totalMisses:0 };
     shots.forEach(sh => {
@@ -464,7 +501,7 @@ export default function GAAAnalysisDashboard() {
     setSummary(s);
   }, [file, appliedFilters]);
 
-  // ── MAP SHOTS TO RENDER TYPES ──────────────────────────────────────
+  // MAP SHOTS TO RENDER TYPES
   const shotsWithRenderType = useMemo(
     () => flattenShots(games).map(sh => ({
       ...sh,
@@ -473,7 +510,7 @@ export default function GAAAnalysisDashboard() {
     [games, actionMapping]
   );
 
-  // ── AGGREGATED TEAM DATA ──────────────────────────────────────────
+  // AGGREGATED TEAM DATA
   const aggregatedData = useMemo(() => {
     const agg = {}, scorerMap = {}, distAcc = {};
     flattenShots(games).forEach(sh => {
@@ -494,7 +531,6 @@ export default function GAAAnalysisDashboard() {
       distAcc[team] += tShot.distMeters;
 
       const act = (sh.action||'').toLowerCase().trim();
-      // goals & points
       if (act==='goal'||act==='penalty goal') {
         agg[team].goals++;
         agg[team].successfulShots++;
@@ -512,7 +548,6 @@ export default function GAAAnalysisDashboard() {
         agg[team].offensiveMarkScored++;
         agg[team].successfulShots++;
       }
-      // frees & 45s
       if (act.startsWith('free')) {
         agg[team].freeAttempts++;
         if (act==='free') {
@@ -527,11 +562,9 @@ export default function GAAAnalysisDashboard() {
           agg[team].successfulShots++;
         }
       }
-      // misses
       if (/miss|wide|short|blocked|post/.test(act)) {
         agg[team].misses++;
       }
-      // two pointers
       const eligible = ['point','free','offensive mark','45','fortyfive'];
       if (eligible.includes(act) && tShot.distMeters >= 40) {
         agg[team].twoPointerAttempts++;
@@ -540,14 +573,11 @@ export default function GAAAnalysisDashboard() {
         }
       }
     });
-
-    // average distance
     Object.keys(agg).forEach(team => {
       agg[team].avgDistance = agg[team].totalShots > 0
         ? (distAcc[team] / agg[team].totalShots).toFixed(2)
         : '0.00';
     });
-
     return { aggregator: agg, scorersMap: scorerMap };
   }, [games, halfLineX, goalX, goalY]);
 
@@ -556,13 +586,12 @@ export default function GAAAnalysisDashboard() {
     setTeamScorers(aggregatedData.scorersMap);
   }, [aggregatedData]);
 
-  // ── RECALC xP/xG BUTTON ───────────────────────────────────────────
+  // RECALC xP/xG
   const handleRecalculate = async () => {
     try {
       const uid = currentUser?.uid;
       if (!uid) throw new Error('Not logged in');
 
-      // 1) Try server endpoint
       try {
         const payload = {
           user_id: uid,
@@ -581,10 +610,8 @@ export default function GAAAnalysisDashboard() {
         console.warn('Server recalc failed; falling back to client-side');
       }
 
-      // 2) Client-side fallback
       const locally = calculateMissingMetrics(games);
       setGames(locally);
-      // update summary
       const shots = flattenShots(locally);
       setSummary({
         totalShots: shots.length,
@@ -592,7 +619,7 @@ export default function GAAAnalysisDashboard() {
         totalPoints: shots.filter(s => (s.action||'').toLowerCase()==='point').length,
         totalMisses: shots.filter(s => /miss|wide|short|blocked|post/.test((s.action||'').toLowerCase())).length
       });
-      Swal.fire('Recalculation Complete','xP/xG updated locally.','success');
+      Swal.fire('Recalculation Complete','xP/xG updated','success');
 
     } catch (e) {
       console.error(e);
@@ -600,12 +627,12 @@ export default function GAAAnalysisDashboard() {
     }
   };
 
-  // ── SHOT CLICK HANDLER ────────────────────────────────────────────
+  // SHOT CLICK HANDLER
   const handleShotClick = shot => {
     setSelectedShot(translateShotToOneSide(shot, halfLineX, goalX, goalY));
   };
 
-  // ── RENDER SELECTED SHOT DETAILS ──────────────────────────────────
+  // RENDER SELECTED SHOT DETAILS
   function renderSelectedShotDetails() {
     if (!selectedShot) return null;
     return (
@@ -744,14 +771,13 @@ export default function GAAAnalysisDashboard() {
           </div>
         </Modal>
 
-        <Modal
+        {/* Settings modal invocation */}
+        <SettingsModal
           isOpen={isGearModalOpen}
           onRequestClose={() => setIsGearModalOpen(false)}
-          style={customModalStyles}
-          contentLabel="Settings"
-        >
-          {/* Gear Settings UI here */}
-        </Modal>
+          markerColors={markerColors}
+          setMarkerColors={setMarkerColors}
+        />
       </PageContainer>
     </ErrorBoundary>
   );

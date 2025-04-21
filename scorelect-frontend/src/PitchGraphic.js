@@ -133,6 +133,8 @@ const PitchGraphic = () => {
     // Add a new state to track line completion
     const [lineCompleted, setLineCompleted] = useState(false);
 
+    const [uploadedDataset, setUploadedDataset] = useState(null);
+
     // When opening the review modal, copy the current coordinates:
     const toggleReviewModal = () => {
       // If opening (i.e. modal currently closed) then copy coords into reviewData
@@ -242,111 +244,74 @@ const PitchGraphic = () => {
       </div>
     );
 
+    // 2) “Download Data” (custom modal) – respects free‑user limits, uses uploadedDataset if present
     const handleCustomDownload = async () => {
+      // free‑user quota check
       if (userType === 'free' && downloadsRemaining <= 0) {
         handlePremiumFeatureAccess('Download Data');
         return;
       }
-
       if (userType === 'free') {
         setDownloadsRemaining(downloadsRemaining - 1);
-        const auth = getAuth();
-        const user = auth.currentUser;
-        if (user) {
-          const docRef = doc(firestore, 'users', user.uid);
-          await setDoc(docRef, { downloadsRemaining: downloadsRemaining - 1 }, { merge: true });
+        const auth = getAuth(), u = auth.currentUser;
+        if (u) {
+          await setDoc(doc(firestore, 'users', u.uid), { downloadsRemaining: downloadsRemaining - 1 }, { merge: true });
         } else {
           localStorage.setItem('downloadCount', (downloadsRemaining - 1).toString());
         }
       }
-    
-      // 3) Build the data object (this is used only for the JSON export)
-      const datasetName = selectedDataset || newDatasetName || 'My Dataset';
-      const finalData = {
-        dataset: {
-          name: datasetName,
-          description: '',
-          price: 0.0,
-          category: 'GAA',
-          created_at: null,
-          updated_at: null
-        },
-        games: [
-          {
-            gameName: gameName || 'Unnamed Game',
-            matchDate: matchDate || null,
-            sport: 'GAA',
-            gameData: coords
-          }
-        ]
+
+      // build the payload, preferring the uploadedDataset
+      const datasetPayload = uploadedDataset || {
+        name: selectedDataset || newDatasetName || 'My Dataset',
+        description: '',
+        price: 0.0,
+        category: 'GAA',
+        created_at: null,
+        updated_at: null
       };
-    
-      // 4) Create a safe file name by replacing spaces with underscores
+      const finalData = {
+        dataset: datasetPayload,
+        games: [{
+          gameName: gameName || 'Unnamed Game',
+          matchDate: matchDate || null,
+          sport: 'GAA',
+          gameData: coords
+        }]
+      };
+
+      // file name + blob
       const fileNameSafe = downloadFileName.replace(/\s+/g, '_');
-      let fileBlob;
-      let extension = downloadFormat; // 'json' | 'csv' | 'xlsx'
-    
-      if (downloadFormat === 'json') {
-        // Create JSON file
-        const jsonString = JSON.stringify(finalData, null, 2);
-        fileBlob = new Blob([jsonString], { type: 'application/json' });
-      } else if (downloadFormat === 'csv') {
-        // Create a minimal CSV file using only a few fields (adjust if needed)
-        const header = ['team', 'playerName', 'action', 'x', 'y'].join(',');
-        const rows = coords.map(c => [c.team, c.playerName, c.action, c.x, c.y].join(','));
-        const csvOutput = [header, ...rows].join('\n');
-        fileBlob = new Blob([csvOutput], { type: 'text/csv' });
-      } else if (downloadFormat === 'xlsx') {
-        // --------------- XLSX ---------------
-        // Define the header row with all desired fields
-        const header = [
-          'action',
-          'foot',
-          'from',
-          'minute',
-          'player',
-          'playerName',
-          'position',
-          'pressure',
-          'team',
-          'to',
-          'type',
-          'x',
-          'y'
-        ];
-        // Map the coords to rows
+      let fileBlob, extension = downloadFormat;
+
+      if (extension === 'json') {
+        fileBlob = new Blob([JSON.stringify(finalData, null, 2)], { type: 'application/json' });
+
+      } else if (extension === 'csv') {
+        const header = ['team','playerName','action','x','y'].join(',');
+        const rows = coords.map(c => [c.team,c.playerName,c.action,c.x,c.y].join(','));
+        fileBlob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' });
+
+      } else if (extension === 'xlsx') {
+        const header = ['action','foot','from','minute','player','playerName','position','pressure','team','to','type','x','y'];
         const dataRows = coords.map(c => [
-          c.action,
-          c.foot,
+          c.action, c.foot,
           c.from ? JSON.stringify(c.from) : '',
-          c.minute,
-          c.player,
-          c.playerName,
-          c.position,
-          c.pressure,
+          c.minute, c.player, c.playerName,
+          c.position, c.pressure,
           c.team,
           c.to ? JSON.stringify(c.to) : '',
-          c.type,
-          c.x,
-          c.y
+          c.type, c.x, c.y
         ]);
-        // Combine header and rows
-        const sheetData = [header, ...dataRows];
-    
-        // Create a worksheet and workbook using SheetJS
-        const ws = utils.aoa_to_sheet(sheetData);
+        const ws = utils.aoa_to_sheet([ header, ...dataRows ]);
         const wb = utils.book_new();
         utils.book_append_sheet(wb, ws, 'Data');
-    
-        // Write the workbook and trigger the download
         writeFile(wb, `${fileNameSafe}.xlsx`);
-    
-        // Close the modal and exit the function (skip the blob download code below)
         setIsCustomDownloadModalOpen(false);
         return;
       }
-    
-      // 5) For JSON or CSV, trigger a download from the Blob
+
+      // trigger JSON or CSV download
       if (fileBlob) {
         const url = URL.createObjectURL(fileBlob);
         const a = document.createElement('a');
@@ -356,20 +321,22 @@ const PitchGraphic = () => {
         a.click();
         document.body.removeChild(a);
       }
-    
-      // 6) Close the modal
-      setIsCustomDownloadModalOpen(false);
-    };    
 
+      setIsCustomDownloadModalOpen(false);
+    };
+
+     
+
+    // 5) Open “new game” flow
     const handleStartNewGame = () => {
       setIsInitialSetupModalOpen(false);
-      setIsSetupTeamModalOpen(true); // directly open the black setup team modal
+      setIsSetupTeamModalOpen(true);
     };
-    
-    
+
+    // 6) Skip initial setup entirely
     const handleSkipSetup = () => {
       setIsInitialSetupModalOpen(false);
-      // Proceed to main functionality, e.g., initializing default teams or leaving them empty
+      // …and proceed with whatever defaults you’ve got in place
     };
     
     const handleNewGameSetupSubmit = (gameSetupData) => {
@@ -508,6 +475,12 @@ const handleSaveGame = async () => {
     return;
   }
 
+  // require a date
+  if (!matchDate) {
+    Swal.fire('Missing Date', 'Please choose a match date before saving.', 'warning');
+    return;
+  }
+
   if (saveToDataset && selectedDataset === 'new' && !newDatasetName.trim()) {
     Swal.fire('Invalid Dataset Name', 'Please enter a valid dataset name.', 'warning');
     return;
@@ -529,8 +502,8 @@ const handleSaveGame = async () => {
     const payload = {
       uid: user.uid,
       gameName,
-      matchDate, // Include match date
-      gameData: coords, // Ensure 'coords' contains the game data
+      matchDate,      // ← now guaranteed non‑empty
+      gameData: coords,
       sport: 'GAA',
     };
 
@@ -1374,156 +1347,124 @@ const handleSaveToDataset = async () => {
 
   const FREE_USER_DOWNLOAD_LIMIT = 10; // Set the new free download limit
 
+  // 3) Legacy “Download Data” button (no custom modal) — same dataset logic
   const handleDownloadData = async () => {
     if (userType === 'free') {
       if (downloadsRemaining <= 0) {
-        // Optionally reset downloads every month
-        const lastResetDate = localStorage.getItem('lastResetDate');
-        const today = new Date().toISOString().split('T')[0];
-  
-        if (lastResetDate !== today) {
-          setDownloadsRemaining(FREE_USER_DOWNLOAD_LIMIT);
-          localStorage.setItem('lastResetDate', today);
-        } else {
-          handlePremiumFeatureAccess('Download Data');
-          return;
-        }
+        handlePremiumFeatureAccess('Download Data');
+        return;
       }
-  
-      // Decrease downloadsRemaining
       setDownloadsRemaining(downloadsRemaining - 1);
-  
-      const auth = getAuth();
-      const user = auth.currentUser;
-      if (user) {
-        const docRef = doc(firestore, 'users', user.uid);
-        await setDoc(docRef, { downloadsRemaining: downloadsRemaining - 1 }, { merge: true });
+      const auth = getAuth(), u = auth.currentUser;
+      if (u) {
+        await setDoc(doc(firestore, 'users', u.uid), { downloadsRemaining: downloadsRemaining - 1 }, { merge: true });
       } else {
-        // Update localStorage for unauthenticated users
         localStorage.setItem('downloadCount', (downloadsRemaining - 1).toString());
       }
     }
-  
-    // Proceed with downloading data
-    const datasetName = selectedDataset || newDatasetName || 'My Dataset';
-  
-    const downloadData = {
-      dataset: {
-        name: datasetName,
-        description: '',
-        price: 0.0,
-        category: 'GAA',
-        created_at: null,
-        updated_at: null
-      },
-      games: [
-        {
-          gameName: gameName || 'Unnamed Game',
-          matchDate: matchDate || null,
-          sport: 'GAA',
-          gameData: coords
-        }
-      ]
+
+    const ds = uploadedDataset || {
+      name: selectedDataset || newDatasetName || 'My Dataset',
+      description: '',
+      price: 0.0,
+      category: 'GAA',
+      created_at: null,
+      updated_at: null
     };
-  
-    const jsonData = JSON.stringify(downloadData, null, 2);
-    const blob = new Blob([jsonData], { type: 'application/json' });
+
+    const payload = {
+      dataset: ds,
+      games: [{
+        gameName: gameName || 'Unnamed Game',
+        matchDate: matchDate || null,
+        sport: 'GAA',
+        gameData: coords
+      }]
+    };
+
+    const jsonString = JSON.stringify(payload, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${datasetName.replace(' ', '_')}_${(gameName || 'Unnamed_Game').replace(' ', '_')}.json`;
+    a.download = `${ds.name.replace(/\s+/g,'_')}_${(gameName||'Unnamed_Game').replace(/\s+/g,'_')}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
   };
+
   
 
+  // 4) Download only the filtered coords
   const handleDownloadFilteredData = async () => {
-    // 1) If user is free but out of downloads => upgrade
     if (userType === 'free') {
       handlePremiumFeatureAccess('Download Filtered Data');
       return;
     }
-  
-    // 2) Filter the coords
-    const filteredCoords = coords.filter((coord) => {
-      const matchTeam = downloadTeam ? coord.team === downloadTeam : true;
-      const matchPlayer = downloadPlayer ? coord.playerName === downloadPlayer : true;
-      const matchAction = downloadAction ? coord.action === downloadAction : true;
-      return matchTeam && matchPlayer && matchAction;
-    });
-  
-    // 3) Build data object
-    const datasetName = selectedDataset || newDatasetName || 'My Dataset';
-    const downloadData = {
-      dataset: {
-        name: datasetName,
-        description: '',
-        price: 0.0,
-        category: 'GAA',
-        created_at: null,
-        updated_at: null
-      },
-      games: [
-        {
-          gameName: gameName || 'Unnamed Game',
-          matchDate: matchDate || null,
-          sport: 'GAA',
-          gameData: filteredCoords
-        }
-      ]
+
+    const filteredCoords = coords.filter(c => 
+      (!downloadTeam   || c.team       === downloadTeam) &&
+      (!downloadPlayer || c.playerName === downloadPlayer) &&
+      (!downloadAction || c.action     === downloadAction)
+    );
+
+    const ds = uploadedDataset || {
+      name: selectedDataset || newDatasetName || 'My Dataset',
+      description: '',
+      price: 0.0,
+      category: 'GAA',
+      created_at: null,
+      updated_at: null
     };
-  
-    // 4) Figure out extension & safe filename
+
+    const payload = {
+      dataset: ds,
+      games: [{
+        gameName: gameName || 'Unnamed Game',
+        matchDate: matchDate || null,
+        sport: 'GAA',
+        gameData: filteredCoords
+      }]
+    };
+
     const fileNameSafe = filteredFileName.replace(/\s+/g, '_');
-    let extension = filteredFormat;  // 'json','csv','xlsx'
-    let fileBlob;
-  
-    if (filteredFormat === 'json') {
-      // JSON approach
-      const jsonString = JSON.stringify(downloadData, null, 2);
-      fileBlob = new Blob([jsonString], { type: 'application/json' });
-    } 
-    else if (filteredFormat === 'csv') {
-      // Minimal CSV example
-      // Flatten just the "gameData" portion if you want
+    let fileBlob, ext = filteredFormat;
+
+    if (ext === 'json') {
+      fileBlob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+
+    } else if (ext === 'csv') {
       const header = ['team','playerName','action','x','y'].join(',');
-      const rows = filteredCoords.map(c =>
-        [c.team, c.playerName, c.action, c.x, c.y].join(',')
-      );
-      const csvOutput = [header, ...rows].join('\n');
-      fileBlob = new Blob([csvOutput], { type: 'text/csv' });
-    }
-    else if (filteredFormat === 'xlsx') {
-      // Build sheet via sheetjs
+      const rows = filteredCoords.map(c => [c.team,c.playerName,c.action,c.x,c.y].join(','));
+      fileBlob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' });
+
+    } else if (ext === 'xlsx') {
       const sheetData = [
         ['team','playerName','action','x','y'],
-        ...filteredCoords.map(c => [c.team, c.playerName, c.action, c.x, c.y]),
+        ...filteredCoords.map(c => [c.team,c.playerName,c.action,c.x,c.y])
       ];
       const ws = utils.aoa_to_sheet(sheetData);
       const wb = utils.book_new();
       utils.book_append_sheet(wb, ws, 'FilteredData');
       writeFile(wb, `${fileNameSafe}.xlsx`);
-      
-      // Close modal & return
       setIsDownloadModalOpen(false);
       return;
     }
-  
-    // 5) For JSON/CSV, do normal blob download
+
     if (fileBlob) {
       const url = URL.createObjectURL(fileBlob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${fileNameSafe}.${extension}`;
+      a.download = `${fileNameSafe}.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
     }
-  
-    // 6) Close the modal
+
     setIsDownloadModalOpen(false);
   };
+
+  
   
 
   const renderContextMenu = () => (
@@ -1584,29 +1525,40 @@ const handleSaveToDataset = async () => {
     </div>
   );
 
-  const handleUploadRawData = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const jsonData = JSON.parse(e.target.result);
-          
-          // Validate the JSON structure
-          if (validateUploadedData(jsonData)) {
-            const gameData = jsonData.games?.[0]?.gameData || [];
-            setCoords(gameData); // Load the data onto the pitch
-            Swal.fire('Success', 'Raw data uploaded successfully!', 'success');
-          } else {
-            Swal.fire('Error', 'Invalid data format. Please upload a properly formatted JSON file.', 'error');
-          }
-        } catch (err) {
-          Swal.fire('Error', 'Unable to parse the file. Please upload a valid JSON file.', 'error');
-        }
-      };
-      reader.readAsText(file);
+// 1) Upload raw JSON and store both dataset metadata + coords
+const handleUploadRawData = (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const jsonData = JSON.parse(e.target.result);
+      if (!validateUploadedData(jsonData)) {
+        Swal.fire('Error', 'Invalid data format…', 'error');
+        return;
+      }
+
+      // store the full dataset metadata
+      setUploadedDataset(jsonData.dataset);
+
+      // now grab the first game
+      const game = jsonData.games[0];
+      setGameName(game.gameName    || '');
+      setMatchDate(game.matchDate  || '');
+      setCoords(   game.gameData   || []);
+
+      Swal.fire('Success', 'Raw data uploaded successfully!', 'success');
+    } catch {
+      Swal.fire('Error', 'Unable to parse the file…', 'error');
     }
   };
+
+  reader.readAsText(file);
+};
+
+  
+  
   
   const validateUploadedData = (data) => {
     if (

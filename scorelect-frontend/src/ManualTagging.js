@@ -61,19 +61,55 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 
 // GAA Pitch Selector Component
+// GAA Pitch Selector Component
 const GAAPitchSelector = ({ currentPosition, setCurrentPosition, selectedTeam }) => {
-  // Set up canvas dimensions
-  const canvasWidth = 580;
-  const canvasHeight = 352;
+  // Use a ratio-based approach for the canvas
+  const aspectRatio = 145 / 88; // Original width:height ratio of a GAA pitch
+  
+  // Reference for dynamic size calculations
+  const stageRef = useRef(null);
+  
+  // Calculate initial dimensions - these will adjust with container size
+  const [dimensions, setDimensions] = useState({
+    width: 580,
+    height: 352,
+  });
+  
+  // Handle stage resize
+  useEffect(() => {
+    const checkSize = () => {
+      if (stageRef.current) {
+        const container = stageRef.current.container();
+        if (container && container.offsetWidth) {
+          const containerWidth = container.offsetWidth;
+          // Make the stage 95% of the container width (5% smaller)
+          const stageWidth = containerWidth * 0.995;
+          setDimensions({
+            width: stageWidth,
+            height: stageWidth / aspectRatio
+          });
+        }
+      }
+    };
+    
+    // Initial size check
+    checkSize();
+    
+    // Add resize listener
+    window.addEventListener('resize', checkSize);
+    
+    // Cleanup
+    return () => window.removeEventListener('resize', checkSize);
+  }, []);
   
   // Calculate scaling factors
-  const xScale = canvasWidth / 145;
-  const yScale = canvasHeight / 88;
+  const xScale = dimensions.width / 145;
+  const yScale = dimensions.height / 88;
   
   // Canvas configuration
   const canvasSizeMain = {
-    width: canvasWidth,
-    height: canvasHeight
+    width: dimensions.width,
+    height: dimensions.height
   };
   
   // Pitch colors
@@ -87,8 +123,8 @@ const GAAPitchSelector = ({ currentPosition, setCurrentPosition, selectedTeam })
     const stage = e.target.getStage();
     const pointerPosition = stage.getPointerPosition();
     const newPosition = {
-      x: (pointerPosition.x / canvasWidth) * 100,
-      y: (pointerPosition.y / canvasHeight) * 100
+      x: (pointerPosition.x / stage.width()) * 100,
+      y: (pointerPosition.y / stage.height()) * 100
     };
     
     setCurrentPosition(newPosition);
@@ -96,8 +132,9 @@ const GAAPitchSelector = ({ currentPosition, setCurrentPosition, selectedTeam })
   
   return (
     <Stage 
-      width={canvasWidth} 
-      height={canvasHeight} 
+      ref={stageRef}
+      width={dimensions.width} 
+      height={dimensions.height} 
       onClick={handleStageClick}
       style={{ 
         border: '2px solid white',
@@ -118,8 +155,8 @@ const GAAPitchSelector = ({ currentPosition, setCurrentPosition, selectedTeam })
       
       <Layer>
         <Circle
-          x={(currentPosition.x / 100) * canvasWidth}
-          y={(currentPosition.y / 100) * canvasHeight}
+          x={(currentPosition.x / 100) * dimensions.width}
+          y={(currentPosition.y / 100) * dimensions.height}
           radius={10}
           fill={selectedTeam === 'home' ? '#5e2e8f' : '#dc3545'}
           stroke="#ffffff"
@@ -268,8 +305,9 @@ const TagChip = styled(Chip)(({ theme, type }) => ({
   },
 }));
 
+// Enhanced TimelineContainer with timestamps and improved styling
 const TimelineContainer = styled(Box)(({ theme }) => ({
-  height: 80,
+  height: 100, // Increased height to accommodate timestamps
   position: 'relative',
   backgroundColor: '#1a1a1a',
   borderRadius: theme.spacing(1),
@@ -277,8 +315,22 @@ const TimelineContainer = styled(Box)(({ theme }) => ({
   marginTop: theme.spacing(2),
   border: '1px solid #444',
   overflow: 'hidden',
+  // Add timeline ruler marks
+  backgroundImage: 'linear-gradient(to right, #333 1px, transparent 1px)',
+  backgroundSize: '10% 100%', // 10 divisions
+  '&::after': { // Time ruler line
+    content: '""',
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '70%', // Position of the time ruler line
+    height: '1px',
+    backgroundColor: '#444',
+    zIndex: 1
+  }
 }));
 
+// Enhanced TimelineMark with timestamp label
 const TimelineMark = styled(Box)(({ theme, category, active }) => ({
   position: 'absolute',
   width: 6,
@@ -290,7 +342,7 @@ const TimelineMark = styled(Box)(({ theme, category, active }) => ({
     category === 'Set Pieces' ? '#ffc107' :
     category === 'Turnovers'  ? '#ff8c00' : '#999',
   borderRadius: '2px',
-  top: active === 'true' ? 15 : 20,
+  top: active === 'true' ? 15 : 20, // Position from top
   transform: 'translateX(-3px)',
   cursor: 'pointer',
   transition: 'height 0.2s ease, top 0.2s ease',
@@ -299,35 +351,78 @@ const TimelineMark = styled(Box)(({ theme, category, active }) => ({
     height: 50,
     top: 15,
     zIndex: 2,
-  },  
+  },
+  '&::after': { // Timestamp label
+    content: 'attr(data-time)',
+    position: 'absolute',
+    bottom: '-25px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    fontSize: '10px',
+    whiteSpace: 'nowrap',
+    color: '#aaa',
+    fontWeight: active === 'true' ? 'bold' : 'normal',
+  }
+}));
+
+// Fixed PitchMarker component 
+const PitchMarker = styled(Box)(({ theme, category }) => ({
+  position: 'absolute',
+  width: 16, // Smaller size
+  height: 16, // Smaller size
+  borderRadius: '50%',
+  backgroundColor:
+    category === 'Possession' ? '#5e2e8f' :
+    category === 'Defense'    ? '#dc3545' :
+    category === 'Scoring'    ? '#28a745' :
+    category === 'Set Pieces' ? '#ffc107' :
+    category === 'Turnovers'  ? '#ff8c00' : '#999',
+  border: '2px solid white',
+  transform: 'translate(-50%, -50%)',
+  cursor: 'grab',
+  zIndex: 10,
+  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+  '&:hover': {
+    transform: 'translate(-50%, -50%) scale(1.2)',
+    boxShadow: '0 0 8px rgba(255,255,255,0.6)',
+    zIndex: 20,
+  },
+}));
+
+// Marker tooltip for hover details
+const MarkerTooltip = styled(Box)(({ theme }) => ({
+  position: 'absolute',
+  bottom: '100%',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  backgroundColor: 'rgba(0,0,0,0.85)',
+  color: '#fff',
+  padding: theme.spacing(1),
+  borderRadius: theme.spacing(0.5),
+  fontSize: '0.75rem',
+  whiteSpace: 'nowrap',
+  pointerEvents: 'none',
+  opacity: 0,
+  transition: 'opacity 0.2s ease',
+  zIndex: 30,
+  boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+  border: '1px solid #444',
+  marginBottom: '5px',
+  maxWidth: '200px',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
 }));
 
 const PitchContainer = styled(Box)(({ theme }) => ({
   width: '100%',
-  height: '300px',
+  position: 'relative',
   backgroundColor: '#1D6E1D',
   borderRadius: theme.spacing(1),
-  position: 'relative',
   border: '2px solid white',
   margin: '20px 0',
   backgroundImage: 'linear-gradient(0deg, rgba(29,110,29,1) 0%, rgba(39,130,39,1) 100%)',
-}));
-
-const PitchMarker = styled(Box)(({ theme, left, top, team }) => ({
-  position: 'absolute',
-  width: 20,
-  height: 20,
-  borderRadius: '50%',
-  backgroundColor: team === 'home' ? '#5e2e8f' : '#dc3545',
-  border: '2px solid white',
-  left: `${left}%`,
-  top: `${top}%`,
-  transform: 'translate(-50%, -50%)',
-  cursor: 'pointer',
-  zIndex: 10,
-  '&:hover': {
-    transform: 'translate(-50%, -50%) scale(1.2)',
-  },
+  // Add proper spacing
+  marginBottom: theme.spacing(3)
 }));
 
 const ActionButton = styled(Button)(({ theme, color }) => ({
@@ -350,6 +445,107 @@ const ActionButton = styled(Button)(({ theme, color }) => ({
     boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
   },
 }));
+
+// PitchMarkerComponent - Extracted to fix hooks rules
+const PitchMarkerComponent = ({ 
+  tag, 
+  index, 
+  tags, 
+  setTags, 
+  handleJumpToTag, 
+  setSelectedCategory, 
+  setSelectedAction, 
+  setSelectedTeam, 
+  setSelectedPlayer, 
+  setSelectedOutcome, 
+  setNotes, 
+  setCurrentPosition, 
+  setTagDialogOpen,
+  pitchRef,
+  formatTime 
+}) => {
+  const [isDragging, setIsDragging] = useState(false);
+  
+  // Handle marker mouse down (start drag)
+  const handleMarkerMouseDown = (e) => {
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+  
+  // Handle marker double-click
+  const handleMarkerDoubleClick = (e) => {
+    e.stopPropagation();
+    // Set current time to tag time
+    handleJumpToTag(tag.timestamp);
+    // Open tag dialog with tag data pre-filled
+    setSelectedCategory(tag.category);
+    setSelectedAction(tag.action);
+    setSelectedTeam(tag.team);
+    setSelectedPlayer(tag.player);
+    setSelectedOutcome(tag.outcome);
+    setNotes(tag.notes);
+    setCurrentPosition(tag.position);
+    setTagDialogOpen(true);
+  };
+  
+  // Update position while dragging
+// Update position while dragging
+useEffect(() => {
+  const handleMouseMove = (e) => {
+    if (isDragging && pitchRef.current) {
+      // Get the actual pitch area (not the container)
+      const pitchArea = pitchRef.current.querySelector('.konvajs-content');
+      const rect = pitchArea ? pitchArea.getBoundingClientRect() : pitchRef.current.getBoundingClientRect();
+      
+      // Calculate position relative to the pitch area
+      const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+      const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+      
+      // Update this specific tag's position
+      setTags(prevTags => 
+        prevTags.map((t, i) => 
+          i === index ? { ...t, position: { x, y } } : t
+        )
+      );
+    }
+  };
+  
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+  
+  if (isDragging) {
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }
+  
+  return () => {
+    window.removeEventListener('mousemove', handleMouseMove);
+    window.removeEventListener('mouseup', handleMouseUp);
+  };
+}, [isDragging, index, setTags, pitchRef]);
+  
+  return (
+    <Box 
+      className="marker-container"
+      sx={{ position: 'absolute', left: `${tag.position.x}%`, top: `${tag.position.y}%` }}
+    >
+      <PitchMarker
+        category={tag.category}
+        onMouseDown={handleMarkerMouseDown}
+        onDoubleClick={handleMarkerDoubleClick}
+        sx={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+      />
+      <MarkerTooltip className="marker-tooltip">
+        <strong>{formatTime(tag.timestamp)} - {tag.category}: {tag.action}</strong>
+        <br />
+        {tag.outcome && <span>Outcome: {tag.outcome} • </span>}
+        <span>Player: {tag.player || 'None'}</span>
+        {tag.notes && <Box sx={{ mt: 0.5, fontSize: '0.7rem', opacity: 0.8 }}>{tag.notes}</Box>}
+      </MarkerTooltip>
+    </Box>
+  );
+};
 
 // Main Manual Tagging Component
 const ManualTagging = () => {
@@ -1170,32 +1366,118 @@ return (
           )}
         </VideoContainer>
 
+        {/* Enhanced Timeline with timestamp marks */}
         <TimelineContainer>
-          {tags.map((tag,i)=>(
+          {tags.map((tag, i) => (
             <TimelineMark
               key={i}
               category={tag.category}
-              active={(Math.abs(tag.timestamp-currentTime) < 0.5).toString()}
-              style={{ left:`${(tag.timestamp/duration)*100}%` }}
-              onClick={()=>handleJumpToTag(tag.timestamp)}
+              active={(Math.abs(tag.timestamp - currentTime) < 0.5).toString()}
+              style={{ 
+                left: `${(tag.timestamp / duration) * 100}%` 
+              }}
+              onClick={() => handleJumpToTag(tag.timestamp)}
               title={`${tag.category}: ${tag.action} (${formatTime(tag.timestamp)})`}
+              data-time={formatTime(tag.timestamp)}
             />
+          ))}
+          
+          {/* Time markers - add these for better time visualization */}
+          {[...Array(11)].map((_, i) => (
+            <Typography
+              key={`time-${i}`}
+              variant="caption"
+              sx={{
+                position: 'absolute',
+                bottom: 5,
+                left: `${i * 10}%`,
+                transform: 'translateX(-50%)',
+                color: '#666',
+                fontSize: '0.7rem'
+              }}
+            >
+              {formatTime((duration * i) / 10)}
+            </Typography>
           ))}
         </TimelineContainer>
 
         <canvas ref={canvasRef} style={{ display:'none' }}/>
 
-        {/* Optional simple pitch container for main view */}
-        <Box sx={{ 
-          textAlign: 'center', 
-          mt: 2, 
-          p: 2, 
-          backgroundColor: '#1a1a1a',
-          borderRadius: '8px',
-          border: '1px solid #333'
-        }}>
-          <Typography variant="body2" color="text.secondary">
-            Click "Tag Event" to mark the action's position on the GAA pitch.
+        {/* Pitch visualization with enhanced markers */}
+        <Box 
+          ref={pitchRef}
+          sx={{ 
+            position: 'relative',
+            width: '96%',
+            marginTop: 2,
+            backgroundColor: '#1a1a1a',
+            borderRadius: '8px',
+            border: '1px solid #333',
+            padding: 2,
+            // Set max-height to prevent overflow
+            maxHeight: { xs: '400px', md: '500px' },
+            overflow: 'hidden'
+          }}
+        >
+          <Typography variant="h6" sx={{ color: '#5e2e8f', mb: 2, display: 'flex', alignItems: 'center' }}>
+            <LocationOnIcon sx={{ mr: 1 }} /> Event Locations on Pitch
+          </Typography>
+          
+          {/* This wrapper constrains the pitch to the proper size */}
+          <Box 
+            sx={{ 
+              position: 'relative', 
+              // Set fixed widths for different screen sizes
+              width: { xs: '100%', sm: '500px', md: '550px', lg: '675px' },
+              maxWidth: '100%', // Ensure it doesn't overflow its container
+              // Center the container
+              marginLeft: 'auto',
+              marginRight: 'auto',
+              maxHeight: { xs: '280px', sm: '300px', md: '320px', lg: '450px' },
+              mb: 2,
+              '& .marker-tooltip': {
+                opacity: 0,
+              },
+              '& .marker-container:hover .marker-tooltip': {
+                opacity: 1,
+              },
+              overflow: 'hidden'
+            }}
+          >
+            <GAAPitchSelector
+              currentPosition={currentPosition}
+              setCurrentPosition={setCurrentPosition}
+              selectedTeam={selectedTeam}
+            />
+            
+            {/* Render position markers for each tag */}
+            {tags.map((tag, index) => (
+              <PitchMarkerComponent
+                key={index}
+                tag={tag}
+                index={index}
+                tags={tags}
+                setTags={setTags}
+                handleJumpToTag={handleJumpToTag}
+                setSelectedCategory={setSelectedCategory}
+                setSelectedAction={setSelectedAction}
+                setSelectedTeam={setSelectedTeam}
+                setSelectedPlayer={setSelectedPlayer}
+                setSelectedOutcome={setSelectedOutcome}
+                setNotes={setNotes}
+                setCurrentPosition={setCurrentPosition}
+                setTagDialogOpen={setTagDialogOpen}
+                pitchRef={pitchRef}
+                formatTime={formatTime}
+              />
+            ))}
+          </Box>
+          
+          <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 1 }}>
+            {tags.length === 0 
+              ? "No events tagged yet. Tagged events will appear on the pitch." 
+              : `${tags.length} events tagged on pitch. Drag markers to reposition, double-click to edit.`
+            }
           </Typography>
         </Box>
       </Grid>
@@ -1480,7 +1762,7 @@ return (
               alignItems: 'center',
               mb: 1,
               cursor: 'pointer',
-announced: '8px',
+              padding: '8px',
               backgroundColor: '#333',
               borderRadius: '4px'
             }} 
@@ -1577,7 +1859,7 @@ announced: '8px',
         <IconButton onClick={()=>setHelpDialogOpen(false)} sx={{ position:'absolute', right:8, top:8, color:'#aaa' }}>
           <CloseIcon/>
         </IconButton>
-      </DialogTitle>
+        </DialogTitle>
       <DialogContent sx={{ mt:2 }}>
         <Typography variant="h6" sx={{ mb:2 }}>Supported Video Formats</Typography>
         {supportedFormats.length > 0 ? (
@@ -1613,6 +1895,6 @@ announced: '8px',
     />
   </PageContainer>
 );
-};
+}
 
 export default ManualTagging;

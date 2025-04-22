@@ -60,7 +60,8 @@ import LocationOnIcon from '@mui/icons-material/LocationOn';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 
-// GAA Pitch Selector Component
+import AdvancedClipManager from './AdvancedClipManager';
+
 // GAA Pitch Selector Component
 const GAAPitchSelector = ({ currentPosition, setCurrentPosition, selectedTeam }) => {
   // Use a ratio-based approach for the canvas
@@ -153,7 +154,7 @@ const GAAPitchSelector = ({ currentPosition, setCurrentPosition, selectedTeam })
         yScale
       })}
       
-      {/* <Layer>
+       <Layer>
         <Circle
           x={(currentPosition.x / 100) * dimensions.width}
           y={(currentPosition.y / 100) * dimensions.height}
@@ -162,7 +163,7 @@ const GAAPitchSelector = ({ currentPosition, setCurrentPosition, selectedTeam })
           stroke="#ffffff"
           strokeWidth={2}
         />
-      </Layer> */}
+      </Layer>
     </Stage>
   );
 };
@@ -690,6 +691,8 @@ const ManualTagging = () => {
   const [datasetName, setDatasetName]       = useState('');
   const [savingInProgress, setSavingInProgress] = useState(false);
   const [saveDialogOpen, setSaveDialogOpen]   = useState(false);
+
+  const [advancedClipManagerOpen, setAdvancedClipManagerOpen] = useState(false);
 
   // Teams data (use dynamic data if available, otherwise fallback)
   const teams = teamsData || {
@@ -1604,6 +1607,16 @@ return (
           >
             Team Setup
           </ActionButton>
+          <ActionButton 
+            color="primary" 
+            onClick={() => setAdvancedClipManagerOpen(true)} 
+            startIcon={<VideocamIcon/>} 
+            fullWidth
+            disabled={!tags.length || !videoReady}
+          >
+            Advanced Clips
+          </ActionButton>
+
         </Box>
 
         {/* Capture Data Preview */}
@@ -1886,6 +1899,21 @@ return (
         </Button>
       </DialogActions>
     </Dialog>
+
+    <AdvancedClipManager
+      open={advancedClipManagerOpen}
+      onClose={() => setAdvancedClipManagerOpen(false)}
+      tags={tags}
+      teams={teams}
+      tagCategories={tagCategories}
+      tagOutcomes={tagOutcomes}
+      videoRef={videoRef}
+      currentTime={currentTime}
+      duration={duration}
+      formatTime={formatTime}
+      waitForSeek={waitForSeek}
+      datasetName={datasetName}
+    />
 
     {/* Teams Manager Dialog */}
     <TeamsManager

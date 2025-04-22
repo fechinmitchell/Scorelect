@@ -83,7 +83,7 @@ const GAAPitchSelector = ({ currentPosition, setCurrentPosition, selectedTeam })
         if (container && container.offsetWidth) {
           const containerWidth = container.offsetWidth;
           // Make the stage 95% of the container width (5% smaller)
-          const stageWidth = containerWidth * 0.995;
+          const stageWidth = containerWidth * 0.994;
           setDimensions({
             width: stageWidth,
             height: stageWidth / aspectRatio
@@ -153,7 +153,7 @@ const GAAPitchSelector = ({ currentPosition, setCurrentPosition, selectedTeam })
         yScale
       })}
       
-      <Layer>
+      {/* <Layer>
         <Circle
           x={(currentPosition.x / 100) * dimensions.width}
           y={(currentPosition.y / 100) * dimensions.height}
@@ -162,7 +162,7 @@ const GAAPitchSelector = ({ currentPosition, setCurrentPosition, selectedTeam })
           stroke="#ffffff"
           strokeWidth={2}
         />
-      </Layer>
+      </Layer> */}
     </Stage>
   );
 };
@@ -368,8 +368,8 @@ const TimelineMark = styled(Box)(({ theme, category, active }) => ({
 // Fixed PitchMarker component 
 const PitchMarker = styled(Box)(({ theme, category }) => ({
   position: 'absolute',
-  width: 16, // Smaller size
-  height: 16, // Smaller size
+  width: 10, // Smaller size
+  height: 10, // Smaller size
   borderRadius: '50%',
   backgroundColor:
     category === 'Possession' ? '#5e2e8f' :

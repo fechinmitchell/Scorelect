@@ -1,6 +1,3 @@
-/* SavedGames.css */
-
-/* General styling for the saved games container */
 .saved-games-container {
     padding: 20px;
     max-width: 900px;
@@ -21,7 +18,7 @@
     color: #333;
     margin-bottom: 20px;
 }
-/* Styling for each dataset section */
+
 .dataset-section {
     margin-bottom: 30px;
     padding: 15px;
@@ -60,7 +57,7 @@
 }
 
 .download-dataset-button {
-    background: #28a745; /* Green */
+    background: #28a745;
 }
 
 .download-dataset-button:hover {
@@ -68,7 +65,7 @@
 }
 
 .publish-dataset-button {
-    background: #17a2b8; /* Teal */
+    background: #17a2b8;
 }
 
 .publish-dataset-button:hover {
@@ -76,14 +73,13 @@
 }
 
 .delete-dataset-button {
-    background: #dc3545; /* Red */
+    background: #dc3545;
 }
 
 .delete-dataset-button:hover {
     background: #c82333;
 }
 
-/* Styling for the list of saved games within each dataset */
 .saved-games-list {
     list-style: none;
     padding: 0;
@@ -100,10 +96,19 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+.saved-game-item.video {
+    border-left: 4px solid #5e2e8f;
+}
+
+.saved-game-item.pitch {
+    border-left: 4px solid #28a745;
+}
+
 .game-info {
     flex: 2;
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: 10px;
 }
 
 .game-name {
@@ -114,10 +119,21 @@
 
 .game-date {
     font-size: 14px;
-    color: #2e2e2e;
-    text-align: right;
-    margin-top: -15px;
-    padding-right: 15px;
+    color: #666;
+}
+
+.analysis-icon {
+    margin-left: 10px;
+    font-size: 16px;
+    vertical-align: middle;
+}
+
+.analysis-icon.video {
+    color: #5e2e8f;
+}
+
+.analysis-icon.pitch {
+    color: #28a745;
 }
 
 .game-actions {
@@ -146,12 +162,11 @@
     transition: background 0.3s ease;
     margin-left: 760px;
     margin-bottom: 15px;
-  }
-  
-  .refresh-button:hover {
+}
+
+.refresh-button:hover {
     background-color: #0056b3;
-  }
-  
+}
 
 .load-button {
     background: #007bff;
@@ -170,14 +185,13 @@
 }
 
 .update-dataset-button {
-    background: #fd7e14; /* Orange */
+    background: #fd7e14;
 }
 
 .update-dataset-button:hover {
     background: #e8590c;
 }
 
-/* Styling for error messages */
 .error {
     color: #dc3545;
     background-color: #f8d7da;
@@ -187,7 +201,50 @@
     margin-bottom: 20px;
 }
 
-/* Responsive Design */
+.filter-buttons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    justify-content: center;
+}
+
+.filter-buttons button {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #f0f0f0;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.filter-buttons button.active {
+    background: #5e2e8f;
+    color: white;
+    border-color: #5e2e8f;
+}
+
+.filter-buttons button:hover {
+    background: #ddd;
+}
+
+.filter-buttons button.active:hover {
+    background: #6d3ca1;
+}
+
+.legend {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.legend span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #333;
+}
+
 @media (max-width: 600px) {
     .dataset-header {
         flex-direction: column;
@@ -195,13 +252,21 @@
         gap: 10px;
     }
 
+    .game-info {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
     .game-date {
-        text-align: left;
         margin-top: 5px;
-        padding-right: 0;
     }
 
     .game-actions {
         margin-top: 10px;
+    }
+
+    .filter-buttons {
+        flex-direction: column;
+        align-items: center;
     }
 }

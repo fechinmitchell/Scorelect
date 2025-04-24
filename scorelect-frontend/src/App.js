@@ -134,6 +134,13 @@ const App = () => {
 
   const renderSelectedSport = () => {
     if (!selectedSport) return <Navigate replace to="/select-sport" />;
+    if (loadedCoords && loadedCoords.analysisType === 'video') {
+      return (
+        <ManualTagging
+          gameData={loadedCoords} // Pass the loaded data as a prop
+        />
+      );
+    }
     switch (selectedSport) {
       case 'GAA':
         return <PitchGraphic userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />;

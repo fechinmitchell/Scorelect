@@ -1,0 +1,94 @@
+/* Add this CSS to your existing styles or create a new CSS file */
+
+.video-upload-modal .MuiPaper-root {
+    background-color: #222;
+    color: #fff;
+    border-radius: 8px;
+  }
+  
+  .video-dropzone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: #1a1a1a;
+    border: 2px dashed #444;
+    border-radius: 8px;
+    padding: 2rem;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    min-height: 200px;
+  }
+  
+  .video-dropzone:hover,
+  .video-dropzone.active {
+    border-color: #5e2e8f;
+    background-color: rgba(94, 46, 143, 0.05);
+  }
+  
+  .video-upload-modal .MuiTab-root {
+    color: #aaa;
+  }
+  
+  .video-upload-modal .MuiTab-root.Mui-selected {
+    color: #5e2e8f;
+    font-weight: bold;
+  }
+  
+  .video-upload-modal .MuiTabs-indicator {
+    background-color: #5e2e8f;
+  }
+  
+  .video-upload-modal .MuiButton-contained {
+    background-color: #5e2e8f;
+  }
+  
+  .video-upload-modal .MuiButton-contained:hover {
+    background-color: #7e4cb8;
+  }
+  
+  .video-upload-modal .MuiTextField-root {
+    background-color: #333;
+  }
+  
+  .video-upload-modal .MuiOutlinedInput-notchedOutline {
+    border-color: #444;
+  }
+  
+  .video-upload-modal .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline {
+    border-color: #666;
+  }
+  
+  .video-upload-modal .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+    border-color: #5e2e8f;
+  }
+  
+  .video-loading-timeout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    text-align: center;
+    background-color: rgba(0, 0, 0, 0.7);
+    border-radius: 8px;
+    border: 1px solid #444;
+  }
+  
+  .error-icon {
+    font-size: 48px;
+    color: #dc3545;
+    margin-bottom: 1rem;
+  }
+  
+  .timeout-message {
+    margin-bottom: 1.5rem;
+  }
+  
+  .upload-again-button {
+    background-color: #5e2e8f !important;
+  }
+  
+  .upload-again-button:hover {
+    background-color: #7e4cb8 !important;
+  }

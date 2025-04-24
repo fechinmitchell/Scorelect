@@ -147,6 +147,14 @@ const SideToolbar = styled(Paper)(({ theme }) => ({
     background: PRIMARY_COLOR,
     borderRadius: '2px',
   },
+  // Add fullscreen styles
+  '&.fullscreen': {
+    position: 'fixed',
+    left: 0,
+    top: 0,
+    height: '100vh',
+    zIndex: 1400,
+  },
 }));
 
 const ToolGroup = styled(Box)(({ theme }) => ({
@@ -192,7 +200,7 @@ const CanvasArea = styled(Box)(({ theme, isFullscreen }) => ({
   ...(isFullscreen && {
     position: 'fixed',
     top: 0,
-    left: 0,
+    left: 60, // Account for toolbar width
     right: 0,
     bottom: 0,
     zIndex: 1300,
@@ -2165,7 +2173,7 @@ const SessionEditor = ({ selectedSport = 'GAA' }) => {
       
       <EditorContent>
         {/* Side Toolbar */}
-        <SideToolbar>
+        <SideToolbar className={isFullscreen ? 'fullscreen' : ''}>
           <ToolGroup>
             {TOOLS.map((tool) => (
               <Tooltip key={tool.id} title={tool.label} placement="right">

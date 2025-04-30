@@ -55,6 +55,8 @@ import Sessions from './Sessions';
 import SessionEditor from './SessionEditor';
 import SessionDetail from './SessionDetail';
 import ManualTagging from './ManualTagging';
+import DashboardHome from './DashboardHome';
+
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
@@ -96,11 +98,11 @@ const App = () => {
     }
   }, [selectedSport]);
 
-  const loadGame = (sport, gameData) => {
+  const loadGame = (sport, game) => {
     setSelectedSport(sport);
-    setLoadedCoords(gameData);
-    navigate('/');
-  };
+    setLoadedCoords(game);                // store the full game object
+    navigate('/pitch', { state: { gameLoaded: true } });   // go straight to the pitch tool
+  };  
 
   const handleSportChange = (sport) => {
     setSelectedSport(sport);
@@ -174,8 +176,8 @@ const App = () => {
             <div className="content-area">
               <ErrorBoundary>
                 <Routes>
-                  <Route path="/" element={renderSelectedSport()} />
-                  <Route
+                <Route path="/" element={<Navigate replace to="/dashboard" />} />
+                <Route
                     path="/select-sport"
                     element={<SportSelectionPage onSportSelect={handleSportChange} />}
                   />
@@ -220,6 +222,22 @@ const App = () => {
                   <Route path="/session-detail/:sessionId" element={<SessionDetail />} />
                   <Route path="*" element={<Navigate replace to="/select-sport" />} />
                   <Route path="/tagging/manual" element={<ManualTagging />} />
+                  <Route path="/dashboard" element={ <DashboardHome onNavigate={handleNavigate} selectedSport={selectedSport}/>} />
+                  <Route
+                    path="/pitch"
+                    element={
+                      <PitchGraphic
+                        userType={userRole}
+                        userId={user?.uid}
+                        apiUrl={API_BASE_URL}
+                      />
+                    }
+                  />
+
+                  <Route
+                    path="/video"
+                    element={<AnalysisGAA defaultTab="video" />}
+                  />
                 </Routes>
               </ErrorBoundary>
               <Analytics />

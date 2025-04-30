@@ -51,64 +51,24 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
 
 // Updated part of handleLoadGame in SavedGames.js
 const handleLoadGame = async (game) => {
-  if (!game.gameData || game.gameData.length === 0) {
-    Swal.fire('Error', 'Game data is empty or corrupted.', 'error');
-    return;
-  }
-  
-  try {
-    const analysisType = getAnalysisType(game);
-    
-    if (analysisType === 'video' || analysisType === 'combined') {
-      // This is a video analysis, navigate to the tagging page with state
-      const navigationState = {
-        youtubeUrl: game.youtubeUrl,
-        sport: game.sport,
-        tags: game.gameData.map(tag => ({
-          id: `tag-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          timestamp: tag.timestamp,
-          category: tag.category || 'Unknown',
-          action: tag.action,
-          team: tag.team,
-          player: tag.playerName,
-          outcome: tag.outcome,
-          position: { 
-            x: parseFloat(tag.x) || 50, 
-            y: parseFloat(tag.y) || 50 
-          },
-          notes: tag.notes || '',
-        })),
-        datasetName: game.datasetName,
-        teamsData: game.teamsData
-      };
-      
-      // Show a more informative message when loading video analysis
-      Swal.fire({
-        title: 'Loading Video Analysis',
-        html: `
-          Loading "${game.gameName}" into video analysis editor.<br><br>
-          <strong>Note:</strong> ${game.youtubeUrl ? 
-            'You may need to re-enter the YouTube URL if the video doesn\'t load properly.' : 
-            'You may need to re-upload the video file as it is not stored with the analysis data.'}
-        `,
-        icon: 'info',
-        confirmButtonText: 'Continue',
-        allowOutsideClick: false
-      }).then(() => {
-        // Navigate to the tagging page after user confirms
-        navigate('/tagging/manual', { state: navigationState });
-      });
-    } else {
-      // This is a regular pitch analysis
-      setLoadedCoords(game);
-      onLoadGame(game.sport, game.gameData);
+  // normalize gameData into an array
+  let normalizedData = Array.isArray(game.gameData)
+    ? game.gameData
+    : Object.values(game.gameData || {});
+
+  if (normalizedData.length > 0) {
+    try {
+      onLoadGame(game.sport, normalizedData);
       Swal.fire('Success', `Game "${game.gameName}" loaded successfully!`, 'success');
+    } catch (error) {
+      console.error('Error loading game data:', error);
+      Swal.fire('Error', 'Failed to load game data.', 'error');
     }
-  } catch (error) {
-    console.error('Error loading game data:', error);
-    Swal.fire('Error', 'Failed to load game data.', 'error');
+  } else {
+    Swal.fire('Error', 'Game data is empty or corrupted.', 'error');
   }
 };
+
 
   const handleDeleteGame = async (gameId, gameName) => {
     const user = auth.currentUser;

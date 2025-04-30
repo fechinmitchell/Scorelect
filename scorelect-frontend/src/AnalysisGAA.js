@@ -693,8 +693,8 @@ const VideoAnalysis = () => {
 };
 
 // --- Main AnalysisGAA Component ---
-const AnalysisGAA = () => {
-  const [tab, setTab] = useState(0);
+const AnalysisGAA = ({ defaultTab = 'dataset' }) => {
+  const [tab, setTab] = useState(defaultTab === 'video' ? 1 : 0);
   
   return (
     <PageContainer maxWidth="lg">

@@ -24,6 +24,7 @@
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.2",
     "konva": "^9.3.20",
+    "lucide-react": "^0.503.0",
     "ml-distance": "^4.0.1",
     "ml-logistic-regression": "^2.0.0",
     "ml-matrix": "^6.12.0",

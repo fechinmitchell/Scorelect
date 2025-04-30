@@ -1,6 +1,11 @@
 import React, { useContext, useMemo, useState, useEffect, useRef } from 'react';
 import { Box, Grid, Typography, Button, Paper, Fade, Container, Avatar, Divider } from '@mui/material';
-import { FaVideo, FaMapMarkedAlt, FaDatabase, FaHistory, FaClock } from 'react-icons/fa';
+import { FaVideo, FaMapMarkedAlt, FaDatabase, FaHistory, FaClock, FaChartBar, FaChartPie, FaChartLine } from 'react-icons/fa';
+import { FaBrain } from 'react-icons/fa6';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import AnalyticsIcon from '@mui/icons-material/Analytics';
+import AssessmentIcon from '@mui/icons-material/Assessment';
+import InsightsIcon from '@mui/icons-material/Insights';
 import { SavedGamesContext } from './components/SavedGamesContext';
 import { GameContext } from './GameContext';
 import { useNavigate } from 'react-router-dom';
@@ -125,6 +130,7 @@ const RecentGameItem = ({ game, onSelect }) => {
   const [hover, setHover] = useState(false);
   const [isOverflowing, setIsOverflowing] = useState(false);
   const textRef = useRef(null);
+  const navigate = useNavigate();
   
   // Check if text is overflowing on mount and window resize
   useEffect(() => {
@@ -145,6 +151,65 @@ const RecentGameItem = ({ game, onSelect }) => {
   const formattedDate = game.matchDate 
     ? new Date(game.matchDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
     : 'No date';
+  
+  // Open in dataset analysis
+  const handleDatasetAnalysis = (e) => {
+    e.stopPropagation(); // Prevent triggering the parent onClick
+    
+    Swal.fire({
+      title: 'Opening Analysis Dashboard',
+      text: `Analyzing performance data for ${game.gameName}`,
+      icon: 'info',
+      background: '#222',
+      confirmButtonColor: '#5e2e8f',
+      showConfirmButton: false,
+      timer: 1500
+    });
+    
+    // Navigate to analysis with this game's data
+    const dataForAnalysis = {
+      datasetName: game.datasetName,
+      games: [game]
+    };
+    
+    navigate('/analysis/gaa-dashboard', { 
+      state: { 
+        file: dataForAnalysis, 
+        sport: game.sport || 'GAA'
+      } 
+    });
+  };
+  
+  // AI analysis (locked feature)
+  const handleAIAnalysis = (e) => {
+    e.stopPropagation(); // Prevent triggering the parent onClick
+    
+    Swal.fire({
+      title: 'Premium Feature',
+      html: `
+        <div style="text-align: left; color: #ddd">
+          <p>AI-powered match analysis is a premium feature that provides:</p>
+          <ul style="margin-left: 20px">
+            <li>Advanced performance metrics</li>
+            <li>Predictive play patterns</li>
+            <li>Player improvement recommendations</li>
+            <li>Tactical suggestions</li>
+          </ul>
+        </div>
+      `,
+      icon: 'info',
+      background: '#222',
+      confirmButtonColor: '#5e2e8f',
+      confirmButtonText: 'Upgrade',
+      showCancelButton: true,
+      cancelButtonText: 'Maybe Later',
+      cancelButtonColor: '#444'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        navigate('/upgrade');
+      }
+    });
+  };
     
   return (
     <Paper
@@ -203,6 +268,73 @@ const RecentGameItem = ({ game, onSelect }) => {
         <Typography variant="caption" sx={{ color: '#999', display: 'flex', alignItems: 'center', gap: 0.5 }}>
           <FaClock size={10} /> {formattedDate}
         </Typography>
+      </Box>
+      
+      {/* Action buttons */}
+      <Box sx={{ 
+        display: 'flex', 
+        gap: 1, 
+        ml: 1,
+        opacity: hover ? 1 : 0.2,
+        transition: 'opacity 0.2s ease'
+      }}>
+        {/* Dataset Analysis Button */}
+        <Button
+          size="small"
+          variant="contained"
+          onClick={handleDatasetAnalysis}
+          title="Open in Data Analysis"
+          sx={{
+            minWidth: 'auto',
+            width: 32,
+            height: 32,
+            borderRadius: '50%',
+            p: 0,
+            background: '#388e3c',
+            color: 'white',
+            '&:hover': { 
+              background: '#4caf50',
+            }
+          }}
+        >
+          <InsightsIcon style={{ fontSize: 16 }} />
+        </Button>
+        
+        {/* AI Analysis Button (Locked) */}
+        <Button
+          size="small"
+          variant="contained"
+          onClick={handleAIAnalysis}
+          title="AI Analysis (Premium)"
+          sx={{
+            minWidth: 'auto',
+            width: 32,
+            height: 32,
+            borderRadius: '50%',
+            p: 0,
+            background: '#6d4294',
+            color: 'white',
+            '&:hover': { 
+              background: '#8250ae',
+            }
+          }}
+        >
+          <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <AutoAwesomeIcon style={{ fontSize: 14 }} />
+            <Box
+              sx={{
+                position: 'absolute',
+                top: -2,
+                right: -3,
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: '#ffab00',
+                border: '1px solid #333',
+              }}
+            />
+          </Box>
+        </Button>
       </Box>
     </Paper>
   );
@@ -335,194 +467,209 @@ const DashboardHome = ({ selectedSport }) => {
         minHeight: '100vh',
         background: 'linear-gradient(135deg, #111, #1a1a1a)',
         pt: 4, 
-        pb: 8 
+        pb: 8,
+        position: 'relative',
+        overflow: 'hidden'
       }}
     >
       <Container maxWidth="lg">
-        <Box sx={{ textAlign: 'center', mb: 6 }}>
-          <Typography
-            variant="h3"
-            sx={{ 
-              color: '#fff',
-              fontWeight: 800,
-              letterSpacing: '0.5px',
-              position: 'relative',
-              display: 'inline-block',
-              pb: 2,
-              '&::after': {
-                content: '""',
-                position: 'absolute',
-                bottom: 0,
-                left: '25%',
-                width: '50%',
-                height: '4px',
-                borderRadius: '2px',
-                background: 'linear-gradient(90deg, #5e2e8f, #9254de)',
-              }
-            }}
-          >
-            {selectedSport} Dashboard
-          </Typography>
-          
-          <Typography 
-            variant="subtitle1" 
-            sx={{ 
-              mt: 2, 
-              color: '#bbb',
-              fontWeight: 400,
-              maxWidth: 700,
-              mx: 'auto' 
-            }}
-          >
-            Track, analyze, and visualize performance metrics for your {selectedSport} matches.
-          </Typography>
-        </Box>
+        <Paper
+          elevation={0}
+          sx={{
+            background: 'linear-gradient(135deg, #111, #1a1a1a)',
+            borderRadius: 6,
+            overflow: 'hidden',
+            padding: 4,
+            position: 'relative',
+            border: '1px solid #333',
+            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.25)'
+          }}
+        >
+          <Box sx={{ textAlign: 'center', mb: 6 }}>
+            <Typography
+              variant="h3"
+              sx={{ 
+                color: '#fff',
+                fontWeight: 800,
+                letterSpacing: '0.5px',
+                position: 'relative',
+                display: 'inline-block',
+                pb: 2,
+                '&::after': {
+                  content: '""',
+                  position: 'absolute',
+                  bottom: 0,
+                  left: '25%',
+                  width: '50%',
+                  height: '4px',
+                  borderRadius: '2px',
+                  background: 'linear-gradient(90deg, #5e2e8f, #9254de)',
+                }
+              }}
+            >
+              {selectedSport} Dashboard
+            </Typography>
+            
+            <Typography 
+              variant="subtitle1" 
+              sx={{ 
+                mt: 2, 
+                color: '#bbb',
+                fontWeight: 400,
+                maxWidth: 700,
+                mx: 'auto' 
+              }}
+            >
+              Track, analyze, and visualize performance metrics for your {selectedSport} matches.
+            </Typography>
+          </Box>
 
-        <Grid container spacing={4} sx={{ mb: 5 }}>
-          {/* Pitch Analysis */}
-          <Grid item xs={12} md={4}>
-            <Fade in={true} timeout={500}>
-              <Box>
-                <FeatureCard
-                  icon={FaMapMarkedAlt}
-                  title="Pitch Analysis"
-                  blurb="Tag events directly on a virtual pitch. Analyze player movements and team formations in real-time."
-                  cta="Open Pitch Tool"
-                  onClick={() => navigate('/pitch')}
-                />
-                <RecentList
-                  title="Recent Pitch Sessions"
-                  games={recentPitch}
-                  empty="No recent pitch analysis sessions found. Start a new session to see it here."
-                  onSelect={loadGame}
-                />
-              </Box>
-            </Fade>
-          </Grid>
+          <Grid container spacing={4} sx={{ mb: 5 }}>
+            {/* Pitch Analysis */}
+            <Grid item xs={12} md={4}>
+              <Fade in={true} timeout={500}>
+                <Box>
+                  <FeatureCard
+                    icon={FaMapMarkedAlt}
+                    title="Pitch Analysis"
+                    blurb="Tag events directly on a virtual pitch. Analyze player movements and team formations in real-time."
+                    cta="Open Pitch Tool"
+                    onClick={() => navigate('/pitch')}
+                  />
+                  <RecentList
+                    title="Recent Pitch Sessions"
+                    games={recentPitch}
+                    empty="No recent pitch analysis sessions found. Start a new session to see it here."
+                    onSelect={loadGame}
+                  />
+                </Box>
+              </Fade>
+            </Grid>
 
-          {/* Video Analysis */}
-          <Grid item xs={12} md={4}>
-            <Fade in={true} timeout={700}>
-              <Box>
-                <FeatureCard
-                  icon={FaVideo}
-                  title="Video Analysis"
-                  blurb="Upload or load match footage for detailed video analysis. Tag plays, track player movements, and identify key moments."
-                  cta="Open Video Tool"
-                  onClick={() => navigate('/video')}
-                />
-                <RecentList
-                  title="Recent Video Sessions"
-                  games={recentVideo}
-                  empty="No recent video analysis sessions found. Upload a video to get started."
-                  onSelect={loadGame}
-                />
-              </Box>
-            </Fade>
-          </Grid>
+            {/* Video Analysis */}
+            <Grid item xs={12} md={4}>
+              <Fade in={true} timeout={700}>
+                <Box>
+                  <FeatureCard
+                    icon={FaVideo}
+                    title="Video Analysis"
+                    blurb="Upload or load match footage for detailed video analysis. Tag plays, track player movements, and identify key moments."
+                    cta="Open Video Tool"
+                    onClick={() => navigate('/video')}
+                  />
+                  <RecentList
+                    title="Recent Video Sessions"
+                    games={recentVideo}
+                    empty="No recent video analysis sessions found. Upload a video to get started."
+                    onSelect={loadGame}
+                  />
+                </Box>
+              </Fade>
+            </Grid>
 
-          {/* Data Hub */}
-          <Grid item xs={12} md={4}>
-            <Fade in={true} timeout={900}>
-              <Box>
-                <FeatureCard
-                  icon={FaDatabase}
-                  title="Data Hub"
-                  blurb="Access, share and explore performance datasets. Generate insights, export reports, and collaborate with your team."
-                  cta="Open Data Hub"
-                  onClick={() => navigate('/sports-datahub')}
-                />
-                {/* Could add data hub stats or recent activities here */}
-                <Box sx={{ mt: 3, mb: 2 }}>
-                  <Typography 
-                    variant="h6" 
-                    sx={{ 
-                      mb: 2, 
-                      fontWeight: 600, 
-                      color: '#bbb',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1
-                    }}
-                  >
-                    <FaDatabase size={16} /> Data Hub Stats
-                    <Divider sx={{ ml: 2, flexGrow: 1, borderColor: '#444' }} />
-                  </Typography>
-                  
-                  <Box sx={{ height: 340, overflowY: 'auto', pr: 1 }}>
-                    <Paper
-                      sx={{
-                        p: 3,
-                        background: 'rgba(255,255,255,0.03)',
-                        borderRadius: 2,
+            {/* Data Hub */}
+            <Grid item xs={12} md={4}>
+              <Fade in={true} timeout={900}>
+                <Box>
+                  <FeatureCard
+                    icon={FaDatabase}
+                    title="Data Hub"
+                    blurb="Access, share and explore performance datasets. Generate insights, export reports, and collaborate with your team."
+                    cta="Open Data Hub"
+                    onClick={() => navigate('/sports-datahub')}
+                  />
+                  {/* Could add data hub stats or recent activities here */}
+                  <Box sx={{ mt: 3, mb: 2 }}>
+                    <Typography 
+                      variant="h6" 
+                      sx={{ 
+                        mb: 2, 
+                        fontWeight: 600, 
+                        color: '#bbb',
                         display: 'flex',
-                        flexDirection: 'column',
-                        gap: 2
+                        alignItems: 'center',
+                        gap: 1
                       }}
                     >
-                      {/* Show some data hub stats if available */}
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography color="#999">Total Datasets:</Typography>
-                        <Typography color="#fff" fontWeight={600}>
-                          {Object.keys(datasets).length}
+                      <FaDatabase size={16} /> Data Hub Stats
+                      <Divider sx={{ ml: 2, flexGrow: 1, borderColor: '#444' }} />
+                    </Typography>
+                    
+                    <Box sx={{ height: 340, overflowY: 'auto', pr: 1 }}>
+                      <Paper
+                        sx={{
+                          p: 3,
+                          background: 'rgba(255,255,255,0.03)',
+                          borderRadius: 2,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 2
+                        }}
+                      >
+                        {/* Show some data hub stats if available */}
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography color="#999">Total Datasets:</Typography>
+                          <Typography color="#fff" fontWeight={600}>
+                            {Object.keys(datasets).length}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography color="#999">{selectedSport} Games:</Typography>
+                          <Typography color="#fff" fontWeight={600}>
+                            {Object.values(datasets)
+                              .flatMap((d) => d.games)
+                              .filter((g) => g.sport === selectedSport).length}
+                          </Typography>
+                        </Box>
+                        
+                        {/* Added more stats to fill space */}
+                        <Divider sx={{ my: 1, borderColor: '#333' }} />
+                        
+                        <Typography variant="subtitle2" color="#bbb" sx={{ mt: 1 }}>
+                          Data Analysis
                         </Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography color="#999">{selectedSport} Games:</Typography>
-                        <Typography color="#fff" fontWeight={600}>
-                          {Object.values(datasets)
-                            .flatMap((d) => d.games)
-                            .filter((g) => g.sport === selectedSport).length}
+                        
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography color="#999">Pitch Analyses:</Typography>
+                          <Typography color="#fff" fontWeight={600}>
+                            {recentPitch.length}
+                          </Typography>
+                        </Box>
+                        
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography color="#999">Video Analyses:</Typography>
+                          <Typography color="#fff" fontWeight={600}>
+                            {recentVideo.length}
+                          </Typography>
+                        </Box>
+                        
+                        <Divider sx={{ my: 1, borderColor: '#333' }} />
+                        
+                        <Typography variant="subtitle2" color="#bbb" sx={{ mt: 1 }}>
+                          System Status
                         </Typography>
-                      </Box>
-                      
-                      {/* Added more stats to fill space */}
-                      <Divider sx={{ my: 1, borderColor: '#333' }} />
-                      
-                      <Typography variant="subtitle2" color="#bbb" sx={{ mt: 1 }}>
-                        Data Analysis
-                      </Typography>
-                      
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography color="#999">Pitch Analyses:</Typography>
-                        <Typography color="#fff" fontWeight={600}>
-                          {recentPitch.length}
-                        </Typography>
-                      </Box>
-                      
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography color="#999">Video Analyses:</Typography>
-                        <Typography color="#fff" fontWeight={600}>
-                          {recentVideo.length}
-                        </Typography>
-                      </Box>
-                      
-                      <Divider sx={{ my: 1, borderColor: '#333' }} />
-                      
-                      <Typography variant="subtitle2" color="#bbb" sx={{ mt: 1 }}>
-                        System Status
-                      </Typography>
-                      
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography color="#999">Storage Used:</Typography>
-                        <Typography color="#fff" fontWeight={600}>
-                          {Math.floor(Math.random() * 50) + 20}%
-                        </Typography>
-                      </Box>
-                      
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography color="#999">Last Backup:</Typography>
-                        <Typography color="#fff" fontWeight={600}>
-                          {new Date().toLocaleDateString()}
-                        </Typography>
-                      </Box>
-                    </Paper>
+                        
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography color="#999">Storage Used:</Typography>
+                          <Typography color="#fff" fontWeight={600}>
+                            {Math.floor(Math.random() * 50) + 20}%
+                          </Typography>
+                        </Box>
+                        
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography color="#999">Last Backup:</Typography>
+                          <Typography color="#fff" fontWeight={600}>
+                            {new Date().toLocaleDateString()}
+                          </Typography>
+                        </Box>
+                      </Paper>
+                    </Box>
                   </Box>
                 </Box>
-              </Box>
-            </Fade>
+              </Fade>
+            </Grid>
           </Grid>
-        </Grid>
+        </Paper>
       </Container>
     </Box>
   );

@@ -1,6 +1,17 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Typography, Button, Select, MenuItem, Paper, Container, Grid, TextField } from '@mui/material';
+import {
+  Box,
+  Typography,
+  Button,
+  Select,
+  MenuItem,
+  Paper,
+  Container,
+  Grid,
+  TextField,
+  Divider
+} from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useDropzone } from 'react-dropzone';
 import Swal from 'sweetalert2';
@@ -20,42 +31,45 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import StorageIcon from '@mui/icons-material/Storage';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import EditIcon from '@mui/icons-material/Edit';
+import SportsIcon from '@mui/icons-material/Sports';
+import AnalyticsIcon from '@mui/icons-material/Analytics';
 
-// --- Custom Styled Components ---
+// --- Styled Components ---
 const PageContainer = styled(Container)(({ theme }) => ({
   position: 'relative',
   minHeight: '100vh',
   padding: theme.spacing(4, 0),
   display: 'flex',
-  flexDirection: 'column',
+  flexDirection: 'column'
 }));
 
-const TabButton = styled(Button)(({ theme, active }) => ({
-  backgroundColor: active ? '#5e2e8f' : '#1f1f1f',
-  color: '#ffffff',
+const TabButton = styled(Button, {
+  shouldForwardProp: (prop) => prop !== 'isActive'
+})(({ theme, isActive }) => ({
+  backgroundColor: isActive ? '#5e2e8f' : '#1f1f1f',
+  color: '#fff',
   padding: theme.spacing(1.5, 3),
   borderRadius: theme.spacing(2.5),
-  fontWeight: active ? 'bold' : 'normal',
+  fontWeight: isActive ? 'bold' : 'normal',
   transition: 'all 0.3s ease',
   '&:hover': {
-    backgroundColor: active ? '#6d3ca1' : '#2d2d2d',
+    backgroundColor: isActive ? '#6d3ca1' : '#2d2d2d',
     transform: 'translateY(-2px)',
-    boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
+    boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
   },
   flex: 1,
-  minWidth: '180px',
-  maxWidth: '240px',
+  minWidth: 150,
+  maxWidth: 200
 }));
 
 const SectionCard = styled(Paper)(({ theme }) => ({
   backgroundColor: '#1a1a1a',
-  color: '#ffffff',
+  color: '#fff',
   padding: theme.spacing(3),
   borderRadius: theme.spacing(2),
   boxShadow: '0 8px 16px rgba(0,0,0,0.3)',
-  flexGrow: 1,
   marginTop: theme.spacing(3),
-  border: '1px solid #333',
+  border: '1px solid #333'
 }));
 
 const SectionTitle = styled(Typography)(({ theme }) => ({
@@ -69,16 +83,18 @@ const SectionTitle = styled(Typography)(({ theme }) => ({
   '&::after': {
     content: '""',
     display: 'block',
-    height: '3px',
-    background: 'linear-gradient(90deg, #5e2e8f 0%, rgba(94, 46, 143, 0.1) 100%)',
+    height: 3,
+    background: 'linear-gradient(90deg, #5e2e8f 0%, rgba(94,46,143,0.1) 100%)',
     flexGrow: 1,
-    marginLeft: theme.spacing(2),
+    marginLeft: theme.spacing(2)
   }
 }));
 
-const DropzoneContainer = styled(Box)(({ theme, isDragActive }) => ({
+const DropzoneContainer = styled(Box, {
+  shouldForwardProp: (prop) => prop !== 'isdragactive'
+})(({ theme, isdragactive }) => ({
   padding: theme.spacing(4),
-  border: `2px dashed ${isDragActive ? '#7e4cb8' : '#501387'}`,
+  border: `2px dashed ${isdragactive ? '#7e4cb8' : '#501387'}`,
   borderRadius: theme.spacing(2),
   textAlign: 'center',
   cursor: 'pointer',
@@ -86,12 +102,12 @@ const DropzoneContainer = styled(Box)(({ theme, isDragActive }) => ({
   transition: 'all 0.3s ease',
   '&:hover': {
     backgroundColor: '#282828',
-    borderColor: '#7e4cb8',
+    borderColor: '#7e4cb8'
   },
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  gap: theme.spacing(2),
+  gap: theme.spacing(2)
 }));
 
 const FiltersContainer = styled(Box)(({ theme }) => ({
@@ -99,13 +115,13 @@ const FiltersContainer = styled(Box)(({ theme }) => ({
   backgroundColor: '#232323',
   padding: theme.spacing(3),
   borderRadius: theme.spacing(2),
-  border: '1px solid #333',
+  border: '1px solid #333'
 }));
 
 const StyledSelect = styled(Select)(({ theme }) => ({
   marginBottom: theme.spacing(2),
   backgroundColor: '#2c2c2c',
-  color: '#ffffff',
+  color: '#fff',
   '& .MuiOutlinedInput-notchedOutline': {
     borderColor: '#444'
   },
@@ -120,19 +136,31 @@ const StyledSelect = styled(Select)(({ theme }) => ({
   }
 }));
 
-const ActionButton = styled(Button)(({ theme, color }) => ({
-  backgroundColor: color === 'primary' ? '#5e2e8f' : color === 'success' ? '#28a745' : '#dc3545',
-  color: '#ffffff',
+const ActionButton = styled(Button, {
+  shouldForwardProp: (prop) => prop !== 'btncolor'
+})(({ theme, btncolor }) => ({
+  backgroundColor:
+    btncolor === 'primary'
+      ? '#5e2e8f'
+      : btncolor === 'success'
+      ? '#28a745'
+      : '#dc3545',
+  color: '#fff',
   padding: theme.spacing(1, 3),
   borderRadius: theme.spacing(1),
   textTransform: 'none',
   fontWeight: 600,
   transition: 'all 0.3s ease',
   '&:hover': {
-    backgroundColor: color === 'primary' ? '#7e4cb8' : color === 'success' ? '#2fbc4e' : '#e04555',
+    backgroundColor:
+      btncolor === 'primary'
+        ? '#7e4cb8'
+        : btncolor === 'success'
+        ? '#2fbc4e'
+        : '#e04555',
     transform: 'translateY(-2px)',
-    boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
-  },
+    boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
+  }
 }));
 
 const UploadIcon = styled(CloudUploadIcon)(({ theme }) => ({
@@ -146,25 +174,22 @@ const FilePreview = styled(Box)(({ theme }) => ({
   alignItems: 'center',
   gap: theme.spacing(1),
   padding: theme.spacing(1.5),
-  backgroundColor: 'rgba(94, 46, 143, 0.1)',
+  backgroundColor: 'rgba(94,46,143,0.1)',
   borderRadius: theme.spacing(1),
   marginTop: theme.spacing(2),
-  border: '1px solid #5e2e8f',
+  border: '1px solid #5e2e8f'
 }));
 
-// --- TabPanel Component ---
-const TabPanel = ({ children, value, index }) => (
-  <div role="tabpanel" hidden={value !== index} style={{ width: '100%' }}>
-    {value === index && <Box sx={{ width: '100%' }}>{children}</Box>}
-  </div>
-);
+// --- TabPanel Helper ---
+const TabPanel = ({ children, value, index }) =>
+  value === index ? <Box sx={{ width: '100%' }}>{children}</Box> : null;
 
-// --- Dataset Analysis Tab ---
+// --- DatasetAnalysis ---
 const DatasetAnalysis = () => {
-  const { userRole } = useUser();
-  const { currentUser, loading } = useAuth();
-  const navigate = useNavigate();
   const { datasets } = useContext(SavedGamesContext);
+  const { currentUser, loading } = useAuth();
+  const { userRole } = useUser();
+  const navigate = useNavigate();
 
   const [uploadedFile, setUploadedFile] = useState(null);
   const [parsedData, setParsedData] = useState(null);
@@ -173,34 +198,29 @@ const DatasetAnalysis = () => {
   const [selectedTeam, setSelectedTeam] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState('');
   const [selectedAction, setSelectedAction] = useState('');
-  const [filterOptions, setFilterOptions] = useState({ teams: [], players: [], actions: [] });
+  const [filterOptions, setFilterOptions] = useState({
+    teams: [],
+    players: [],
+    actions: []
+  });
   const [analysisPermission, setAnalysisPermission] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
 
-  // file drop handler
-  const onDrop = (acceptedFiles) => {
-    if (!acceptedFiles.length) return;
-    const file = acceptedFiles[0];
+  const onDrop = (files) => {
+    if (!files.length) return;
+    const file = files[0];
     setUploadedFile(file);
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const json = JSON.parse(reader.result);
         if (!json.games || !Array.isArray(json.games)) {
-          Swal.fire({
-            title: 'Invalid File',
-            text: 'The uploaded file does not have the correct structure.',
-            icon: 'error',
-            background: '#222',
-            color: '#fff',
-            confirmButtonColor: '#5e2e8f'
-          });
-          return;
+          throw new Error('Invalid structure');
         }
         setParsedData(json);
         Swal.fire({
           title: 'File Uploaded',
-          text: `${file.name} has been uploaded and parsed successfully.`,
+          text: `${file.name} parsed successfully.`,
           icon: 'success',
           background: '#222',
           color: '#fff',
@@ -209,7 +229,7 @@ const DatasetAnalysis = () => {
       } catch {
         Swal.fire({
           title: 'Error',
-          text: 'Failed to parse the file. Please check the file format.',
+          text: 'Invalid JSON format.',
           icon: 'error',
           background: '#222',
           color: '#fff',
@@ -220,77 +240,79 @@ const DatasetAnalysis = () => {
     reader.readAsText(file);
   };
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
-    onDrop, 
-    accept: { 'application/json': ['.json'] }, 
-    multiple: false 
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: { 'application/json': ['.json'] },
+    multiple: false
   });
 
-  // permissions check
   useEffect(() => {
     if (loading) return;
     (async () => {
-      const settingsRef = doc(firestore, 'adminSettings', 'config');
-      const settingsSnap = await getDoc(settingsRef);
-      const perms = settingsSnap.exists() ? settingsSnap.data().permissions || {} : {};
-      const perm = perms['analysis'] || 0;
+      const ref = doc(firestore, 'adminSettings', 'config');
+      const snap = await getDoc(ref);
+      const perms = snap.exists() ? snap.data().permissions || {} : {};
+      const perm = perms.analysis || 0;
       setAnalysisPermission(perm);
-      
+
       if (perm > 0 && !currentUser) {
         await Swal.fire({
-          title: 'Authentication Required',
-          text: 'Please sign in to access this page.',
+          title: 'Sign In Required',
+          text: 'Please sign in to continue.',
           icon: 'warning',
           background: '#222',
           color: '#fff',
           confirmButtonColor: '#5e2e8f'
         });
-        navigate('/signin');
-      } else if (currentUser) {
-        if ((perm === 1 && userRole !== 'free') || (perm === 2 && userRole !== 'premium')) {
-          await Swal.fire({
-            title: 'Access Denied',
-            text: 'You do not have permission to view this page.',
-            icon: 'error',
-            background: '#222',
-            color: '#fff',
-            confirmButtonColor: '#5e2e8f'
-          });
-          navigate('/');
-        }
+        return navigate('/signin');
+      }
+      if (
+        (perm === 1 && userRole !== 'free') ||
+        (perm === 2 && userRole !== 'premium')
+      ) {
+        await Swal.fire({
+          title: 'Access Denied',
+          text: 'Insufficient permissions.',
+          icon: 'error',
+          background: '#222',
+          color: '#fff',
+          confirmButtonColor: '#5e2e8f'
+        });
+        return navigate('/');
       }
     })();
   }, [currentUser, loading, userRole, navigate]);
 
-  // build filter options
   useEffect(() => {
-    const source = parsedData || (selectedUserDataset && datasets[selectedUserDataset]);
-    if (source?.games) {
-      const teams = new Set();
-      const players = new Set();
-      const actions = new Set();
-      source.games.forEach(game =>
-        game.gameData?.forEach(e => {
-          if (e.team) teams.add(e.team);
-          if (e.playerName) players.add(e.playerName);
-          if (e.action) actions.add(e.action);
-        })
-      );
-      setFilterOptions({ 
-        teams: [...teams].sort(), 
-        players: [...players].sort(), 
-        actions: [...actions].sort() 
-      });
-    }
+    const source =
+      parsedData || (selectedUserDataset && datasets[selectedUserDataset]);
+    if (!source?.games) return;
+
+    const teams = new Set(),
+      players = new Set(),
+      actions = new Set();
+
+    source.games.forEach((g) =>
+      g.gameData?.forEach((e) => {
+        if (e.team) teams.add(e.team);
+        if (e.playerName) players.add(e.playerName);
+        if (e.action) actions.add(e.action);
+      })
+    );
+
+    setFilterOptions({
+      teams: [...teams].sort(),
+      players: [...players].sort(),
+      actions: [...actions].sort()
+    });
   }, [parsedData, selectedUserDataset, datasets]);
 
-  // continue to dashboard
   const handleContinue = () => {
-    let data = parsedData || (selectedUserDataset && datasets[selectedUserDataset]);
+    let data = parsedData || datasets[selectedUserDataset];
     if (!data) {
       Swal.fire({
-        title: 'No Dataset Selected',
-        text: 'Please upload or select a dataset.',
+        title: 'No Dataset',
+        text: 'Upload or select a dataset first.',
         icon: 'warning',
         background: '#222',
         color: '#fff',
@@ -298,24 +320,27 @@ const DatasetAnalysis = () => {
       });
       return;
     }
-    
     if (selectedMatch !== 'all') {
       data = {
         ...data,
-        games: data.games.filter(g => (g.gameId || g.gameName) === selectedMatch)
+        games: data.games.filter(
+          (g) => (g.gameId || g.gameName) === selectedMatch
+        )
       };
     }
-    
-    const filters = {
-      team: selectedTeam || null,
-      player: selectedPlayer || null,
-      action: selectedAction || null,
-    };
-    
-    navigate('/analysis/gaa-dashboard', { state: { file: data, sport: 'GAA', filters } });
+    navigate('/analysis/gaa-dashboard', {
+      state: {
+        file: data,
+        sport: 'GAA',
+        filters: {
+          team: selectedTeam || null,
+          player: selectedPlayer || null,
+          action: selectedAction || null
+        }
+      }
+    });
   };
 
-  // reset all selections
   const handleReset = () => {
     setUploadedFile(null);
     setParsedData(null);
@@ -325,6 +350,7 @@ const DatasetAnalysis = () => {
     setSelectedPlayer('');
     setSelectedAction('');
     setFilterOptions({ teams: [], players: [], actions: [] });
+    setShowFilters(false);
   };
 
   return (
@@ -334,41 +360,51 @@ const DatasetAnalysis = () => {
       </SectionTitle>
 
       {/* Saved Datasets */}
-      {Object.keys(datasets).length > 0 ? (
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="subtitle1" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <StorageIcon fontSize="small" color="primary" /> Select a saved dataset:
+      {Object.keys(datasets).length ? (
+        <Box mb={4}>
+          <Typography
+            variant="subtitle1"
+            mb={1}
+            display="flex"
+            alignItems="center"
+            gap={1}
+          >
+            <StorageIcon fontSize="small" /> Select a saved dataset:
           </Typography>
-          
           <StyledSelect
             fullWidth
             value={selectedUserDataset}
-            onChange={e => {
+            onChange={(e) => {
               setSelectedUserDataset(e.target.value);
               setSelectedMatch('all');
-              if (e.target.value) setShowFilters(true);
+              setShowFilters(!!e.target.value);
             }}
             displayEmpty
-            sx={{ mb: 2 }}
           >
-            <MenuItem value=""><em>None</em></MenuItem>
-            {Object.keys(datasets).map(name => (
-              <MenuItem key={name} value={name}>{name}</MenuItem>
+            <MenuItem value="">
+              <em>None</em>
+            </MenuItem>
+            {Object.keys(datasets).map((name) => (
+              <MenuItem key={name} value={name}>
+                {name}
+              </MenuItem>
             ))}
           </StyledSelect>
-
           {selectedUserDataset && (
             <StyledSelect
               fullWidth
               value={selectedMatch}
-              onChange={e => setSelectedMatch(e.target.value)}
+              onChange={(e) => setSelectedMatch(e.target.value)}
             >
               <MenuItem value="all">All Matches</MenuItem>
-              {datasets[selectedUserDataset].games.map(g => {
+              {datasets[selectedUserDataset].games.map((g) => {
                 const id = g.gameId || g.gameName;
                 return (
                   <MenuItem key={id} value={id}>
-                    {g.gameName} ({g.matchDate ? new Date(g.matchDate).toLocaleDateString() : 'N/A'})
+                    {g.gameName}{' '}
+                    {g.matchDate
+                      ? `(${new Date(g.matchDate).toLocaleDateString()})`
+                      : '(N/A)'}
                   </MenuItem>
                 );
               })}
@@ -376,19 +412,26 @@ const DatasetAnalysis = () => {
           )}
         </Box>
       ) : (
-        <Typography sx={{ mb: 4 }}>No saved datasets available.</Typography>
+        <Typography mb={4}>No saved datasets available.</Typography>
       )}
 
-      {/* Upload JSON Dataset */}
-      <DropzoneContainer {...getRootProps()} isDragActive={isDragActive}>
+      {/* Upload JSON */}
+      <DropzoneContainer
+        {...getRootProps()}
+        isdragactive={isDragActive.toString()}
+      >
         <input {...getInputProps()} />
         <UploadIcon />
         {isDragActive ? (
           <Typography variant="h6">Drop the JSON here…</Typography>
         ) : (
           <>
-            <Typography variant="h6">Drag & drop a dataset JSON</Typography>
-            <Typography variant="body2" color="text.secondary">or click to select a file</Typography>
+            <Typography variant="h6">
+              Drag & drop a dataset JSON
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              or click to select
+            </Typography>
           </>
         )}
       </DropzoneContainer>
@@ -396,84 +439,70 @@ const DatasetAnalysis = () => {
       {uploadedFile && (
         <FilePreview>
           <StorageIcon color="primary" />
-          <Typography sx={{ color: '#fff' }}>
+          <Typography>
             <strong>Uploaded:</strong> {uploadedFile.name}
           </Typography>
         </FilePreview>
       )}
 
-      {/* Additional Filters */}
-      <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <FilterListIcon fontSize="small" color="primary" /> Additional Filters
+      {/* Filters Toggle */}
+      <Box
+        mt={4}
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
+      >
+        <Typography variant="subtitle1" display="flex" alignItems="center" gap={1}>
+          <FilterListIcon fontSize="small" /> Additional Filters
         </Typography>
-        <Button 
-          onClick={() => setShowFilters(!showFilters)}
+        <Button
+          onClick={() => setShowFilters((s) => !s)}
           sx={{ color: '#5e2e8f', textTransform: 'none' }}
         >
           {showFilters ? 'Hide Filters' : 'Show Filters'}
         </Button>
       </Box>
 
+      {/* Filters Panel */}
       {showFilters && (
         <FiltersContainer>
           <Grid container spacing={2}>
-            <Grid item xs={12} md= {4}>
-              <Typography variant="body2" sx={{ mb: 1, color: '#aaa' }}>Team</Typography>
-              <StyledSelect
-                fullWidth
-                value={selectedTeam}
-                onChange={e => setSelectedTeam(e.target.value)}
-                displayEmpty
-              >
-                <MenuItem value=""><em>All Teams</em></MenuItem>
-                {filterOptions.teams.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-              </StyledSelect>
-            </Grid>
-            
-            <Grid item xs={12} md={4}>
-              <Typography variant="body2" sx={{ mb: 1, color: '#aaa' }}>Player</Typography>
-              <StyledSelect
-                fullWidth
-                value={selectedPlayer}
-                onChange={e => setSelectedPlayer(e.target.value)}
-                displayEmpty
-              >
-                <MenuItem value=""><em>All Players</em></MenuItem>
-                {filterOptions.players.map(p => <MenuItem key={p} value={p}>{p}</MenuItem>)}
-              </StyledSelect>
-            </Grid>
-            
-            <Grid item xs={12} md={4}>
-              <Typography variant="body2" sx={{ mb: 1, color: '#aaa' }}>Action</Typography>
-              <StyledSelect
-                fullWidth
-                value={selectedAction}
-                onChange={e => setSelectedAction(e.target.value)}
-                displayEmpty
-              >
-                <MenuItem value=""><em>All Actions</em></MenuItem>
-                {filterOptions.actions.map(a => <MenuItem key={a} value={a}>{a}</MenuItem>)}
-              </StyledSelect>
-            </Grid>
+            {[
+              { label: 'Team', value: selectedTeam, setter: setSelectedTeam, options: filterOptions.teams },
+              { label: 'Player', value: selectedPlayer, setter: setSelectedPlayer, options: filterOptions.players },
+              { label: 'Action', value: selectedAction, setter: setSelectedAction, options: filterOptions.actions }
+            ].map(({ label, value, setter, options }) => (
+              <Grid item xs={12} md={4} key={label}>
+                <Typography variant="body2" mb={1} color="#aaa">
+                  {label}
+                </Typography>
+                <StyledSelect
+                  fullWidth
+                  value={value}
+                  onChange={(e) => setter(e.target.value)}
+                  displayEmpty
+                >
+                  <MenuItem value="">
+                    <em>All {label}s</em>
+                  </MenuItem>
+                  {options.map((opt) => (
+                    <MenuItem key={opt} value={opt}>
+                      {opt}
+                    </MenuItem>
+                  ))}
+                </StyledSelect>
+              </Grid>
+            ))}
           </Grid>
         </FiltersContainer>
       )}
 
-      {/* Action Buttons */}
-      <Box sx={{ mt: 4, display: 'flex', gap: 2 }}>
-        <ActionButton
-          color="success"
-          onClick={handleContinue}
-          startIcon={<PlayArrowIcon />}
-        >
+      {/* Actions */}
+      <Box mt={4} display="flex" gap={2}>
+        <ActionButton btncolor="success" onClick={handleContinue} startIcon={<PlayArrowIcon />}>
           Continue to Analysis
         </ActionButton>
-        <ActionButton
-          color="error"
-          onClick={handleReset}
-          startIcon={<RestartAltIcon />}
-        >
+        <ActionButton btncolor="error" onClick={handleReset} startIcon={<RestartAltIcon />}>
           Reset
         </ActionButton>
       </Box>
@@ -481,45 +510,37 @@ const DatasetAnalysis = () => {
   );
 };
 
-// --- Video Analysis Tab ---
+// --- VideoAnalysis ---
 const VideoAnalysis = () => {
+  const navigate = useNavigate();
   const [file, setFile] = useState(null);
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [urlError, setUrlError] = useState('');
-  const navigate = useNavigate();
 
-  // Validate YouTube URL
-  const validateYouTubeUrl = (url) => {
-    const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/(watch\?v=|embed\/|v\/|.+\?v=)?([^&=%\?]{11})/;
-    return youtubeRegex.test(url);
-  };
+  const validateYouTubeUrl = (url) =>
+    /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/(watch\?v=|embed\/|v\/|.+\?v=)?([^&=%\?]{11})/.test(
+      url
+    );
 
-  // Handle URL input change
   const handleUrlChange = (e) => {
-    const url = e.target.value;
-    setYoutubeUrl(url);
-    if (url) {
-      if (validateYouTubeUrl(url)) {
-        setUrlError('');
-        setFile(null); // Clear file if URL is entered
-      } else {
-        setUrlError('Please enter a valid YouTube URL');
-      }
+    const val = e.target.value;
+    setYoutubeUrl(val);
+    if (val && !validateYouTubeUrl(val)) {
+      setUrlError('Please enter a valid YouTube URL');
     } else {
       setUrlError('');
     }
+    if (val) setFile(null);
   };
 
-  // File drop handler
-  const onDrop = (acceptedFiles) => {
-    if (!acceptedFiles.length) return;
-    const f = acceptedFiles[0];
-    setFile(f);
-    setYoutubeUrl(''); // Clear URL if file is dropped
+  const onDrop = (files) => {
+    if (!files.length) return;
+    setFile(files[0]);
+    setYoutubeUrl('');
     setUrlError('');
     Swal.fire({
       title: 'Video Uploaded',
-      text: `${f.name} has been successfully uploaded.`,
+      text: `${files[0].name} uploaded.`,
       icon: 'success',
       background: '#222',
       color: '#fff',
@@ -529,46 +550,40 @@ const VideoAnalysis = () => {
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { 'video/mp4': ['.mp4'] }, // Explicitly accept MP4
-    multiple: false,
+    accept: { 'video/mp4': ['.mp4'] },
+    multiple: false
   });
-
-  const handleReset = () => {
-    setFile(null);
-    setYoutubeUrl('');
-    setUrlError('');
-  };
 
   const handleContinue = () => {
     if (!file && !youtubeUrl) {
-      Swal.fire({
+      return Swal.fire({
         title: 'No Video Selected',
-        text: 'Please upload a video file or enter a YouTube URL.',
+        text: 'Upload a file or enter a URL.',
         icon: 'warning',
         background: '#222',
         color: '#fff',
         confirmButtonColor: '#5e2e8f'
       });
-      return;
     }
-    if (youtubeUrl && !validateYouTubeUrl(youtubeUrl)) {
-      Swal.fire({
+    if (youtubeUrl && urlError) {
+      return Swal.fire({
         title: 'Invalid URL',
-        text: 'Please enter a valid YouTube URL.',
+        text: 'Correct the YouTube URL.',
         icon: 'error',
         background: '#222',
         color: '#fff',
         confirmButtonColor: '#5e2e8f'
       });
-      return;
     }
-    navigate('/tagging/manual', { 
-      state: { 
-        file: file || null, 
-        youtubeUrl: youtubeUrl || null, 
-        sport: 'GAA' 
-      }
+    navigate('/tagging/manual', {
+      state: { file: file || null, youtubeUrl: youtubeUrl || null, sport: 'GAA' }
     });
+  };
+
+  const handleReset = () => {
+    setFile(null);
+    setYoutubeUrl('');
+    setUrlError('');
   };
 
   return (
@@ -577,10 +592,10 @@ const VideoAnalysis = () => {
         <VideoLibraryIcon /> Video Analysis
       </SectionTitle>
 
-      {/* YouTube URL Input */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="subtitle1" sx={{ mb: 1, color: '#eee' }}>
-          Enter YouTube Video URL
+      {/* YouTube URL */}
+      <Box mb={3}>
+        <Typography variant="subtitle1" mb={1} color="#eee">
+          Enter YouTube URL
         </Typography>
         <TextField
           fullWidth
@@ -596,33 +611,39 @@ const VideoAnalysis = () => {
               color: '#fff',
               '& fieldset': { borderColor: '#444' },
               '&:hover fieldset': { borderColor: '#666' },
-              '&.Mui-focused fieldset': { borderColor: '#5e2e8f' },
+              '&.Mui-focused fieldset': { borderColor: '#5e2e8f' }
             },
-            '& .MuiInputLabel-root': { color: '#aaa' },
+            '& .MuiInputLabel-root': { color: '#aaa' }
           }}
         />
       </Box>
 
-      {/* Upload Video File */}
-      <DropzoneContainer {...getRootProps()} isDragActive={isDragActive}>
+      {/* File Drop */}
+      <DropzoneContainer
+        {...getRootProps()}
+        isdragactive={isDragActive.toString()}
+      >
         <input {...getInputProps()} />
         <UploadIcon />
         {isDragActive ? (
-          <Typography variant="h6">Drop the MP4 video here…</Typography>
+          <Typography variant="h6">Drop the MP4 here…</Typography>
         ) : (
           <>
-            <Typography variant="h6">Drag & drop an MP4 video file</Typography>
-            <Typography variant="body2" color="text.secondary">or click to select</Typography>
+            <Typography variant="h6">Drag & drop an MP4</Typography>
+            <Typography variant="body2" color="text.secondary">
+              or click to select
+            </Typography>
           </>
         )}
       </DropzoneContainer>
 
+      {/* Preview */}
       {(file || youtubeUrl) && (
         <>
           {file && (
             <FilePreview>
               <VideoLibraryIcon color="primary" />
-              <Typography sx={{ color: '#fff' }}>
+              <Typography>
                 <strong>Selected:</strong> {file.name}
               </Typography>
             </FilePreview>
@@ -630,43 +651,37 @@ const VideoAnalysis = () => {
           {youtubeUrl && (
             <FilePreview>
               <VideoLibraryIcon color="primary" />
-              <Typography sx={{ color: '#fff' }}>
-                <strong>YouTube URL:</strong> {youtubeUrl}
+              <Typography>
+                <strong>URL:</strong> {youtubeUrl}
               </Typography>
             </FilePreview>
           )}
 
-          {/* Tagging Mode Selection */}
-          <Box sx={{ mt: 3 }}>
-            <Typography variant="subtitle1" sx={{ mb: 2, color: '#eee' }}>
+          {/* Tagging Options */}
+          <Box mt={3}>
+            <Typography variant="subtitle1" mb={2} color="#eee">
               Select tagging method:
             </Typography>
-
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
                 <ActionButton
-                  color="primary"
+                  btncolor="primary"
                   fullWidth
-                  onClick={handleContinue}
                   startIcon={<EditIcon />}
+                  onClick={handleContinue}
                 >
                   Manual Tagging
                 </ActionButton>
               </Grid>
-
               <Grid item xs={12} sm={6}>
                 <ActionButton
-                  color="primary"
+                  btncolor="primary"
                   fullWidth
                   disabled
-                  sx={{ 
-                    opacity: 0.5, 
+                  sx={{
+                    opacity: 0.5,
                     cursor: 'not-allowed',
-                    '&:hover': {
-                      backgroundColor: '#5e2e8f',
-                      transform: 'none',
-                      boxShadow: 'none',
-                    }
+                    '&:hover': { transform: 'none', boxShadow: 'none' }
                   }}
                   title="AI-Assisted Tagging coming soon"
                   startIcon={<AutoAwesomeIcon />}
@@ -679,12 +694,8 @@ const VideoAnalysis = () => {
         </>
       )}
 
-      <Box sx={{ mt: 4, display: 'flex', gap: 2 }}>
-        <ActionButton
-          color="error"
-          onClick={handleReset}
-          startIcon={<RestartAltIcon />}
-        >
+      <Box mt={4} display="flex" gap={2}>
+        <ActionButton btncolor="error" onClick={handleReset} startIcon={<RestartAltIcon />}>
           Reset
         </ActionButton>
       </Box>
@@ -692,62 +703,286 @@ const VideoAnalysis = () => {
   );
 };
 
-// --- Main AnalysisGAA Component ---
-const AnalysisGAA = ({ defaultTab = 'dataset' }) => {
-  const [tab, setTab] = useState(defaultTab === 'video' ? 1 : 0);
-  
+// --- PitchAnalysis with simplified setup/skip options ---
+const PitchAnalysis = () => {
+  const { currentUser } = useAuth();
+  const { userRole } = useUser();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!currentUser) {
+      Swal.fire({
+        title: 'Sign In Required',
+        text: 'Please sign in to use the Pitch Analysis tool.',
+        icon: 'warning',
+        background: '#222',
+        color: '#fff',
+        confirmButtonColor: '#5e2e8f'
+      }).then(() => navigate('/signin'));
+    }
+  }, [currentUser, navigate]);
+
+  const pitchOptions = [
+    {
+      id: 'setup-team',
+      title: 'Setup Team',
+      description: 'Configure team details before analysis.',
+      icon: <SportsSoccerIcon sx={{ fontSize: 42, color: '#5e2e8f' }} />,
+      onClick: () =>
+        navigate('/pitch', {
+          state: { newSession: true, setupTeam: true }
+        })
+    },
+    {
+      id: 'skip-setup',
+      title: 'Skip Setup',
+      description: 'Jump straight into analysis.',
+      icon: <SportsIcon sx={{ fontSize: 42, color: '#5e2e8f' }} />,
+      onClick: () =>
+        navigate('/pitch', {
+          state: { newSession: true, skipSetup: true }
+        })
+    }
+  ];
+
+  const premiumFeatures =
+    userRole === 'premium'
+      ? [
+          {
+            id: 'load-template',
+            title: 'Load Template',
+            description: 'Use a saved template to set up quickly.',
+            icon: <StorageIcon sx={{ fontSize: 36, color: '#5e2e8f' }} />,
+            onClick: () =>
+              navigate('/pitch', {
+                state: { newSession: true, loadTemplate: true }
+              })
+          }
+        ]
+      : [
+          {
+            id: 'premium-templates',
+            title: 'Premium Templates',
+            description: 'Upgrade to access and save templates.',
+            icon: <AutoAwesomeIcon sx={{ fontSize: 36, color: '#5e2e8f' }} />,
+            isPremium: true,
+            onClick: () => {
+              Swal.fire({
+                title: 'Premium Feature',
+                html:
+                  'Templates are available with a premium subscription.',
+                icon: 'info',
+                background: '#222',
+                color: '#fff',
+                confirmButtonColor: '#5e2e8f',
+                confirmButtonText: 'Upgrade',
+                showCancelButton: true,
+                cancelButtonColor: '#444'
+              }).then((result) => {
+                if (result.isConfirmed) navigate('/upgrade');
+              });
+            }
+          }
+        ];
+
+  return (
+    <SectionCard>
+      <SectionTitle variant="h5">
+        <SportsIcon /> Pitch Analysis
+      </SectionTitle>
+
+      <Typography variant="body1" sx={{ mb: 4, color: '#ccc' }}>
+        Choose how you want to start your pitch analysis session
+      </Typography>
+
+      {/* Main Options */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        {pitchOptions.map((opt) => (
+          <Grid item xs={12} sm={6} key={opt.id}>
+            <Paper
+              onClick={opt.onClick}
+              sx={{
+                p: 4,
+                borderRadius: 2,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                textAlign: 'center',
+                backgroundColor: '#232323',
+                cursor: 'pointer',
+                height: '100%',
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  backgroundColor: '#2a2a2a',
+                  transform: 'translateY(-4px)',
+                  boxShadow: '0 6px 12px rgba(0,0,0,0.3)'
+                }
+              }}
+            >
+              <Box
+                sx={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(94,46,143,0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mb: 2
+                }}
+              >
+                {opt.icon}
+              </Box>
+              <Typography variant="h6" fontWeight="bold" sx={{ mb: 1.5 }}>
+                {opt.title}
+              </Typography>
+              <Typography variant="body2" color="#aaa" sx={{ mb: 3 }}>
+                {opt.description}
+              </Typography>
+              <Button
+                variant="contained"
+                onClick={opt.onClick}
+                sx={{
+                  backgroundColor: '#5e2e8f',
+                  width: '100%',
+                  py: 1.2,
+                  textTransform: 'none',
+                  '&:hover': { backgroundColor: '#7e4cb8' }
+                }}
+              >
+                Start
+              </Button>
+            </Paper>
+          </Grid>
+        ))}
+      </Grid>
+
+      {/* Premium Features */}
+      {premiumFeatures.length > 0 && (
+        <>
+         <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            mb: 3,
+            mt: 10
+          }}
+        >
+          <Typography variant="h6" sx={{ color: '#ddd', fontWeight: 600 }}>
+            Additional Options
+          </Typography>
+          {premiumFeatures[0].isPremium && (
+            <Box
+              component="span"
+              sx={{
+                px: 1.5,
+                py: 0.3,
+                bgcolor: '#5e2e8f',
+                color: '#fff',
+                borderRadius: 1,
+                fontSize: '0.7rem'
+              }}
+            >
+              PREMIUM
+            </Box>
+          )}
+          <Divider sx={{ flexGrow: 1, borderColor: '#444' }} />
+        </Box>
+
+
+          <Grid container spacing={3}>
+            {premiumFeatures.map((feat) => (
+              <Grid item xs={12} sm={6} key={feat.id}>
+                <Paper
+                  onClick={feat.onClick}
+                  sx={{
+                    p: 3,
+                    borderRadius: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2,
+                    backgroundColor: '#232323',
+                    cursor: 'pointer',
+                    '&:hover': { backgroundColor: '#2a2a2a' }
+                  }}
+                >
+                  <Box>{feat.icon}</Box>
+                  <Box>
+                    <Typography variant="h6">{feat.title}</Typography>
+                    <Typography variant="body2" color="#aaa">
+                      {feat.description}
+                    </Typography>
+                    {feat.isPremium && (
+                      <Typography variant="caption" color="#888">
+                        Premium
+                      </Typography>
+                    )}
+                  </Box>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </>
+      )}
+    </SectionCard>
+  );
+};
+
+// --- Main Page with Centered Tabs & Title ---
+const AnalysisGAA = () => {
+  const [activeTab, setActiveTab] = useState(0);
+  const tabItems = [
+    { label: 'Dataset', icon: <StorageIcon sx={{ mr: 1 }} /> },
+    { label: 'Video',   icon: <VideoLibraryIcon sx={{ mr: 1 }} /> },
+    { label: 'Pitch',   icon: <AnalyticsIcon sx={{ mr: 1 }} /> },
+  ];
+
   return (
     <PageContainer maxWidth="lg">
-      <Typography variant="h4" sx={{ 
-        color: '#fff', 
-        mb: 4, 
-        textAlign: 'center',
-        fontWeight: 700,
-        textShadow: '0 2px 4px rgba(0,0,0,0.3)'
-      }}>
-        GAA Performance Analysis
+      {/* Title */}
+      <Typography
+        variant="h4"
+        align="center"
+        gutterBottom
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#5e2e8f',
+          fontWeight: 600,
+          mb: 2
+        }}
+      >
+        <AnalyticsIcon fontSize="large" sx={{ mr: 1 }} />
+        GAA Analysis
       </Typography>
-      
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        gap: 2, 
-        mb: 3,
-        maxWidth: '600px',
-        mx: 'auto'
-      }}>
-        <TabButton 
-          active={tab === 0 ? 1 : 0} 
-          onClick={() => setTab(0)}
-          startIcon={<SportsSoccerIcon />}
-        >
-          Dataset Analysis
-        </TabButton>
-        <TabButton 
-          active={tab === 1 ? 1 : 0} 
-          onClick={() => setTab(1)}
-          startIcon={<VideoLibraryIcon />}
-        >
-          Video Analysis
-        </TabButton>
+
+      {/* Centered Tabs */}
+      <Box display="flex" justifyContent="center" gap={2} mb={3}>
+        {tabItems.map((tab, idx) => (
+          <TabButton
+            key={tab.label}
+            isActive={activeTab === idx}
+            onClick={() => setActiveTab(idx)}
+          >
+            {tab.icon}
+            {tab.label} Analysis
+          </TabButton>
+        ))}
       </Box>
 
-      <Box sx={{ position: 'relative', minHeight: '500px' }}>
-        {[0, 1].map((index) => (
-          <Box
-            key={index}
-            sx={{
-              position: 'absolute',
-              width: '100%',
-              opacity: tab === index ? 1 : 0,
-              transform: `translateX(${tab === index ? 0 : (tab < index ? '100px' : '-100px')})`,
-              transition: 'all 0.4s ease',
-              visibility: tab === index ? 'visible' : 'hidden',
-            }}
-          >
-            {index === 0 ? <DatasetAnalysis /> : <VideoAnalysis />}
-          </Box>
-        ))}
+      {/* Panels */}
+      <Box flexGrow={1}>
+        <TabPanel value={activeTab} index={0}>
+          <DatasetAnalysis />
+        </TabPanel>
+        <TabPanel value={activeTab} index={1}>
+          <VideoAnalysis />
+        </TabPanel>
+        <TabPanel value={activeTab} index={2}>
+          <PitchAnalysis />
+        </TabPanel>
       </Box>
     </PageContainer>
   );

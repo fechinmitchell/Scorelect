@@ -127,11 +127,11 @@ const GaaLineup = () => {
     const players = [];
 
     formation.forEach((numInLine, lineIdx) => {
-      const xGap = FIELD_W / (numInLine + 1);              // even horizontal spacing
+      const xGap = numInLine === 1 ? 0 : FIELD_W / (numInLine + 1); // skip gap when only 1
       const y = yGap * (lineIdx + 1);
 
       for (let i = 0; i < numInLine; i++) {
-        const x = xGap * (i + 1);
+        const x = numInLine === 1 ? FIELD_W / 2 : xGap * (i + 1);  // centre the single player
 
         players.push({
           id      : `player-${idx + 1}`,
@@ -142,7 +142,7 @@ const GaaLineup = () => {
           locked  : false,
           removed : false,
           // centre an 85×60 card on the point (x,y)
-          posX    : x - 48,
+          posX    : x - 47,
           posY    : y - 70,
           club    : '',
           age     : '',

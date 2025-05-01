@@ -1,5 +1,4 @@
 // src/components/Players.js
-
 import React, { useState, useEffect } from 'react';
 import {
   Container,
@@ -25,8 +24,10 @@ import {
   FormControl,
   Snackbar,
   Alert,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
-import { Edit, Delete, Add } from '@mui/icons-material';
+import { Edit, Delete, Add, Email, Search, Clear } from '@mui/icons-material';
 import { v4 as uuidv4 } from 'uuid';
 import Swal from 'sweetalert2';
 import './Players.css';
@@ -69,6 +70,8 @@ const Players = () => {
     message: '',
     severity: 'success',
   });
+  const [selectedPlayers, setSelectedPlayers] = useState([]);
+  const [selectAll, setSelectAll] = useState(false);
 
   /**
    * Load Players from localStorage on Component Mount
@@ -98,7 +101,6 @@ const Players = () => {
           phone: '098-765-4321',
           injuryStatus: 'Injured',
         },
-        // Add more default players if necessary
       ];
       setPlayers(defaultPlayers);
       localStorage.setItem(`players_${userId}`, JSON.stringify(defaultPlayers));
@@ -161,9 +163,7 @@ const Players = () => {
    * Validate Email Format
    */
   const validateEmail = (email) => {
-    // Simple email regex
-    const re =
-      /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@(([^<>()[\]\\.,;:\s@"]+\.)+[^<>()[\]\\.,;:\s@"]{2,})$/i;
+    const re = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@(([^<>()[\]\\.,;:\s@"]+\.)+[^<>()[\]\\.,;:\s@"]{2,})$/i;
     return re.test(String(email).toLowerCase());
   };
 
@@ -171,7 +171,6 @@ const Players = () => {
    * Validate Phone Number Format
    */
   const validatePhone = (phone) => {
-    // Simple phone number regex (allows digits, spaces, dashes, parentheses)
     const re = /^[0-9\s\-()+]+$/;
     return re.test(String(phone));
   };
@@ -184,17 +183,41 @@ const Players = () => {
     const { name, position, number, email, phone, injuryStatus } = currentPlayer;
 
     if (!name || !position || !number || !email || !phone) {
-      Swal.fire('Error', 'All fields are required.', 'error');
+      Swal.fire({
+        title: 'Error',
+        text: 'All fields are required.',
+        icon: 'error',
+        confirmButtonText: 'OK',
+        background: '#251943',
+        color: '#E6E6FA',
+        confirmButtonColor: '#733FAA',
+      });
       return;
     }
 
     if (!validateEmail(email)) {
-      Swal.fire('Error', 'Please enter a valid email address.', 'error');
+      Swal.fire({
+        title: 'Error',
+        text: 'Please enter a valid email address.',
+        icon: 'error',
+        confirmButtonText: 'OK',
+        background: '#251943',
+        color: '#E6E6FA',
+        confirmButtonColor: '#733FAA',
+      });
       return;
     }
 
     if (!validatePhone(phone)) {
-      Swal.fire('Error', 'Please enter a valid phone number.', 'error');
+      Swal.fire({
+        title: 'Error',
+        text: 'Please enter a valid phone number.',
+        icon: 'error',
+        confirmButtonText: 'OK',
+        background: '#251943',
+        color: '#E6E6FA',
+        confirmButtonColor: '#733FAA',
+      });
       return;
     }
 
@@ -203,7 +226,15 @@ const Players = () => {
       (player) => player.number === parseInt(number)
     );
     if (duplicate) {
-      Swal.fire('Error', 'Jersey number must be unique.', 'error');
+      Swal.fire({
+        title: 'Error',
+        text: 'Jersey number must be unique.',
+        icon: 'error',
+        confirmButtonText: 'OK',
+        background: '#251943',
+        color: '#E6E6FA',
+        confirmButtonColor: '#733FAA',
+      });
       return;
     }
 
@@ -230,17 +261,41 @@ const Players = () => {
     const { id, name, position, number, email, phone, injuryStatus } = currentPlayer;
 
     if (!name || !position || !number || !email || !phone) {
-      Swal.fire('Error', 'All fields are required.', 'error');
+      Swal.fire({
+        title: 'Error',
+        text: 'All fields are required.',
+        icon: 'error',
+        confirmButtonText: 'OK',
+        background: '#251943',
+        color: '#E6E6FA',
+        confirmButtonColor: '#733FAA',
+      });
       return;
     }
 
     if (!validateEmail(email)) {
-      Swal.fire('Error', 'Please enter a valid email address.', 'error');
+      Swal.fire({
+        title: 'Error',
+        text: 'Please enter a valid email address.',
+        icon: 'error',
+        confirmButtonText: 'OK',
+        background: '#251943',
+        color: '#E6E6FA',
+        confirmButtonColor: '#733FAA',
+      });
       return;
     }
 
     if (!validatePhone(phone)) {
-      Swal.fire('Error', 'Please enter a valid phone number.', 'error');
+      Swal.fire({
+        title: 'Error',
+        text: 'Please enter a valid phone number.',
+        icon: 'error',
+        confirmButtonText: 'OK',
+        background: '#251943',
+        color: '#E6E6FA',
+        confirmButtonColor: '#733FAA',
+      });
       return;
     }
 
@@ -250,7 +305,15 @@ const Players = () => {
         player.number === parseInt(number) && player.id !== id
     );
     if (duplicate) {
-      Swal.fire('Error', 'Jersey number must be unique.', 'error');
+      Swal.fire({
+        title: 'Error',
+        text: 'Jersey number must be unique.',
+        icon: 'error',
+        confirmButtonText: 'OK',
+        background: '#251943',
+        color: '#E6E6FA',
+        confirmButtonColor: '#733FAA',
+      });
       return;
     }
 
@@ -284,6 +347,10 @@ const Players = () => {
       showCancelButton: true,
       confirmButtonText: 'Yes, delete it!',
       cancelButtonText: 'Cancel',
+      background: '#251943',
+      color: '#E6E6FA',
+      confirmButtonColor: '#FF5555',
+      cancelButtonColor: '#1A1232',
     }).then((result) => {
       if (result.isConfirmed) {
         const updatedPlayers = players.filter((player) => player.id !== id);
@@ -298,6 +365,66 @@ const Players = () => {
    */
   const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
+  };
+
+  /**
+   * Handle Checkbox Change for Multiple Selection
+   */
+  const handleCheckboxChange = (id) => {
+    if (selectedPlayers.includes(id)) {
+      setSelectedPlayers(selectedPlayers.filter(playerId => playerId !== id));
+    } else {
+      setSelectedPlayers([...selectedPlayers, id]);
+    }
+  };
+
+  /**
+   * Handle Select All Checkboxes
+   */
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedPlayers([]);
+    } else {
+      setSelectedPlayers(displayedPlayers.map(player => player.id));
+    }
+    setSelectAll(!selectAll);
+  };
+
+  /**
+   * Send Email to Selected Players
+   */
+  const handleSendEmail = () => {
+    if (selectedPlayers.length === 0) {
+      Swal.fire({
+        title: 'No Players Selected',
+        text: 'Please select at least one player to send an email.',
+        icon: 'warning',
+        confirmButtonText: 'OK',
+        background: '#251943',
+        color: '#E6E6FA',
+        confirmButtonColor: '#733FAA',
+      });
+      return;
+    }
+
+    // Get emails of selected players
+    const selectedEmails = players
+      .filter(player => selectedPlayers.includes(player.id))
+      .map(player => player.email);
+
+    // Create mailto link with all emails
+    const mailtoLink = `mailto:${selectedEmails.join(',')}?subject=Team Schedule Update&body=Here is the updated team schedule for the upcoming period.`;
+    
+    // Open email client
+    window.location.href = mailtoLink;
+  };
+
+  /**
+   * Clear Search and Filters
+   */
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setFilterPosition('');
   };
 
   /**
@@ -317,61 +444,37 @@ const Players = () => {
   return (
     <Container maxWidth="lg" className="players-page">
       {/* Team Roster Heading */}
-      <Typography variant="h4" gutterBottom sx={{ color: '#ffffff' }}>
+      <Typography variant="h4" gutterBottom className="page-title">
         Team Roster
       </Typography>
 
       {/* Search and Filter Section */}
       <Box className="search-filter-section">
-        <TextField
-          label="Search by Name"
-          variant="outlined"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          sx={{
-            backgroundColor: '#3a3a3a',
-            color: '#ffffff',
-            '& .MuiOutlinedInput-root': {
-              '& fieldset': {
-                borderColor: '#555555',
-              },
-              '&:hover fieldset': {
-                borderColor: '#4caf50',
-              },
-              '&.Mui-focused fieldset': {
-                borderColor: '#4caf50',
-              },
-            },
-            '& .MuiInputLabel-root': {
-              color: '#ffffff',
-            },
-            '& .MuiInputBase-input': {
-              color: '#ffffff',
-            },
-          }}
-        />
-        <FormControl variant="outlined" sx={{ minWidth: 200, backgroundColor: '#3a3a3a' }}>
-          <InputLabel id="filter-position-label" sx={{ color: '#ffffff' }}>Filter by Position</InputLabel>
+        <div className="search-container">
+          <TextField
+            label="Search by Name"
+            variant="outlined"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: <Search className="search-icon" />,
+              endAdornment: searchTerm && (
+                <IconButton size="small" onClick={handleClearSearch}>
+                  <Clear />
+                </IconButton>
+              ),
+            }}
+            className="search-field"
+          />
+        </div>
+        
+        <FormControl variant="outlined" className="position-filter">
+          <InputLabel id="filter-position-label">Filter by Position</InputLabel>
           <Select
             labelId="filter-position-label"
             label="Filter by Position"
             value={filterPosition}
             onChange={(e) => setFilterPosition(e.target.value)}
-            sx={{
-              color: '#ffffff',
-              '& .MuiOutlinedInput-notchedOutline': {
-                borderColor: '#555555',
-              },
-              '&:hover .MuiOutlinedInput-notchedOutline': {
-                borderColor: '#4caf50',
-              },
-              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                borderColor: '#4caf50',
-              },
-              '& .MuiSvgIcon-root': {
-                color: '#ffffff',
-              },
-            }}
           >
             <MenuItem value="">
               <em>All</em>
@@ -383,91 +486,105 @@ const Players = () => {
             ))}
           </Select>
         </FormControl>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={() => handleOpenDialog('add')}
-          sx={{
-            backgroundColor: '#4caf50',
-            color: '#ffffff',
-            '&:hover': {
-              backgroundColor: '#45a049',
-            },
-          }}
-        >
-          Add Player
-        </Button>
+        
+        <div className="action-buttons-container">
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => handleOpenDialog('add')}
+            className="add-button"
+          >
+            Add Player
+          </Button>
+          
+          <Button
+            variant="contained"
+            startIcon={<Email />}
+            onClick={handleSendEmail}
+            className="email-button"
+            disabled={selectedPlayers.length === 0}
+          >
+            Email Selected
+          </Button>
+        </div>
       </Box>
 
       {/* Players Table */}
-      <TableContainer component={Paper} sx={{ backgroundColor: '#2c2c2c' }}>
-        <Table aria-label="players table">
+      <TableContainer component={Paper} className="players-table-container">
+        <Table aria-label="players table" className="players-table">
           <TableHead>
             <TableRow>
-              <TableCell align="center" sx={{ color: '#ffffff' }}>Jersey Number</TableCell>
-              <TableCell align="center" sx={{ color: '#ffffff' }}>Name</TableCell>
-              <TableCell align="center" sx={{ color: '#ffffff' }}>Position</TableCell>
-              <TableCell align="center" sx={{ color: '#ffffff' }}>Injury Status</TableCell>
-              <TableCell align="center" sx={{ color: '#ffffff' }}>Email</TableCell>
-              <TableCell align="center" sx={{ color: '#ffffff' }}>Phone Number</TableCell>
-              <TableCell align="center" sx={{ color: '#ffffff' }}>Actions</TableCell>
+              <TableCell padding="checkbox">
+                <Checkbox
+                  checked={selectAll}
+                  onChange={handleSelectAll}
+                  className="player-checkbox"
+                />
+              </TableCell>
+              <TableCell align="center">Jersey Number</TableCell>
+              <TableCell align="center">Name</TableCell>
+              <TableCell align="center">Position</TableCell>
+              <TableCell align="center">Injury Status</TableCell>
+              <TableCell align="center">Email</TableCell>
+              <TableCell align="center">Phone Number</TableCell>
+              <TableCell align="center">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {displayedPlayers.length > 0 ? (
               displayedPlayers.map((player) => (
-                <TableRow key={player.id}>
-                  <TableCell align="center" sx={{ color: '#ffffff' }}>{player.number}</TableCell>
-                  <TableCell align="center" sx={{ color: '#ffffff' }}>{player.name}</TableCell>
-                  <TableCell align="center" sx={{ color: '#ffffff' }}>{player.position}</TableCell>
-                  <TableCell align="center" sx={{ color: '#ffffff' }}>{player.injuryStatus}</TableCell>
+                <TableRow key={player.id} className={selectedPlayers.includes(player.id) ? 'selected-row' : ''}>
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      checked={selectedPlayers.includes(player.id)}
+                      onChange={() => handleCheckboxChange(player.id)}
+                      className="player-checkbox"
+                    />
+                  </TableCell>
+                  <TableCell align="center" className="jersey-number">
+                    {player.number}
+                  </TableCell>
+                  <TableCell align="center">{player.name}</TableCell>
+                  <TableCell align="center">{player.position}</TableCell>
                   <TableCell align="center">
-                    <a href={`mailto:${player.email}`} style={{ color: '#4caf50' }}>
+                    <span className={`status-badge status-${player.injuryStatus.toLowerCase()}`}>
+                      {player.injuryStatus}
+                    </span>
+                  </TableCell>
+                  <TableCell align="center">
+                    <a href={`mailto:${player.email}`} className="player-email">
                       {player.email}
                     </a>
                   </TableCell>
                   <TableCell align="center">
-                    <a href={`tel:${player.phone}`} style={{ color: '#4caf50' }}>
+                    <a href={`tel:${player.phone}`} className="player-phone">
                       {player.phone}
                     </a>
                   </TableCell>
                   <TableCell align="center">
-                    <IconButton
-                      color="primary"
-                      onClick={() => handleOpenDialog('edit', player)}
-                      aria-label={`edit ${player.name}`}
-                      sx={{
-                        backgroundColor: '#2196f3',
-                        color: '#ffffff',
-                        '&:hover': {
-                          backgroundColor: '#1976d2',
-                        },
-                        marginRight: '8px',
-                      }}
-                    >
-                      <Edit />
-                    </IconButton>
-                    <IconButton
-                      color="error"
-                      onClick={() => handleDeletePlayer(player.id)}
-                      aria-label={`delete ${player.name}`}
-                      sx={{
-                        backgroundColor: '#f44336',
-                        color: '#ffffff',
-                        '&:hover': {
-                          backgroundColor: '#d32f2f',
-                        },
-                      }}
-                    >
-                      <Delete />
-                    </IconButton>
+                    <div className="table-actions">
+                      <IconButton
+                        onClick={() => handleOpenDialog('edit', player)}
+                        aria-label={`edit ${player.name}`}
+                        className="edit-button"
+                      >
+                        <Edit />
+                      </IconButton>
+                      <IconButton
+                        onClick={() => handleDeletePlayer(player.id)}
+                        aria-label={`delete ${player.name}`}
+                        className="delete-button"
+                      >
+                        <Delete />
+                      </IconButton>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell align="center" colSpan={7} sx={{ color: '#ffffff' }}>
-                  No players found.
+                <TableCell align="center" colSpan={8} className="no-players">
+                  No players found. Add a player to get started.
                 </TableCell>
               </TableRow>
             )}
@@ -476,61 +593,35 @@ const Players = () => {
       </TableContainer>
 
       {/* Add/Edit Player Dialog */}
-      <Dialog open={openDialog} onClose={handleCloseDialog} fullWidth maxWidth="sm">
-        <DialogTitle sx={{ backgroundColor: '#3a3a3a', color: '#ffffff' }}>
+      <Dialog 
+        open={openDialog} 
+        onClose={handleCloseDialog} 
+        fullWidth 
+        maxWidth="sm"
+        className="player-dialog"
+      >
+        <DialogTitle className="dialog-title">
           {dialogMode === 'add' ? 'Add New Player' : 'Edit Player'}
         </DialogTitle>
-        <DialogContent sx={{ backgroundColor: '#2c2c2c', color: '#ffffff' }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 1 }}>
+        <DialogContent className="dialog-content">
+          <Box className="dialog-form">
             <TextField
               label="Name"
               variant="outlined"
               value={currentPlayer.name}
               onChange={(e) => setCurrentPlayer({ ...currentPlayer, name: e.target.value })}
               required
-              sx={{
-                backgroundColor: '#3a3a3a',
-                '& .MuiOutlinedInput-root': {
-                  '& fieldset': {
-                    borderColor: '#555555',
-                  },
-                  '&:hover fieldset': {
-                    borderColor: '#4caf50',
-                  },
-                  '&.Mui-focused fieldset': {
-                    borderColor: '#4caf50',
-                  },
-                },
-                '& .MuiInputLabel-root': {
-                  color: '#ffffff',
-                },
-                '& .MuiInputBase-input': {
-                  color: '#ffffff',
-                },
-              }}
+              fullWidth
+              className="form-field"
             />
-            <FormControl variant="outlined" required sx={{ backgroundColor: '#3a3a3a' }}>
-              <InputLabel id="position-label" sx={{ color: '#ffffff' }}>Position</InputLabel>
+            
+            <FormControl variant="outlined" required fullWidth className="form-field">
+              <InputLabel id="position-label">Position</InputLabel>
               <Select
                 labelId="position-label"
                 label="Position"
                 value={currentPlayer.position}
                 onChange={(e) => setCurrentPlayer({ ...currentPlayer, position: e.target.value })}
-                sx={{
-                  color: '#ffffff',
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#555555',
-                  },
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#4caf50',
-                  },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#4caf50',
-                  },
-                  '& .MuiSvgIcon-root': {
-                    color: '#ffffff',
-                  },
-                }}
               >
                 {positions.map((position) => (
                   <MenuItem key={position} value={position}>
@@ -539,6 +630,7 @@ const Players = () => {
                 ))}
               </Select>
             </FormControl>
+            
             <TextField
               label="Jersey Number"
               type="number"
@@ -548,28 +640,11 @@ const Players = () => {
                 setCurrentPlayer({ ...currentPlayer, number: e.target.value })
               }
               required
+              fullWidth
               inputProps={{ min: 0 }}
-              sx={{
-                backgroundColor: '#3a3a3a',
-                '& .MuiOutlinedInput-root': {
-                  '& fieldset': {
-                    borderColor: '#555555',
-                  },
-                  '&:hover fieldset': {
-                    borderColor: '#4caf50',
-                  },
-                  '&.Mui-focused fieldset': {
-                    borderColor: '#4caf50',
-                  },
-                },
-                '& .MuiInputLabel-root': {
-                  color: '#ffffff',
-                },
-                '& .MuiInputBase-input': {
-                  color: '#ffffff',
-                },
-              }}
+              className="form-field"
             />
+            
             <TextField
               label="Email"
               type="email"
@@ -579,27 +654,10 @@ const Players = () => {
                 setCurrentPlayer({ ...currentPlayer, email: e.target.value })
               }
               required
-              sx={{
-                backgroundColor: '#3a3a3a',
-                '& .MuiOutlinedInput-root': {
-                  '& fieldset': {
-                    borderColor: '#555555',
-                  },
-                  '&:hover fieldset': {
-                    borderColor: '#4caf50',
-                  },
-                  '&.Mui-focused fieldset': {
-                    borderColor: '#4caf50',
-                  },
-                },
-                '& .MuiInputLabel-root': {
-                  color: '#ffffff',
-                },
-                '& .MuiInputBase-input': {
-                  color: '#ffffff',
-                },
-              }}
+              fullWidth
+              className="form-field"
             />
+            
             <TextField
               label="Phone Number"
               type="tel"
@@ -609,29 +667,12 @@ const Players = () => {
                 setCurrentPlayer({ ...currentPlayer, phone: e.target.value })
               }
               required
-              sx={{
-                backgroundColor: '#3a3a3a',
-                '& .MuiOutlinedInput-root': {
-                  '& fieldset': {
-                    borderColor: '#555555',
-                  },
-                  '&:hover fieldset': {
-                    borderColor: '#4caf50',
-                  },
-                  '&.Mui-focused fieldset': {
-                    borderColor: '#4caf50',
-                  },
-                },
-                '& .MuiInputLabel-root': {
-                  color: '#ffffff',
-                },
-                '& .MuiInputBase-input': {
-                  color: '#ffffff',
-                },
-              }}
+              fullWidth
+              className="form-field"
             />
-            <FormControl variant="outlined" required sx={{ backgroundColor: '#3a3a3a' }}>
-              <InputLabel id="injury-status-label" sx={{ color: '#ffffff' }}>Injury Status</InputLabel>
+            
+            <FormControl variant="outlined" required fullWidth className="form-field">
+              <InputLabel id="injury-status-label">Injury Status</InputLabel>
               <Select
                 labelId="injury-status-label"
                 label="Injury Status"
@@ -639,21 +680,6 @@ const Players = () => {
                 onChange={(e) =>
                   setCurrentPlayer({ ...currentPlayer, injuryStatus: e.target.value })
                 }
-                sx={{
-                  color: '#ffffff',
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#555555',
-                  },
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#4caf50',
-                  },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#4caf50',
-                  },
-                  '& .MuiSvgIcon-root': {
-                    color: '#ffffff',
-                  },
-                }}
               >
                 <MenuItem value="Healthy">Healthy</MenuItem>
                 <MenuItem value="Injured">Injured</MenuItem>
@@ -663,21 +689,14 @@ const Players = () => {
             </FormControl>
           </Box>
         </DialogContent>
-        <DialogActions sx={{ backgroundColor: '#2c2c2c' }}>
-          <Button onClick={handleCloseDialog} color="secondary" sx={{ color: '#ffffff' }}>
+        <DialogActions className="dialog-actions">
+          <Button onClick={handleCloseDialog} className="cancel-button">
             Cancel
           </Button>
           <Button
             onClick={dialogMode === 'add' ? handleAddPlayer : handleEditPlayer}
             variant="contained"
-            color="primary"
-            sx={{
-              backgroundColor: '#4caf50',
-              color: '#ffffff',
-              '&:hover': {
-                backgroundColor: '#45a049',
-              },
-            }}
+            className="save-button"
           >
             {dialogMode === 'add' ? 'Add Player' : 'Save Changes'}
           </Button>
@@ -691,7 +710,12 @@ const Players = () => {
         onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+        <Alert 
+          onClose={handleCloseSnackbar} 
+          severity={snackbar.severity} 
+          sx={{ width: '100%' }}
+          className={`snackbar-alert snackbar-${snackbar.severity}`}
+        >
           {snackbar.message}
         </Alert>
       </Snackbar>

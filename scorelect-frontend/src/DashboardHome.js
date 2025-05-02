@@ -166,10 +166,128 @@ const RecentGameItem = ({ game, onSelect }) => {
       timer: 1500
     });
     
+    // GAA pitch dimensions and goal positions used in the analysis dashboard
+    const pitchWidth = 145;  // Width of pitch in meters
+    const pitchHeight = 88;  // Height of pitch in meters
+    const halfLineX = pitchWidth / 2;
+    const goalY = pitchHeight / 2;
+    
+    // Check if this is pitch or video analysis data
+    const analysisType = game.analysisType || 'pitch';
+    
+    // Process the game data to normalize coordinates for correct positioning
+    const processedGame = {
+      ...game,
+      gameData: (game.gameData || []).map(tag => {
+        // Different handling based on analysis type
+        if (analysisType === 'video') {
+          // Video analysis - normalize coordinates from percentages (0-100) to meters
+          const rawX = parseFloat(tag.x) || 50;
+          const rawY = parseFloat(tag.y) || 50;
+          
+          // Normalize coordinates to match the analysis dashboard's 145×88 meter pitch
+          const normalizedX = (rawX / 100) * pitchWidth;
+          const normalizedY = (rawY / 100) * pitchHeight;
+          
+          // Determine which goal the shot is targeting based on x position
+          const isLeftSide = normalizedX <= halfLineX;
+          const targetGoalX = isLeftSide ? 0 : pitchWidth;
+          
+          // Calculate distance to goal - required for proper positioning in analysis
+          const dx = normalizedX - targetGoalX;
+          const dy = normalizedY - goalY;
+          const distToGoal = Math.sqrt(dx * dx + dy * dy);
+          
+          // Ensure position is a string value
+          let positionStr = '';
+          if (typeof tag.position === 'string') {
+            positionStr = tag.position;
+          } else if (tag.position && typeof tag.position === 'object') {
+            positionStr = tag.position.type || 'forward';
+          } else {
+            positionStr = 'forward';
+          }
+          
+          return {
+            ...tag,
+            // Store position as a string value for compatibility with analysis dashboard
+            position: positionStr,
+            // Use the normalized coordinates
+            x: normalizedX,
+            y: normalizedY,
+            // Add these properties required for proper analysis visualization
+            distMeters: distToGoal,
+            side: isLeftSide ? 'Left' : 'Right',
+            distanceFromGoal: distToGoal,
+            pressure: tag.pressure || '0',
+            foot: tag.foot || 'Right'
+          };
+        } else {
+          // Pitch analysis - coordinates are already in the correct format
+          // Just ensure position is a string value and add required fields if missing
+          
+          // Handle position string
+          let positionStr = '';
+          if (typeof tag.position === 'string') {
+            positionStr = tag.position;
+          } else if (tag.position && typeof tag.position === 'object') {
+            positionStr = tag.position.type || 'forward';
+          } else {
+            positionStr = 'forward';
+          }
+          
+          // Calculate distance to goal if not already present
+          let distMeters = tag.distMeters;
+          if (!distMeters && tag.x !== undefined && tag.y !== undefined) {
+            const x = parseFloat(tag.x);
+            const y = parseFloat(tag.y);
+            const isLeftSide = x <= halfLineX;
+            const targetGoalX = isLeftSide ? 0 : pitchWidth;
+            const dx = x - targetGoalX;
+            const dy = y - goalY;
+            distMeters = Math.sqrt(dx * dx + dy * dy);
+          }
+          
+          // Add renderType for proper marker coloring
+          // This maps actions to their visual representation
+          let renderType = '';
+          const action = tag.action?.toLowerCase().trim() || '';
+          
+          if (action === 'free' || action === 'fortyfive' || action === 'offensive mark') {
+            renderType = 'setplayscore'; // Green with white ring
+          } else if (action.includes('free') && (action.includes('miss') || action.includes('wide') || action.includes('short'))) {
+            renderType = 'setplaymiss'; // Red with white ring
+          } else if (action === 'goal' || action === 'penalty goal') {
+            renderType = action; // Yellow
+          } else if (action === 'point') {
+            renderType = 'point'; // Green
+          } else if (action.includes('miss') || action.includes('wide') || action.includes('short')) {
+            renderType = 'miss'; // Red
+          } else if (action.includes('block')) {
+            renderType = 'blocked'; // Orange
+          } else {
+            // Default fallback
+            renderType = action;
+          }
+          
+          return {
+            ...tag,
+            position: positionStr,
+            distMeters: distMeters || 30, // Default if missing
+            side: tag.side || (tag.x <= halfLineX ? 'Left' : 'Right'),
+            distanceFromGoal: tag.distanceFromGoal || distMeters || 30,
+            pressure: tag.pressure || '0',
+            foot: tag.foot || 'Right',
+            renderType: renderType // Add renderType for proper coloring
+          };
+        }
+      })
+    };
+    
     // Navigate to analysis with this game's data
     const dataForAnalysis = {
       datasetName: game.datasetName,
-      games: [game]
+      games: [processedGame]
     };
     
     navigate('/analysis/gaa-dashboard', { 
@@ -393,23 +511,65 @@ const RecentList = ({ games, empty, onSelect, title }) => (
  * Builds the same navigation-state object that SavedGames.js uses
  * so ManualTagging (or PitchGraphic) can boot up instantly.
  */
-const buildVideoNavState = (game) => ({
-  youtubeUrl: game.youtubeUrl,
-  sport:      game.sport,
-  datasetName: game.datasetName,
-  teamsData:   game.teamsData,
-  tags: game.gameData.map((tag) => ({
-    id: `tag-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-    timestamp: tag.timestamp,
-    category:  tag.category || 'Unknown',
-    action:    tag.action,
-    team:      tag.team,
-    player:    tag.playerName,
-    outcome:   tag.outcome,
-    position:  { x: parseFloat(tag.x) || 50, y: parseFloat(tag.y) || 50 },
-    notes:     tag.notes || '',
-  })),
-});
+const buildVideoNavState = (game) => {
+  // GAA pitch dimensions and goal positions used in the analysis dashboard
+  const pitchWidth = 145;  // Width of pitch in meters
+  const pitchHeight = 88;  // Height of pitch in meters
+  const halfLineX = pitchWidth / 2;
+  const goalY = pitchHeight / 2;
+
+  return {
+    youtubeUrl: game.youtubeUrl,
+    sport:      game.sport,
+    datasetName: game.datasetName,
+    teamsData:   game.teamsData,
+    tags: game.gameData.map((tag) => {
+      // Extract and normalize coordinates
+      const rawX = parseFloat(tag.x) || 50;
+      const rawY = parseFloat(tag.y) || 50;
+      
+      // Normalize coordinates to match the analysis dashboard's 145×88 meter pitch
+      // Convert from percentages (0-100) to meters
+      const normalizedX = (rawX / 100) * pitchWidth;
+      const normalizedY = (rawY / 100) * pitchHeight;
+      
+      // Determine which goal the shot is targeting based on x position
+      const isLeftSide = normalizedX <= halfLineX;
+      const targetGoalX = isLeftSide ? 0 : pitchWidth;
+      
+      // Calculate distance to goal - required for proper positioning in analysis
+      const dx = normalizedX - targetGoalX;
+      const dy = normalizedY - goalY;
+      const distToGoal = Math.sqrt(dx * dx + dy * dy);
+      
+      return {
+        id: `tag-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        timestamp: tag.timestamp,
+        category:  tag.category || 'Unknown',
+        action:    tag.action,
+        team:      tag.team,
+        player:    tag.playerName,
+        outcome:   tag.outcome,
+        
+        // Store position as a string value for compatibility with analysis dashboard
+        position: tag.position || 'forward',
+        
+        // Store coordinates using the normalized values in meters
+        x: normalizedX,
+        y: normalizedY,
+        
+        // Add these properties required for proper analysis visualization
+        distMeters: distToGoal,
+        side: isLeftSide ? 'Left' : 'Right',
+        distanceFromGoal: distToGoal,
+        pressure: tag.pressure || '0',
+        foot: tag.foot || 'Right',
+        
+        notes: tag.notes || '',
+      };
+    }),
+  };
+};
 
 const DashboardHome = ({ selectedSport }) => {
   const { datasets } = useContext(SavedGamesContext);

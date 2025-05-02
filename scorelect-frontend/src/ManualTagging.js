@@ -59,9 +59,262 @@ import { toast } from 'react-toastify';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import VideoUploadModal from './components/VideoUploadModal';
 import VideoLoadingHandler from './components/VideoLoadingHandler';
+import { useTheme } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import AnalyticsIcon from '@mui/icons-material/Analytics';
+import CameraAltIcon from '@mui/icons-material/CameraAlt';
+import VideoCameraFrontIcon from '@mui/icons-material/VideoCameraFront';
+import StopIcon from '@mui/icons-material/Stop';
+
+// Styled Components
+const PageContainer = styled(Container)(({ theme }) => ({
+  padding: theme.spacing(3),
+  backgroundColor: '#121212', // Force dark background
+  color: '#fff', // Force light text
+  minHeight: '100vh',
+}));
+
+const VideoContainer = styled(Box)(({ theme }) => ({
+  position: 'relative',
+  width: '100%',
+  backgroundColor: '#000',
+  borderRadius: theme.shape.borderRadius,
+  overflow: 'hidden',
+  marginBottom: theme.spacing(2),
+}));
+
+const VideoControlsContainer = styled(Box)(({ theme }) => ({
+  position: 'absolute',
+  bottom: 0,
+  left: 0,
+  right: 0,
+  padding: theme.spacing(1.5),
+  paddingBottom: theme.spacing(2),
+  background: 'linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.7) 80%, transparent)',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: theme.spacing(1),
+}));
+
+const ControlsRow = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  padding: theme.spacing(0.5),
+}));
+
+const ProgressBar = styled(Slider)(({ theme }) => ({
+  color: '#5e2e8f', // Use the theme purple instead of primary color
+  height: 4,
+  padding: '15px 0',
+  '& .MuiSlider-thumb': {
+    width: 14,
+    height: 14,
+    transition: '0.3s cubic-bezier(.47,1.64,.41,.8)',
+    backgroundColor: '#fff',
+    border: '2px solid #5e2e8f',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+    '&:before': {
+      boxShadow: '0 2px 12px 0 rgba(0,0,0,0.4)',
+    },
+    '&:hover, &.Mui-focusVisible': {
+      boxShadow: `0px 0px 0px 8px rgba(94, 46, 143, 0.16)`,
+    },
+    '&.Mui-active': {
+      width: 20,
+      height: 20,
+    },
+  },
+  '& .MuiSlider-rail': {
+    opacity: 0.3,
+    backgroundColor: '#888',
+  },
+  '& .MuiSlider-track': {
+    backgroundColor: '#5e2e8f',
+    border: 'none',
+  },
+}));
+
+// Update the TimelineContainer for a taller appearance
+const TimelineContainer = styled(Box)(({ theme }) => ({
+  position: 'relative',
+  height: 70, // Make it taller
+  backgroundColor: '#1a1a1a',
+  borderRadius: theme.shape.borderRadius,
+  marginBottom: theme.spacing(2),
+  border: '1px solid #333',
+  padding: '10px 0',
+  boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)',
+}));
+
+// Replace with a vertical line marker
+const TimelineMark = styled(Box)(({ theme, category, active }) => ({
+  position: 'absolute',
+  top: '20%', // Start from 20% from top
+  height: '60%', // Extend to 60% of timeline height
+  width: active === 'true' ? 3 : 2, // Width of the line
+  transform: 'translateX(-50%)', // Center the line
+  backgroundColor: active === 'true' ? '#5e2e8f' : 
+    category === 'Possession' ? '#5e2e8f' :
+    category === 'Defense' ? '#e57373' :
+    category === 'Scoring' ? '#81c784' :
+    category === 'Set Pieces' ? '#fff176' :
+    '#5e2e8f',
+  cursor: 'pointer',
+  transition: 'all 0.2s ease',
+  zIndex: active === 'true' ? 10 : 5,
+  boxShadow: active === 'true' ? '0 0 3px rgba(255,255,255,0.8)' : 'none',
+  '&:hover': {
+    width: active === 'true' ? 4 : 3,
+    boxShadow: '0 0 5px rgba(255,255,255,0.8)',
+    zIndex: 15,
+  },
+  '&::after': { // Add a circular dot at the top of the line
+    content: '""',
+    position: 'absolute',
+    width: active === 'true' ? 8 : 6,
+    height: active === 'true' ? 8 : 6,
+    backgroundColor: 'inherit',
+    borderRadius: '50%',
+    top: -4,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    boxShadow: '0 0 2px rgba(0,0,0,0.5)'
+  }
+}));
+
+const StyledTab = styled(Tab)(({ theme }) => ({
+  color: '#aaa',
+  fontWeight: 600,
+  textTransform: 'none',
+  '&.Mui-selected': {
+    color: '#5e2e8f',
+  },
+}));
+
+const SectionCard = styled(Paper)(({ theme }) => ({
+  padding: theme.spacing(2),
+  backgroundColor: '#1a1a1a', // Force dark card background
+  color: '#fff', // Force light text
+  borderRadius: theme.shape.borderRadius,
+  marginBottom: theme.spacing(2),
+}));
+
+const SectionTitle = styled(Typography)(({ theme }) => ({
+  marginBottom: theme.spacing(2),
+  color: theme.palette.text.primary,
+  display: 'flex',
+  alignItems: 'center',
+  gap: theme.spacing(1),
+}));
+
+const TagChip = styled(Chip)(({ theme, type }) => ({
+  marginRight: theme.spacing(0.5),
+  marginBottom: theme.spacing(0.5),
+  backgroundColor: 
+    type === 'Possession' ? theme.palette.primary.main :
+    type === 'Defense' ? theme.palette.error.main :
+    type === 'Scoring' ? theme.palette.success.main :
+    type === 'Set Pieces' ? theme.palette.warning.main :
+    theme.palette.primary.main,
+  color: theme.palette.common.white,
+}));
+
+const TagButton = styled(Button)(({ theme, colorscheme }) => ({
+  margin: theme.spacing(0.5),
+  backgroundColor: 
+    colorscheme === 'primary' ? '#5e2e8f' :
+    colorscheme === 'error' ? '#d32f2f' :
+    colorscheme === 'success' ? '#2e7d32' :
+    colorscheme === 'warning' ? '#ed6c02' :
+    '#5e2e8f',
+  color: theme.palette.common.white,
+  '&:hover': {
+    backgroundColor: 
+      colorscheme === 'primary' ? '#7e4cb8' :
+      colorscheme === 'error' ? '#e33c3c' :
+      colorscheme === 'success' ? '#3e9142' :
+      colorscheme === 'warning' ? '#f57c00' :
+      '#7e4cb8',
+  },
+  textTransform: 'none',
+  borderRadius: '6px',
+  fontWeight: 600,
+  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+}));
+
+const ActionButton = styled(Button)(({ theme }) => ({
+  marginBottom: theme.spacing(1),
+  color: '#fff',
+  backgroundColor: '#5e2e8f',
+  '&:hover': {
+    backgroundColor: '#7e4cb8',
+  },
+  '&.MuiButton-containedPrimary': {
+    backgroundColor: '#5e2e8f',
+    '&:hover': {
+      backgroundColor: '#7e4cb8',
+    },
+  },
+  '&.MuiButton-containedSecondary': {
+    backgroundColor: '#333',
+    '&:hover': {
+      backgroundColor: '#444',
+    },
+  },
+  '&.MuiButton-containedSuccess': {
+    backgroundColor: '#2e7d32',
+    '&:hover': {
+      backgroundColor: '#3e9142',
+    },
+  },
+  '&:disabled': {
+    backgroundColor: 'rgba(94, 46, 143, 0.5)',
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  fontWeight: 600,
+  boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+  textTransform: 'none',
+  borderRadius: '6px',
+}));
+
+const PitchMarker = styled(Box)(({ theme, category }) => ({
+  width: 12,
+  height: 12,
+  borderRadius: '50%',
+  backgroundColor: 
+    category === 'Possession' ? theme.palette.primary.main :
+    category === 'Defense' ? theme.palette.error.main :
+    category === 'Scoring' ? theme.palette.success.main :
+    category === 'Set Pieces' ? theme.palette.warning.main :
+    theme.palette.primary.main,
+  border: '2px solid white',
+  cursor: 'grab',
+  '&:hover': {
+    transform: 'scale(1.5)',
+  },
+}));
+
+const MarkerTooltip = styled(Box)(({ theme }) => ({
+  position: 'absolute',
+  bottom: '100%',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  backgroundColor: 'rgba(0,0,0,0.8)',
+  color: 'white',
+  padding: theme.spacing(1),
+  borderRadius: theme.shape.borderRadius,
+  fontSize: '0.8rem',
+  whiteSpace: 'nowrap',
+  pointerEvents: 'none',
+  transition: 'opacity 0.2s',
+}));
 
 // GAA Pitch Selector Component
 const GAAPitchSelector = ({ currentPosition, setCurrentPosition, selectedTeam }) => {
+  // Define the aspect ratio to match PitchGraphic.js (145/88)
   const aspectRatio = 145 / 88;
   const stageRef = useRef(null);
   const [dimensions, setDimensions] = useState({
@@ -102,10 +355,13 @@ const GAAPitchSelector = ({ currentPosition, setCurrentPosition, selectedTeam })
   const handleStageClick = (e) => {
     const stage = e.target.getStage();
     const pointerPosition = stage.getPointerPosition();
+    
+    // Convert to percentage coordinates - this matches PitchGraphic's coordinate system
     const newPosition = {
       x: (pointerPosition.x / stage.width()) * 100,
       y: (pointerPosition.y / stage.height()) * 100
     };
+    
     setCurrentPosition(newPosition);
   };
 
@@ -154,277 +410,7 @@ GAAPitchSelector.propTypes = {
   selectedTeam: PropTypes.string.isRequired,
 };
 
-// Styled Components
-const PageContainer = styled(Container)(({ theme }) => ({
-  position: 'relative',
-  minHeight: '100vh',
-  padding: theme.spacing(4, 0, 8, 0),
-  display: 'flex',
-  flexDirection: 'column',
-  backgroundColor: '#121212',
-  color: '#ffffff',
-  maxWidth: '100%',
-  overflow: 'auto',
-  marginTop: theme.spacing(2.5),
-}));
-
-const VideoContainer = styled(Box)(({ theme }) => ({
-  position: 'relative',
-  backgroundColor: '#000',
-  borderRadius: theme.spacing(1),
-  overflow: 'hidden',
-  aspectRatio: '16/9',
-  width: '100%',
-  boxShadow: '0 8px 16px rgba(0,0,0,0.3)',
-}));
-
-const VideoControlsContainer = styled(Box)(({ theme }) => ({
-  position: 'absolute',
-  bottom: 0,
-  left: 0,
-  right: 0,
-  padding: theme.spacing(1),
-  background: 'linear-gradient(transparent, rgba(0,0,0,0.8))',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: theme.spacing(1),
-}));
-
-const ControlsRow = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  width: '100%',
-}));
-
-const ProgressBar = styled(Slider)(({ theme }) => ({
-  color: '#5e2e8f',
-  height: 4,
-  '& .MuiSlider-thumb': {
-    width: 12,
-    height: 12,
-    '&:hover': {
-      boxShadow: '0 0 0 8px rgba(94, 46, 143, 0.16)'
-    }
-  },
-  '& .MuiSlider-rail': {
-    opacity: 0.5,
-    backgroundColor: '#bfbfbf',
-  },
-  padding: '15px 0',
-}));
-
-const SectionCard = styled(Paper)(({ theme }) => ({
-  backgroundColor: '#1a1a1a',
-  color: '#ffffff',
-  padding: theme.spacing(2),
-  borderRadius: theme.spacing(2),
-  boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-  marginTop: theme.spacing(2),
-  border: '1px solid #333',
-  height: '100%',
-  maxHeight: '600px',
-  overflowY: 'auto',
-}));
-
-const SectionTitle = styled(Typography)(({ theme }) => ({
-  color: '#5e2e8f',
-  marginBottom: theme.spacing(2),
-  fontWeight: 600,
-  display: 'flex',
-  alignItems: 'center',
-  gap: theme.spacing(1),
-}));
-
-const TagButton = styled(Button)(({ theme, colorscheme = 'primary' }) => ({
-  backgroundColor: colorscheme === 'primary' ? '#5e2e8f' :
-                colorscheme === 'success' ? '#28a745' :
-                colorscheme === 'error' ? '#dc3545' :
-                colorscheme === 'warning' ? '#ffc107' : '#1f1f1f',
-  color: '#ffffff',
-  padding: theme.spacing(1),
-  borderRadius: theme.spacing(1),
-  fontWeight: 'normal',
-  transition: 'all 0.2s ease',
-  textTransform: 'none',
-  margin: theme.spacing(0.5),
-  '&:hover': {
-    backgroundColor: colorscheme === 'primary' ? '#6d3ca1' :
-                   colorscheme === 'success' ? '#2fbc4e' :
-                   colorscheme === 'error' ? '#e04555' :
-                   colorscheme === 'warning' ? '#ffcb2d' : '#2d2d2d',
-    transform: 'translateY(-2px)',
-    boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
-  },
-}));
-
-const StyledTab = styled(Tab)(({ theme }) => ({
-  color: '#aaa',
-  '&.Mui-selected': {
-    color: '#5e2e8f',
-    fontWeight: 'bold',
-  },
-}));
-
-const TagChip = styled(Chip)(({ theme, type }) => ({
-  margin: theme.spacing(0.5),
-  backgroundColor:
-    type === 'Possession' ? 'rgba(94, 46, 143, 0.2)' :
-    type === 'Defense'    ? 'rgba(220, 53, 69, 0.2)' :
-    type === 'Scoring'    ? 'rgba(40, 167, 69, 0.2)' :
-    type === 'Set Pieces' ? 'rgba(255, 193, 7, 0.2)' :
-    type === 'Turnovers'  ? 'rgba(255, 140, 0, 0.2)' :
-                            'rgba(150, 150, 150, 0.2)',
-  color:
-    type === 'Possession' ? '#9b7cb7' :
-    type === 'Defense'    ? '#e57373' :
-    type === 'Scoring'    ? '#81c784' :
-    type === 'Set Pieces' ? '#fff176' :
-    type === 'Turnovers'  ? '#ffb74d' :
-                            '#fff',
-  borderRadius: '16px',
-  '& .MuiChip-deleteIcon': {
-    color: 'rgba(255, 255, 255, 0.7)',
-    '&:hover': {
-      color: '#fff',
-    },
-  },
-}));
-
-const TimelineContainer = styled(Box)(({ theme }) => ({
-  height: 100,
-  position: 'relative',
-  backgroundColor: '#1a1a1a',
-  borderRadius: theme.spacing(1),
-  padding: theme.spacing(1),
-  marginTop: theme.spacing(2),
-  border: '1px solid #444',
-  overflow: 'hidden',
-  backgroundImage: 'linear-gradient(to right, #333 1px, transparent 1px)',
-  backgroundSize: '10% 100%',
-  '&::after': {
-    content: '""',
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: '70%',
-    height: '1px',
-    backgroundColor: '#444',
-    zIndex: 1
-  }
-}));
-
-const TimelineMark = styled(Box)(({ theme, category, active }) => ({
-  position: 'absolute',
-  width: 6,
-  height: active === 'true' ? 50 : 40,
-  backgroundColor:
-    category === 'Possession' ? '#5e2e8f' :
-    category === 'Defense'    ? '#dc3545' :
-    category === 'Scoring'    ? '#28a745' :
-    category === 'Set Pieces' ? '#ffc107' :
-    category === 'Turnovers'  ? '#ff8c00' : '#999',
-  borderRadius: '2px',
-  top: active === 'true' ? 15 : 20,
-  transform: 'translateX(-3px)',
-  cursor: 'pointer',
-  transition: 'height 0.2s ease, top 0.2s ease',
-  zIndex: active === 'true' ? 2 : 1,
-  '&:hover': {
-    height: 50,
-    top: 15,
-    zIndex: 2,
-  },
-  '&::after': {
-    content: 'attr(data-time)',
-    position: 'absolute',
-    bottom: '-25px',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    fontSize: '10px',
-    whiteSpace: 'nowrap',
-    color: '#aaa',
-    fontWeight: active === 'true' ? 'bold' : 'normal',
-  }
-}));
-
-const PitchMarker = styled(Box)(({ theme, category }) => ({
-  position: 'absolute',
-  width: 8,
-  height: 8,
-  borderRadius: '50%',
-  backgroundColor:
-    category === 'Possession' ? '#5e2e8f' :
-    category === 'Defense'    ? '#dc3545' :
-    category === 'Scoring'    ? '#28a745' :
-    category === 'Set Pieces' ? '#ffc107' :
-    category === 'Turnovers'  ? '#ff8c00' : '#999',
-  border: '2px solid white',
-  transform: 'translate(-50%, -50%)',
-  cursor: 'grab',
-  zIndex: 10,
-  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-  '&:hover': {
-    transform: 'translate(-50%, -50%) scale(1.2)',
-    boxShadow: '0 0 8px rgba(255,255,255,0.6)',
-    zIndex: 20,
-  },
-}));
-
-const MarkerTooltip = styled(Box)(({ theme }) => ({
-  position: 'absolute',
-  bottom: '100%',
-  left: '50%',
-  transform: 'translateX(-50%)',
-  backgroundColor: 'rgba(0,0,0,0.85)',
-  color: '#fff',
-  padding: theme.spacing(1),
-  borderRadius: theme.spacing(0.5),
-  fontSize: '0.75rem',
-  whiteSpace: 'nowrap',
-  pointerEvents: 'none',
-  opacity: 0,
-  transition: 'opacity 0.2s ease',
-  zIndex: 30,
-  boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-  border: '1px solid #444',
-  marginBottom: '5px',
-  maxWidth: '200px',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-}));
-
-const PitchContainer = styled(Box)(({ theme }) => ({
-  width: '100%',
-  position: 'relative',
-  backgroundColor: '#1D6E1D',
-  borderRadius: theme.spacing(1),
-  border: '2px solid white',
-  margin: '20px 0',
-  backgroundImage: 'linear-gradient(0deg, rgba(29,110,29,1) 0%, rgba(39,130,39,1) 100%)',
-  marginBottom: theme.spacing(3)
-}));
-
-const ActionButton = styled(Button)(({ theme, color }) => ({
-  backgroundColor:
-    color === 'primary' ? '#5e2e8f' :
-    color === 'success' ? '#28a745':
-                         '#dc3545',
-  color: '#ffffff',
-  padding: theme.spacing(1, 2),
-  borderRadius: theme.spacing(1),
-  textTransform: 'none',
-  fontWeight: 600,
-  transition: 'all 0.3s ease',
-  '&:hover': {
-    backgroundColor:
-      color === 'primary' ? '#7e4cb8' :
-      color === 'success' ? '#2fbc4e' :
-                            '#e04555',
-    transform: 'translateY(-2px)',
-    boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
-  },
-}));
+// ... [All the styled components remain unchanged] ...
 
 const PitchMarkerComponent = ({ 
   tag, 
@@ -443,7 +429,7 @@ const PitchMarkerComponent = ({
   pitchRef,
   formatTime 
 }) => {
-  console.log('PitchMarkerComponent received tag:', tag.position);
+  console.log('PitchMarkerComponent received tag position:', tag.position);
   const [isDragging, setIsDragging] = useState(false);
 
   const handleMarkerMouseDown = (e) => {
@@ -522,6 +508,44 @@ const ManualTagging = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
 
+  // Force styling fix for the component
+  useEffect(() => {
+    // Apply dark theme styling to ensure consistent appearance
+    document.body.style.backgroundColor = '#121212';
+    document.body.style.color = '#fff';
+    
+    // Add a CSS class to the document for global styling
+    document.documentElement.classList.add('manual-tagging-active');
+    
+    // Create and inject a style tag with theme overrides
+    const styleTag = document.createElement('style');
+    styleTag.id = 'manual-tagging-theme-fix';
+    styleTag.innerHTML = `
+      .manual-tagging-active .MuiPaper-root {
+        background-color: #222;
+        color: #fff;
+      }
+      .manual-tagging-active .MuiButton-contained {
+        background-color: #5e2e8f;
+      }
+      .manual-tagging-active .MuiAppBar-root {
+        background-color: #1a1a1a;
+      }
+    `;
+    document.head.appendChild(styleTag);
+    
+    // Clean up on unmount
+    return () => {
+      document.body.style.backgroundColor = '';
+      document.body.style.color = '';
+      document.documentElement.classList.remove('manual-tagging-active');
+      const injectedStyle = document.getElementById('manual-tagging-theme-fix');
+      if (injectedStyle) {
+        injectedStyle.remove();
+      }
+    };
+  }, []);
+
   // Get data from location state
   const videoFile = location.state?.file;
   const youtubeUrl = location.state?.youtubeUrl;
@@ -561,26 +585,47 @@ const ManualTagging = () => {
     // Process tags from location state
     if (savedTags && savedTags.length > 0) {
       console.log('Setting tags from location state:', savedTags);
-      console.log('First tag position data:', savedTags[0].x, savedTags[0].y);
       
-      setTags(savedTags.map(tag => ({
-        id: `tag-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        timestamp: tag.timestamp || 0,
-        category: tag.category || '',
-        action: tag.action || '',
-        team: tag.team || 'home',
-        player: tag.playerName || '',
-        outcome: tag.outcome || '',
-        position: { 
-          x: typeof tag.x === 'number' ? tag.x : 
-             typeof tag.position?.x === 'number' ? tag.position.x : 50, 
-          y: typeof tag.y === 'number' ? tag.y : 
-             typeof tag.position?.y === 'number' ? tag.position.y : 50 
-        },
-        notes: tag.notes || '',
-        frameData: null,
-        clipData: null,
-      })));
+      // FIXED: Improved tag position handling to match PitchGraphic's structure
+      setTags(savedTags.map(tag => {
+        // Convert the position data to a standardized format
+        let position = { x: 50, y: 50 }; // Default fallback position
+        
+        // Handle various position data formats to ensure compatibility
+        if (typeof tag.x === 'number' && typeof tag.y === 'number') {
+          // If we have direct x, y coordinates (PitchGraphic format)
+          position = { x: tag.x, y: tag.y };
+        } else if (tag.position && typeof tag.position.x === 'number' && typeof tag.position.y === 'number') {
+          // If position is stored in a position object
+          position = { x: tag.position.x, y: tag.position.y };
+        }
+        
+        console.log('Processed tag position:', position);
+        
+        return {
+          id: `tag-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          timestamp: tag.timestamp || 0,
+          category: tag.category || '',
+          action: tag.action || '',
+          team: tag.team || 'home',
+          player: tag.playerName || tag.player || '', // Support both naming formats
+          playerName: tag.playerName || tag.player || '', // Store in both formats for compatibility
+          playerNumber: tag.playerNumber || '',
+          position: position,
+          outcome: tag.outcome || '',
+          notes: tag.notes || '',
+          // ADDED: Include compatibility fields to match PitchGraphic
+          pressure: tag.pressure || '0',
+          foot: tag.foot || 'Right',
+          minute: tag.minute || '',
+          // Store coordinates in both formats for maximum compatibility
+          x: position.x,
+          y: position.y,
+          // Media data
+          frameData: null,
+          clipData: null,
+        };
+      }));
     }
 
     // Process YouTube URL
@@ -701,6 +746,11 @@ const ManualTagging = () => {
   const [selectedAction, setSelectedAction] = useState('');
   const [selectedTeam, setSelectedTeam] = useState('home');
   const [selectedPlayer, setSelectedPlayer] = useState('');
+  const [selectedPlayerNumber, setSelectedPlayerNumber] = useState(''); // ADDED: Player number
+  const [selectedPosition, setSelectedPosition] = useState('forward'); // ADDED: Position field
+  const [selectedPressure, setSelectedPressure] = useState('0'); // ADDED: Pressure field
+  const [selectedFoot, setSelectedFoot] = useState('Right'); // ADDED: Foot/Hand field
+  const [selectedMinute, setSelectedMinute] = useState(''); // ADDED: Minute field
   const [selectedOutcome, setSelectedOutcome] = useState('');
   const [notes, setNotes] = useState('');
   const [currentFrameData, setCurrentFrameData] = useState(null);
@@ -744,6 +794,28 @@ const ManualTagging = () => {
 
   // Use teamsData if available, otherwise use default teams
   const teams = teamsData || defaultTeams;
+
+  // ADDED: Position options to match PitchGraphic
+  const positionOptions = [
+    { id: 'forward', name: 'Forward' },
+    { id: 'midfield', name: 'Midfield' },
+    { id: 'back', name: 'Back' },
+    { id: 'goalkeeper', name: 'Goalkeeper' }
+  ];
+
+  // ADDED: Pressure options to match PitchGraphic
+  const pressureOptions = [
+    { id: '0', name: 'No Pressure (0)' },
+    { id: '1', name: 'Moderate (1)' },
+    { id: '2', name: 'Heavy (2)' }
+  ];
+
+  // ADDED: Foot/Hand options to match PitchGraphic
+  const footOptions = [
+    { id: 'Right', name: 'Right' },
+    { id: 'Left', name: 'Left' },
+    { id: 'Hand', name: 'Hand' }
+  ];
 
   // Tag categories and outcomes
   const tagCategories = [
@@ -1151,6 +1223,16 @@ const ManualTagging = () => {
       setPlaying(false);
     }
     
+    // Set default team if needed and ensure it matches the loaded team data
+    if (!selectedTeam || selectedTeam === '') {
+      setSelectedTeam('home');
+    }
+    
+    // Auto-populate the minute field from current video time
+    // Convert seconds to minutes and round down
+    const currentMinute = Math.floor(currentTime / 60).toString();
+    setSelectedMinute(currentMinute);
+    
     captureFrame();
     recordClip();
     setTagDialogOpen(true);
@@ -1164,12 +1246,28 @@ const ManualTagging = () => {
     setSelectedOutcome('');
     setNotes('');
     setSelectedPlayer('');
+    setSelectedPlayerNumber('');
+    setSelectedPosition('forward');
+    setSelectedPressure('0');
+    setSelectedFoot('Right');
+    setSelectedMinute('');
     setShowPitchSelector(false);
   };
 
   const handleAddTag = () => {
     if (!selectedCategory || !selectedAction) return;
     
+    // Get player number from the selected player if available
+    let playerNumber = selectedPlayerNumber;
+    if (!playerNumber && selectedPlayer) {
+      const teamPlayers = teams[selectedTeam]?.players || [];
+      const playerData = teamPlayers.find(p => p.name === selectedPlayer);
+      if (playerData) {
+        playerNumber = playerData.number.toString();
+      }
+    }
+    
+    // Create new tag with PitchGraphic-compatible structure
     const newTag = {
       id: `tag-${Date.now()}`,
       timestamp: currentTime,
@@ -1177,8 +1275,17 @@ const ManualTagging = () => {
       action: selectedAction,
       team: selectedTeam,
       player: selectedPlayer,
+      playerName: selectedPlayer, // For compatibility with PitchGraphic
+      playerNumber: playerNumber, // For compatibility with PitchGraphic
+      position: selectedPosition, // For compatibility with PitchGraphic
+      pressure: selectedPressure, // For compatibility with PitchGraphic
+      foot: selectedFoot,         // For compatibility with PitchGraphic
+      minute: selectedMinute,     // For compatibility with PitchGraphic
       outcome: selectedOutcome,
+      // Store position data in both formats for maximum compatibility
       position: { ...currentPosition },
+      x: currentPosition.x,       // For compatibility with PitchGraphic
+      y: currentPosition.y,       // For compatibility with PitchGraphic
       notes,
       frameData: currentFrameData,
       clipData: currentClipData,
@@ -1229,6 +1336,7 @@ const ManualTagging = () => {
         ? `YouTube-${getYouTubeVideoId(youtubeUrl)}`
         : videoFile?.name.replace(/\.[^/.]+$/, "") || "game";
       
+      // Create gameData with PitchGraphic-compatible structure
       const gameData = {
         gameName,
         sport,
@@ -1238,15 +1346,32 @@ const ManualTagging = () => {
         teamsData,
         analysisType: 'video',
         gameData: tags.map(tag => ({
+          // Standard fields
           action: tag.action,
           category: tag.category,
           team: tag.team,
-          playerName: tag.player,
+          playerName: tag.player || tag.playerName,
           outcome: tag.outcome,
           timestamp: tag.timestamp,
-          x: tag.position.x,
-          y: tag.position.y,
           notes: tag.notes,
+          
+          // PitchGraphic-compatible fields
+          playerNumber: tag.playerNumber || '',
+          position: tag.position?.type || tag.position || 'forward',
+          pressure: tag.pressure || '0',
+          foot: tag.foot || 'Right',
+          minute: tag.minute || '',
+          
+          // Position stored in both formats for compatibility
+          // Direct coordinates outside the position object
+          x: tag.position?.x || tag.x || 50,
+          y: tag.position?.y || tag.y || 50,
+          
+          // Also keep the position object
+          position: {
+            x: tag.position?.x || tag.x || 50,
+            y: tag.position?.y || tag.y || 50
+          }
         })),
       };
       
@@ -1274,6 +1399,7 @@ const ManualTagging = () => {
       ? `YouTube-${getYouTubeVideoId(youtubeUrl)}`
       : videoFile?.name || "game";
     
+    // Create export data with PitchGraphic-compatible structure
     const gameData = {
       fileName,
       sport,
@@ -1281,15 +1407,34 @@ const ManualTagging = () => {
       youtubeUrl: youtubeUrl || null,
       teamsData,
       tags: tags.map(tag => ({
+        // Standard fields
         timestamp: tag.timestamp,
         formattedTime: formatTime(tag.timestamp),
         category: tag.category,
         action: tag.action,
         team: tag.team,
-        player: tag.player,
+        player: tag.player || tag.playerName,
         outcome: tag.outcome,
-        position: tag.position,
         notes: tag.notes,
+        
+        // PitchGraphic-compatible fields
+        playerName: tag.player || tag.playerName,
+        playerNumber: tag.playerNumber || '',
+        position: tag.position?.type || tag.position || 'forward',
+        pressure: tag.pressure || '0',
+        foot: tag.foot || 'Right',
+        minute: tag.minute || '',
+        
+        // Position stored in both formats for compatibility
+        // Direct coordinates
+        x: tag.position?.x || tag.x || 50,
+        y: tag.position?.y || tag.y || 50,
+        
+        // Also keep the position object
+        position: {
+          x: tag.position?.x || tag.x || 50,
+          y: tag.position?.y || tag.y || 50
+        }
       })),
     };
     
@@ -1305,16 +1450,96 @@ const ManualTagging = () => {
     setTimeout(() => URL.revokeObjectURL(url), 100);
   };
 
+  // Function to open data in AnalysisGAA format
+  const handleOpenInAnalysis = () => {
+    if (!tags.length) return alert("No tags to analyze");
+    
+    const fileName = youtubeUrl
+      ? `YouTube-${getYouTubeVideoId(youtubeUrl)}`
+      : videoFile?.name || "game";
+    
+    // GAA pitch dimensions and goal positions used in the analysis dashboard
+    const pitchWidth = 145;  // Width of pitch in meters
+    const pitchHeight = 88;  // Height of pitch in meters
+    const halfLineX = pitchWidth / 2;
+    const goalY = pitchHeight / 2;
+    
+    // Format the data in the structure expected by AnalysisGAA
+    const analysisData = {
+      games: [
+        {
+          gameName: fileName,
+          matchDate: new Date().toISOString(),
+          gameData: tags.map(tag => {
+            // Extract coordinates, using fallbacks if needed
+            const x = tag.position?.x || tag.x || 50;
+            const y = tag.position?.y || tag.y || 50;
+            
+            // Normalize coordinates to match the analysis dashboard's 145×88 meter pitch
+            // Our coordinates are percentages (0-100), so we need to convert them
+            const normalizedX = (x / 100) * pitchWidth;
+            const normalizedY = (y / 100) * pitchHeight;
+            
+            // Determine which goal the shot is targeting based on x position
+            const isLeftSide = normalizedX <= halfLineX;
+            const targetGoalX = isLeftSide ? 0 : pitchWidth;
+            
+            // Calculate distance to goal - this is what the analysis dashboard does
+            const dx = normalizedX - targetGoalX;
+            const dy = normalizedY - goalY;
+            const distToGoal = Math.sqrt(dx * dx + dy * dy);
+            
+            return {
+              team: tag.team,
+              playerName: tag.player || tag.playerName,
+              action: tag.action,
+              category: tag.category,
+              timestamp: tag.timestamp,
+              minute: tag.minute || Math.floor(tag.timestamp / 60),
+              // Add both the string position (forward, midfielder, etc.)
+              position: tag.position?.type || 'forward',
+              // Use the normalized coordinates for the pitch visualization
+              x: normalizedX,
+              y: normalizedY,
+              // Add proper distance to goal calculation
+              distMeters: distToGoal,
+              // Add side based on which half of the pitch
+              side: isLeftSide ? 'Left' : 'Right',
+              outcome: tag.outcome,
+              notes: tag.notes,
+              // Add these properties to help with correct rendering
+              distanceFromGoal: distToGoal,
+              pressure: tag.pressure || '0',
+              foot: tag.foot || 'Right'
+            };
+          })
+        }
+      ]
+    };
+    
+    // Navigate to the analysis dashboard with the formatted data
+    navigate('/analysis/gaa-dashboard', {
+      state: {
+        file: analysisData,
+        sport: 'GAA',
+        filters: {
+          team: null,
+          player: null,
+          action: null
+        }
+      }
+    });
+  };
+
   const handleGoBack = () => navigate('/analysis-gaa');
   
   const togglePitchSelector = () => {
     setShowPitchSelector(!showPitchSelector);
   };
 
-  // Inside the ManualTagging component, add the new state variable
+  // Video upload modal functionality
   const [showVideoUploadModal, setShowVideoUploadModal] = useState(false);
 
-  // Add these new handler functions before the return statement
   const handleVideoFileReupload = (file) => {
     if (file) {
       try {
@@ -1350,7 +1575,10 @@ const ManualTagging = () => {
   };
 
   return (
-    <PageContainer maxWidth="xl">
+    <PageContainer maxWidth="xl" className="manual-tagging-container" sx={{
+      backgroundColor: '#121212',
+      color: '#fff',
+    }}>
       <Box sx={{ display:'flex', justifyContent:'space-between', alignItems:'center', mb:3 }}>
         <Button startIcon={<ArrowBackIcon/>} onClick={handleGoBack} sx={{ color:'#fff' }}>
           Back to Analysis
@@ -1410,663 +1638,876 @@ const ManualTagging = () => {
               <>
                 {videoFile ? (
                   <video
-                    ref={videoRef}
-                    onLoadedMetadata={handleLoadedMetadata}
-                    onTimeUpdate={handleTimeUpdate}
-                    onError={handleVideoError}
-                    style={{ width:'100%', height:'100%' }}
-                    onClick={togglePlay}
-                    playsInline
-                    controls={false}
-                  >
-                    <source src={videoUrl} type="video/mp4"/>
-                    Your browser does not support HTML5 video.
-                  </video>
-                ) : (
-                  <YouTube
-                    videoId={getYouTubeVideoId(videoUrl || youtubeUrl)}
-                    opts={{ width:'100%', height:'100%', playerVars:{ autoplay:0, controls:0, modestbranding:1, rel:0 } }}
-                    onReady={onYouTubeReady}
-                    onStateChange={handleYouTubeStateChange}
-                    style={{ width:'100%', height:'100%' }}
-                  />
-                )}
-                <VideoControlsContainer>
-                  <ControlsRow>
-                    <Typography variant="body2">
-                      {formatTime(currentTime)} / {formatTime(duration)}
-                    </Typography>
-                    <Select
-                      value={playbackRate}
-                      onChange={handlePlaybackRateChange}
-                      size="small"
-                      sx={{
-                        backgroundColor:'rgba(0,0,0,0.5)',
-                        color:'#fff',
-                        height:30,
-                        '& .MuiSelect-select': { p:'2px 8px' }
-                      }}
+                      ref={videoRef}
+                      onLoadedMetadata={handleLoadedMetadata}
+                      onTimeUpdate={handleTimeUpdate}
+                      onError={handleVideoError}
+                      style={{ width:'100%', height:'100%' }}
+                      onClick={togglePlay}
+                      playsInline
+                      controls={false}
                     >
-                      {[0.25,0.5,0.75,1,1.5,2].map(r=>(
-                        <MenuItem key={r} value={r}>{r}x</MenuItem>
-                      ))}
-                    </Select>
-                  </ControlsRow>
-                  <ProgressBar value={(currentTime/duration)*100 || 0} onChange={handleVideoProgress}/>
-                  <ControlsRow>
-                    <Box sx={{ display:'flex', gap:1 }}>
-                      <IconButton size="small" onClick={()=>skip(-10)} sx={{color:'#fff'}}><FastRewindIcon/></IconButton>
-                      <IconButton size="small" onClick={()=>skip(-5)}  sx={{color:'#fff'}}><SkipPreviousIcon/></IconButton>
-                      <IconButton size="small" onClick={togglePlay} sx={{color:'#fff'}}>
-                        {playing ? <PauseIcon/> : <PlayArrowIcon/>}
-                      </IconButton>
-                      <IconButton size="small" onClick={()=>skip(5)}   sx={{color:'#fff'}}><SkipNextIcon/></IconButton>
-                      <IconButton size="small" onClick={()=>skip(10)}  sx={{color:'#fff'}}><FastForwardIcon/></IconButton>
-                    </Box>
-                    <Button
-                      variant="contained"
-                      startIcon={<FlagIcon/>}
-                      onClick={handleOpenTagDialog}
-                      sx={{ backgroundColor:'#5e2e8f','&:hover':{backgroundColor:'#7e4cb8'} }}
-                    >
-                      Tag Event
-                    </Button>
-                  </ControlsRow>
-                </VideoControlsContainer>
-              </>
-            )}
-          </VideoContainer>
-          <TimelineContainer>
-            {tags.map((tag, i) => (
-              <TimelineMark
-                key={i}
-                category={tag.category}
-                active={(Math.abs(tag.timestamp - currentTime) < 0.5).toString()}
-                style={{ 
-                  left: `${(tag.timestamp / duration) * 100}%` 
-                }}
-                onClick={() => handleJumpToTag(tag.timestamp)}
-                title={`${tag.category}: ${tag.action} (${formatTime(tag.timestamp)})`}
-                data-time={formatTime(tag.timestamp)}
-              />
-            ))}
-            {[...Array(11)].map((_, i) => (
-              <Typography
-                key={`time-${i}`}
-                variant="caption"
-                sx={{
-                  position: 'absolute',
-                  bottom: 5,
-                  left: `${i * 10}%`,
-                  transform: 'translateX(-50%)',
-                  color: '#666',
-                  fontSize: '0.7rem'
-                }}
-              >
-                {formatTime((duration * i) / 10)}
-              </Typography>
-            ))}
-          </TimelineContainer>
-          <canvas ref={canvasRef} style={{ display:'none' }}/>
-          <Box 
-            ref={pitchRef}
-            sx={{ 
-              position: 'relative',
-              width: '96%',
-              marginTop: 2,
-              backgroundColor: '#1a1a1a',
-              borderRadius: '8px',
-              border: '1px solid #333',
-              padding: 2,
-              maxHeight: { xs: '400px', md: '500px' },
-              overflow: 'hidden'
-            }}
-          >
-            <Typography variant="h6" sx={{ color: '#5e2e8f', mb: 2, display: 'flex', alignItems: 'center' }}>
-              <LocationOnIcon sx={{ mr: 1 }} /> Event Locations on Pitch
-            </Typography>
+                      <source src={videoUrl} type="video/mp4"/>
+                      Your browser does not support HTML5 video.
+                    </video>
+                  ) : (
+                    <YouTube
+                      videoId={getYouTubeVideoId(videoUrl || youtubeUrl)}
+                      opts={{ width:'100%', height:'100%', playerVars:{ autoplay:0, controls:0, modestbranding:1, rel:0 } }}
+                      onReady={onYouTubeReady}
+                      onStateChange={handleYouTubeStateChange}
+                      style={{ width:'100%', height:'100%' }}
+                    />
+                  )}
+                  <VideoControlsContainer>
+                    <ControlsRow>
+                      <Typography variant="body2">
+                        {formatTime(currentTime)} / {formatTime(duration)}
+                      </Typography>
+                      <Select
+                        value={playbackRate}
+                        onChange={handlePlaybackRateChange}
+                        size="small"
+                        sx={{
+                          backgroundColor:'rgba(0,0,0,0.5)',
+                          color:'#fff',
+                          height:30,
+                          '& .MuiSelect-select': { p:'2px 8px' }
+                        }}
+                      >
+                        {[0.25,0.5,0.75,1,1.5,2].map(r=>(
+                          <MenuItem key={r} value={r}>{r}x</MenuItem>
+                        ))}
+                      </Select>
+                    </ControlsRow>
+                    <ProgressBar value={(currentTime/duration)*100 || 0} onChange={handleVideoProgress}/>
+                    <ControlsRow>
+                      <Box sx={{ display:'flex', gap:1 }}>
+                        <IconButton size="small" onClick={()=>skip(-10)} sx={{
+                          color:'#fff',
+                          backgroundColor: 'rgba(94, 46, 143, 0.2)',
+                          '&:hover': { backgroundColor: 'rgba(94, 46, 143, 0.4)' }
+                        }}>
+                          <FastRewindIcon/>
+                        </IconButton>
+                        <IconButton size="small" onClick={()=>skip(-5)} sx={{
+                          color:'#fff',
+                          backgroundColor: 'rgba(94, 46, 143, 0.2)',
+                          '&:hover': { backgroundColor: 'rgba(94, 46, 143, 0.4)' }
+                        }}>
+                          <SkipPreviousIcon/>
+                        </IconButton>
+                        <IconButton size="small" onClick={togglePlay} sx={{
+                          color:'#fff',
+                          backgroundColor: '#5e2e8f',
+                          width: '36px',
+                          height: '36px',
+                          '&:hover': { backgroundColor: '#7e4cb8' }
+                        }}>
+                          {playing ? <PauseIcon/> : <PlayArrowIcon/>}
+                        </IconButton>
+                        <IconButton size="small" onClick={()=>skip(5)} sx={{
+                          color:'#fff',
+                          backgroundColor: 'rgba(94, 46, 143, 0.2)',
+                          '&:hover': { backgroundColor: 'rgba(94, 46, 143, 0.4)' }
+                        }}>
+                          <SkipNextIcon/>
+                        </IconButton>
+                        <IconButton size="small" onClick={()=>skip(10)} sx={{
+                          color:'#fff',
+                          backgroundColor: 'rgba(94, 46, 143, 0.2)',
+                          '&:hover': { backgroundColor: 'rgba(94, 46, 143, 0.4)' }
+                        }}>
+                          <FastForwardIcon/>
+                        </IconButton>
+                      </Box>
+                      <Button
+                        variant="contained"
+                        startIcon={<FlagIcon/>}
+                        onClick={handleOpenTagDialog}
+                        sx={{ 
+                          backgroundColor:'#5e2e8f',
+                          '&:hover':{backgroundColor:'#7e4cb8'},
+                          fontWeight: 600,
+                          textTransform: 'none',
+                          borderRadius: '6px',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                        }}
+                      >
+                        Tag Event
+                      </Button>
+                    </ControlsRow>
+                  </VideoControlsContainer>
+                </>
+              )}
+            </VideoContainer>
+            <TimelineContainer>
+              {/* Timeline markers for events */}
+              {tags.map((tag, i) => (
+                <TimelineMark
+                  key={i}
+                  category={tag.category}
+                  active={(Math.abs(tag.timestamp - currentTime) < 0.5).toString()}
+                  style={{ 
+                    left: `${(tag.timestamp / duration) * 100}%` 
+                  }}
+                  onClick={() => handleJumpToTag(tag.timestamp)}
+                  title={`${tag.category}: ${tag.action} (${formatTime(tag.timestamp)})`}
+                  data-time={formatTime(tag.timestamp)}
+                />
+              ))}
+              
+              {/* Background grid lines */}
+              {[...Array(21)].map((_, i) => (
+                <Box
+                  key={`mark-${i}`}
+                  sx={{
+                    position: 'absolute',
+                    top: '20%',
+                    bottom: '20%',
+                    left: `${i * 5}%`,
+                    width: i % 5 === 0 ? '2px' : '1px',
+                    backgroundColor: i % 5 === 0 ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)',
+                    zIndex: 1
+                  }}
+                />
+              ))}
+              
+              {/* Time labels */}
+              {[...Array(11)].map((_, i) => (
+                <Typography
+                  key={`time-${i}`}
+                  variant="caption"
+                  sx={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: `${i * 10}%`,
+                    transform: 'translateX(-50%)',
+                    color: '#aaa',
+                    fontSize: '0.75rem',
+                    fontWeight: 500,
+                    backgroundColor: 'rgba(0,0,0,0.3)',
+                    padding: '2px 4px',
+                    borderRadius: '4px',
+                    zIndex: 2
+                  }}
+                >
+                  {formatTime((duration * i) / 10)}
+                </Typography>
+              ))}
+
+              {/* Current time indicator */}
+              {duration > 0 && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: '10%',
+                    bottom: '10%',
+                    left: `${(currentTime / duration) * 100}%`,
+                    width: '2px',
+                    backgroundColor: '#fff',
+                    boxShadow: '0 0 8px rgba(255,255,255,0.8)',
+                    zIndex: 20,
+                    transform: 'translateX(-50%)',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: -5,
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      width: 0,
+                      height: 0,
+                      borderLeft: '6px solid transparent',
+                      borderRight: '6px solid transparent',
+                      borderTop: '6px solid #fff'
+                    }
+                  }}
+                />
+              )}
+            </TimelineContainer>
+            <canvas ref={canvasRef} style={{ display:'none' }}/>
             <Box 
+              ref={pitchRef}
               sx={{ 
-                position: 'relative', 
-                width: { xs: '100%', sm: '500px', md: '550px', lg: '675px' },
-                maxWidth: '100%',
-                marginLeft: 'auto',
-                marginRight: 'auto',
-                maxHeight: { xs: '280px', sm: '300px', md: '320px', lg: '450px' },
-                mb: 2,
-                '& .marker-tooltip': {
-                  opacity: 0,
-                },
-                '& .marker-container:hover .marker-tooltip': {
-                  opacity: 1,
-                },
+                position: 'relative',
+                width: '96%',
+                marginTop: 2,
+                backgroundColor: '#1a1a1a',
+                borderRadius: '8px',
+                border: '1px solid #333',
+                padding: 2,
+                maxHeight: { xs: '400px', md: '500px' },
                 overflow: 'hidden'
               }}
             >
-              <GAAPitchSelector
-                currentPosition={currentPosition}
-                setCurrentPosition={setCurrentPosition}
-                selectedTeam={selectedTeam}
-              />
-              {tags.map((tag, index) => {
-                console.log(`Rendering marker ${index}:`, tag.position);
-                return (
-                  <PitchMarkerComponent
-                    key={index}
-                    tag={tag}
-                    index={index}
-                    tags={tags}
-                    setTags={setTags}
-                    handleJumpToTag={handleJumpToTag}
-                    setSelectedCategory={setSelectedCategory}
-                    setSelectedAction={setSelectedAction}
-                    setSelectedTeam={setSelectedTeam}
-                    setSelectedPlayer={setSelectedPlayer}
-                    setSelectedOutcome={setSelectedOutcome}
-                    setNotes={setNotes}
-                    setCurrentPosition={setCurrentPosition}
-                    setTagDialogOpen={setTagDialogOpen}
-                    pitchRef={pitchRef}
-                    formatTime={formatTime}
-                  />
-                );
-              })}
-            </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 1 }}>
-              {tags.length === 0 
-                ? "No events tagged yet. Tagged events will appear on the pitch." 
-                : `${tags.length} events tagged on pitch. Drag markers to reposition, double-click to edit.`
-              }
-            </Typography>
-          </Box>
-        </Grid>
-        <Grid item xs={12} lg={4}>
-          <Tabs
-            value={activeTab}
-            onChange={(e,v)=>setActiveTab(v)}
-            variant="fullWidth"
-            sx={{
-              backgroundColor:'#1a1a1a',
-              borderRadius:'8px 8px 0 0',
-              '& .MuiTabs-indicator':{backgroundColor:'#5e2e8f'}
-            }}
-          >
-            <StyledTab label="Tagged Events"/>
-            <StyledTab label="Quick Tags"/>
-          </Tabs>
-          <SectionCard sx={{ borderRadius:'0 0 8px 8px', maxHeight:600, overflowY:'auto' }}>
-            {activeTab === 0 ? (
-              <>
-                <SectionTitle variant="h6"><FlagIcon fontSize="small"/> Tags ({tags.length})</SectionTitle>
-                {tags.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary" sx={{ textAlign:'center', py:2 }}>
-                    No tags yet. Click "Tag Event" to add one.
-                  </Typography>
-                ) : (
-                  tags.map((tag,i)=>(
-                    <Box key={i} sx={{ p:1, mb:1, borderRadius:1, backgroundColor:'rgba(25,25,25,0.5)', border:'1px solid #333' }}>
-                      <Box sx={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                        <Typography sx={{ fontWeight:'bold', color:'#fff' }}>{formatTime(tag.timestamp)}</Typography>
-                        <Box>
-                          <IconButton size="small" onClick={()=>handleJumpToTag(tag.timestamp)} sx={{color:'#5e2e8f'}}>
-                            <PlayArrowIcon fontSize="small"/>
-                          </IconButton>
-                          <IconButton size="small" onClick={()=>handleDeleteTag(tag.id)} sx={{color:'#dc3545'}}>
-                            <DeleteIcon fontSize="small"/>
-                          </IconButton>
-                        </Box>
-                      </Box>
-                      <TagChip label={tag.category} type={tag.category} size="small"/>
-                      <TagChip label={tag.action} type={tag.category} size="small"/>
-                      {tag.outcome && <TagChip label={tag.outcome} type={tag.category} size="small"/>}
-                      <Typography variant="body2" sx={{ mt:1, color:'#aaa' }}>
-                        {tag.team === 'home' ? teams.home.name : teams.away.name}: {tag.player || 'No player'}
-                      </Typography>
-                      {tag.notes && (
-                        <Typography variant="body2" sx={{ mt:0.5, color:'#ddd', fontSize:'0.8rem' }}>
-                          {tag.notes}
-                        </Typography>
-                      )}
-                    </Box>
-                  ))
-                )}
-              </>
-            ) : (
-              <>
-                <SectionTitle variant="h6"><SportsSoccerIcon fontSize="small"/> Quick Tags</SectionTitle>
-                {tagCategories.map(cat=>(
-                  <Box key={cat.id} sx={{ mb:2 }}>
-                    <Typography sx={{
-                      fontWeight:'bold',
-                      color:
-                        cat.id==='Possession'? '#9b7cb7':
-                        cat.id==='Defense'? '#e57373':
-                        cat.id==='Scoring'? '#81c784':
-                        cat.id==='Set Pieces'? '#fff176':
-                        cat.id==='Turnovers'? '#ffb74d':'#fff',
-                      mb:1
-                    }}>{cat.name}</Typography>
-                    <Box sx={{ display:'flex', flexWrap:'wrap', gap:0.5 }}>
-                      {cat.actions.map(act=>(
-                        <TagButton
-                          key={act.id}
-                          size="small"
-                          colorscheme={
-                            cat.id==='Possession'? 'primary':
-                            cat.id==='Defense'? 'error':
-                            cat.id==='Scoring'? 'success':
-                            cat.id==='Set Pieces'? 'warning':'primary'
-                          }
-                          onClick={()=>{
-                            setSelectedCategory(cat.id);
-                            setSelectedAction(act.name);
-                            captureFrame();
-                            recordClip();
-                            setTagDialogOpen(true);
-                          }}
-                        >
-                          {act.name}
-                        </TagButton>
-                      ))}
-                    </Box>
-                  </Box>
-                ))}
-              </>
-            )}
-          </SectionCard>
-          
-          {/* Action & Download Buttons */}
-          <Box sx={{ mt:2, display:'grid', gridTemplateColumns:'1fr 1fr', gap:2 }}>
-            <ActionButton 
-              color="success" 
-              onClick={handleSave} 
-              startIcon={<SaveIcon/>} 
-              fullWidth 
-              disabled={savingInProgress}
-            >
-              {savingInProgress ? 'Saving...' : 'Save Dataset'}
-            </ActionButton>
-            <ActionButton 
-              color="primary" 
-              onClick={handleExport} 
-              startIcon={<DownloadIcon/>} 
-              fullWidth
-            >
-              Export Tags
-            </ActionButton>
-            <ActionButton 
-              color="primary" 
-              onClick={downloadFrame} 
-              startIcon={<ScreenshotMonitorIcon/>} 
-              fullWidth
-            >
-              Download Frame
-            </ActionButton>
-            <ActionButton 
-              color="primary" 
-              onClick={downloadClip} 
-              startIcon={<VideocamIcon/>} 
-              fullWidth
-            >
-              Download Clip
-            </ActionButton>
-            <ActionButton 
-              color="primary" 
-              onClick={handleLocalSave} 
-              startIcon={<SaveIcon/>} 
-              fullWidth 
-              disabled={savingInProgress}
-            >
-              {savingInProgress ? 'Saving...' : 'Local Save'}
-            </ActionButton>
-            <ActionButton 
-              color="primary" 
-              onClick={() => setTeamSetupOpen(true)} 
-              startIcon={<GroupsIcon/>} 
-              fullWidth
-            >
-              Team Setup
-            </ActionButton>
-            <ActionButton
-              color="primary"
-              onClick={() => setAdvancedClipManagerOpen(true)}
-              startIcon={<VideocamIcon/>}
-              fullWidth
-              sx={{ gridColumn: "span 1" }}
-            >
-              Advanced Clip Manager
-            </ActionButton>
-            <ActionButton
-              color="primary"
-              onClick={() => setShowVideoUploadModal(true)}
-              startIcon={<CloudUploadIcon/>}
-              fullWidth
-              sx={{ gridColumn: "span 1" }}
-            >
-              Reupload Video
-            </ActionButton>
-          </Box>
-          
-          {/* Capture Data Preview */}
-          <Grid container spacing={2} sx={{ mt:2 }}>
-            <Grid item xs={6}>
-              <SectionCard>
-                <SectionTitle variant="subtitle1"><ScreenshotMonitorIcon fontSize="small"/> Frame</SectionTitle>
-                {currentFrameData ? (
-                  <Box component="img" src={currentFrameData} sx={{ width:'100%', borderRadius:1, border:'1px solid #444' }}/>
-                ) : (
-                  <Typography variant="body2" color="text.secondary" sx={{ textAlign:'center', py:2 }}>
-                    {youtubeUrl ? 'Frame capture not available for YouTube videos' : 'No frame captured'}
-                  </Typography>
-                )}
-              </SectionCard>
-            </Grid>
-            <Grid item xs={6}>
-              <SectionCard>
-                <SectionTitle variant="subtitle1"><VideocamIcon fontSize="small"/> Clip</SectionTitle>
-                {currentClipData ? (
-                  <Box sx={{ color:'#aaa', fontSize:'0.9rem' }}>
-                    <Typography>Start: {formatTime(currentClipData.startTime)}</Typography>
-                    <Typography>End: {formatTime(currentClipData.endTime)}</Typography>
-                    <Typography>Duration: {currentClipData.duration.toFixed(2)}s</Typography>
-                  </Box>
-                ) : (
-                  <Typography variant="body2" color="text.secondary" sx={{ textAlign:'center', py:2 }}>
-                    No clip recorded
-                  </Typography>
-                )}
-              </SectionCard>
-            </Grid>
-          </Grid>
-          
-          {/* Dialogs */}
-          <Dialog 
-            open={tagDialogOpen} 
-            onClose={handleCloseTagDialog}
-            PaperProps={{ sx: { backgroundColor:'#222', color:'#fff', borderRadius:2, maxWidth:'600px', width:'100%' } }}
-          >
-            <DialogTitle sx={{ borderBottom:'1px solid #444' }}>
-              Tag Event at {formatTime(currentTime)}
-              <IconButton onClick={handleCloseTagDialog} sx={{ position:'absolute', right:8, top:8, color:'#aaa' }}>
-                <CloseIcon/>
-              </IconButton>
-            </DialogTitle>
-            <DialogContent sx={{ mt:2 }}>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" sx={{ mb:1 }}>Category</Typography>
-                  <Select
-                    value={selectedCategory}
-                    onChange={e=>setSelectedCategory(e.target.value)}
-                    fullWidth
-                    sx={{
-                      backgroundColor:'#333', color:'#fff',
-                      '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
-                      '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
-                      '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'}
-                    }}
-                  >
-                    <MenuItem value=""><em>Select Category</em></MenuItem>
-                    {tagCategories.map(cat=>(
-                      <MenuItem key={cat.id} value={cat.id}>{cat.name}</MenuItem>
-                    ))}
-                  </Select>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" sx={{ mb:1 }}>Action</Typography>
-                  <Select
-                    value={selectedAction}
-                    onChange={e=>setSelectedAction(e.target.value)}
-                    fullWidth
-                    disabled={!selectedCategory}
-                    sx={{
-                      backgroundColor:'#333', color:'#fff',
-                      '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
-                      '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
-                      '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'}
-                    }}
-                  >
-                    <MenuItem value=""><em>Select Action</em></MenuItem>
-                    {selectedCategory && tagCategories.find(cat=>cat.id===selectedCategory)?.actions.map(action=>(
-                      <MenuItem key={action.id} value={action.name}>{action.name}</MenuItem>
-                    ))}
-                  </Select>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" sx={{ mb:1 }}>Team</Typography>
-                  <Select
-                    value={selectedTeam}
-                    onChange={e=>setSelectedTeam(e.target.value)}
-                    fullWidth
-                    sx={{
-                      backgroundColor:'#333', color:'#fff',
-                      '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
-                      '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
-                      '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'}
-                    }}
-                  >
-                    <MenuItem value="home">{teams.home.name}</MenuItem>
-                    <MenuItem value="away">{teams.away.name}</MenuItem>
-                  </Select>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" sx={{ mb:1 }}>Player</Typography>
-                  <Select
-                    value={selectedPlayer}
-                    onChange={e=>setSelectedPlayer(e.target.value)}
-                    fullWidth
-                    sx={{
-                      backgroundColor:'#333', color:'#fff',
-                      '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
-                      '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
-                      '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'}
-                    }}
-                  >
-                    <MenuItem value=""><em>No Player</em></MenuItem>
-                    {teams[selectedTeam]?.players
-                      .filter(player => player.name) // Only show players with names
-                      .sort((a, b) => a.number - b.number) // Sort by number
-                      .map(player => (
-                        <MenuItem key={player.id} value={player.name}>
-                          {player.number}. {player.name} ({player.position})
-                        </MenuItem>
-                      ))}
-                  </Select>
-                </Grid>
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" sx={{ mb:1 }}>Outcome</Typography>
-                  <Select
-                    value={selectedOutcome}
-                    onChange={e=>setSelectedOutcome(e.target.value)}
-                    fullWidth
-                    sx={{
-                      backgroundColor:'#333', color:'#fff',
-                      '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
-                      '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
-                      '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'}
-                    }}
-                  >
-                    <MenuItem value=""><em>Select Outcome</em></MenuItem>
-                    {tagOutcomes.map(outcome=>(
-                      <MenuItem key={outcome.id} value={outcome.name}>{outcome.name}</MenuItem>
-                    ))}
-                  </Select>
-                </Grid>
-
-                {/* Location on Pitch (Optional) */}
-                <Grid item xs={12}>
-                  <Box sx={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center',
-                    mb: 1,
-                    cursor: 'pointer',
-                    padding: '8px',
-                    backgroundColor: '#333',
-                    borderRadius: '4px'
-                  }} 
-                  onClick={togglePitchSelector}>
-                    <Typography variant="subtitle2">
-                      <LocationOnIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'text-bottom' }} />
-                      Position on Pitch (Optional)
-                    </Typography>
-                    <IconButton size="small" sx={{ color: '#aaa' }}>
-                      {showPitchSelector ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                    </IconButton>
-                  </Box>
-
-                  <Collapse in={showPitchSelector}>
-                    <Box sx={{ mt: 1, mb: 2, display: 'flex', justifyContent: 'center' }}>
-                      <GAAPitchSelector
-                        currentPosition={currentPosition}
-                        setCurrentPosition={setCurrentPosition}
-                        selectedTeam={selectedTeam}
-                      />
-                    </Box>
-                  </Collapse>
-                </Grid>
-
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" sx={{ mb:1 }}>Notes</Typography>
-                  <TextField
-                    value={notes}
-                    onChange={e=>setNotes(e.target.value)}
-                    fullWidth
-                    multiline
-                    rows={3}
-                    sx={{
-                      backgroundColor:'#333', color:'#fff',
-                      '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
-                      '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
-                      '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'}
-                    }}
-                  />
-                </Grid>
-              </Grid>
-            </DialogContent>
-            <DialogActions sx={{ p:2, borderTop:'1px solid #444' }}>
-              <Button onClick={handleCloseTagDialog} sx={{ color:'#aaa' }}>Cancel</Button>
-              <Button onClick={handleAddTag} variant="contained" startIcon={<AddIcon/>} sx={{ backgroundColor:'#5e2e8f','&:hover':{backgroundColor:'#7e4cb8'} }}>
-                Add Tag
-              </Button>
-            </DialogActions>
-          </Dialog>
-          
-          {/* Save Dialog */}
-          <Dialog
-            open={saveDialogOpen}
-            onClose={()=>setSaveDialogOpen(false)}
-            PaperProps={{ sx:{ backgroundColor:'#222', color:'#fff', borderRadius:2, maxWidth:'400px', width:'100%' } }}
-          >
-            <DialogTitle sx={{ borderBottom:'1px solid #444' }}>
-              Save Dataset
-              <IconButton onClick={()=>setSaveDialogOpen(false)} sx={{ position:'absolute', right:8, top:8, color:'#aaa' }}>
-                <CloseIcon/>
-              </IconButton>
-            </DialogTitle>
-            <DialogContent sx={{ mt:2 }}>
-              <Typography variant="subtitle2" sx={{ mb:1 }}>Dataset Name</Typography>
-              <TextField
-                value={datasetName}
-                onChange={e=>setDatasetName(e.target.value)}
-                fullWidth
-                placeholder="Enter a name for your dataset"
-                sx={{
-                  backgroundColor:'#333', color:'#fff',
-                  '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
-                  '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'}
+              <Typography variant="h6" sx={{ color: '#5e2e8f', mb: 2, display: 'flex', alignItems: 'center' }}>
+                <LocationOnIcon sx={{ mr: 1 }} /> Event Locations on Pitch
+              </Typography>
+              <Box 
+                sx={{ 
+                  position: 'relative', 
+                  width: { xs: '100%', sm: '500px', md: '550px', lg: '675px' },
+                  maxWidth: '100%',
+                  marginLeft: 'auto',
+                  marginRight: 'auto',
+                  maxHeight: { xs: '280px', sm: '300px', md: '320px', lg: '450px' },
+                  mb: 2,
+                  '& .marker-tooltip': {
+                    opacity: 0,
+                  },
+                  '& .marker-container:hover .marker-tooltip': {
+                    opacity: 1,
+                  },
+                  overflow: 'hidden'
                 }}
-              />
-            </DialogContent>
-            <DialogActions sx={{ p:2, borderTop:'1px solid #444' }}>
-              <Button onClick={()=>setSaveDialogOpen(false)} sx={{ color:'#aaa' }}>Cancel</Button>
-              <Button onClick={confirmSave} variant="contained" disabled={savingInProgress} startIcon={<SaveIcon/>} sx={{ backgroundColor:'#5e2e8f','&:hover':{backgroundColor:'#7e4cb8'} }}>
-                {savingInProgress ? 'Saving...' : 'Save'}
-              </Button>
-            </DialogActions>
-          </Dialog>
-          
-          {/* Help Dialog */}
-          <Dialog
-            open={helpDialogOpen}
-            onClose={()=>setHelpDialogOpen(false)}
-            PaperProps={{ sx:{ backgroundColor:'#222', color:'#fff', borderRadius:2, maxWidth:'500px', width:'100%' } }}
-          >
-            <DialogTitle sx={{ borderBottom:'1px solid #444' }}>
-              Video Format Help
-              <IconButton onClick={()=>setHelpDialogOpen(false)} sx={{ position:'absolute', right:8, top:8, color:'#aaa' }}>
-                <CloseIcon/>
-              </IconButton>
-              </DialogTitle>
-            <DialogContent sx={{ mt:2 }}>
-              <Typography variant="h6" sx={{ mb:2 }}>Supported Video Formats</Typography>
-              {supportedFormats.length > 0 ? (
-                supportedFormats.map((format, idx) => (
-                  <Typography key={idx} sx={{ mb:1 }}>
-                    <strong>{format.format.toUpperCase()}</strong> ({format.codec}): {format.support}
-                  </Typography>
-                ))
+              >
+                <GAAPitchSelector
+                  currentPosition={currentPosition}
+                  setCurrentPosition={setCurrentPosition}
+                  selectedTeam={selectedTeam}
+                />
+                {tags.map((tag, index) => {
+                  console.log(`Rendering marker ${index}:`, tag.position);
+                  return (
+                    <PitchMarkerComponent
+                      key={index}
+                      tag={tag}
+                      index={index}
+                      tags={tags}
+                      setTags={setTags}
+                      handleJumpToTag={handleJumpToTag}
+                      setSelectedCategory={setSelectedCategory}
+                      setSelectedAction={setSelectedAction}
+                      setSelectedTeam={setSelectedTeam}
+                      setSelectedPlayer={setSelectedPlayer}
+                      setSelectedOutcome={setSelectedOutcome}
+                      setNotes={setNotes}
+                      setCurrentPosition={setCurrentPosition}
+                      setTagDialogOpen={setTagDialogOpen}
+                      pitchRef={pitchRef}
+                      formatTime={formatTime}
+                    />
+                  );
+                })}
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 1 }}>
+                {tags.length === 0 
+                  ? "No events tagged yet. Tagged events will appear on the pitch." 
+                  : `${tags.length} events tagged on pitch. Drag markers to reposition, double-click to edit.`
+                }
+              </Typography>
+            </Box>
+          </Grid>
+          <Grid item xs={12} lg={4}>
+            <Tabs
+              value={activeTab}
+              onChange={(e,v)=>setActiveTab(v)}
+              variant="fullWidth"
+              sx={{
+                backgroundColor:'#1a1a1a',
+                borderRadius:'8px 8px 0 0',
+                '& .MuiTabs-indicator':{backgroundColor:'#5e2e8f'}
+              }}
+            >
+              <StyledTab label="Tagged Events"/>
+              <StyledTab label="Quick Tags"/>
+            </Tabs>
+            <SectionCard sx={{ borderRadius:'0 0 8px 8px', maxHeight:600, overflowY:'auto' }}>
+              {activeTab === 0 ? (
+                <>
+                  <SectionTitle variant="h6"><FlagIcon fontSize="small"/> Tags ({tags.length})</SectionTitle>
+                  {tags.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ textAlign:'center', py:2 }}>
+                      No tags yet. Click "Tag Event" to add one.
+                    </Typography>
+                  ) : (
+                    tags.map((tag,i)=>(
+                      <Box key={i} sx={{ p:1, mb:1, borderRadius:1, backgroundColor:'rgba(25,25,25,0.5)', border:'1px solid #333' }}>
+                        <Box sx={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                          <Typography sx={{ fontWeight:'bold', color:'#fff' }}>{formatTime(tag.timestamp)}</Typography>
+                          <Box>
+                            <IconButton size="small" onClick={()=>handleJumpToTag(tag.timestamp)} sx={{color:'#5e2e8f'}}>
+                              <PlayArrowIcon fontSize="small"/>
+                            </IconButton>
+                            <IconButton size="small" onClick={()=>handleDeleteTag(tag.id)} sx={{color:'#dc3545'}}>
+                              <DeleteIcon fontSize="small"/>
+                            </IconButton>
+                          </Box>
+                        </Box>
+                        <TagChip label={tag.category} type={tag.category} size="small"/>
+                        <TagChip label={tag.action} type={tag.category} size="small"/>
+                        {tag.outcome && <TagChip label={tag.outcome} type={tag.category} size="small"/>}
+                        <Typography variant="body2" sx={{ mt:1, color:'#aaa' }}>
+                          {tag.team === 'home' ? teams.home.name : teams.away.name}: {tag.player || 'No player'}
+                        </Typography>
+                        {tag.notes && (
+                          <Typography variant="body2" sx={{ mt:0.5, color:'#ddd', fontSize:'0.8rem' }}>
+                            {tag.notes}
+                          </Typography>
+                        )}
+                      </Box>
+                    ))
+                  )}
+                </>
               ) : (
-                <Typography>Unable to detect supported formats. Please ensure your browser supports HTML5 video.</Typography>
+                <>
+                  <SectionTitle variant="h6"><SportsSoccerIcon fontSize="small"/> Quick Tags</SectionTitle>
+                  {tagCategories.map(cat=>(
+                    <Box key={cat.id} sx={{ mb:2 }}>
+                      <Typography sx={{
+                        fontWeight:'bold',
+                        color:
+                          cat.id==='Possession'? '#9b7cb7':
+                          cat.id==='Defense'? '#e57373':
+                          cat.id==='Scoring'? '#81c784':
+                          cat.id==='Set Pieces'? '#fff176':
+                          cat.id==='Turnovers'? '#ffb74d':'#fff',
+                        mb:1
+                      }}>{cat.name}</Typography>
+                      <Box sx={{ display:'flex', flexWrap:'wrap', gap:0.5 }}>
+                        {cat.actions.map(act=>(
+                          <TagButton
+                            key={act.id}
+                            size="small"
+                            colorscheme={
+                              cat.id==='Possession'? 'primary':
+                              cat.id==='Defense'? 'error':
+                              cat.id==='Scoring'? 'success':
+                              cat.id==='Set Pieces'? 'warning':'primary'
+                            }
+                            onClick={()=>{
+                              setSelectedCategory(cat.id);
+                              setSelectedAction(act.name);
+                              captureFrame();
+                              recordClip();
+                              setTagDialogOpen(true);
+                            }}
+                          >
+                            {act.name}
+                          </TagButton>
+                        ))}
+                      </Box>
+                    </Box>
+                  ))}
+                </>
               )}
-              <Divider sx={{ my:2, borderColor:'#444' }}/>
-              <Typography variant="h6" sx={{ mb:2 }}>YouTube Videos</Typography>
-              <Typography>Enter a valid YouTube URL (e.g., https://www.youtube.com/watch?v=...). Note that frame capture is not available for YouTube videos due to streaming restrictions.</Typography>
-              <Divider sx={{ my:2, borderColor:'#444' }}/>
-              <Typography variant="h6" sx={{ mb:2 }}>Troubleshooting</Typography>
-              <Typography sx={{ mb:1 }}>- Ensure your video is in MP4 format with H.264 codec.</Typography>
-              <Typography sx={{ mb:1 }}>- For YouTube videos, verify the URL is correct and the video is publicly accessible.</Typography>
-              <Typography>- Try a different browser if you encounter issues (Chrome, Firefox, Safari recommended).</Typography>
-            </DialogContent>
-            <DialogActions sx={{ p:2, borderTop:'1px solid #444' }}>
-              <Button onClick={()=>setHelpDialogOpen(false)} variant="contained" sx={{ backgroundColor:'#5e2e8f','&:hover':{backgroundColor:'#7e4cb8'} }}>
-                Close
-              </Button>
-            </DialogActions>
-          </Dialog>
-          
-          {/* Teams Manager Dialog */}
-          <TeamsManager
-            open={teamSetupOpen}
-            onClose={() => setTeamSetupOpen(false)}
-            teamsData={teams}
-            onSave={handleSaveTeams}
-          />
-          
-          {/* Advanced Clip Manager */}
-          <AdvancedClipManager
-            open={advancedClipManagerOpen}
-            onClose={() => setAdvancedClipManagerOpen(false)}
-            videoRef={videoRef}
-            youtubePlayer={youtubePlayer}
-            tags={tags}
-            setTags={setTags}
-            currentTime={currentTime}
-            setCurrentTime={setCurrentTime}
-            duration={duration}
-            tagCategories={tagCategories}
-            tagOutcomes={tagOutcomes}
-            formatTime={formatTime}
-            handleJumpToTag={handleJumpToTag}
-            isYouTube={!!youtubeUrl}
-            teams={teamsData || defaultTeams}
-            waitForSeek={waitForSeek}
-            datasetName={datasetName}
-          />
+            </SectionCard>
+            
+            {/* Action & Download Buttons */}
+            <Box sx={{ mt:2, display:'grid', gridTemplateColumns:'1fr 1fr', gap:2 }}>
+              <ActionButton 
+                color="success" 
+                onClick={handleSave} 
+                startIcon={<SaveIcon/>} 
+                fullWidth 
+                disabled={savingInProgress}
+              >
+                {savingInProgress ? 'Saving...' : 'Save Dataset'}
+              </ActionButton>
+              <ActionButton 
+                color="primary" 
+                onClick={handleExport} 
+                startIcon={<DownloadIcon/>} 
+                fullWidth
+              >
+                Export Tags
+              </ActionButton>
+              <ActionButton 
+                color="primary" 
+                onClick={handleOpenInAnalysis} 
+                startIcon={<AnalyticsIcon/>} 
+                fullWidth
+                sx={{ backgroundColor: '#5e2e8f', '&:hover': { backgroundColor: '#7e4cb8' } }}
+              >
+                Open in Analysis
+              </ActionButton>
+              <ActionButton 
+                color="primary" 
+                onClick={downloadFrame} 
+                startIcon={<ScreenshotMonitorIcon/>} 
+                fullWidth
+              >
+                Download Frame
+              </ActionButton>
+              <ActionButton 
+                color="primary" 
+                onClick={downloadClip} 
+                startIcon={<VideocamIcon/>} 
+                fullWidth
+              >
+                Download Clip
+              </ActionButton>
+              <ActionButton 
+                color="primary" 
+                onClick={handleLocalSave} 
+                startIcon={<SaveIcon/>} 
+                fullWidth 
+                disabled={savingInProgress}
+              >
+                {savingInProgress ? 'Saving...' : 'Local Save'}
+              </ActionButton>
+              <ActionButton 
+                color="primary" 
+                onClick={() => setTeamSetupOpen(true)} 
+                startIcon={<GroupsIcon/>} 
+                fullWidth
+              >
+                Team Setup
+              </ActionButton>
+              <ActionButton
+                color="primary"
+                onClick={() => setAdvancedClipManagerOpen(true)}
+                startIcon={<VideocamIcon/>}
+                fullWidth
+                sx={{ gridColumn: "span 1" }}
+              >
+                Advanced Clip Manager
+              </ActionButton>
+              <ActionButton
+                color="primary"
+                onClick={() => setShowVideoUploadModal(true)}
+                startIcon={<CloudUploadIcon/>}
+                fullWidth
+                sx={{ gridColumn: "span 1" }}
+              >
+                Reupload Video
+              </ActionButton>
+            </Box>
+            
+            {/* Capture Data Preview */}
+            <Grid container spacing={2} sx={{ mt:2 }}>
+              <Grid item xs={6}>
+                <SectionCard>
+                  <SectionTitle variant="subtitle1"><ScreenshotMonitorIcon fontSize="small"/> Frame</SectionTitle>
+                  {currentFrameData ? (
+                    <Box component="img" src={currentFrameData} sx={{ width:'100%', borderRadius:1, border:'1px solid #444' }}/>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ textAlign:'center', py:2 }}>
+                      {youtubeUrl ? 'Frame capture not available for YouTube videos' : 'No frame captured'}
+                    </Typography>
+                  )}
+                </SectionCard>
+              </Grid>
+              <Grid item xs={6}>
+                <SectionCard>
+                  <SectionTitle variant="subtitle1"><VideocamIcon fontSize="small"/> Clip</SectionTitle>
+                  {currentClipData ? (
+                    <Box sx={{ color:'#aaa', fontSize:'0.9rem' }}>
+                      <Typography>Start: {formatTime(currentClipData.startTime)}</Typography>
+                      <Typography>End: {formatTime(currentClipData.endTime)}</Typography>
+                      <Typography>Duration: {currentClipData.duration.toFixed(2)}s</Typography>
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ textAlign:'center', py:2 }}>
+                      No clip recorded
+                    </Typography>
+                  )}
+                </SectionCard>
+              </Grid>
+            </Grid>
+            
+            {/* Dialogs */}
+            <Dialog 
+              open={tagDialogOpen} 
+              onClose={handleCloseTagDialog}
+              PaperProps={{ sx: { backgroundColor:'#222', color:'#fff', borderRadius:2, maxWidth:'600px', width:'100%' } }}
+            >
+              <DialogTitle sx={{ borderBottom:'1px solid #444' }}>
+                Tag Event at {formatTime(currentTime)}
+                <IconButton onClick={handleCloseTagDialog} sx={{ position:'absolute', right:8, top:8, color:'#aaa' }}>
+                  <CloseIcon/>
+                </IconButton>
+              </DialogTitle>
+              <DialogContent sx={{ mt:2 }}>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="subtitle2" sx={{ mb:1 }}>Category</Typography>
+                    <Select
+                      value={selectedCategory}
+                      onChange={e=>setSelectedCategory(e.target.value)}
+                      fullWidth
+                      sx={{
+                        backgroundColor:'#333', color:'#fff',
+                        '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
+                        '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'}
+                      }}
+                    >
+                      {tagCategories.map(category => (
+                        <MenuItem key={category.id} value={category.id}>{category.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="subtitle2" sx={{ mb:1 }}>Team</Typography>
+                    <Select
+                      value={selectedTeam}
+                      onChange={e=>setSelectedTeam(e.target.value)}
+                      fullWidth
+                      sx={{
+                        backgroundColor:'#333', color:'#fff',
+                        '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
+                        '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'}
+                      }}
+                    >
+                      <MenuItem value="home">{teams.home.name}</MenuItem>
+                      <MenuItem value="away">{teams.away.name}</MenuItem>
+                    </Select>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="subtitle2" sx={{ mb:1 }}>Action</Typography>
+                    <Select
+                      value={selectedAction}
+                      onChange={e=>setSelectedAction(e.target.value)}
+                      fullWidth
+                      disabled={!selectedCategory}
+                      sx={{
+                        backgroundColor:'#333', color:'#fff',
+                        '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
+                        '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'}
+                      }}
+                    >
+                      <MenuItem value=""><em>Select Action</em></MenuItem>
+                      {selectedCategory && tagCategories
+                        .find(cat => cat.id === selectedCategory)?.actions
+                        .map(action => (
+                          <MenuItem key={action.id} value={action.name}>{action.name}</MenuItem>
+                        ))
+                      }
+                    </Select>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="subtitle2" sx={{ mb:1 }}>Player</Typography>
+                    <Select
+                      value={selectedPlayer}
+                      onChange={e=>{
+                        setSelectedPlayer(e.target.value);
+                        // Auto-set player number if player is selected
+                        if (e.target.value) {
+                          const playerData = teams[selectedTeam]?.players.find(p => p.name === e.target.value);
+                          if (playerData) {
+                            setSelectedPlayerNumber(playerData.number.toString());
+                            // Also set position based on player data
+                            if (playerData.position) {
+                              const posMapping = {
+                                'Forward': 'forward',
+                                'Midfielder': 'midfield',
+                                'Back': 'back',
+                                'Goalkeeper': 'goalkeeper'
+                              };
+                              setSelectedPosition(posMapping[playerData.position] || 'forward');
+                            }
+                          }
+                        }
+                      }}
+                      fullWidth
+                      sx={{
+                        backgroundColor:'#333', color:'#fff',
+                        '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
+                        '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'}
+                      }}
+                    >
+                      <MenuItem value=""><em>No Player</em></MenuItem>
+                      {teams[selectedTeam]?.players
+                        .filter(player => player.name) // Only show players with names
+                        .sort((a, b) => a.number - b.number) // Sort by number
+                        .map(player => (
+                          <MenuItem key={player.id} value={player.name}>
+                            {player.number}. {player.name} ({player.position})
+                          </MenuItem>
+                        ))}
+                    </Select>
+                  </Grid>
+                  
+                  {/* NEW FIELDS - MATCH PITCHGRAPHIC STRUCTURE */}
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="subtitle2" sx={{ mb:1 }}>Player Number</Typography>
+                    <TextField
+                      value={selectedPlayerNumber}
+                      onChange={e=>setSelectedPlayerNumber(e.target.value)}
+                      fullWidth
+                      placeholder="Enter player number"
+                      sx={{
+                        backgroundColor:'#333', color:'#fff',
+                        '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
+                        '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'},
+                        'input': {color: '#fff'}
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="subtitle2" sx={{ mb:1 }}>Minute in Game</Typography>
+                    <TextField
+                      value={selectedMinute}
+                      onChange={e=>setSelectedMinute(e.target.value)}
+                      fullWidth
+                      placeholder="Enter minute (e.g. 25)"
+                      sx={{
+                        backgroundColor:'#333', color:'#fff',
+                        '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
+                        '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'},
+                        'input': {color: '#fff'}
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="subtitle2" sx={{ mb:1 }}>Position</Typography>
+                    <Select
+                      value={selectedPosition}
+                      onChange={e=>setSelectedPosition(e.target.value)}
+                      fullWidth
+                      sx={{
+                        backgroundColor:'#333', color:'#fff',
+                        '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
+                        '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'}
+                      }}
+                    >
+                      {positionOptions.map(position => (
+                        <MenuItem key={position.id} value={position.id}>{position.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </Grid>
+                  
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="subtitle2" sx={{ mb:1 }}>Pressure</Typography>
+                    <Select
+                      value={selectedPressure}
+                      onChange={e=>setSelectedPressure(e.target.value)}
+                      fullWidth
+                      sx={{
+                        backgroundColor:'#333', color:'#fff',
+                        '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
+                        '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'}
+                      }}
+                    >
+                      {pressureOptions.map(pressure => (
+                        <MenuItem key={pressure.id} value={pressure.id}>{pressure.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </Grid>
+                  
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="subtitle2" sx={{ mb:1 }}>Foot/Hand</Typography>
+                    <Select
+                      value={selectedFoot}
+                      onChange={e=>setSelectedFoot(e.target.value)}
+                      fullWidth
+                      sx={{
+                        backgroundColor:'#333', color:'#fff',
+                        '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
+                        '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'}
+                      }}
+                    >
+                      {footOptions.map(foot => (
+                        <MenuItem key={foot.id} value={foot.id}>{foot.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </Grid>
+                  
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" sx={{ mb:1 }}>Outcome</Typography>
+                    <Select
+                      value={selectedOutcome}
+                      onChange={e=>setSelectedOutcome(e.target.value)}
+                      fullWidth
+                      sx={{
+                        backgroundColor:'#333', color:'#fff',
+                        '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
+                        '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'}
+                      }}
+                    >
+                      <MenuItem value=""><em>Select Outcome</em></MenuItem>
+                      {tagOutcomes.map(outcome=>(
+                        <MenuItem key={outcome.id} value={outcome.name}>{outcome.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </Grid>
+
+                  {/* Location on Pitch (Optional) */}
+                  <Grid item xs={12}>
+                    <Box sx={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      mb: 1,
+                      cursor: 'pointer',
+                      padding: '8px',
+                      backgroundColor: '#333',
+                      borderRadius: '4px'
+                    }} 
+                    onClick={togglePitchSelector}>
+                      <Typography variant="subtitle2">
+                        <LocationOnIcon fontSize="small" sx={{ mr: 1, verticalAlign: 'text-bottom' }} />
+                        Position on Pitch (Optional)
+                      </Typography>
+                      <IconButton size="small" sx={{ color: '#aaa' }}>
+                        {showPitchSelector ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                      </IconButton>
+                    </Box>
+
+                    <Collapse in={showPitchSelector}>
+                      <Box sx={{ mt: 1, mb: 2, display: 'flex', justifyContent: 'center' }}>
+                        <GAAPitchSelector
+                          currentPosition={currentPosition}
+                          setCurrentPosition={setCurrentPosition}
+                          selectedTeam={selectedTeam}
+                        />
+                      </Box>
+                    </Collapse>
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" sx={{ mb:1 }}>Notes</Typography>
+                    <TextField
+                      value={notes}
+                      onChange={e=>setNotes(e.target.value)}
+                      fullWidth
+                      multiline
+                      rows={3}
+                      sx={{
+                        backgroundColor:'#333', color:'#fff',
+                        '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
+                        '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'}
+                      }}
+                    />
+                  </Grid>
+                </Grid>
+              </DialogContent>
+              <DialogActions sx={{ p:2, borderTop:'1px solid #444' }}>
+                <Button onClick={handleCloseTagDialog} sx={{ color:'#aaa' }}>Cancel</Button>
+                <Button onClick={handleAddTag} variant="contained" startIcon={<AddIcon/>} sx={{ backgroundColor:'#5e2e8f','&:hover':{backgroundColor:'#7e4cb8'} }}>
+                  Add Tag
+                </Button>
+              </DialogActions>
+            </Dialog>
+            
+            {/* Save Dialog */}
+            <Dialog
+              open={saveDialogOpen}
+              onClose={()=>setSaveDialogOpen(false)}
+              PaperProps={{ sx:{ backgroundColor:'#222', color:'#fff', borderRadius:2, maxWidth:'400px', width:'100%' } }}
+            >
+              <DialogTitle sx={{ borderBottom:'1px solid #444' }}>
+                Save Dataset
+                <IconButton onClick={()=>setSaveDialogOpen(false)} sx={{ position:'absolute', right:8, top:8, color:'#aaa' }}>
+                  <CloseIcon/>
+                </IconButton>
+              </DialogTitle>
+              <DialogContent sx={{ mt:2 }}>
+                <Typography variant="subtitle2" sx={{ mb:1 }}>Dataset Name</Typography>
+                <TextField
+                  value={datasetName}
+                  onChange={e=>setDatasetName(e.target.value)}
+                  fullWidth
+                  placeholder="Enter a name for your dataset"
+                  sx={{
+                    backgroundColor:'#333', color:'#fff',
+                    '.MuiOutlinedInput-notchedOutline':{borderColor:'#444'},
+                    '&:hover .MuiOutlinedInput-notchedOutline':{borderColor:'#666'},
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline':{borderColor:'#5e2e8f'}
+                  }}
+                />
+              </DialogContent>
+              <DialogActions sx={{ p:2, borderTop:'1px solid #444' }}>
+                <Button onClick={()=>setSaveDialogOpen(false)} sx={{ color:'#aaa' }}>Cancel</Button>
+                <Button onClick={confirmSave} variant="contained" disabled={savingInProgress} startIcon={<SaveIcon/>} sx={{ backgroundColor:'#5e2e8f','&:hover':{backgroundColor:'#7e4cb8'} }}>
+                  {savingInProgress ? 'Saving...' : 'Save'}
+                </Button>
+              </DialogActions>
+            </Dialog>
+            
+            {/* Help Dialog */}
+            <Dialog
+              open={helpDialogOpen}
+              onClose={()=>setHelpDialogOpen(false)}
+              PaperProps={{ sx:{ backgroundColor:'#222', color:'#fff', borderRadius:2, maxWidth:'500px', width:'100%' } }}
+            >
+              <DialogTitle sx={{ borderBottom:'1px solid #444' }}>
+                Video Format Help
+                <IconButton onClick={()=>setHelpDialogOpen(false)} sx={{ position:'absolute', right:8, top:8, color:'#aaa' }}>
+                  <CloseIcon/>
+                </IconButton>
+                </DialogTitle>
+              <DialogContent sx={{ mt:2 }}>
+                <Typography variant="h6" sx={{ mb:2 }}>Supported Video Formats</Typography>
+                {supportedFormats.length > 0 ? (
+                  supportedFormats.map((format, idx) => (
+                    <Typography key={idx} sx={{ mb:1 }}>
+                      <strong>{format.format.toUpperCase()}</strong> ({format.codec}): {format.support}
+                    </Typography>
+                  ))
+                ) : (
+                  <Typography>Unable to detect supported formats. Please ensure your browser supports HTML5 video.</Typography>
+                )}
+                <Divider sx={{ my:2, borderColor:'#444' }}/>
+                <Typography variant="h6" sx={{ mb:2 }}>YouTube Videos</Typography>
+                <Typography>Enter a valid YouTube URL (e.g., https://www.youtube.com/watch?v=...). Note that frame capture is not available for YouTube videos due to streaming restrictions.</Typography>
+                <Divider sx={{ my:2, borderColor:'#444' }}/>
+                <Typography variant="h6" sx={{ mb:2 }}>Troubleshooting</Typography>
+                <Typography sx={{ mb:1 }}>- Ensure your video is in MP4 format with H.264 codec.</Typography>
+                <Typography sx={{ mb:1 }}>- For YouTube videos, verify the URL is correct and the video is publicly accessible.</Typography>
+                <Typography>- Try a different browser if you encounter issues (Chrome, Firefox, Safari recommended).</Typography>
+              </DialogContent>
+              <DialogActions sx={{ p:2, borderTop:'1px solid #444' }}>
+                <Button onClick={()=>setHelpDialogOpen(false)} variant="contained" sx={{ backgroundColor:'#5e2e8f','&:hover':{backgroundColor:'#7e4cb8'} }}>
+                  Close
+                </Button>
+              </DialogActions>
+            </Dialog>
+            
+            {/* Teams Manager Dialog */}
+            <TeamsManager
+              open={teamSetupOpen}
+              onClose={() => setTeamSetupOpen(false)}
+              teamsData={teams}
+              onSaveTeams={handleSaveTeams}
+            />
+            
+            {/* Advanced Clip Manager */}
+            <AdvancedClipManager
+              open={advancedClipManagerOpen}
+              onClose={() => setAdvancedClipManagerOpen(false)}
+              videoRef={videoRef}
+              youtubePlayer={youtubePlayer}
+              tags={tags}
+              setTags={setTags}
+              currentTime={currentTime}
+              setCurrentTime={setCurrentTime}
+              duration={duration}
+              tagCategories={tagCategories}
+              tagOutcomes={tagOutcomes}
+              formatTime={formatTime}
+              handleJumpToTag={handleJumpToTag}
+              isYouTube={!!youtubeUrl}
+              teams={teamsData || defaultTeams}
+              waitForSeek={waitForSeek}
+              datasetName={datasetName}
+            />
+            
+            {/* Video Upload Modal */}
+            <VideoUploadModal
+              open={showVideoUploadModal}
+              onClose={() => setShowVideoUploadModal(false)}
+              onVideoFileUpload={handleVideoFileReupload}
+              onYoutubeUrlSubmit={handleYoutubeUrlResubmit}
+              isLoading={videoLoading}
+              title="Upload Video"
+              defaultTab={youtubeUrl ? 1 : 0}
+            />
+          </Grid>
         </Grid>
-      </Grid>
-      {/* Video Upload Modal */}
-      <VideoUploadModal
-        open={showVideoUploadModal}
-        onClose={() => setShowVideoUploadModal(false)}
-        onVideoFileUpload={handleVideoFileReupload}
-        onYoutubeUrlSubmit={handleYoutubeUrlResubmit}
-        isLoading={videoLoading}
-        title="Upload Video"
-        defaultTab={youtubeUrl ? 1 : 0}
-      />
-    </PageContainer>
+      </PageContainer>
+    
   );
 };
 

@@ -211,6 +211,21 @@ export function renderOneSidePitchShots({
           strokeColor = '#ffffff';
           strokeWidth = 2;
         }
+        
+        // Special override for free kicks 
+        const action = (shot.action || '').toLowerCase().trim();
+        if (action === 'free') {
+          fillColor = '#39FF14'; // Bright green
+          strokeColor = '#ffffff'; // White
+          strokeWidth = 2;
+        }
+        
+        // Handle forced color from upper components
+        if (shot._forcedColor && shot.color) {
+          fillColor = shot.color.fill || fillColor;
+          strokeColor = shot.color.stroke || strokeColor;
+          strokeWidth = shot.color.strokeWidth || strokeWidth;
+        }
 
         return (
           <Circle

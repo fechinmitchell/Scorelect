@@ -206,7 +206,6 @@ const PitchGraphic = () => {
               e.preventDefault();
               handleDeleteAction(action.value);
             }}
-            style={actionButtonStyles(action, actionType && actionType.value === action.value)}
           >
             {action.label}
             
@@ -215,22 +214,22 @@ const PitchGraphic = () => {
               <div style={{
                 position: 'absolute',
                 top: '50%',
-                right: '15px',
+                right: '10px',
                 transform: 'translateY(-50%)',
                 display: 'flex',
                 gap: '5px'
               }}>
                 <span style={{
-                  width: '10px',
-                  height: '10px',
+                  width: '8px',
+                  height: '8px',
                   borderRadius: '50%',
                   backgroundColor: currentCoords.length >= 1 ? '#00ff00' : '#555',
                   border: '1px solid #333',
                   display: 'inline-block'
                 }}></span>
                 <span style={{
-                  width: '10px',
-                  height: '10px',
+                  width: '8px',
+                  height: '8px',
                   borderRadius: '50%',
                   backgroundColor: lineCompleted ? '#00ff00' : '#555',
                   border: '1px solid #333',
@@ -240,11 +239,17 @@ const PitchGraphic = () => {
             )}
           </button>
         ))}
-        <button className="action-button add-action" onClick={() => setIsAddActionModalOpen(true)}>Add Action</button>
+        <button 
+          className="button"
+          onClick={() => setIsAddActionModalOpen(true)}
+          style={{ marginTop: '12px' }}
+        >
+          Add Action
+        </button>
       </div>
     );
 
-    // 2) “Download Data” (custom modal) – respects free‑user limits, uses uploadedDataset if present
+    // 2) "Download Data" (custom modal) – respects free‑user limits, uses uploadedDataset if present
     const handleCustomDownload = async () => {
       // free‑user quota check
       if (userType === 'free' && downloadsRemaining <= 0) {
@@ -327,7 +332,7 @@ const PitchGraphic = () => {
 
      
 
-    // 5) Open “new game” flow
+    // 5) Open "new game" flow
     const handleStartNewGame = () => {
       setIsInitialSetupModalOpen(false);
       setIsSetupTeamModalOpen(true);
@@ -336,7 +341,7 @@ const PitchGraphic = () => {
     // 6) Skip initial setup entirely
     const handleSkipSetup = () => {
       setIsInitialSetupModalOpen(false);
-      // …and proceed with whatever defaults you’ve got in place
+      // …and proceed with whatever defaults you've got in place
     };
     
     const handleNewGameSetupSubmit = (gameSetupData) => {
@@ -1347,7 +1352,7 @@ const handleSaveToDataset = async () => {
 
   const FREE_USER_DOWNLOAD_LIMIT = 10; // Set the new free download limit
 
-  // 3) Legacy “Download Data” button (no custom modal) — same dataset logic
+  // 3) Legacy "Download Data" button (no custom modal) — same dataset logic
   const handleDownloadData = async () => {
     if (userType === 'free') {
       if (downloadsRemaining <= 0) {

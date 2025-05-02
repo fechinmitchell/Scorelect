@@ -58,8 +58,55 @@ const handleLoadGame = async (game) => {
 
   if (normalizedData.length > 0) {
     try {
-      onLoadGame(game.sport, normalizedData);
-      Swal.fire('Success', `Game "${game.gameName}" loaded successfully!`, 'success');
+      // Ensure each item has the necessary properties for PitchGraphic
+      const processedData = normalizedData.map(item => {
+        // Ensure position property exists
+        if (!item.position && (typeof item.x === 'number' && typeof item.y === 'number')) {
+          item.position = { x: item.x, y: item.y };
+        } else if (!item.position) {
+          item.position = { x: 50, y: 50 }; // Default fallback position
+        }
+        
+        // Ensure x and y properties exist (even if they're already in position object)
+        if (typeof item.x !== 'number' && item.position) {
+          item.x = item.position.x;
+        }
+        if (typeof item.y !== 'number' && item.position) {
+          item.y = item.position.y;
+        }
+        
+        // Ensure other required properties have default values if missing
+        item.playerName = item.playerName || item.player || '';
+        item.playerNumber = item.playerNumber || '';
+        item.position = item.position || { x: 50, y: 50 };
+        item.pressure = item.pressure || '0';
+        item.foot = item.foot || 'Right';
+        item.outcome = item.outcome || '';
+        
+        return item;
+      });
+
+      // Check if this is a video analysis
+      if (game.analysisType === 'video') {
+        console.log('Loading video analysis game:', game.gameName);
+        console.log('Analysis type:', game.analysisType);
+        
+        // For video analysis, navigate to ManualTagging with the data
+        navigate('/tagging/manual', {
+          state: {
+            youtubeUrl: game.youtubeUrl,
+            tags: processedData,
+            teamsData: game.teamsData,
+            datasetName: game.datasetName || game.gameName,
+            sport: game.sport
+          }
+        });
+        Swal.fire('Success', `Video analysis "${game.gameName}" loaded successfully!`, 'success');
+      } else {
+        // For pitch analysis, use the existing onLoadGame function
+        onLoadGame(game.sport, processedData);
+        Swal.fire('Success', `Game "${game.gameName}" loaded successfully!`, 'success');
+      }
     } catch (error) {
       console.error('Error loading game data:', error);
       Swal.fire('Error', 'Failed to load game data.', 'error');

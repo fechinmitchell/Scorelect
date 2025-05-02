@@ -189,7 +189,7 @@ const customModalStyles = {
   overlay:{ backgroundColor:'rgba(0,0,0,0.75)', zIndex:9999 }
 };
 
-// Predictive “models” for xP and xG
+// Predictive "models" for xP and xG
 const predictXP = shot => {
   const baseRates = {
     goal: 0.92,
@@ -198,7 +198,17 @@ const predictXP = shot => {
     offensive_mark: 0.78,
     fortyfive: 0.55,
   };
-  const act = (shot.action||'').toLowerCase().trim();
+  
+  // Safely extract action - handle both string and object forms
+  let actionStr = '';
+  if (typeof shot.action === 'string') {
+    actionStr = shot.action;
+  } else if (shot.action && typeof shot.action === 'object') {
+    // Try to get action string from object properties
+    actionStr = shot.action.name || shot.action.type || shot.action.value || '';
+  }
+  
+  const act = actionStr.toLowerCase().trim();
   let type = 'point';
   if (act==='goal' || act==='penalty goal') type = 'goal';
   else if (act.includes('free')) type = 'free';
@@ -209,7 +219,20 @@ const predictXP = shot => {
   const distFactor = d<20?1:d<30?0.9:d<40?0.7:d<50?0.5:0.3;
   const pres = (shot.pressure||'none').toLowerCase();
   const presFactor = pres==='none'?1:pres==='low'?0.9:pres==='medium'?0.75:0.6;
-  const pos = (shot.position||'').toLowerCase();
+  
+  // Safe position handling - ensure position is a string before toLowerCase
+  let posStr = '';
+  if (typeof shot.position === 'string') {
+    posStr = shot.position;
+  } else if (shot.position && typeof shot.position === 'object') {
+    // If position is an object with a type field, use that
+    posStr = shot.position.type || 'forward';
+  } else {
+    // Default fallback
+    posStr = 'forward';
+  }
+  
+  const pos = posStr.toLowerCase();
   const posFactor = pos.includes('central')?1.1:pos.includes('wide')?0.85:1;
 
   let xp = (baseRates[type]||0.5) * distFactor * presFactor * posFactor;
@@ -220,9 +243,24 @@ const predictXG = shot => {
   const baseGoalProb = 0.3;
   const d = shot.distMeters||15;
   const distF = d<10?0.9:d<15?0.7:d<20?0.5:d<25?0.3:0.2;
+  
+  // Safely extract pressure
   const pres = (shot.pressure||'none').toLowerCase();
   const presF = pres==='none'?0.95:pres==='low'?0.8:pres==='medium'?0.6:0.4;
-  const pos = (shot.position||'').toLowerCase();
+  
+  // Safe position handling - ensure position is a string before toLowerCase
+  let posStr = '';
+  if (typeof shot.position === 'string') {
+    posStr = shot.position;
+  } else if (shot.position && typeof shot.position === 'object') {
+    // If position is an object with a type field, use that
+    posStr = shot.position.type || 'forward';
+  } else {
+    // Default fallback
+    posStr = 'forward';
+  }
+  
+  const pos = posStr.toLowerCase();
   const posF = pos.includes('central')?0.9:pos.includes('wide')?0.7:0.8;
 
   let xg = baseGoalProb * distF * presF * posF;

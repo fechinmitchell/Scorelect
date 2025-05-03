@@ -429,8 +429,15 @@ const PitchMarkerComponent = ({
   pitchRef,
   formatTime 
 }) => {
-  console.log('PitchMarkerComponent received tag position:', tag.position);
   const [isDragging, setIsDragging] = useState(false);
+  
+  // Extract position with fallbacks
+  const position = { 
+    x: tag.position?.x || tag.x || 50, 
+    y: tag.position?.y || tag.y || 50 
+  };
+  
+  console.log('PitchMarkerComponent received tag position:', tag.position);
 
   const handleMarkerMouseDown = (e) => {
     e.stopPropagation();
@@ -483,7 +490,11 @@ const PitchMarkerComponent = ({
   return (
     <Box 
       className="marker-container"
-      sx={{ position: 'absolute', left: `${tag.position.x}%`, top: `${tag.position.y}%` }}
+      sx={{ 
+        position: 'absolute', 
+        left: `${position.x}%`, 
+        top: `${position.y}%`
+      }}
     >
       <PitchMarker
         category={tag.category}
@@ -586,21 +597,33 @@ const ManualTagging = () => {
     if (savedTags && savedTags.length > 0) {
       console.log('Setting tags from location state:', savedTags);
       
-      // FIXED: Improved tag position handling to match PitchGraphic's structure
       setTags(savedTags.map(tag => {
-        // Convert the position data to a standardized format
-        let position = { x: 50, y: 50 }; // Default fallback position
+        // Determine position coordinates with better fallbacks
+        let x = 50;
+        let y = 50;
         
-        // Handle various position data formats to ensure compatibility
+        // First try direct x,y properties
         if (typeof tag.x === 'number' && typeof tag.y === 'number') {
-          // If we have direct x, y coordinates (PitchGraphic format)
-          position = { x: tag.x, y: tag.y };
-        } else if (tag.position && typeof tag.position.x === 'number' && typeof tag.position.y === 'number') {
-          // If position is stored in a position object
-          position = { x: tag.position.x, y: tag.position.y };
+          x = tag.x;
+          y = tag.y;
+        } 
+        // Then try position object
+        else if (tag.position) {
+          if (typeof tag.position.x === 'number' && typeof tag.position.y === 'number') {
+            x = tag.position.x;
+            y = tag.position.y;
+          } 
+          // Handle string positions (sometimes position is a string like "forward")
+          else if (typeof tag.position === 'string' || typeof tag.position === 'object') {
+            console.log('Using default position for tag with position type:', typeof tag.position);
+          }
         }
         
-        console.log('Processed tag position:', position);
+        // Extract position with fallbacks
+        const position = { 
+          x: tag.position?.x || tag.x || 50, 
+          y: tag.position?.y || tag.y || 50 
+        };
         
         return {
           id: `tag-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -608,17 +631,17 @@ const ManualTagging = () => {
           category: tag.category || '',
           action: tag.action || '',
           team: tag.team || 'home',
-          player: tag.playerName || tag.player || '', // Support both naming formats
-          playerName: tag.playerName || tag.player || '', // Store in both formats for compatibility
+          player: tag.playerName || tag.player || '',
+          playerName: tag.playerName || tag.player || '',
           playerNumber: tag.playerNumber || '',
-          position: position,
+          position: position, // Store position as object
           outcome: tag.outcome || '',
           notes: tag.notes || '',
-          // ADDED: Include compatibility fields to match PitchGraphic
+          // Include compatibility fields
           pressure: tag.pressure || '0',
           foot: tag.foot || 'Right',
           minute: tag.minute || '',
-          // Store coordinates in both formats for maximum compatibility
+          // Store coordinates in both formats
           x: position.x,
           y: position.y,
           // Media data

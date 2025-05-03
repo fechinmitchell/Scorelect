@@ -210,6 +210,117 @@
   background-color: #5e2e8f;
 }
 
+/* Modern toggle switch styling */
+.display-options-container {
+  background: linear-gradient(145deg, #2a2a2a, #232323);
+  padding: 15px;
+  border-radius: 12px;
+  margin: 15px 0;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.display-options-container h4 {
+  color: #9254de;
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.toggle-switches {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.toggle-switch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 8px 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 24px;
+  background-color: #333;
+  border-radius: 12px;
+  margin-right: 12px;
+  transition: all 0.3s ease;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.toggle-slider:before {
+  content: "";
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #fff;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+input:checked + .toggle-slider {
+  background-color: #5e2e8f;
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(24px);
+  background-color: #fff;
+}
+
+input:focus + .toggle-slider {
+  box-shadow: 0 0 1px #5e2e8f;
+}
+
+.toggle-slider:hover:before {
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.5);
+}
+
+.toggle-label {
+  color: #e0e0e0;
+  font-size: 14px;
+  font-weight: 500;
+  user-select: none;
+}
+
+/* Animation on toggle */
+@keyframes toggleOn {
+  0% { transform: translateX(0); }
+  50% { transform: translateX(28px); }
+  60% { transform: translateX(22px); }
+  100% { transform: translateX(24px); }
+}
+
+@keyframes toggleOff {
+  0% { transform: translateX(24px); }
+  50% { transform: translateX(-4px); }
+  60% { transform: translateX(4px); }
+  100% { transform: translateX(0); }
+}
+
+input:checked + .toggle-slider:before {
+  animation: toggleOn 0.2s ease-out forwards;
+}
+
+input:not(:checked) + .toggle-slider:before {
+  animation: toggleOff 0.2s ease-out forwards;
+}
+
 /* Action buttons with improved styling */
 .action-buttons {
   display: flex;

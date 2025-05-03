@@ -1652,23 +1652,29 @@ const handleUploadRawData = (event) => {
           <h3>Instructions</h3>
           {renderActionButtons()}
           <p>Click on an action then on the pitch to record action at that location. Use the buttons above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
+          <div className="display-options-container">
+          <h4>Display Options</h4>
           <div className="toggle-switches">
-          <label>
-            <input
-              type="checkbox"
-              checked={displayPlayerNumber}
-              onChange={() => setDisplayPlayerNumber(!displayPlayerNumber)}
-            />
-            Player Number
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={displayPlayerName}
-              onChange={() => setDisplayPlayerName(!displayPlayerName)}
-            />
-            Player Name
-          </label>
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={displayPlayerNumber}
+                onChange={() => setDisplayPlayerNumber(!displayPlayerNumber)}
+              />
+              <span className="toggle-slider"></span>
+              <span className="toggle-label">Player Numbers</span>
+            </label>
+            
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={displayPlayerName}
+                onChange={() => setDisplayPlayerName(!displayPlayerName)}
+              />
+              <span className="toggle-slider"></span>
+              <span className="toggle-label">Player Names</span>
+            </label>
+          </div>
         </div>
         <div className="button-container">
           <button className="button" onClick={handleClearMarkers}>Clear Markers</button>

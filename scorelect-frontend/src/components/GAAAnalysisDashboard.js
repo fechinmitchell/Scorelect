@@ -293,6 +293,14 @@ function flattenShots(games = []) {
 const getRenderType = (raw, map) =>
   map[raw?.toLowerCase().trim()] || raw?.toLowerCase().trim();
 
+filled.forEach(g => g.gameData.forEach(s => {
+  const t = translateShotToOneSide(s, halfLineX, goalX, goalY);
+  if (t.x > halfLineX + 0.01) {           // allow a tiny epsilon
+    console.warn('NOT ON ONE SIDE', s);   // should never fire
+  }
+}));
+
+
 // Pitch view component
 function PitchView({ allShots, xScale, yScale, halfLineX, goalX, goalY, onShotClick, colors, legendColors }) {
   return (

@@ -9,7 +9,7 @@ from collections import Counter  # For counting hashable objects
 import warnings  # For managing warnings
 
 # Third-Party Libraries
-from flask import Flask, request, jsonify  # Flask framework components
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS, cross_origin  # CORS handling
 from flask_talisman import Talisman  # Security enhancements
 import firebase_admin  # Firebase Admin SDK
@@ -27,6 +27,7 @@ from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val
 from sklearn.metrics import accuracy_score, classification_report, roc_auc_score  # Model evaluation metrics
 from sklearn.calibration import CalibratedClassifierCV
 from imblearn.over_sampling import SMOTE  # SMOTE for handling class imbalance
+
 
 # Optional: Stripe (if used elsewhere in your application)
 import stripe  # Stripe's Python library for payments and subscriptions
@@ -402,7 +403,7 @@ def delete_dataset():
         games_snapshot = query.stream()
     
         # Initialize a batch for bulk deletion
-        batch = firestore.batch()
+        batch = db.batch()
         games_found = False
     
         for game_doc in games_snapshot:
@@ -937,19 +938,45 @@ def get_user_data():
 #Sports Hub Section 
 # Helper function to add a new dataset
 # Helper function to add a new dataset
+# Updated helper function to add a new dataset
 def add_dataset(name, description, price, creator_uid, preview_snippet, category):
+    """
+    Helper function to add a new dataset to Firestore with pricing support.
+    
+    Args:
+        name (str): Dataset name
+        description (str): Dataset description
+        price (float): Dataset price (0.0 for free datasets)
+        creator_uid (str): UID of the dataset creator
+        preview_snippet (str): Preview text or image URL
+        category (str): Dataset category (e.g., 'Soccer', 'Basketball')
+        
+    Returns:
+        str: The ID of the newly created dataset document
+    """
     try:
+        # Create a new document in the datasets collection
         dataset_ref = db.collection('datasets').document()
+        
+        # Set the dataset data
         dataset_ref.set({
             'name': name,
             'description': description,
-            'price': price,
+            'price': float(price),  # Ensure price is stored as float
             'creator_uid': creator_uid,
             'preview_snippet': preview_snippet,
             'category': category,
-            'created_at': firestore.SERVER_TIMESTAMP
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+            'is_free': price == 0.0,  # Add an explicit is_free field for querying
+            'downloads': 0,           # Track number of downloads
+            'purchases': 0            # Track number of purchases (for paid datasets)
         })
-        logging.info(f"Dataset '{name}' added with ID {dataset_ref.id}.")
+        
+        # Log the operation
+        logging.info(f"Dataset '{name}' added with ID {dataset_ref.id}, price: ${price:.2f}")
+        
+        # Return the document ID
         return dataset_ref.id
     except Exception as e:
         logging.error(f"Error adding dataset '{name}': {str(e)}")
@@ -1048,7 +1075,7 @@ def signup():
         logging.error(f"Error during signup: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-# Updated /publish-dataset Endpoint
+# Replace your existing publish-dataset endpoint with this updated version
 @app.route('/publish-dataset', methods=['POST'])
 def publish_dataset():
     try:
@@ -1061,50 +1088,67 @@ def publish_dataset():
         # Extract form data
         name = data.get('name')
         description = data.get('description')
-        price = data.get('price')
         creator_uid = data.get('creator_uid')
-        # preview_snippet = data.get('preview_snippet')  # Commented out for now
         category = data.get('category')
         is_free = data.get('isFree') == 'true'  # Convert string to boolean
+        
+        # Get price if not free
+        price = 0.0
+        if not is_free:
+            price_str = data.get('price')
+            if price_str:
+                try:
+                    price = float(price_str)
+                except ValueError:
+                    logging.error(f"Invalid price format: {price_str}")
+                    return jsonify({'error': 'Invalid price format.'}), 400
 
         # Validate required fields
         if not all([name, description, creator_uid, category]):
             logging.error("Incomplete dataset publishing data provided.")
             return jsonify({'error': 'Name, description, creator_uid, and category are required.'}), 400
 
-        # Validate price if the dataset is not free
+        # Check if user has permission to publish datasets
+        if not check_publish_permissions(creator_uid):
+            logging.error(f"User {creator_uid} does not have permission to publish datasets.")
+            return jsonify({'error': 'You do not have permission to publish datasets. Please contact an administrator.'}), 403
+
+        # Check premium status for paid datasets
         if not is_free:
-            if not price or float(price) <= 0:
+            user_doc = db.collection('users').document(creator_uid).get()
+            user_data = user_doc.to_dict() if user_doc.exists else {}
+            user_role = user_data.get('role', '')
+            is_admin = check_admin_status(creator_uid)
+            
+            # Only premium users and admins can set prices
+            if user_role != 'premium' and not is_admin:
+                logging.error(f"User {creator_uid} (role: {user_role}) attempted to create a paid dataset without premium status.")
+                return jsonify({'error': 'Only premium users or admins can create paid datasets.'}), 403
+                
+            # Validate price for paid datasets
+            if price <= 0:
                 logging.error("Invalid price provided for a paid dataset.")
                 return jsonify({'error': 'Valid price is required for paid datasets.'}), 400
-            price = float(price)
-        else:
-            price = 0.0  # Set price to 0 for free datasets
 
         # Check free dataset limit if applicable
-        if is_free:
-            free_limit = 20  # Set your free dataset limit here
+        user_doc = db.collection('users').document(creator_uid).get()
+        user_data = user_doc.to_dict() if user_doc.exists else {}
+        user_role = user_data.get('role', '')
+        
+        # Only check limits for non-admin users
+        if is_free and not check_admin_status(creator_uid):
+            # Set different limits based on user role
+            free_limit = 5  # Default limit for free users
+            if user_role == 'premium':
+                free_limit = 20  # Higher limit for premium users
+                
             user_games_ref = db.collection('datasets').where('creator_uid', '==', creator_uid).where('price', '==', 0.0)
             # Manual count since .count() is not available
             free_count = sum(1 for _ in user_games_ref.stream())
             logging.info(f"User {creator_uid} has {free_count} free datasets.")
             if free_count >= free_limit:
                 logging.error("Free dataset limit reached.")
-                return jsonify({'error': 'Free dataset limit reached. Upgrade to premium to publish more datasets.'}), 403
-
-        # Handle image upload if provided (Commented out for now)
-        # if 'image' in files:
-        #     image = files['image']
-        #     if image and image.filename.endswith(('.png', '.jpg', '.jpeg', '.gif')):
-        #         image_url = save_image(image)
-        #         if image_url:
-        #             preview_snippet = image_url  # Use the image URL as the preview snippet
-        #         else:
-        #             logging.error("Failed to save image.")
-        #             return jsonify({'error': 'Failed to save image.'}), 500
-        #     else:
-        #         logging.error("Invalid image file uploaded.")
-        #         return jsonify({'error': 'Invalid image file.'}), 400
+                return jsonify({'error': f'Free dataset limit of {free_limit} reached. Upgrade to premium for more datasets or contact an administrator.'}), 403
 
         # Add dataset to Firestore
         dataset_id = add_dataset(name, description, price, creator_uid, None, category)  # preview_snippet set to None
@@ -1139,6 +1183,51 @@ def publish_dataset():
     except Exception as e:
         logging.error(f"Error in publish_dataset endpoint: {str(e)}")
         return jsonify({'error': str(e)}), 500
+    
+# Replace your existing published-datasets endpoint with this updated version
+@app.route('/published-datasets', methods=['GET'])
+def get_published_datasets():
+    try:
+        # Check for auth token in headers
+        auth_header = request.headers.get('Authorization')
+        uid = None
+        
+        if auth_header and auth_header.startswith('Bearer '):
+            # Extract token
+            token = auth_header.split('Bearer ')[1]
+            try:
+                # Verify token
+                decoded_token = firebase_admin.auth.verify_id_token(token)
+                uid = decoded_token['uid']
+            except Exception as e:
+                logging.warning(f"Invalid auth token: {str(e)}")
+                # Continue as anonymous user
+        
+        # Check if user has permission to view datasets
+        has_access = check_view_permissions(uid)
+        
+        if not has_access:
+            logging.warning(f"User {uid or 'anonymous'} does not have permission to view datasets")
+            return jsonify({
+                'error': 'You do not have permission to view the Sports Data Hub.',
+                'datasets': []
+            }), 403
+        
+        # If user has access, fetch datasets
+        datasets_ref = db.collection('datasets')
+        datasets = []
+        
+        for doc in datasets_ref.stream():
+            dataset = doc.to_dict()
+            dataset['id'] = doc.id
+            datasets.append(dataset)
+        
+        logging.info(f"Fetched {len(datasets)} published datasets for user {uid or 'anonymous'}")
+        return jsonify({'datasets': datasets}), 200
+    
+    except Exception as e:
+        logging.error(f"Error fetching published datasets: {str(e)}")
+        return jsonify({'error': 'Failed to fetch published datasets.'}), 500
 
 # def save_image(image_file):
 #     try:
@@ -1228,6 +1317,7 @@ def connect_stripe():
         logging.error(f"Error generating Stripe Connect URL: {str(e)}")
         return jsonify({'error': 'Failed to generate Stripe Connect URL.'}), 500
 
+# Update the purchase-dataset endpoint to handle Stripe payments for datasets
 @app.route('/purchase-dataset', methods=['POST'])
 def purchase_dataset():
     try:
@@ -1247,12 +1337,31 @@ def purchase_dataset():
             return jsonify({'error': 'Dataset not found.'}), 404
 
         dataset = dataset_doc.to_dict()
-        price = dataset.get('price')
+        price = dataset.get('price', 0.0)
         creator_uid = dataset.get('creator_uid')
+        dataset_name = dataset.get('name', 'Unnamed Dataset')
+
+        # Verify this is a paid dataset
+        if price <= 0:
+            logging.error(f"Attempted to purchase free dataset '{dataset_id}'.")
+            return jsonify({'error': 'This dataset is free and does not require purchase.'}), 400
 
         if not all([price, creator_uid]):
             logging.error(f"Incomplete dataset information for '{dataset_id}'.")
             return jsonify({'error': 'Dataset information incomplete.'}), 400
+
+        # Don't allow creators to purchase their own datasets
+        if buyer_uid == creator_uid:
+            logging.error(f"Creator '{creator_uid}' attempted to purchase their own dataset.")
+            return jsonify({'error': 'You cannot purchase your own dataset.'}), 400
+
+        # Check if user already owns this dataset
+        purchases_ref = db.collection('users').document(buyer_uid).collection('purchases')
+        existing_purchase = purchases_ref.where('dataset_id', '==', dataset_id).limit(1).get()
+        
+        if len(list(existing_purchase)) > 0:
+            logging.warning(f"User '{buyer_uid}' already owns dataset '{dataset_id}'.")
+            return jsonify({'error': 'You already own this dataset.'}), 400
 
         # Retrieve the creator's Stripe account ID
         creator_doc = db.collection('users').document(creator_uid).get()
@@ -1265,56 +1374,102 @@ def purchase_dataset():
 
         if not stripe_account_id:
             logging.error(f"Stripe account not connected for creator '{creator_uid}'.")
-            return jsonify({'error': 'Dataset creator Stripe account not connected.'}), 400
+            return jsonify({'error': 'Dataset creator has not connected their payment account.'}), 400
 
         # Calculate commission and creator payout
-        commission_percentage = 0.20
+        commission_percentage = 0.20  # 20% commission
         commission = price * commission_percentage
         payout = price - commission
 
-        # Create a PaymentIntent with destination charge for Stripe Connect
-        payment_intent = stripe.PaymentIntent.create(
-            amount=int(price * 100),  # Convert to cents
-            currency='usd',
-            payment_method=payment_method,
-            confirmation_method='manual',
-            confirm=True,
-            transfer_data={
-                'destination': stripe_account_id,
-                'amount': int(payout * 100),
-            },
-        )
+        # Get buyer information for the receipt
+        buyer_doc = db.collection('users').document(buyer_uid).get()
+        buyer_email = buyer_doc.to_dict().get('email') if buyer_doc.exists else None
 
-        # Record the transaction in Firestore
-        transaction_id = record_transaction(buyer_uid, dataset_id, price, commission)
+        try:
+            # Create a PaymentIntent with destination charge for Stripe Connect
+            payment_intent = stripe.PaymentIntent.create(
+                amount=int(price * 100),  # Convert to cents
+                currency='usd',
+                payment_method=payment_method,
+                confirmation_method='manual',
+                confirm=True,
+                receipt_email=buyer_email,  # Send receipt email
+                description=f"Purchase of dataset: {dataset_name}",
+                metadata={
+                    'dataset_id': dataset_id,
+                    'dataset_name': dataset_name,
+                    'buyer_uid': buyer_uid
+                },
+                transfer_data={
+                    'destination': stripe_account_id,
+                    'amount': int(payout * 100),  # Convert payout to cents
+                },
+            )
 
-        logging.info(f"PaymentIntent created for transaction {transaction_id}.")
-        return jsonify({
-            'clientSecret': payment_intent.client_secret,
-            'transaction_id': transaction_id
-        }), 200
+            # Record the transaction in Firestore
+            transaction_id = record_transaction(buyer_uid, dataset_id, price, commission)
+            
+            # Add the purchased dataset to the user's purchases collection
+            purchases_ref.document(transaction_id).set({
+                'dataset_id': dataset_id,
+                'dataset_name': dataset_name,
+                'price': price,
+                'purchase_date': firestore.SERVER_TIMESTAMP,
+                'transaction_id': transaction_id
+            })
+            
+            # Increment the purchases count for the dataset
+            db.collection('datasets').document(dataset_id).update({
+                'purchases': firestore.Increment(1)
+            })
 
-    except stripe.error.CardError as e:
-        logging.error(f"Stripe Card Error: {e.user_message}")
-        return jsonify({'error': e.user_message}), 400
-    except stripe.error.RateLimitError as e:
-        logging.error("Stripe Rate Limit Error.")
-        return jsonify({'error': 'Too many requests to Stripe.'}), 429
-    except stripe.error.InvalidRequestError as e:
-        logging.error(f"Stripe Invalid Request Error: {str(e)}")
-        return jsonify({'error': 'Invalid payment request.'}), 400
-    except stripe.error.AuthenticationError as e:
-        logging.error("Stripe Authentication Error.")
-        return jsonify({'error': 'Authentication with Stripe failed.'}), 401
-    except stripe.error.APIConnectionError as e:
-        logging.error("Stripe Network Error.")
-        return jsonify({'error': 'Network communication with Stripe failed.'}), 502
-    except stripe.error.StripeError as e:
-        logging.error(f"Stripe Error: {str(e)}")
-        return jsonify({'error': 'Payment processing failed.'}), 500
+            # Update creator's earnings
+            creator_earnings_ref = db.collection('earnings').document(creator_uid)
+            creator_earnings_doc = creator_earnings_ref.get()
+            
+            if creator_earnings_doc.exists:
+                creator_earnings_ref.update({
+                    'total_earnings': firestore.Increment(payout),
+                    'pending_payouts': firestore.Increment(payout),
+                    'last_updated': firestore.SERVER_TIMESTAMP
+                })
+            else:
+                creator_earnings_ref.set({
+                    'total_earnings': payout,
+                    'pending_payouts': payout,
+                    'last_updated': firestore.SERVER_TIMESTAMP
+                })
+
+            logging.info(f"User '{buyer_uid}' purchased dataset '{dataset_id}' for ${price:.2f}. Transaction ID: {transaction_id}")
+            return jsonify({
+                'success': True,
+                'clientSecret': payment_intent.client_secret,
+                'transaction_id': transaction_id
+            }), 200
+
+        except stripe.error.CardError as e:
+            logging.error(f"Stripe Card Error: {e.user_message}")
+            return jsonify({'error': e.user_message}), 400
+        except stripe.error.RateLimitError as e:
+            logging.error("Stripe Rate Limit Error.")
+            return jsonify({'error': 'Too many requests to Stripe.'}), 429
+        except stripe.error.InvalidRequestError as e:
+            logging.error(f"Stripe Invalid Request Error: {str(e)}")
+            return jsonify({'error': 'Invalid payment request.'}), 400
+        except stripe.error.AuthenticationError as e:
+            logging.error("Stripe Authentication Error.")
+            return jsonify({'error': 'Authentication with Stripe failed.'}), 401
+        except stripe.error.APIConnectionError as e:
+            logging.error("Stripe Network Error.")
+            return jsonify({'error': 'Network communication with Stripe failed.'}), 502
+        except stripe.error.StripeError as e:
+            logging.error(f"Stripe Error: {str(e)}")
+            return jsonify({'error': 'Payment processing failed.'}), 500
+
     except Exception as e:
         logging.error(f"Error processing purchase: {str(e)}")
         return jsonify({'error': 'An error occurred during purchase.'}), 500
+
 
 from flask import Flask, request, jsonify
 import json
@@ -1380,20 +1535,20 @@ def upload_dataset():
         logging.error(f"Error uploading dataset: {str(e)}")
         return jsonify({'error': 'An error occurred while uploading the dataset.'}), 500
     
-@app.route('/published-datasets', methods=['GET'])
-def get_published_datasets():
-    try:
-        datasets_ref = db.collection('datasets')
-        datasets = []
-        for doc in datasets_ref.stream():
-            dataset = doc.to_dict()
-            dataset['id'] = doc.id
-            datasets.append(dataset)
-        logging.info(f"Fetched {len(datasets)} published datasets.")
-        return jsonify({'datasets': datasets}), 200
-    except Exception as e:
-        logging.error(f"Error fetching published datasets: {str(e)}")
-        return jsonify({'error': 'Failed to fetch published datasets.'}), 500
+# @app.route('/published-datasets', methods=['GET'])
+# def get_published_datasets():
+#     try:
+#         datasets_ref = db.collection('datasets')
+#         datasets = []
+#         for doc in datasets_ref.stream():
+#             dataset = doc.to_dict()
+#             dataset['id'] = doc.id
+#             datasets.append(dataset)
+#         logging.info(f"Fetched {len(datasets)} published datasets.")
+#         return jsonify({'datasets': datasets}), 200
+#     except Exception as e:
+#         logging.error(f"Error fetching published datasets: {str(e)}")
+#         return jsonify({'error': 'Failed to fetch published datasets.'}), 500
 
 def check_free_dataset_limit(creator_uid, limit=5):
     try:
@@ -2601,6 +2756,470 @@ def recalculate_xpoints():
 
     except Exception as e:
         logging.error(f"Error recalculating xpoints: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+    
+def check_admin_status(uid, email=None):
+    """
+    Checks if a user has admin privileges.
+    
+    Args:
+        uid (str): User ID
+        email (str, optional): User email. If not provided, will fetch from user document
+        
+    Returns:
+        bool: True if user has admin privileges, False otherwise
+    """
+    try:
+        if not email:
+            # Fetch user email if not provided
+            user_doc = db.collection('users').document(uid).get()
+            if not user_doc.exists:
+                logging.error(f"User {uid} not found")
+                return False
+            email = user_doc.to_dict().get('email')
+            if not email:
+                logging.error(f"Email not found for user {uid}")
+                return False
+        
+        # Check admin settings
+        admin_config_ref = db.collection('adminSettings').document('datasetConfig')
+        admin_config = admin_config_ref.get()
+        
+        if not admin_config.exists:
+            # If no config exists, create it with the user as admin
+            admin_config_ref.set({
+                'adminUsers': [email],
+                'permissions': {
+                    'datasetPublishing': 3,  # Admin only by default
+                    'datasetViewing': 0      # All users by default
+                }
+            })
+            logging.info(f"Created admin config with {email} as admin")
+            return True
+        
+        # Check if user email is in admin list
+        admin_users = admin_config.to_dict().get('adminUsers', [])
+        return email in admin_users
+    
+    except Exception as e:
+        logging.error(f"Error checking admin status: {str(e)}")
+        return False
+
+# Middleware function to check dataset publishing permissions
+def check_publish_permissions(uid, userType=None):
+    """
+    Checks if a user has permission to publish datasets based on admin settings.
+    
+    Args:
+        uid (str): User ID
+        userType (str, optional): User type (free, premium). If not provided, will fetch from user document
+        
+    Returns:
+        bool: True if user has permission to publish, False otherwise
+    """
+    try:
+        # Get user info if userType not provided
+        if userType is None:
+            user_doc = db.collection('users').document(uid).get()
+            if not user_doc.exists:
+                logging.error(f"User {uid} not found")
+                return False
+            
+            user_data = user_doc.to_dict()
+            userType = user_data.get('role', '')
+            email = user_data.get('email', '')
+            
+            # Check if user is admin
+            if check_admin_status(uid, email):
+                return True
+        
+        # Get publishing permissions
+        admin_config = db.collection('adminSettings').document('datasetConfig').get()
+        if not admin_config.exists:
+            # Default to admin-only if config doesn't exist
+            return False
+        
+        # Get publishing access level
+        permissions = admin_config.to_dict().get('permissions', {})
+        publish_access = permissions.get('datasetPublishing', 3)  # Default to admin-only
+        
+        # Check if user has permission based on access level
+        if publish_access == 0:  # All users
+            return True
+        elif publish_access == 1:  # Free users or higher
+            return userType != ''
+        elif publish_access == 2:  # Premium users only
+            return userType == 'premium'
+        else:  # Admin only (level 3)
+            return False
+    
+    except Exception as e:
+        logging.error(f"Error checking publish permissions: {str(e)}")
+        return False
+
+# Middleware function to check dataset viewing permissions
+def check_view_permissions(uid, userType=None):
+    """
+    Checks if a user has permission to view datasets based on admin settings.
+    
+    Args:
+        uid (str): User ID
+        userType (str, optional): User type (free, premium). If not provided, will fetch from user document
+        
+    Returns:
+        bool: True if user has permission to view datasets, False otherwise
+    """
+    try:
+        # Handle anonymous users (no uid)
+        if not uid:
+            # Get permission settings
+            admin_config = db.collection('adminSettings').document('datasetConfig').get()
+            if not admin_config.exists:
+                # Default to all users if config doesn't exist
+                return True
+            
+            # Get viewing access level
+            permissions = admin_config.to_dict().get('permissions', {})
+            view_access = permissions.get('datasetViewing', 0)  # Default to all users
+            
+            # Allow anonymous users only if viewAccess is set to "All Users" (0)
+            return view_access == 0
+        
+        # Get user info if userType not provided
+        if userType is None:
+            user_doc = db.collection('users').document(uid).get()
+            if not user_doc.exists:
+                logging.error(f"User {uid} not found")
+                return False
+            
+            user_data = user_doc.to_dict()
+            userType = user_data.get('role', '')
+            email = user_data.get('email', '')
+            
+            # Check if user is admin
+            if check_admin_status(uid, email):
+                return True
+        
+        # Get viewing permissions
+        admin_config = db.collection('adminSettings').document('datasetConfig').get()
+        if not admin_config.exists:
+            # Default to all users if config doesn't exist
+            return True
+        
+        # Get viewing access level
+        permissions = admin_config.to_dict().get('permissions', {})
+        view_access = permissions.get('datasetViewing', 0)  # Default to all users
+        
+        # Check if user has permission based on access level
+        if view_access == 0:  # All users
+            return True
+        elif view_access == 1:  # Free users or higher
+            return userType != ''
+        elif view_access == 2:  # Premium users only
+            return userType == 'premium'
+        else:
+            return False
+    
+    except Exception as e:
+        logging.error(f"Error checking view permissions: {str(e)}")
+        return False
+    
+# Add these API routes to your Flask application
+# Place them with your other route definitions
+
+# Endpoint to check if user is an admin
+@app.route('/check-admin-status', methods=['POST'])
+def api_check_admin_status():
+    try:
+        data = request.json
+        uid = data.get('uid')
+        
+        if not uid:
+            logging.error("UID not provided for admin status check")
+            return jsonify({'error': 'UID is required'}), 400
+        
+        # Fetch user email
+        user_doc = db.collection('users').document(uid).get()
+        if not user_doc.exists:
+            logging.error(f"User {uid} not found")
+            return jsonify({'error': 'User not found'}), 404
+        
+        email = user_doc.to_dict().get('email')
+        if not email:
+            logging.error(f"Email not found for user {uid}")
+            return jsonify({'error': 'User email not found'}), 400
+        
+        # Check admin status
+        is_admin = check_admin_status(uid, email)
+        
+        return jsonify({'isAdmin': is_admin}), 200
+    
+    except Exception as e:
+        logging.error(f"Error checking admin status: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# Endpoint to get dataset publishing permissions
+@app.route('/dataset-permissions', methods=['POST'])
+def get_dataset_permissions():
+    try:
+        data = request.json
+        uid = data.get('uid')
+        userType = data.get('userType')
+        
+        if not uid:
+            logging.error("UID not provided for permissions check")
+            return jsonify({'error': 'UID is required'}), 400
+        
+        # Get user info if userType not provided
+        if userType is None:
+            user_doc = db.collection('users').document(uid).get()
+            if not user_doc.exists:
+                logging.error(f"User {uid} not found")
+                return jsonify({'error': 'User not found'}), 404
+            
+            userType = user_doc.to_dict().get('role', '')
+        
+        # Get admin settings
+        admin_config = db.collection('adminSettings').document('datasetConfig').get()
+        
+        # Default permissions if config doesn't exist
+        permissions = {
+            'canPublish': False,
+            'canView': True,
+            'isAdmin': False
+        }
+        
+        # Check if user is admin
+        is_admin = check_admin_status(uid)
+        if is_admin:
+            permissions['isAdmin'] = True
+            permissions['canPublish'] = True
+            permissions['canView'] = True
+        else:
+            # Check permissions based on settings
+            if admin_config.exists:
+                settings = admin_config.to_dict().get('permissions', {})
+                
+                # Publishing permissions
+                publish_access = settings.get('datasetPublishing', 3)
+                if publish_access == 0:  # All users
+                    permissions['canPublish'] = True
+                elif publish_access == 1 and userType:  # Free users
+                    permissions['canPublish'] = True
+                elif publish_access == 2 and userType == 'premium':  # Premium users
+                    permissions['canPublish'] = True
+                
+                # Viewing permissions
+                view_access = settings.get('datasetViewing', 0)
+                if view_access == 0:  # All users
+                    permissions['canView'] = True
+                elif view_access == 1 and userType:  # Free users
+                    permissions['canView'] = True
+                elif view_access == 2 and userType == 'premium':  # Premium users
+                    permissions['canView'] = True
+        
+        return jsonify(permissions), 200
+    
+    except Exception as e:
+        logging.error(f"Error getting dataset permissions: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# Endpoint to save admin settings
+@app.route('/save-admin-settings', methods=['POST'])
+def save_admin_settings():
+    try:
+        data = request.json
+        uid = data.get('uid')
+        settings = data.get('settings')
+        
+        if not uid or not settings:
+            logging.error("UID or settings not provided")
+            return jsonify({'error': 'UID and settings are required'}), 400
+        
+        # Check if user is admin
+        if not check_admin_status(uid):
+            logging.error(f"User {uid} is not an admin")
+            return jsonify({'error': 'Only admins can update settings'}), 403
+        
+        # Get current settings to preserve any fields not included in update
+        admin_config_ref = db.collection('adminSettings').document('datasetConfig')
+        admin_config = admin_config_ref.get()
+        
+        if admin_config.exists:
+            current_settings = admin_config.to_dict()
+            
+            # Ensure we don't remove current user from admin list
+            if 'adminUsers' in settings and 'adminUsers' in current_settings:
+                user_doc = db.collection('users').document(uid).get()
+                if user_doc.exists:
+                    email = user_doc.to_dict().get('email')
+                    if email and email not in settings['adminUsers']:
+                        settings['adminUsers'].append(email)
+            
+            # Update settings
+            admin_config_ref.set(settings, merge=True)
+        else:
+            # If no settings exist, ensure the current user is an admin
+            if 'adminUsers' not in settings:
+                user_doc = db.collection('users').document(uid).get()
+                if user_doc.exists:
+                    email = user_doc.to_dict().get('email')
+                    if email:
+                        settings['adminUsers'] = [email]
+            
+            # Create settings
+            admin_config_ref.set(settings)
+        
+        logging.info(f"Admin settings updated by user {uid}")
+        return jsonify({'success': True}), 200
+    
+    except Exception as e:
+        logging.error(f"Error saving admin settings: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# Endpoint to get list of admin users
+@app.route('/admin-users', methods=['POST'])
+def get_admin_users():
+    try:
+        data = request.json
+        uid = data.get('uid')
+        
+        if not uid:
+            logging.error("UID not provided for admin users request")
+            return jsonify({'error': 'UID is required'}), 400
+        
+        # Check if user is admin
+        if not check_admin_status(uid):
+            logging.error(f"User {uid} is not an admin")
+            return jsonify({'error': 'Only admins can view admin users list'}), 403
+        
+        # Get admin users list
+        admin_config = db.collection('adminSettings').document('datasetConfig').get()
+        
+        if admin_config.exists:
+            admin_users = admin_config.to_dict().get('adminUsers', [])
+        else:
+            # If no config exists, only include the current user
+            user_doc = db.collection('users').document(uid).get()
+            if user_doc.exists:
+                email = user_doc.to_dict().get('email')
+                admin_users = [email] if email else []
+            else:
+                admin_users = []
+        
+        return jsonify({'adminUsers': admin_users}), 200
+    
+    except Exception as e:
+        logging.error(f"Error getting admin users: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# Endpoint to add an admin user
+@app.route('/add-admin-user', methods=['POST'])
+def add_admin_user():
+    try:
+        data = request.json
+        uid = data.get('uid')
+        new_admin_email = data.get('newAdminEmail')
+        
+        if not uid or not new_admin_email:
+            logging.error("UID or new admin email not provided")
+            return jsonify({'error': 'UID and newAdminEmail are required'}), 400
+        
+        # Check if user is admin
+        if not check_admin_status(uid):
+            logging.error(f"User {uid} is not an admin")
+            return jsonify({'error': 'Only admins can add admin users'}), 403
+        
+        # Get admin settings
+        admin_config_ref = db.collection('adminSettings').document('datasetConfig')
+        admin_config = admin_config_ref.get()
+        
+        if admin_config.exists:
+            current_settings = admin_config.to_dict()
+            admin_users = current_settings.get('adminUsers', [])
+            
+            # Check if user is already an admin
+            if new_admin_email in admin_users:
+                return jsonify({'message': 'User is already an admin'}), 200
+            
+            # Add new admin
+            admin_users.append(new_admin_email)
+            admin_config_ref.update({'adminUsers': admin_users})
+        else:
+            # If no settings exist, create with current user and new admin
+            user_doc = db.collection('users').document(uid).get()
+            current_email = user_doc.to_dict().get('email') if user_doc.exists else None
+            
+            admin_users = [current_email, new_admin_email] if current_email else [new_admin_email]
+            admin_config_ref.set({
+                'adminUsers': admin_users,
+                'permissions': {
+                    'datasetPublishing': 3,  # Admin only by default
+                    'datasetViewing': 0      # All users by default
+                }
+            })
+        
+        logging.info(f"Added {new_admin_email} as admin by user {uid}")
+        return jsonify({'success': True}), 200
+    
+    except Exception as e:
+        logging.error(f"Error adding admin user: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# Endpoint to remove an admin user
+@app.route('/remove-admin-user', methods=['POST'])
+def remove_admin_user():
+    try:
+        data = request.json
+        uid = data.get('uid')
+        admin_email = data.get('adminEmail')
+        
+        if not uid or not admin_email:
+            logging.error("UID or admin email not provided")
+            return jsonify({'error': 'UID and adminEmail are required'}), 400
+        
+        # Check if user is admin
+        if not check_admin_status(uid):
+            logging.error(f"User {uid} is not an admin")
+            return jsonify({'error': 'Only admins can remove admin users'}), 403
+        
+        # Get user email
+        user_doc = db.collection('users').document(uid).get()
+        if not user_doc.exists:
+            logging.error(f"User {uid} not found")
+            return jsonify({'error': 'User not found'}), 404
+        
+        user_email = user_doc.to_dict().get('email')
+        
+        # Prevent removing yourself
+        if user_email == admin_email:
+            logging.error(f"User {uid} tried to remove themselves as admin")
+            return jsonify({'error': 'You cannot remove yourself as admin'}), 400
+        
+        # Get admin settings
+        admin_config_ref = db.collection('adminSettings').document('datasetConfig')
+        admin_config = admin_config_ref.get()
+        
+        if not admin_config.exists:
+            logging.error("Admin config not found")
+            return jsonify({'error': 'Admin settings not found'}), 404
+        
+        current_settings = admin_config.to_dict()
+        admin_users = current_settings.get('adminUsers', [])
+        
+        # Check if user is an admin
+        if admin_email not in admin_users:
+            return jsonify({'message': 'User is not an admin'}), 200
+        
+        # Remove admin
+        admin_users.remove(admin_email)
+        admin_config_ref.update({'adminUsers': admin_users})
+        
+        logging.info(f"Removed {admin_email} as admin by user {uid}")
+        return jsonify({'success': True}), 200
+    
+    except Exception as e:
+        logging.error(f"Error removing admin user: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
     

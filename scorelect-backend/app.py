@@ -422,7 +422,40 @@ def delete_dataset():
     except Exception as e:
         logging.error(f"Error deleting dataset: {str(e)}")
         return jsonify({'error': str(e)}), 500
-    
+
+# Endpoint to delete ONE game for a user
+@app.route('/delete-game', methods=['DELETE', 'POST'])   # allow either verb
+def delete_game():
+    try:
+        data      = request.get_json() or request.form
+        uid       = data.get('uid')
+        game_id   = data.get('gameId')   # you send this from the front end
+
+        if not uid or not game_id:
+            logging.error("UID or gameId missing for delete-game")
+            return jsonify({'error': 'uid and gameId are required.'}), 400
+
+        # reference: savedGames/{uid}/games/{gameId}
+        game_ref = (
+            db.collection('savedGames')
+              .document(uid)
+              .collection('games')
+              .document(game_id)
+        )
+
+        if not game_ref.get().exists:
+            logging.warning(f"Game '{game_id}' not found for user {uid}")
+            return jsonify({'error': 'Game not found.'}), 404
+
+        game_ref.delete()
+        logging.info(f"Deleted game '{game_id}' for user {uid}")
+        return jsonify({'success': True}), 200
+
+    except Exception as e:
+        logging.error(f"Error deleting game: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+   
 # Endpoint to download all games within a specific dataset as a JSON file
 @app.route('/download-dataset', methods=['POST'])
 def download_dataset():

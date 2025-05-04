@@ -34,7 +34,10 @@ const defaultMapping = {
   'free short': 'setplaymiss',
   fortyfive: 'setplayscore',
   'fortyfive wide': 'setplaymiss',
-  'fortyfive short': 'setplaymiss'
+  'fortyfive short': 'setplaymiss',
+  'wide': 'miss',
+  'miss': 'miss',
+  'shot wide': 'miss'
 };
 
 // Fallback colors for markers
@@ -521,10 +524,15 @@ export default function GAAAnalysisDashboard() {
       if (appliedFilters[f]) {
         filtered = filtered.map(g => ({
           ...g,
-          gameData: (g.gameData||[]).filter(sh => sh[f] === appliedFilters[f])
+          gameData: (g.gameData||[]).filter(sh =>
+            f === 'player'
+              ? sh.playerName === appliedFilters.player    // compare to the real field
+              : sh[f] === appliedFilters[f]
+          )
         }));
       }
     });
+    
     filtered = filtered.filter(g => (g.gameData||[]).length);
     setGames(filtered);
 

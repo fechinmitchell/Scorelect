@@ -32,12 +32,14 @@ const defaultMapping = {
   'free miss': 'setplaymiss',
   'free wide': 'setplaymiss',
   'free short': 'setplaymiss',
-  fortyfive: 'setplayscore',
+  'fortyfive': 'setplayscore',
   'fortyfive wide': 'setplaymiss',
   'fortyfive short': 'setplaymiss',
   'wide': 'miss',
   'miss': 'miss',
-  'shot wide': 'miss'
+  'shot wide': 'miss',
+  'goal miss': 'miss'
+
 };
 
 // Fallback colors for markers

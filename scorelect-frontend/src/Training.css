@@ -36,7 +36,7 @@
   .training-content { /* Changed from .content to .training-content */
     flex: 1;
     padding: 20px;
-    background-color: #333;
+    background-color: #0F0A1B;
     overflow-y: auto;
     display: flex;
     flex-direction: column;

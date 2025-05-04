@@ -245,7 +245,7 @@ body {
   justify-content: space-between;
   margin-bottom: var(--space-xs);
   font-size: 0.875rem;
-  color: var(--gray-dark);
+  color: var(#0F0A1B);
 }
 
 .agenda-item-title {

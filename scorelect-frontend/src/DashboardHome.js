@@ -173,7 +173,7 @@ const RecentGameItem = ({ game, onSelect }) => {
             renderType = action; // Yellow
           } else if (action === 'point') {
             renderType = 'point'; // Green
-          } else if (action.includes('miss') || action.includes('wide') || action.includes('short')) {
+          } else if (action.includes('miss') || action.includes('wide') || action.includes('short')  || action.includes('short')) {
             renderType = 'miss'; // Red
           } else if (action.includes('block')) {
             renderType = 'blocked'; // Orange

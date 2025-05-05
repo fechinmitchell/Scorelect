@@ -163,16 +163,14 @@ const App = () => {
         <div className="app">
           <ToastContainer />
           <div className="main-container">
-            {selectedSport && (
-              <Sidebar
-                onLogout={handleLogout}
-                onSportChange={handleSportChange}
-                onNavigate={handleNavigate}
-                userType={userRole}
-                user={user}
-                selectedSport={selectedSport}
-              />
-            )}
+          <Sidebar
+              onLogout={handleLogout}
+              onSportChange={handleSportChange}
+              onNavigate={handleNavigate}
+              userType={userRole}
+              user={user}
+              selectedSport={selectedSport}
+            />
             <div className="content-area">
               <ErrorBoundary>
                 <Routes>

@@ -427,7 +427,7 @@ const handleLoadGame = async (game) => {
                       {filteredGames.map((game) => (
                         <li key={game.gameId || game.gameName} className={`saved-game-item ${game.analysisType}`}>
                           <div className="game-info">
-                            <span className="game-name">{game.gameName}</span>
+                            <span className="game-name-saved-games">{game.gameName}</span>
                             {game.analysisType === 'video' ? (
                               <FaVideo className="analysis-icon video" title="Video Analysis" />
                             ) : (

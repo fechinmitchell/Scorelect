@@ -33,6 +33,25 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
   const [loading, setLoading] = useState(false);
   const [logoClickCount, setLogoClickCount] = useState(0);
   const [permissions, setPermissions] = useState({});
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // Check if user is logged in
+  useEffect(() => {
+    const checkAuthState = () => {
+      const user = auth.currentUser;
+      setIsLoggedIn(!!user); // Convert user object to boolean
+    };
+
+    // Check immediately on component mount
+    checkAuthState();
+
+    // Set up auth state listener
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setIsLoggedIn(!!user);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Fetch permission settings (including "analysis") from Firestore
   useEffect(() => {
@@ -144,6 +163,28 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
     });
   };
 
+  // New function to handle the logout button click with confirmation
+  const handleLogoutClick = () => {
+    if (isLoggedIn) {
+      // User is logged in, show confirmation dialog
+      Swal.fire({
+        title: 'Sign Out',
+        text: 'Are you sure you want to sign out?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, sign out',
+        cancelButtonText: 'Cancel'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          onLogout(); // Call the logout function from props
+        }
+      });
+    } else {
+      // User is not logged in, redirect to sign in
+      onNavigate('/signin');
+    }
+  };
+
   return (
     <div className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       <button className="toggle-button" onClick={toggleSidebar}>
@@ -235,9 +276,9 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
             </button>
           </li>
           <li>
-            <button onClick={onLogout}>
-              {userRole === 'free' ? <FaSignInAlt className="icon" size={16} /> : <FaSignOutAlt className="icon" size={16} />}
-              {!collapsed && (userRole === 'free' ? 'Sign In' : 'Logout')}
+            <button onClick={handleLogoutClick}>
+              {isLoggedIn ? <FaSignOutAlt className="icon" size={16} /> : <FaSignInAlt className="icon" size={16} />}
+              {!collapsed && (isLoggedIn ? 'Sign Out' : 'Sign In')}
             </button>
           </li>
         </ul>

@@ -10,7 +10,7 @@ import PropTypes from 'prop-types';
 import PublishDataset from './PublishDataset';
 import UpdateDataset from './UpdateDataset';
 import { getFirestore, collection, getDocs } from 'firebase/firestore';
-import { FaVideo, FaMap } from 'react-icons/fa';
+import { FaVideo, FaMap, FaSync } from 'react-icons/fa';
 
 async function parseJSONNoNaN(response) {
   const rawText = await response.text();
@@ -40,6 +40,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     fetchPublishedDatasets();
   };
 
+  // Helper function to determine analysis type
   const getAnalysisType = (game) => {
     // If the game doesn't have an analysisType property, default to 'pitch'
     // This helps with backward compatibility for games saved before this property existed
@@ -49,78 +50,107 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     return game.analysisType;
   };
 
-// Updated part of handleLoadGame in SavedGames.js
-const handleLoadGame = async (game) => {
-  // normalize gameData into an array
-  let normalizedData = Array.isArray(game.gameData)
-    ? game.gameData
-    : Object.values(game.gameData || {});
+  // Updated part of handleLoadGame in SavedGames.js
+  const handleLoadGame = async (game) => {
+    // normalize gameData into an array
+    let normalizedData = Array.isArray(game.gameData)
+      ? game.gameData
+      : Object.values(game.gameData || {});
 
-  if (normalizedData.length > 0) {
-    try {
-      // Ensure each item has the necessary properties for PitchGraphic
-      const processedData = normalizedData.map(item => {
-        // Ensure position property exists
-        if (!item.position && (typeof item.x === 'number' && typeof item.y === 'number')) {
-          item.position = { x: item.x, y: item.y };
-        } else if (!item.position) {
-          item.position = { x: 50, y: 50 }; // Default fallback position
-        }
-        
-        // Ensure x and y properties exist (even if they're already in position object)
-        if (typeof item.x !== 'number' && item.position) {
-          item.x = item.position.x;
-        }
-        if (typeof item.y !== 'number' && item.position) {
-          item.y = item.position.y;
-        }
-        
-        // Ensure other required properties have default values if missing
-        item.playerName = item.playerName || item.player || '';
-        item.playerNumber = item.playerNumber || '';
-        item.position = item.position || { x: 50, y: 50 };
-        item.pressure = item.pressure || '0';
-        item.foot = item.foot || 'Right';
-        item.outcome = item.outcome || '';
-        
-        return item;
-      });
-
-      // Check if this is a video analysis
-      if (game.analysisType === 'video') {
-        console.log('Loading video analysis game:', game.gameName);
-        console.log('Analysis type:', game.analysisType);
-        
-        // For video analysis, navigate to ManualTagging with the data
-        navigate('/tagging/manual', {
-          state: {
-            youtubeUrl: game.youtubeUrl,
-            tags: processedData,
-            teamsData: game.teamsData,
-            datasetName: game.datasetName || game.gameName,
-            sport: game.sport
+    if (normalizedData.length > 0) {
+      try {
+        // Ensure each item has the necessary properties for PitchGraphic
+        const processedData = normalizedData.map(item => {
+          // Ensure position property exists
+          if (!item.position && (typeof item.x === 'number' && typeof item.y === 'number')) {
+            item.position = { x: item.x, y: item.y };
+          } else if (!item.position) {
+            item.position = { x: 50, y: 50 }; // Default fallback position
           }
+          
+          // Ensure x and y properties exist (even if they're already in position object)
+          if (typeof item.x !== 'number' && item.position) {
+            item.x = item.position.x;
+          }
+          if (typeof item.y !== 'number' && item.position) {
+            item.y = item.position.y;
+          }
+          
+          // Ensure other required properties have default values if missing
+          item.playerName = item.playerName || item.player || '';
+          item.playerNumber = item.playerNumber || '';
+          item.position = item.position || { x: 50, y: 50 };
+          item.pressure = item.pressure || '0';
+          item.foot = item.foot || 'Right';
+          item.outcome = item.outcome || '';
+          
+          return item;
         });
-        Swal.fire('Success', `Video analysis "${game.gameName}" loaded successfully!`, 'success');
-      } else {
-        // For pitch analysis, use the existing onLoadGame function
-        onLoadGame(game.sport, processedData);
-        Swal.fire('Success', `Game "${game.gameName}" loaded successfully!`, 'success');
-      }
-    } catch (error) {
-      console.error('Error loading game data:', error);
-      Swal.fire('Error', 'Failed to load game data.', 'error');
-    }
-  } else {
-    Swal.fire('Error', 'Game data is empty or corrupted.', 'error');
-  }
-};
 
+        // Check if this is a video analysis
+        if (getAnalysisType(game) === 'video') {
+          console.log('Loading video analysis game:', game.gameName);
+          console.log('Analysis type:', getAnalysisType(game));
+          
+          // For video analysis, navigate to ManualTagging with the data
+          navigate('/tagging/manual', {
+            state: {
+              youtubeUrl: game.youtubeUrl,
+              tags: processedData,
+              teamsData: game.teamsData,
+              datasetName: game.datasetName || game.gameName,
+              sport: game.sport
+            }
+          });
+          Swal.fire({
+            title: 'Success',
+            text: `Video analysis "${game.gameName}" loaded successfully!`,
+            icon: 'success',
+            background: 'var(--dark-card)',
+            confirmButtonColor: 'var(--primary)',
+          });
+        } else {
+          // For pitch analysis, use the existing onLoadGame function
+          onLoadGame(game.sport, processedData);
+          Swal.fire({
+            title: 'Success',
+            text: `Game "${game.gameName}" loaded successfully!`,
+            icon: 'success',
+            background: 'var(--dark-card)',
+            confirmButtonColor: 'var(--primary)',
+          });
+        }
+      } catch (error) {
+        console.error('Error loading game data:', error);
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to load game data.',
+          icon: 'error',
+          background: 'var(--dark-card)',
+          confirmButtonColor: 'var(--primary)',
+        });
+      }
+    } else {
+      Swal.fire({
+        title: 'Error',
+        text: 'Game data is empty or corrupted.',
+        icon: 'error',
+        background: 'var(--dark-card)',
+        confirmButtonColor: 'var(--primary)',
+      });
+    }
+  };
 
   const handleDeleteGame = async (gameId, gameName) => {
     const user = auth.currentUser;
     if (!user) {
-      Swal.fire('Error', 'User not authenticated.', 'error');
+      Swal.fire({
+        title: 'Error',
+        text: 'User not authenticated.',
+        icon: 'error',
+        background: 'var(--dark-card)',
+        confirmButtonColor: 'var(--primary)',
+      });
       return;
     }
 
@@ -133,6 +163,8 @@ const handleLoadGame = async (game) => {
       showCancelButton: true,
       confirmButtonText: 'Yes, delete it!',
       cancelButtonText: 'Cancel',
+      background: 'var(--dark-card)',
+      confirmButtonColor: 'var(--primary)',
     }).then(async (result) => {
       if (result.isConfirmed) {
         try {
@@ -155,14 +187,26 @@ const handleLoadGame = async (game) => {
           }
 
           if (response.ok) {
-            Swal.fire('Deleted!', `Game "${gameName}" has been deleted.`, 'success');
+            Swal.fire({
+              title: 'Deleted!',
+              text: `Game "${gameName}" has been deleted.`,
+              icon: 'success',
+              background: 'var(--dark-card)',
+              confirmButtonColor: 'var(--primary)',
+            });
             fetchSavedGames();
           } else {
             throw new Error(resultData.error || 'Failed to delete the game.');
           }
         } catch (error) {
           console.error('Error deleting game:', error);
-          Swal.fire('Error', error.message || 'Failed to delete the game.', 'error');
+          Swal.fire({
+            title: 'Error',
+            text: error.message || 'Failed to delete the game.',
+            icon: 'error',
+            background: 'var(--dark-card)',
+            confirmButtonColor: 'var(--primary)',
+          });
         }
       }
     });
@@ -172,7 +216,13 @@ const handleLoadGame = async (game) => {
     try {
       const user = auth.currentUser;
       if (!user) {
-        Swal.fire('Error', 'User not authenticated.', 'error');
+        Swal.fire({
+          title: 'Error',
+          text: 'User not authenticated.',
+          icon: 'error',
+          background: 'var(--dark-card)',
+          confirmButtonColor: 'var(--primary)',
+        });
         return;
       }
 
@@ -202,17 +252,35 @@ const handleLoadGame = async (game) => {
       a.remove();
       window.URL.revokeObjectURL(url);
 
-      Swal.fire('Downloaded!', `Dataset "${datasetName}" has been downloaded.`, 'success');
+      Swal.fire({
+        title: 'Downloaded!',
+        text: `Dataset "${datasetName}" has been downloaded.`,
+        icon: 'success',
+        background: 'var(--dark-card)',
+        confirmButtonColor: 'var(--primary)',
+      });
     } catch (error) {
       console.error('Error downloading dataset:', error);
-      Swal.fire('Error', error.message || 'Failed to download dataset.', 'error');
+      Swal.fire({
+        title: 'Error',
+        text: error.message || 'Failed to download dataset.',
+        icon: 'error',
+        background: 'var(--dark-card)',
+        confirmButtonColor: 'var(--primary)',
+      });
     }
   };
 
   const handleDeleteDataset = async (datasetName) => {
     const user = auth.currentUser;
     if (!user) {
-      Swal.fire('Error', 'User not authenticated.', 'error');
+      Swal.fire({
+        title: 'Error',
+        text: 'User not authenticated.',
+        icon: 'error',
+        background: 'var(--dark-card)',
+        confirmButtonColor: 'var(--primary)',
+      });
       return;
     }
 
@@ -225,6 +293,8 @@ const handleLoadGame = async (game) => {
       showCancelButton: true,
       confirmButtonText: 'Yes, delete it!',
       cancelButtonText: 'Cancel',
+      background: 'var(--dark-card)',
+      confirmButtonColor: 'var(--primary)',
     }).then(async (result) => {
       if (result.isConfirmed) {
         try {
@@ -240,7 +310,13 @@ const handleLoadGame = async (game) => {
 
           const resultData = await parseJSONNoNaN(response);
           if (response.ok) {
-            Swal.fire('Deleted!', `Dataset "${datasetName}" and all its games have been deleted.`, 'success');
+            Swal.fire({
+              title: 'Deleted!',
+              text: `Dataset "${datasetName}" and all its games have been deleted.`,
+              icon: 'success',
+              background: 'var(--dark-card)',
+              confirmButtonColor: 'var(--primary)',
+            });
             fetchSavedGames();
             fetchPublishedDatasets();
           } else {
@@ -248,7 +324,13 @@ const handleLoadGame = async (game) => {
           }
         } catch (error) {
           console.error('Error deleting dataset:', error);
-          Swal.fire('Error', error.message || 'Failed to delete the dataset.', 'error');
+          Swal.fire({
+            title: 'Error',
+            text: error.message || 'Failed to delete the dataset.',
+            icon: 'error',
+            background: 'var(--dark-card)',
+            confirmButtonColor: 'var(--primary)',
+          });
         }
       }
     });
@@ -283,7 +365,13 @@ const handleLoadGame = async (game) => {
       const db = getFirestore();
       const user = auth.currentUser;
       if (!user) {
-        Swal.fire('Error', 'User not authenticated.', 'error');
+        Swal.fire({
+          title: 'Error',
+          text: 'User not authenticated.',
+          icon: 'error',
+          background: 'var(--dark-card)',
+          confirmButtonColor: 'var(--primary)',
+        });
         return;
       }
       const datasetsRef = collection(db, 'datasets');
@@ -291,15 +379,33 @@ const handleLoadGame = async (game) => {
       fetchSavedGames();
       fetchPublishedDatasets();
 
-      Swal.fire('Refreshed!', 'Saved games and datasets updated.', 'success');
+      Swal.fire({
+        title: 'Refreshed!',
+        text: 'Saved games and datasets updated.',
+        icon: 'success',
+        background: 'var(--dark-card)',
+        confirmButtonColor: 'var(--primary)',
+      });
     } catch (error) {
       console.error('Error refreshing from Firebase:', error);
-      Swal.fire('Error', 'Failed to refresh data from Firebase.', 'error');
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to refresh data from Firebase.',
+        icon: 'error',
+        background: 'var(--dark-card)',
+        confirmButtonColor: 'var(--primary)',
+      });
     }
   };
 
   const handleUpdateSuccess = () => {
-    Swal.fire('Updated!', `Dataset "${selectedDataset}" updated successfully.`, 'success');
+    Swal.fire({
+      title: 'Updated!',
+      text: `Dataset "${selectedDataset}" updated successfully.`,
+      icon: 'success',
+      background: 'var(--dark-card)',
+      confirmButtonColor: 'var(--primary)',
+    });
     closeUpdateModal();
     fetchSavedGames();
     fetchPublishedDatasets();
@@ -340,13 +446,36 @@ const handleLoadGame = async (game) => {
     <div className="saved-games-container">
       <div className="header-container">
         <h2>Saved Games for {selectedSport}</h2>
-        <button className="refresh-button" onClick={handleRefresh}>Refresh</button>
       </div>
 
-      <div className="filter-buttons">
-        <button className={analysisFilter === 'all' ? 'active' : ''} onClick={() => setAnalysisFilter('all')}>All</button>
-        <button className={analysisFilter === 'video' ? 'active' : ''} onClick={() => setAnalysisFilter('video')}>Video Analysis</button>
-        <button className={analysisFilter === 'pitch' ? 'active' : ''} onClick={() => setAnalysisFilter('pitch')}>Pitch Analysis</button>
+      <div className="filter-area">
+        <div className="filter-buttons">
+          <button 
+            className={analysisFilter === 'all' ? 'active' : ''} 
+            onClick={() => setAnalysisFilter('all')}
+          >
+            All
+          </button>
+          <button 
+            className={analysisFilter === 'video' ? 'active' : ''} 
+            onClick={() => setAnalysisFilter('video')}
+          >
+            Video Analysis
+          </button>
+          <button 
+            className={analysisFilter === 'pitch' ? 'active' : ''} 
+            onClick={() => setAnalysisFilter('pitch')}
+          >
+            Pitch Analysis
+          </button>
+        </div>
+        <button 
+          className="refresh-button" 
+          onClick={handleRefresh} 
+          title="Refresh Data"
+        >
+          <FaSync />
+        </button>
       </div>
 
       <div className="legend">
@@ -385,7 +514,11 @@ const handleLoadGame = async (game) => {
           ) : (
             datasetKeys.map((datasetName) => {
               const { games, isPublished } = filteredDatasets[datasetName];
-              const filteredGames = analysisFilter === 'all' ? games : games.filter(game => game.analysisType === analysisFilter);
+              // Use getAnalysisType function to fix filtering
+              const filteredGames = analysisFilter === 'all' 
+                ? games 
+                : games.filter(game => getAnalysisType(game).toLowerCase() === analysisFilter.toLowerCase());
+              
               return (
                 <div key={datasetName} className="dataset-section">
                   <div className="dataset-header">
@@ -425,10 +558,10 @@ const handleLoadGame = async (game) => {
                   ) : (
                     <ul className="saved-games-list">
                       {filteredGames.map((game) => (
-                        <li key={game.gameId || game.gameName} className={`saved-game-item ${game.analysisType}`}>
+                        <li key={game.gameId || game.gameName} className={`saved-game-item ${getAnalysisType(game)}`}>
                           <div className="game-info">
                             <span className="game-name-saved-games">{game.gameName}</span>
-                            {game.analysisType === 'video' ? (
+                            {getAnalysisType(game) === 'video' ? (
                               <FaVideo className="analysis-icon video" title="Video Analysis" />
                             ) : (
                               <FaMap className="analysis-icon pitch" title="Pitch Analysis" />

@@ -1,16 +1,18 @@
 /* ===========================================================
-   PLAYERS COMPONENT  (src/components/Players.js)
+   PLAYERS COMPONENT  (src/Players.js)
    -----------------------------------------------------------
    • Dark-mode team-roster manager
    • CRUD (add / edit / delete) with validation
-   • Bulk “E-mail selected”
-   • Immediate localStorage persistence  ← FIX FOR DISAPPEARING PLAYER
-   • “Save Team” button + green toast
+   • Bulk "E-mail selected"
+   • Immediate localStorage persistence 
+   • "Save Team" button + green toast
    • Backup / Restore JSON (shares file with Schedule)
    • Responsive Material-UI + custom CSS (Players.css)
+   • SPORT-SPECIFIC ROSTERS: Each sport maintains its own roster
    =========================================================== */
 
    import React, { useEffect, useState } from 'react';
+   import { useParams, useLocation } from 'react-router-dom';
    import {
      Alert,
      Box,
@@ -51,13 +53,12 @@
    import Swal from 'sweetalert2';
    import { v4 as uuidv4 } from 'uuid';
    import './Players.css';
-
    
    /* -----------------------------------------------------------
       SHARED STORAGE HELPERS
       -----------------------------------------------------------
       These come from the single source of truth utils/storage.js
-      Note the path is “./utils/storage” if utils lives inside src/.
+      Note the path is "./utils/storage" if utils lives inside src/.
    ----------------------------------------------------------- */
    import {
      getUserId,
@@ -65,7 +66,7 @@
      savePlayers,
      backupData,
      restoreData,
-   } from './storage';   // <-- adjust if necessary
+   } from './storage';
    
    /* -----------------------------------------------------------
       REGEX + CONSTANTS
@@ -74,29 +75,62 @@
      /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@(([^<>()[\]\\.,;:\s@"]+\.)+[^<>()[\]\\.,;:\s@"]{2,})$/i;
    const phoneRegex = /^[0-9\s\-()+]+$/;
    
-   const positions = ['Forward', 'Midfielder', 'Defender', 'Goalkeeper'];
-   
-   const blankPlayer = {
-     id: '',
-     name: '',
-     position: '',
-     number: '',
-     email: '',
-     phone: '',
-     injuryStatus: 'Healthy',
+   // Sport-specific positions
+   const getPositionsForSport = (sport) => {
+     switch(sport?.toLowerCase()) {
+       case 'basketball':
+         return ['Point Guard', 'Shooting Guard', 'Small Forward', 'Power Forward', 'Center'];
+       case 'gaa':
+         return ['Goalkeeper', 'Full-back', 'Half-back', 'Midfielder', 'Half-forward', 'Full-forward'];
+       case 'soccer':
+         return ['Goalkeeper', 'Defender', 'Midfielder', 'Forward'];
+       case 'baseball':
+         return ['Pitcher', 'Catcher', 'First Base', 'Second Base', 'Third Base', 'Shortstop', 'Left Field', 'Center Field', 'Right Field'];
+       case 'hockey':
+         return ['Goaltender', 'Defenseman', 'Center', 'Winger'];
+       case 'volleyball':
+         return ['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite Hitter', 'Libero'];
+       case 'americanfootball':
+         return ['Quarterback', 'Running Back', 'Wide Receiver', 'Tight End', 'Offensive Line', 'Defensive Line', 'Linebacker', 'Cornerback', 'Safety', 'Kicker', 'Punter'];
+       default:
+         return ['Forward', 'Midfielder', 'Defender', 'Goalkeeper'];
+     }
    };
    
    /* ===========================================================
       COMPONENT
       =========================================================== */
-   const Players = () => {
+   const Players = ({ sport: sportProp, state: locationState }) => {
      /* ------------------------------------------------------------------
-        1.  UNIQUE USER ID  (shared by Schedule / Players / storage helpers)
+        1. GET SPORT (from props, URL params, or location state)
+     ------------------------------------------------------------------ */
+     const { sport: sportParam } = useParams();
+     const location = useLocation();
+     const sportFromState = locationState?.sport || location.state?.sport;
+     
+     // Use prop first, then URL param, then location state, then default
+     const sport = sportProp || sportParam || sportFromState || 'default';
+     const positions = getPositionsForSport(sport);
+     
+     // Update blank player template with sport
+     const blankPlayer = {
+       id: '',
+       name: '',
+       position: '',
+       number: '',
+       email: '',
+       phone: '',
+       injuryStatus: 'Healthy',
+       sport: sport // Include sport in player data
+     };
+   
+     /* ------------------------------------------------------------------
+        2.  UNIQUE USER ID  (shared by Schedule / Players / storage helpers)
      ------------------------------------------------------------------ */
      const userId = getUserId();
    
      /* ------------------------------------------------------------------
-        2.  STATE VARIABLES
+        3.  STATE VARIABLES
      ------------------------------------------------------------------ */
      const [players, setPlayers] = useState([]);
      const [openDialog, setOpenDialog] = useState(false);           // add / edit modal
@@ -115,34 +149,35 @@
        severity: 'success',
      });
    
-     const [savedBanner, setSavedBanner] = useState(false);         // green “Changes saved” toast
+     const [savedBanner, setSavedBanner] = useState(false);         // green "Changes saved" toast
    
      /* ------------------------------------------------------------------
-        3.  INITIAL LOAD  (pull roster from localStorage)
+        4.  INITIAL LOAD  (pull sport-specific roster from localStorage)
      ------------------------------------------------------------------ */
      useEffect(() => {
-       const stored = getPlayers(userId);
+       const stored = getPlayers(userId, sport);
        if (stored.length) {
          setPlayers(stored);
        } else {
          const demo = [
            {
              id: uuidv4(),
-             name: 'Player One',
-             position: 'Forward',
+             name: `${sport.charAt(0).toUpperCase() + sport.slice(1)} Player`,
+             position: positions[0],
              number: 9,
-             email: 'playerone@example.com',
+             email: 'player@example.com',
              phone: '555-111-2222',
              injuryStatus: 'Healthy',
+             sport: sport
            },
          ];
          setPlayers(demo);
-         savePlayers(userId, demo);
+         savePlayers(userId, demo, sport);
        }
-     }, [userId]);
+     }, [userId, sport, positions]);
    
      /* ------------------------------------------------------------------
-        4.  AUTO-HIDE GREEN “Saved” BANNER
+        5.  AUTO-HIDE GREEN "Saved" BANNER
      ------------------------------------------------------------------ */
      useEffect(() => {
        if (!savedBanner) return;
@@ -151,13 +186,14 @@
      }, [savedBanner]);
    
      /* ------------------------------------------------------------------
-        5.  HELPER   commit(roster [, toast ])
-            • ALWAYS writes to localStorage FIRST  ← FIX
+        6.  HELPER   commit(roster [, toast ])
+            • ALWAYS writes to localStorage FIRST
             • updates React state, banner + snackbar
+            • Uses sport parameter to separate roster data
      ------------------------------------------------------------------ */
      const commit = (roster, toast = 'Roster saved!') => {
-       // write synchronously – ensures data sticks even if user navigates away immediately
-       savePlayers(userId, roster);
+       // write synchronously with sport parameter
+       savePlayers(userId, roster, sport);
    
        // update UI state
        setPlayers(roster);
@@ -174,22 +210,24 @@
      };
    
      /* ------------------------------------------------------------------
-        6.  OPEN / CLOSE DIALOG HELPERS
+        7.  OPEN / CLOSE DIALOG HELPERS
      ------------------------------------------------------------------ */
      const openAddDialog = () => {
+       // Reset to a blank player with the current sport
        setDialogMode('add');
-       setCurrentPlayer(blankPlayer);
+       setCurrentPlayer({...blankPlayer, sport: sport});
        setOpenDialog(true);
      };
    
      const openEditDialog = (player) => {
        setDialogMode('edit');
-       setCurrentPlayer(player);
+       // Ensure edited player has sport property
+       setCurrentPlayer({...player, sport: sport});
        setOpenDialog(true);
      };
    
      /* ------------------------------------------------------------------
-        7.  VALIDATION
+        8.  VALIDATION
      ------------------------------------------------------------------ */
      const validate = () => {
        const { name, position, number, email, phone } = currentPlayer;
@@ -216,7 +254,7 @@
      };
    
      /* ===============================================================
-        8.  CRUD: ADD / EDIT / DELETE
+        9.  CRUD: ADD / EDIT / DELETE
         =============================================================== */
    
      /* -- ADD or SAVE CHANGES -------------------------------------- */
@@ -237,11 +275,20 @@
        const num = parseInt(currentPlayer.number, 10);
    
        if (dialogMode === 'add') {
-         const newPlayer = { ...currentPlayer, id: uuidv4(), number: num };
+         const newPlayer = { 
+           ...currentPlayer, 
+           id: uuidv4(), 
+           number: num,
+           sport: sport // Ensure sport is set
+         };
          commit([...players, newPlayer], 'Player added!');
        } else {
          const updatedRoster = players.map((p) =>
-           p.id === currentPlayer.id ? { ...currentPlayer, number: num } : p
+           p.id === currentPlayer.id ? { 
+             ...currentPlayer, 
+             number: num,
+             sport: sport // Ensure sport is maintained
+           } : p
          );
          commit(updatedRoster, 'Player updated!');
        }
@@ -270,7 +317,7 @@
      };
    
      /* ===============================================================
-        9.  BULK & DATA UTILITIES
+        10.  BULK & DATA UTILITIES
         =============================================================== */
    
      /* -- BULK EMAIL ----------------------------------------------- */
@@ -312,7 +359,8 @@
            try {
              const ok = restoreData(JSON.parse(evt.target.result), userId);
              if (!ok) throw new Error();
-             commit(getPlayers(userId), 'Data restored!');
+             // After restore, load sport-specific players
+             commit(getPlayers(userId, sport), 'Data restored!');
            } catch {
              setSnackbar({
                open: true,
@@ -330,7 +378,7 @@
      };
    
      /* ===============================================================
-        10.  SEARCH / FILTERED LIST
+        11.  SEARCH / FILTERED LIST
         =============================================================== */
      const displayedPlayers = players.filter((p) => {
        const matchesSearch = p.name
@@ -343,7 +391,7 @@
      });
    
      /* ===============================================================
-        11.  JSX RENDER
+        12.  JSX RENDER
         =============================================================== */
      return (
        <Container maxWidth="lg" className="players-page">
@@ -356,10 +404,10 @@
          )}
    
          {/* -------------------------------------------------------
-            PAGE TITLE
+            PAGE TITLE - Now includes the sport name
          ------------------------------------------------------- */}
          <Typography variant="h4" gutterBottom className="page-title">
-           Team Roster
+           {sport.charAt(0).toUpperCase() + sport.slice(1)} Team Roster
          </Typography>
    
          {/* -------------------------------------------------------
@@ -388,7 +436,7 @@
              />
            </div>
    
-           {/* Position Filter */}
+           {/* Position Filter - Now uses sport-specific positions */}
            <FormControl variant="outlined" className="position-filter">
              <InputLabel id="filter-position-label">
                Filter by Position
@@ -602,7 +650,7 @@
          </TableContainer>
    
          {/* -------------------------------------------------------
-            ADD / EDIT DIALOG
+            ADD / EDIT DIALOG - Now uses sport-specific positions
          ------------------------------------------------------- */}
          <Dialog
            open={openDialog}
@@ -633,7 +681,7 @@
                  className="form-field"
                />
    
-               {/* Position */}
+               {/* Position - Uses sport-specific positions */}
                <FormControl
                  variant="outlined"
                  required
@@ -782,4 +830,3 @@
    };
    
    export default Players;
-   

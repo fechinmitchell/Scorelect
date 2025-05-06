@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import styled from 'styled-components';
 import {
   Tabs,
   Tab,
@@ -23,22 +22,8 @@ import SoccerCollectMain from './images/soccer_collect_main.png';
 import GAACollectMain from './images/gaa_collect_main.png';
 import AMFCollectMain from './images/amfootball_collect_main.png';
 
-// Styled Components
-const Container = styled.div`
-  padding: 40px;
-  @media (max-width: 850px) {
-    padding: 20px;
-  }
-`;
-
-const SearchContainer = styled.div`
-  margin-bottom: 20px;
-`;
-
-const TutorialCard = styled(Card)`
-  max-width: 345px;
-  margin: 20px;
-`;
+// Import our new CSS
+import './HowTo.css';
 
 const categories = [
   { label: 'All', value: 'all' },
@@ -128,12 +113,14 @@ const HowTo = () => {
   };
 
   return (
-    <Container>
-      {/* Title in purple */}
-      <Typography variant="h4" gutterBottom sx={{ color: 'white' }}>
+    <div className="howto-container">
+      {/* Title with custom styling */}
+      <Typography variant="h4" gutterBottom className="howto-title">
         How-To Guides and Tutorials
       </Typography>
-      <Box sx={{ width: '100%', bgcolor: 'background.paper', marginBottom: '20px' }}>
+      
+      {/* Tabs section */}
+      <Box className="howto-tabs-section">
         <Tabs
           value={value}
           onChange={handleChange}
@@ -146,58 +133,52 @@ const HowTo = () => {
           ))}
         </Tabs>
       </Box>
-      <SearchContainer>
+      
+      {/* Search section */}
+      <div className="howto-search-container">
         <TextField
           variant="outlined"
           fullWidth
           placeholder="Search tutorials..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          // Here we override the MUI styles for a purple search box:
-          sx={{
-            "& .MuiOutlinedInput-root": {
-              "& fieldset": { borderColor: 'white' },
-              "&:hover fieldset": { borderColor: 'white' },
-              "&.Mui-focused fieldset": { borderColor: 'white' },
-            },
-            "& .MuiInputBase-input": {
-              color: 'white'
-            }
-          }}
+          className="howto-search-field"
           InputProps={{
             endAdornment: (
               <InputAdornment position="end">
-                <IconButton onClick={filterTutorials} aria-label="search" sx={{ color: 'white' }}>
+                <IconButton onClick={filterTutorials} aria-label="search">
                   <SearchIcon />
                 </IconButton>
               </InputAdornment>
             ),
           }}
         />
-      </SearchContainer>
-      <Grid container spacing={2}>
+      </div>
+      
+      {/* Grid of tutorial cards */}
+      <Grid container spacing={3} className="howto-grid">
         {filteredTutorials.length > 0 ? (
           filteredTutorials.map((tutorial) => (
             <Grid item xs={12} sm={6} md={4} key={tutorial.id}>
-              <TutorialCard>
+              <Card className="howto-card">
                 <CardMedia
                   component="img"
-                  height="140"
+                  className="howto-card-media"
                   image={tutorial.thumbnail}
                   alt={tutorial.title}
                 />
-                <CardContent>
-                  <Typography gutterBottom variant="h6" component="div">
+                <CardContent className="howto-card-content">
+                  <Typography gutterBottom variant="h6" component="div" className="howto-card-title">
                     {tutorial.title}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" className="howto-card-description">
                     {tutorial.description}
                   </Typography>
                 </CardContent>
-                <CardActions>
+                <CardActions className="howto-card-actions">
                   <Button
-                    size="small"
-                    color="primary"
+                    size="medium"
+                    className="howto-card-button"
                     href={tutorial.link}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -212,16 +193,16 @@ const HowTo = () => {
                     {tutorial.type === 'video' ? 'Watch Video' : 'Read Blog'}
                   </Button>
                 </CardActions>
-              </TutorialCard>
+              </Card>
             </Grid>
           ))
         ) : (
-          <Typography variant="h6" sx={{ margin: '20px' }}>
-            No tutorials found.
+          <Typography variant="h6" className="howto-no-results">
+            No tutorials found. Try a different search term or category.
           </Typography>
         )}
       </Grid>
-    </Container>
+    </div>
   );
 };
 

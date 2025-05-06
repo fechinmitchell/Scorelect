@@ -1,6 +1,6 @@
 // src/App.js
 import React, { useState, useEffect, useContext } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
 import { getAuth, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
@@ -56,6 +56,7 @@ import SessionEditor from './SessionEditor';
 import SessionDetail from './SessionDetail';
 import ManualTagging from './ManualTagging';
 import DashboardHome from './DashboardHome';
+import Players from './Players'; // Import Players from correct location
 
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
@@ -163,7 +164,7 @@ const App = () => {
         <div className="app">
           <ToastContainer />
           <div className="main-container">
-          <Sidebar
+            <Sidebar
               onLogout={handleLogout}
               onSportChange={handleSportChange}
               onNavigate={handleNavigate}
@@ -174,8 +175,8 @@ const App = () => {
             <div className="content-area">
               <ErrorBoundary>
                 <Routes>
-                <Route path="/" element={<Navigate replace to="/dashboard" />} />
-                <Route
+                  <Route path="/" element={<Navigate replace to="/dashboard" />} />
+                  <Route
                     path="/select-sport"
                     element={<SportSelectionPage onSportSelect={handleSportChange} />}
                   />
@@ -216,11 +217,13 @@ const App = () => {
                   <Route path="/admin-login" element={<AdminLogin />} />
                   <Route path="/admin-settings" element={<AdminSettings />} />
                   <Route path="/sessions" element={<Sessions selectedSport={selectedSport} />} />
-                  <Route path="/session-editor/:sessionId" element={<SessionEditor selectedSport={selectedSport} />} /> {/* Pass selectedSport */}
+                  <Route path="/session-editor/:sessionId" element={<SessionEditor selectedSport={selectedSport} />} />
                   <Route path="/session-detail/:sessionId" element={<SessionDetail />} />
+                  <Route path="/players/:sport" element={<Players />} />
+                  <Route path="/players" element={<Players />} />
                   <Route path="*" element={<Navigate replace to="/select-sport" />} />
                   <Route path="/tagging/manual" element={<ManualTagging />} />
-                  <Route path="/dashboard" element={ <DashboardHome onNavigate={handleNavigate} selectedSport={selectedSport}/>} />
+                  <Route path="/dashboard" element={<DashboardHome onNavigate={handleNavigate} selectedSport={selectedSport}/>} />
                   <Route
                     path="/pitch"
                     element={
@@ -231,7 +234,6 @@ const App = () => {
                       />
                     }
                   />
-
                   <Route
                     path="/video"
                     element={<AnalysisGAA defaultTab="video" />}

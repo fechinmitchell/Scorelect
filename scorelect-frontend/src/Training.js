@@ -1,6 +1,6 @@
 // src/Training.js
 import React from 'react';
-import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
+import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
 import Schedule from './Schedule';
 import Sessions from './Sessions';
 import Players from './Players';
@@ -8,6 +8,8 @@ import MatchDay from './MatchDay';
 import './Training.css';
 
 const Training = ({ selectedSport, onSportChange }) => {
+  const location = useLocation();
+
   return (
     <div className="training-page">
       <div className="navbar">
@@ -50,7 +52,18 @@ const Training = ({ selectedSport, onSportChange }) => {
               />
             }
           />
-          <Route path="players" element={<Players />} />
+          {/* Pass the selectedSport as state to the Players component */}
+          <Route 
+            path="players" 
+            element={
+              <Players 
+                // Pass the sport parameter directly
+                sport={selectedSport}
+                // Also pass it as state in case URL params are not accessible
+                state={{ sport: selectedSport }}
+              />
+            }
+          />
           <Route path="matchday" element={<MatchDay />} />
         </Routes>
       </div>

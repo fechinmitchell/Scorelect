@@ -39,7 +39,10 @@ const pitchHeight = 88;
 
 // Default action-to-render mapping
 const defaultMapping = {
-  free: 'setplayscore',
+  'free': 'setplayscore',
+  'offensive mark': 'setplayscore',
+  'offensive mark wide': 'setplaymiss',  // Added this line for offensive mark wide
+  'offensive mark miss': 'setplaymiss',  // Also adding this variant
   'free miss': 'setplaymiss',
   'free wide': 'setplaymiss',
   'free short': 'setplaymiss',
@@ -49,7 +52,12 @@ const defaultMapping = {
   'wide': 'miss',
   'miss': 'miss',
   'shot wide': 'miss',
-  'goal miss': 'miss'
+  'goal miss': 'miss',
+  'short': 'miss',
+  'fortyfive post': 'miss',
+  'blocked': 'miss',
+  'post': 'miss',
+  'sideline wide': 'miss'
 };
 
 // Fallback colors for markers
@@ -375,6 +383,8 @@ export default function GAAAnalysisDashboard() {
   const goalX = pitchWidth, goalY = pitchHeight / 2;
 
   // dynamic colors memo
+
+  // Fix for dynamicColors to ensure consistent object structure
   const dynamicColors = useMemo(() => ({
     goal: markerColors.goal || fallbackColors.goal,
     point: markerColors.point || fallbackColors.point,
@@ -383,7 +393,12 @@ export default function GAAAnalysisDashboard() {
       fill: markerColors.setplayscore?.fill || fallbackColors.setplayscore.fill, 
       stroke: 'white' 
     },
-    setplaymiss: markerColors.setplaymiss || fallbackColors.setplaymiss,
+    setplaymiss: { 
+      fill: typeof markerColors.setplaymiss === 'object' 
+        ? markerColors.setplaymiss.fill 
+        : markerColors.setplaymiss || fallbackColors.setplaymiss.fill,
+      stroke: 'white'
+    },
     'penalty goal': markerColors['penalty goal'] || fallbackColors['penalty goal'],
     blocked: markerColors.blocked || fallbackColors.blocked
   }), [markerColors]);
@@ -392,8 +407,16 @@ export default function GAAAnalysisDashboard() {
     goal: markerColors.goal || fallbackLegendColors.goal,
     point: markerColors.point || fallbackLegendColors.point,
     miss: markerColors.miss || fallbackLegendColors.miss,
-    setplayscore: markerColors.setplayscore || fallbackLegendColors.setplayscore,
-    setplaymiss: markerColors.setplaymiss || fallbackLegendColors.setplaymiss,
+    setplayscore: { 
+      fill: markerColors.setplayscore?.fill || fallbackLegendColors.setplayscore.fill,
+      stroke: 'white' 
+    },
+    setplaymiss: { 
+      fill: typeof markerColors.setplaymiss === 'object' 
+        ? markerColors.setplaymiss.fill 
+        : markerColors.setplaymiss || fallbackLegendColors.setplaymiss.fill,
+      stroke: 'white'
+    },
     'penalty goal': markerColors['penalty goal'] || fallbackLegendColors['penalty goal'],
     blocked: markerColors.blocked || fallbackLegendColors.blocked
   }), [markerColors]);
@@ -492,57 +515,86 @@ export default function GAAAnalysisDashboard() {
       agg[team].totalShots++;
       const tShot = translateShotToOneSide(sh, halfLineX, goalX, goalY);
       distAcc[team] += tShot.distMeters;
-
+  
       const act = (sh.action||'').toLowerCase().trim();
-      if (act==='goal'||act==='penalty goal') {
+      const name = sh.playerName||'NoName';
+  
+          if (act==='goal'||act==='penalty goal') {
         agg[team].goals++;
         agg[team].successfulShots++;
-        const name = sh.playerName||'NoName';
-        scorerMap[team][name] = scorerMap[team][name] || {goals:0,points:0};
-        scorerMap[team][name].goals++;
+        // Add successful goal to scorer
+        if (name) {
+          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0};
+          scorerMap[team][name].goals++;
+        }
       } else if (act==='point') {
         agg[team].points++;
         agg[team].successfulShots++;
-        const name = sh.playerName||'NoName';
-        scorerMap[team][name] = scorerMap[team][name] || {goals:0,points:0};
-        scorerMap[team][name].points++;
+        // Add successful point to scorer
+        if (name) {
+          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0};
+          scorerMap[team][name].points++;
+        }
       } else if (act==='offensive mark') {
         agg[team].offensiveMarkAttempts++;
         agg[team].offensiveMarkScored++;
         agg[team].successfulShots++;
+        // Add successful offensive mark as a point for the scorer
+        if (name) {
+          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0};
+          scorerMap[team][name].points++;
+        }
       }
+      
       if (act.startsWith('free')) {
         agg[team].freeAttempts++;
         if (act==='free') {
           agg[team].freeScored++;
           agg[team].successfulShots++;
+          // Add successful free as a point for the scorer
+          if (name) {
+            scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0};
+            scorerMap[team][name].points++;
+          }
         }
       }
+      
       if (act.startsWith('45')||act.startsWith('forty')) {
         agg[team].fortyFiveAttempts++;
         if (act==='45'||act==='fortyfive') {
           agg[team].fortyFiveScored++;
           agg[team].successfulShots++;
+          // Add successful 45/fortyfive as a point for the scorer
+          if (name) {
+            scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0};
+            scorerMap[team][name].points++;
+          }
         }
       }
+      
       if (/miss|wide|short|blocked|post/.test(act)) {
         agg[team].misses++;
       }
+      
       const eligible = ['point','free','offensive mark','45','fortyfive'];
       if (eligible.includes(act) && tShot.distMeters >= 40) {
         agg[team].twoPointerAttempts++;
         if (/point|free|offensive mark|45|fortyfive/.test(act)) {
           agg[team].twoPointerScored++;
+          // Two-pointers are already counted above, no need to double-count
         }
       }
     });
+    
     Object.keys(agg).forEach(team => {
       agg[team].avgDistance = agg[team].totalShots > 0
         ? (distAcc[team] / agg[team].totalShots).toFixed(2)
         : '0.00';
     });
+    
     return { aggregator: agg, scorersMap: scorerMap };
   }, [games, halfLineX, goalX, goalY]);
+
 
   useEffect(() => {
     setTeamAggregatedData(aggregatedData.aggregator);

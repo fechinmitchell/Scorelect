@@ -20,6 +20,7 @@ import {
   FaChevronLeft,
   FaChevronRight,
   FaChartLine,
+  FaUsers
 } from 'react-icons/fa';
 import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
@@ -185,6 +186,20 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
     }
   };
 
+  // Handle team roster navigation based on selected sport
+  const handleTeamRosterClick = () => {
+    if (selectedSport) {
+      onNavigate(`/players/${selectedSport.toLowerCase()}`);
+    } else {
+      Swal.fire({
+        title: 'Select Sport',
+        text: 'Please select a sport first to view team roster.',
+        icon: 'warning',
+        confirmButtonText: 'OK'
+      });
+    }
+  };
+
   return (
     <div className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       <button className="toggle-button" onClick={toggleSidebar}>
@@ -270,6 +285,16 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
           </li>
           <li className="separator">{!collapsed && 'Account'}</li>
           <li>
+            <button 
+              onClick={handleTeamRosterClick}
+              disabled={!selectedSport}
+              title={!selectedSport ? "Select a sport first" : `${selectedSport} Team Roster`}
+            >
+              <FaUsers className="icon" size={16} />
+              {!collapsed && 'Team Roster'}
+            </button>
+          </li>
+          <li>
             <button onClick={fetchUserData} className={`profile-button ${loading ? 'loading' : ''}`}>
               <FaUserCircle className="icon" size={16} />
               {!collapsed && (loading ? 'Loading...' : 'Profile')}
@@ -291,7 +316,7 @@ Sidebar.propTypes = {
   onNavigate: PropTypes.func.isRequired,
   onLogout: PropTypes.func.isRequired,
   onSportChange: PropTypes.func.isRequired,
-  selectedSport: PropTypes.string.isRequired,
+  selectedSport: PropTypes.string,
 };
 
 export default Sidebar;

@@ -12,6 +12,7 @@ import {
   FaDatabase, 
   FaHistory, 
   FaClock, 
+  FaUsers,
   FaChartLine, 
   FaChartPie,
   FaSearch,
@@ -452,6 +453,15 @@ const DashboardHome = ({ selectedSport }) => {
           cta="Open Video Tool"
           onClick={() => navigate('/video')}
         />
+
+        {/* Team Roster */}
+        {/* <FeatureCard
+          icon={FaUsers}
+          title="Team Roster"
+          blurb={`Manage your ${selectedSport || 'team'} squad. Add players, set positions, track injury status, and maintain contact information.`}
+          cta="View Team Roster"
+          onClick={selectedSport ? () => navigate(`/players/${selectedSport.toLowerCase()}`) : () => Swal.fire('Select Sport', 'Please select a sport first to view team roster.', 'warning')}
+        /> */}
 
         {/* Data Hub */}
         <FeatureCard

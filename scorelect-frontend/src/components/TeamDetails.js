@@ -1,14 +1,3 @@
-/***********************************************************************
- *  TeamDetails.jsx
- *  -----------------------------------------------------------
- *  Shows **one‑sided** team shot map with distances measured only to
- *  the left‑hand goal. Uses the same translate helpers as the player
- *  file, but keeps the x/y *un‑mirrored* so the Konva renderer can
- *  mirror each dot only once.
- *
- *  Dependencies: React 18, styled‑components, react‑konva, Konva 9,
- *  jspdf, html2canvas, SweetAlert2, Firebase v9 modular SDK.
- **********************************************************************/
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
@@ -16,131 +5,39 @@ import { firestore } from "../firebase";
 import Swal from "sweetalert2";
 import { Stage } from "react-konva";
 import Modal from "react-modal";
-import styled from "styled-components";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+
+// Import icons
+import { 
+  FaDownload, 
+  FaCog, 
+  FaFilter, 
+  FaChartBar, 
+  FaUser
+} from 'react-icons/fa';
 
 import {
   renderGAAPitch,
   renderOneSidePitchShots,
   renderLegendOneSideShots,
   translateShotToOneSide,
-  translateShotToLeftSide,   // ★ newly imported
+  translateShotToLeftSide,
   getShotCategory
 } from "./GAAPitchComponents";
+
+// Import our new CSS
+import './TeamDetails.css';
 
 /* ───────────────────────── Modal root */
 Modal.setAppElement("#root");
 
-/* ─── Styled UI helpers ─────────────────────────────────────────────── */
-const PageContainer = styled.div`
-  position: relative;
-  color: #f0f0f0;
-  background: #1c1c1c;
-  min-height: 100vh;
-  padding: 2rem;
-`;
-const Section = styled.section`
-  background: #2a2a2a;
-  border-radius: 10px;
-  padding: 1.5rem;
-  margin-bottom: 2rem;
-`;
-const Title = styled.h2`
-  text-align: center;
-  margin-bottom: 1rem;
-  font-weight: 600;
-  color: #ffc107;
-`;
-const FiltersContainer = styled.div`
-  background: #3a3a3a;
-  padding: 1rem;
-  border-radius: 8px;
-  max-width: 800px;
-  margin: 0 auto;
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-`;
-const FilterLabel = styled.label`
-  color: #fff;
-  font-weight: bold;
-  margin-right: 0.5rem;
-`;
-const Select = styled.select`
-  padding: 0.5rem;
-  border-radius: 5px;
-  border: 1px solid #777;
-  background: #fff;
-  color: #000;
-  min-width: 150px;
-  font-size: 0.9rem;
-`;
-const PitchAndStatsContainer = styled.div`
-  display: flex;
-  gap: 2rem;
-  justify-content: center;
-  align-items: flex-start;
-  flex-wrap: wrap;
-`;
-const StatsCard = styled.div`
-  background: #333;
-  padding: 1rem;
-  border-radius: 8px;
-  min-width: 250px;
-  max-width: 350px;
-`;
-const StatsHeading = styled.h3`
-  margin: 0 0 1rem;
-  font-weight: 600;
-  color: #ffc107;
-`;
-const StatItem = styled.p`
-  margin: 0.25rem 0;
-`;
-const StyledButton = styled.button`
-  background-color: #4f8ef7;
-  color: #fff;
-  border: none;
-  padding: 0.6rem 1.2rem;
-  border-radius: 5px;
-  font-size: 0.9rem;
-  font-weight: bold;
-  cursor: pointer;
-  box-shadow: 0 3px 5px rgba(0,0,0,0.2);
-  transition: background 0.3s;
-  margin: 0 0.5rem;
-
-  &:hover { background-color: #357ad2; }
-`;
-const GearButton = styled.button`
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  color: #ffc107;
-  cursor: pointer;
-`;
-const GearBox = styled.div`
-  border: 1px solid #444;
-  border-radius: 8px;
-  padding: 0.25rem;
-  display: inline-flex;
-  align-items: center;
-`;
-const PdfContentWrapper = styled.div`
-  position: relative;
-  background-color: #333;
-  padding: 1rem;
-`;
-
 /* ─── Pitch metrics ─────────────────────────────────────────────────── */
 const pitchW = 145;
 const pitchH = 88;
-const halfX  = pitchW / 2;   // 72.5 m
+const halfX  = pitchW / 2;   // 72.5 m
 const goalX  = 0;            // always measure to left goal
-const goalY  = pitchH / 2;   // 44 m
+const goalY  = pitchH / 2;   // 44 m
 const canvas = { width: 930, height: 530 };
 
 /* ─── Colour defaults ──────────────────────────────────────────────── */
@@ -164,7 +61,7 @@ const defaultMapping = {
   "fortyfive short": "setplaymiss"
 };
 
-/* ─── Settings modal (unchanged) ────────────────────────────────────── */
+/* ─── Settings modal (using className instead of styled-components) ─── */
 function SettingsModal({
   isOpen,
   onRequestClose,
@@ -177,63 +74,84 @@ function SettingsModal({
   const colorKeys   = Object.keys(markerColors);
 
   return (
-    <Modal isOpen={isOpen} onRequestClose={onRequestClose}
-           style={{
-             content: {
-               top:"50%",left:"50%",transform:"translate(-50%,-50%)",
-               width:"600px",maxHeight:"80vh",padding:"30px",
-               borderRadius:"10px",background:"#2e2a2a",color:"#fff",overflow:"auto"
-             },
-             overlay:{ backgroundColor:"rgba(0,0,0,0.5)",zIndex:9999 }
-           }}
-           contentLabel="Settings">
-      <h2 style={{ marginTop: 0 }}>Settings</h2>
+    <Modal 
+      isOpen={isOpen} 
+      onRequestClose={onRequestClose}
+      className="team-details-modal-content"
+      overlayClassName="team-details-modal-overlay"
+      contentLabel="Settings"
+    >
+      <h2 className="team-details-modal-title">Settings</h2>
 
       {/* mapping */}
-      <h3>Action Mapping</h3>
-      {mappingKeys.map((k) => (
-        <div key={k} style={{ display:"flex",justifyContent:"space-between",marginBottom:"0.5rem" }}>
-          <span>{k}</span>
-          <Select value={actionMapping[k]}
-                  onChange={(e)=>setActionMapping({...actionMapping,[k]:e.target.value})}>
-            <option value="setplayscore">Set‑Play Score</option>
-            <option value="setplaymiss">Set‑Play Miss</option>
-            <option value="goal">Goal</option>
-            <option value="point">Point</option>
-            <option value="miss">Miss</option>
-            <option value="penalty goal">Penalty Goal</option>
-            <option value="blocked">Blocked</option>
-          </Select>
-        </div>
-      ))}
+      <h3 className="color-modal-header">Action Mapping</h3>
+      <div className="color-modal-grid">
+        {mappingKeys.map((k) => (
+          <div key={k} className="team-details-modal-row">
+            <span className="team-details-modal-label">{k}</span>
+            <select 
+              className="Select"
+              value={actionMapping[k]}
+              onChange={(e)=>setActionMapping({...actionMapping,[k]:e.target.value})}
+            >
+              <option value="setplayscore">Set‑Play Score</option>
+              <option value="setplaymiss">Set‑Play Miss</option>
+              <option value="goal">Goal</option>
+              <option value="point">Point</option>
+              <option value="miss">Miss</option>
+              <option value="penalty goal">Penalty Goal</option>
+              <option value="blocked">Blocked</option>
+            </select>
+          </div>
+        ))}
+      </div>
 
       {/* colours */}
-      <h3 style={{ marginTop:"1.5rem" }}>Marker Colours</h3>
-      {colorKeys.map((k)=>(
-        <div key={k} style={{ display:"flex",justifyContent:"space-between",marginBottom:"0.5rem" }}>
-          <span>{k}</span>
-          <input type="color"
-                 value={markerColors[k]?.fill ?? markerColors[k]}
-                 onChange={(e)=>{
-                   const v=e.target.value;
-                   setMarkerColors(p=>({
-                     ...p,
-                     [k]: typeof p[k]==="object" ? {...p[k],fill:v} : v
-                   }));
-                 }}/>
-        </div>
-      ))}
+      <h3 className="color-modal-header">Marker Colours</h3>
+      <div className="color-modal-grid">
+        {colorKeys.map((k)=>(
+          <div key={k} className="team-details-modal-row">
+            <span className="team-details-modal-label">{k}</span>
+            <input 
+              type="color"
+              value={markerColors[k]?.fill ?? markerColors[k]}
+              onChange={(e)=>{
+                const v=e.target.value;
+                setMarkerColors(p=>({
+                  ...p,
+                  [k]: typeof p[k]==="object" ? {...p[k],fill:v} : v
+                }));
+              }}
+            />
+          </div>
+        ))}
+      </div>
 
-      <div style={{ textAlign:"right", marginTop:"1rem" }}>
-        <StyledButton
+      <div className="team-details-modal-actions">
+        <button
+          className="StyledButton"
           onClick={()=>{
             localStorage.setItem("teamDetailsActionMapping",JSON.stringify(actionMapping));
             localStorage.setItem("teamDetailsMarkerColors",JSON.stringify(markerColors));
-            Swal.fire("Saved","Settings saved.","success");
+            Swal.fire({
+              title: "Saved",
+              text: "Settings saved.",
+              icon: "success",
+              background: 'var(--dark-card)',
+              confirmButtonColor: 'var(--primary)',
+            });
             onRequestClose();
-          }}>Save</StyledButton>
-        <StyledButton style={{ background:"#607d8b",marginLeft:"0.75rem" }}
-                      onClick={onRequestClose}>Close</StyledButton>
+          }}
+        >
+          Save
+        </button>
+        <button 
+          className="StyledButton" 
+          style={{ background: 'var(--gray-light)' }}
+          onClick={onRequestClose}
+        >
+          Close
+        </button>
       </div>
     </Modal>
   );
@@ -259,13 +177,23 @@ async function downloadPDFHandler(setBusy, team) {
     const pdf=new jsPDF("l","mm","a4");
     const W=pdf.internal.pageSize.getWidth();
     const H=pdf.internal.pageSize.getHeight();
-    pdf.setFillColor(50,50,50); pdf.rect(0,0,W,H,"F");
+    pdf.setFillColor(15, 10, 27); // Dark background matching our theme
+    pdf.rect(0,0,W,H,"F");
     const p=pdf.getImageProperties(img);
     pdf.addImage(img,"PNG",0,(H-(p.height*W)/p.width)/2,W,(p.height*W)/p.width);
-    pdf.setFontSize(12); pdf.setTextColor(255,255,255);
+    pdf.setFontSize(12); 
+    pdf.setTextColor(230, 230, 250); // Light text
     pdf.text("scorelect.com",W-40,H-10);
     pdf.save(`${team}_shot_map.pdf`);
-  }catch(e){ Swal.fire("Error",e.message,"error"); }
+  }catch(e){ 
+    Swal.fire({
+      title: "Error",
+      text: e.message,
+      icon: "error",
+      background: 'var(--dark-card)',
+      confirmButtonColor: 'var(--primary)',
+    }); 
+  }
   setBusy(false);
 }
 
@@ -338,7 +266,13 @@ export default function TeamDetails() {
         setAllShots(list);
         const mine=list.filter(s=>(s.team||"").toLowerCase()===teamName.toLowerCase());
         if(!mine.length){
-          Swal.fire("No Data",`No shots for ${teamName}`,"info").then(()=>navigate(-1));
+          Swal.fire({
+            title: "No Data",
+            text: `No shots for ${teamName}`,
+            icon: "info",
+            background: 'var(--dark-card)',
+            confirmButtonColor: 'var(--primary)',
+          }).then(()=>navigate(-1));
           return;
         }
 
@@ -390,10 +324,6 @@ export default function TeamDetails() {
         if(tr.distMeters>=40) rec.twoPointers++;
       }
       if(a==="goal"||a==="penalty goal"){ rec.goals++; rec.successfulShots++; }
-      if(/miss|wide|short|post/.test(a)) rec.misses++;
-      if(/offensive mark/.test(a)&&!/(wide|short|miss)/.test(a)){
-        rec.offensiveMarks++; rec.successfulShots++;
-      }
       if(/free/.test(a)){ rec.frees++; rec.totalFrees++; if(a==="free"){ rec.successfulShots++; rec.successfulFrees++; } }
       if(/45|fortyfive/.test(a)){ rec.fortyFives++; rec.total45s++; if(a==="45"||a==="fortyfive"){ rec.successfulShots++; rec.successful45s++; } }
     });
@@ -407,92 +337,169 @@ export default function TeamDetails() {
     const isGoal=cat==="goal";
     const dist=typeof selected.distMeters==="number"?selected.distMeters.toFixed(1):"N/A";
     return (
-      <div style={{ lineHeight:"1.6" }}>
-        <p><strong>Action:</strong> {selected.action}</p>
-        <p><strong>Category:</strong> {cat}</p>
-        <p><strong>Distance (m):</strong> {dist}</p>
-        <p><strong>Foot:</strong> {selected.foot||"N/A"}</p>
-        <p><strong>Pressure:</strong> {selected.pressure||"N/A"}</p>
-        <p><strong>Position:</strong> {selected.position||"N/A"}</p>
-        <p><strong>{isGoal?"xG":"xP"}:</strong>{" "}
-          {typeof(isGoal?selected.xGoals:selected.xPoints)==="number"
-            ? (isGoal?selected.xGoals:selected.xPoints).toFixed(2)
-            : "N/A"}
-        </p>
-        <p><strong>xP_ADV:</strong> {typeof selected.xP_adv==="number"
-          ? selected.xP_adv.toFixed(2):"N/A"}</p>
+      <div className="team-details-modal-body">
+        <div className="team-details-modal-row">
+          <span className="team-details-modal-label">Action:</span>
+          <span className="team-details-modal-value">{selected.action}</span>
+        </div>
+        <div className="team-details-modal-row">
+          <span className="team-details-modal-label">Category:</span>
+          <span className="team-details-modal-value">{cat}</span>
+        </div>
+        <div className="team-details-modal-row">
+          <span className="team-details-modal-label">Distance (m):</span>
+          <span className="team-details-modal-value">{dist}</span>
+        </div>
+        <div className="team-details-modal-row">
+          <span className="team-details-modal-label">Foot:</span>
+          <span className="team-details-modal-value">{selected.foot||"N/A"}</span>
+        </div>
+        <div className="team-details-modal-row">
+          <span className="team-details-modal-label">Pressure:</span>
+          <span className="team-details-modal-value">{selected.pressure||"N/A"}</span>
+        </div>
+        <div className="team-details-modal-row">
+          <span className="team-details-modal-label">Position:</span>
+          <span className="team-details-modal-value">{selected.position||"N/A"}</span>
+        </div>
+        <div className="team-details-modal-row">
+          <span className="team-details-modal-label">{isGoal?"xG":"xP"}:</span>
+          <span className="team-details-modal-value">
+            {typeof(isGoal?selected.xGoals:selected.xPoints)==="number"
+              ? (isGoal?selected.xGoals:selected.xPoints).toFixed(2)
+              : "N/A"}
+          </span>
+        </div>
+        <div className="team-details-modal-row">
+          <span className="team-details-modal-label">xP_ADV:</span>
+          <span className="team-details-modal-value">
+            {typeof selected.xP_adv==="number"
+              ? selected.xP_adv.toFixed(2):"N/A"}
+          </span>
+        </div>
       </div>
     );
   }
 
   /* ─── conditional UI guards */
-  if(loading) return <PageContainer><p style={{textAlign:"center"}}>Loading…</p></PageContainer>;
-  if(error)   return <PageContainer><p style={{color:"red",textAlign:"center"}}>{error}</p></PageContainer>;
-  if(!filtered.length) return <PageContainer><p style={{textAlign:"center"}}>No shots for this filter.</p></PageContainer>;
+  if(loading) return (
+    <div className="PageContainer">
+      <div className="team-details-loading">
+        <div className="team-details-spinner"></div>
+        <p>Loading team data...</p>
+      </div>
+    </div>
+  );
+  
+  if(error) return (
+    <div className="PageContainer">
+      <div className="team-details-error">{error}</div>
+    </div>
+  );
+  
+  if(!filtered.length) return (
+    <div className="PageContainer">
+      <div className="team-details-error">No shots match the current filter criteria.</div>
+    </div>
+  );
 
   /* ─── MAIN JSX ───────────────────────────────────────────────────── */
   return (
-    <PageContainer>
-      <Title>{teamName} Shot Analysis</Title>
+    <div className="PageContainer">
+      <h2 className="Title">{teamName} Shot Analysis</h2>
 
       {/* filters & controls */}
-      <Section>
-        <FiltersContainer>
+      <div className="Section">
+        <div className="FiltersContainer">
           {/* player */}
           <div>
-            <FilterLabel htmlFor="ply">Player:</FilterLabel>
-            <Select id="ply" value={applied.player}
-                    onChange={e=>setApplied({...applied,player:e.target.value})}>
+            <label className="FilterLabel" htmlFor="ply">
+              <FaUser style={{ marginRight: '0.5rem' }} /> Player:
+            </label>
+            <select 
+              id="ply" 
+              className="Select"
+              value={applied.player}
+              onChange={e=>setApplied({...applied,player:e.target.value})}
+            >
               <option value="">All Players</option>
               {filterOpt.players.map(p=>(
                 <option key={p} value={p}>{p}</option>
               ))}
-            </Select>
+            </select>
           </div>
+          
           {/* action */}
           <div>
-            <FilterLabel htmlFor="act">Action:</FilterLabel>
-            <Select id="act" value={applied.action}
-                    onChange={e=>setApplied({...applied,action:e.target.value})}>
+            <label className="FilterLabel" htmlFor="act">
+              <FaFilter style={{ marginRight: '0.5rem' }} /> Action:
+            </label>
+            <select 
+              id="act" 
+              className="Select"
+              value={applied.action}
+              onChange={e=>setApplied({...applied,action:e.target.value})}
+            >
               <option value="">All Actions</option>
               {filterOpt.actions.map(a=>(
                 <option key={a} value={a}>{a}</option>
               ))}
-            </Select>
+            </select>
           </div>
+          
           {/* export */}
-          <StyledButton onClick={()=>downloadPDFHandler(setBusy,teamName)}>
-            {busy?"Downloading…":"Download PDF"}
-          </StyledButton>
+          <button 
+            className="StyledButton"
+            onClick={()=>downloadPDFHandler(setBusy,teamName)}
+          >
+            {busy ? "Downloading..." : (
+              <><FaDownload style={{ marginRight: '0.5rem' }} /> Download PDF</>
+            )}
+          </button>
+          
           {/* gear */}
-          <GearBox><GearButton title="Settings" onClick={()=>setShowSettings(true)}>⚙️</GearButton></GearBox>
-        </FiltersContainer>
-      </Section>
+          <div className="GearBox">
+            <button 
+              className="GearButton" 
+              title="Settings" 
+              onClick={()=>setShowSettings(true)}
+            >
+              <FaCog />
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* pitch & stats */}
-      <Section id="pdf-content">
-        <PdfContentWrapper>
-          <PitchAndStatsContainer>
+      <div className="Section" id="pdf-content">
+        <div className="PdfContentWrapper">
+          <div className="PitchAndStatsContainer">
             {/* Konva half‑pitch */}
-            <div style={{ textAlign:"center" }}>
-              <Stage ref={stageRef}
-                     width={xScale*(pitchW/2)}
-                     height={yScale*pitchH}
-                     style={{ border:"2px solid #444",borderRadius:"8px",background:"#111" }}>
+            <div className="stage-pitch-container">
+              <Stage 
+                ref={stageRef}
+                width={xScale*(pitchW/2)}
+                height={yScale*pitchH}
+                style={{ 
+                  border: "1px solid var(--primary)",
+                  borderRadius: "var(--radius-md)",
+                  background: "var(--dark)"
+                }}
+              >
                 {renderGAAPitch({
-                  canvasSizeMain:canvas,
-                  pitchColorState:"#000",
-                  lightStripeColorState:"#228B22",
-                  darkStripeColorState:"#006400",
-                  lineColorState:"#fff",
-                  xScale,yScale
+                  canvasSizeMain: canvas,
+                  pitchColorState: "var(--dark)",
+                  lightStripeColorState: "#228B22",
+                  darkStripeColorState: "#006400",
+                  lineColorState: "#fff",
+                  xScale, yScale
                 })}
                 {renderOneSidePitchShots({
-                  shots:filtered,
-                  colors:dynamic,
-                  xScale,yScale,
-                  onShotClick:setSelected,
-                  halfLineX:halfX,
+                  shots: filtered,
+                  colors: dynamic,
+                  xScale, yScale,
+                  onShotClick: setSelected,
+                  halfLineX: halfX,
                   goalX,
                   goalY,
                   actionMapping
@@ -506,41 +513,47 @@ export default function TeamDetails() {
             </div>
 
             {/* stats card */}
-            <StatsCard>
-              <StatsHeading>{teamName} Stats</StatsHeading>
-              <StatItem><strong>Total Shots:</strong> {agg[teamName]?.totalShots||0}</StatItem>
-              <StatItem><strong>Successful:</strong> {agg[teamName]?.successfulShots||0}</StatItem>
-              <StatItem><strong>Points:</strong> {agg[teamName]?.points||0}</StatItem>
-              <StatItem><strong>Goals:</strong> {agg[teamName]?.goals||0}</StatItem>
-              <StatItem><strong>Misses:</strong> {agg[teamName]?.misses||0}</StatItem>
-              <StatItem><strong>Off. Marks:</strong> {agg[teamName]?.offensiveMarks||0}</StatItem>
-              <StatItem><strong>Frees:</strong> {agg[teamName]?.frees||0}</StatItem>
-              <StatItem><strong>45s:</strong> {agg[teamName]?.fortyFives||0}</StatItem>
-              <StatItem><strong>2‑Pointers (≥40 m):</strong> {agg[teamName]?.twoPointers||0}</StatItem>
-              <StatItem>
-                <strong>Avg Success:</strong>{" "}
+            <div className="StatsCard">
+              <h3 className="StatsHeading">{teamName} Stats</h3>
+              <p className="StatItem"><strong>Total Shots:</strong> {agg[teamName]?.totalShots||0}</p>
+              <p className="StatItem"><strong>Successful:</strong> {agg[teamName]?.successfulShots||0}</p>
+              <p className="StatItem"><strong>Points:</strong> {agg[teamName]?.points||0}</p>
+              <p className="StatItem"><strong>Goals:</strong> {agg[teamName]?.goals||0}</p>
+              <p className="StatItem"><strong>Misses:</strong> {agg[teamName]?.misses||0}</p>
+              <p className="StatItem"><strong>Off. Marks:</strong> {agg[teamName]?.offensiveMarks||0}</p>
+              <p className="StatItem"><strong>Frees:</strong> {agg[teamName]?.frees||0}</p>
+              <p className="StatItem"><strong>45s:</strong> {agg[teamName]?.fortyFives||0}</p>
+              <p className="StatItem"><strong>2‑Pointers (≥40 m):</strong> {agg[teamName]?.twoPointers||0}</p>
+              <p className="StatItem">
+                <strong>Avg Success:</strong>{" "}
                 {(agg[teamName]?.totalShots
                   ? (agg[teamName].successfulShots/agg[teamName].totalShots).toFixed(2)
                   : "0.00")}
-              </StatItem>
-            </StatsCard>
-          </PitchAndStatsContainer>
-        </PdfContentWrapper>
-      </Section>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* shot details */}
-      {selected&&(
-        <Modal isOpen onRequestClose={()=>setSelected(null)}
-               style={{
-                 content:{
-                   maxWidth:"500px",margin:"auto",padding:"20px",
-                   borderRadius:"8px",background:"#2e2e2e",color:"#fff"
-                 }
-               }}>
+      {selected && (
+        <Modal 
+          isOpen={true} 
+          onRequestClose={()=>setSelected(null)}
+          className="team-details-modal-content"
+          overlayClassName="team-details-modal-overlay"
+          contentLabel="Shot Details"
+        >
+          <h2 className="team-details-modal-title">Shot Details</h2>
           {shotDetails()}
-          <div style={{ textAlign:"right",marginTop:"1rem" }}>
-            <StyledButton style={{ background:"#607d8b" }}
-                          onClick={()=>setSelected(null)}>Close</StyledButton>
+          <div className="team-details-modal-actions">
+            <button 
+              className="StyledButton" 
+              style={{ background: 'var(--gray-light)' }}
+              onClick={()=>setSelected(null)}
+            >
+              Close
+            </button>
           </div>
         </Modal>
       )}
@@ -552,7 +565,8 @@ export default function TeamDetails() {
         actionMapping={actionMapping}
         setActionMapping={setActionMapping}
         markerColors={markerColors}
-        setMarkerColors={setMarkerColors}/>
-    </PageContainer>
+        setMarkerColors={setMarkerColors}
+      />
+    </div>
   );
 }

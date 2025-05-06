@@ -58,30 +58,70 @@ export const clearUserData = (userId) => {
 };
 
 /**
- * Save player data to localStorage
+ * Get players filtered by sport from localStorage
  * @param {string} userId - User ID
- * @param {Array} players - Player data array
+ * @param {string} sport - Sport filter (optional)
+ * @returns {Array} Player data array
  */
-export const savePlayers = (userId, players) => {
+export const getPlayers = (userId, sport = 'default') => {
   try {
-    localStorage.setItem(`players_${userId}`, JSON.stringify(players));
+    const data = localStorage.getItem(`players_${userId}`);
+    const allPlayers = data ? JSON.parse(data) : [];
+    
+    // If this is a sport-specific request, filter by sport
+    if (sport !== 'default') {
+      return allPlayers.filter(player => 
+        player.sport && player.sport.toLowerCase() === sport.toLowerCase()
+      );
+    }
+    
+    return allPlayers;
   } catch (error) {
-    console.error('Failed to save players data:', error);
+    console.error('Failed to retrieve players data:', error);
+    return [];
   }
 };
 
 /**
- * Get player data from localStorage
+ * Save players with sport information to localStorage
  * @param {string} userId - User ID
- * @returns {Array} Player data array
+ * @param {Array} players - Player data array
+ * @param {string} sport - Sport category (optional)
+ * @returns {boolean} Success status
  */
-export const getPlayers = (userId) => {
+export const savePlayers = (userId, players, sport = 'default') => {
   try {
-    const data = localStorage.getItem(`players_${userId}`);
-    return data ? JSON.parse(data) : [];
+    // If we're saving sport-specific players, we need to merge with existing players of other sports
+    if (sport !== 'default') {
+      // Get all existing players
+      const allPlayersData = localStorage.getItem(`players_${userId}`);
+      let allPlayers = [];
+      
+      if (allPlayersData) {
+        allPlayers = JSON.parse(allPlayersData);
+        // Remove existing players of this sport (we'll replace them)
+        allPlayers = allPlayers.filter(player => 
+          !player.sport || player.sport.toLowerCase() !== sport.toLowerCase()
+        );
+      }
+      
+      // Add sport field to all new players
+      const playersWithSport = players.map(player => ({
+        ...player,
+        sport: player.sport || sport
+      }));
+      
+      // Merge and save
+      const mergedPlayers = [...allPlayers, ...playersWithSport];
+      localStorage.setItem(`players_${userId}`, JSON.stringify(mergedPlayers));
+    } else {
+      // Legacy mode - just save all players
+      localStorage.setItem(`players_${userId}`, JSON.stringify(players));
+    }
+    return true;
   } catch (error) {
-    console.error('Failed to retrieve players data:', error);
-    return [];
+    console.error('Failed to save players data:', error);
+    return false;
   }
 };
 

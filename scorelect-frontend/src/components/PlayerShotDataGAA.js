@@ -1,8 +1,3 @@
-/***********************************************************************
- *  PlayerShotDataGAA.jsx
- *  Full component – copy/paste directly into your project
- *  (React 18, styled‑components, react‑konva, Konva Stage)
- **********************************************************************/
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
@@ -10,9 +5,18 @@ import { firestore } from "../firebase";
 import Swal from "sweetalert2";
 import { Stage } from "react-konva";
 import Modal from "react-modal";
-import styled from "styled-components";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+
+// Import icons
+import { 
+  FaFilter, 
+  FaDownload, 
+  FaCog, 
+  FaArrowLeft, 
+  FaSearch,
+  FaImage
+} from 'react-icons/fa';
 
 import {
   renderOneSidePitchShots,
@@ -20,138 +24,11 @@ import {
   getShotCategory
 } from "./GAAPitchComponents";
 
+// Import our new CSS
+import './PlayerShotDataGAA.css';
+
 /* ───────────────────────── Modal root */
 Modal.setAppElement("#root");
-
-/* ─────────────────────────── Styled */
-const PageContainer = styled.div`
-  min-height: 100vh;
-  background: #1c1c1c;
-  color: #f0f0f0;
-  padding: 2rem;
-`;
-const Section = styled.div`
-  background: #2a2e2a;
-  border-radius: 10px;
-  padding: 1.5rem;
-  margin-bottom: 2rem;
-`;
-const Title = styled.h2`
-  text-align: center;
-  font-weight: 600;
-  margin-bottom: 1rem;
-  color: #ffc107;
-`;
-const FiltersContainer = styled.div`
-  background: #3a3a3a;
-  padding: 1rem;
-  border-radius: 8px;
-  max-width: 900px;
-  margin: 0 auto 2rem;
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-`;
-const FilterLabel = styled.label`
-  margin-right: 0.5rem;
-  font-weight: 600;
-`;
-const FilterSelect = styled.select`
-  padding: 0.5rem;
-  border-radius: 5px;
-  border: 1px solid #777;
-  background: #fff;
-  color: #000;
-  min-width: 150px;
-  font-size: 0.9rem;
-`;
-const PitchAndStats = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2rem;
-  justify-content: center;
-  align-items: flex-start;
-`;
-const StatsCard = styled.div`
-  background: #333;
-  padding: 1rem;
-  border-radius: 8px;
-  min-width: 250px;
-  max-width: 350px;
-`;
-const StatsHeading = styled.h3`
-  margin: 0 0 1rem;
-  font-weight: 600;
-  color: #ffc107;
-`;
-const Stat = styled.p`
-  margin: 0.25rem 0;
-`;
-const Button = styled.button`
-  background: #4f8ef7;
-  color: #fff;
-  border: none;
-  padding: 0.6rem 1.2rem;
-  border-radius: 5px;
-  font-size: 0.9rem;
-  font-weight: bold;
-  cursor: pointer;
-  box-shadow: 0 3px 5px rgba(0, 0, 0, 0.2);
-  transition: background 0.3s;
-
-  &:hover {
-    background: #357ad2;
-  }
-`;
-
-/* Legend */
-const PitchWrapper = styled.div`
-  position: relative;
-`;
-const LegendContainer = styled.div`
-  position: absolute;
-  bottom: 10px;
-  right: 10px;
-  background: rgba(0, 0, 0, 0.65);
-  padding: 8px 10px;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  backdrop-filter: blur(4px);
-`;
-const LegendItem = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-`;
-const LegendMarker = styled.span`
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: ${({ $border }) => ($border ? "1px solid #fff" : "none")};
-  background: ${({ color }) => color};
-  display: inline-block;
-`;
-
-/* Gear icon */
-const GearButton = styled.button`
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  color: #ffc107;
-  cursor: pointer;
-`;
-const GearBox = styled.div`
-  border: 1px solid #444;
-  border-radius: 8px;
-  padding: 0.25rem;
-  display: inline-flex;
-  align-items: center;
-`;
 
 /* ─────────────────────────── Const */
 const canvas = { w: 930, h: 530 };
@@ -159,11 +36,11 @@ const pitchW = 145;
 const pitchH = 88;
 
 const defaultColors = {
-  goal: "#FFFF33",
-  point: "#39FF14",
-  miss: "red",
-  setPlayScore: { fill: "#39FF14", stroke: "white" },
-  setPlayMiss: { fill: "red", stroke: "white" }
+  goal: "var(--goal-color)",
+  point: "var(--point-color)",
+  miss: "var(--danger)",
+  setPlayScore: { fill: "var(--point-color)", stroke: "white" },
+  setPlayMiss: { fill: "var(--danger)", stroke: "white" }
 };
 
 /* map of verbose shots that should fall into canonical buckets */
@@ -228,7 +105,7 @@ async function savePdf(setDownloading, name) {
     const pdf = new jsPDF("l", "mm", "a4");
     const W = pdf.internal.pageSize.getWidth();
     const H = pdf.internal.pageSize.getHeight();
-    pdf.setFillColor(50, 50, 50);
+    pdf.setFillColor(15, 10, 27); // Using dark variable
     pdf.rect(0, 0, W, H, "F");
     const props = pdf.getImageProperties(img);
     pdf.addImage(
@@ -240,11 +117,17 @@ async function savePdf(setDownloading, name) {
       (props.height * W) / props.width
     );
     pdf.setFontSize(12);
-    pdf.setTextColor(255, 255, 255);
+    pdf.setTextColor(230, 230, 250); // Using light variable
     pdf.text("scorelect.com", W - 40, H - 10);
     pdf.save(`${name}_shot_map.pdf`);
   } catch (e) {
-    Swal.fire("Error", e.message, "error");
+    Swal.fire({
+      title: "Error",
+      text: e.message,
+      icon: "error",
+      background: "var(--dark-card)",
+      confirmButtonColor: "var(--primary)",
+    });
   }
   setDownloading(false);
 }
@@ -256,31 +139,17 @@ function SettingsModal({ isOpen, onRequestClose, markerColors, setMarkerColors }
     <Modal
       isOpen={isOpen}
       onRequestClose={onRequestClose}
-      style={{
-        content: {
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: "420px",
-          maxHeight: "80vh",
-          padding: "30px",
-          borderRadius: "10px",
-          backgroundColor: "#2e2a2a",
-          color: "#fff",
-          overflow: "auto"
-        },
-        overlay: { backgroundColor: "rgba(0,0,0,0.5)", zIndex: 9999 }
-      }}
+      className="player-shot-modal-content"
+      overlayClassName="player-shot-modal-overlay"
       contentLabel="Settings"
     >
-      <h2 style={{ marginTop: 0 }}>Marker Color Settings</h2>
-      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <h2 className="player-shot-modal-title">Marker Color Settings</h2>
+      <div className="player-shot-modal-body">
         {colorKeys.map((key) => (
-          <div
-            key={key}
-            style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
-          >
-            <span>{key}</span>
+          <div key={key} className="player-shot-modal-row">
+            <span className="player-shot-modal-label" style={{ textTransform: 'capitalize' }}>
+              {key}
+            </span>
             <input
               type="color"
               value={
@@ -302,22 +171,29 @@ function SettingsModal({ isOpen, onRequestClose, markerColors, setMarkerColors }
           </div>
         ))}
       </div>
-      <div style={{ textAlign: "right", marginTop: "1rem" }}>
-        <Button
+      <div className="player-shot-modal-actions">
+        <button
+          className="player-shot-button primary"
           onClick={() => {
             localStorage.setItem("playerShotMarkerColors", JSON.stringify(markerColors));
-            Swal.fire("Settings Saved", "Your color settings have been saved.", "success");
+            Swal.fire({
+              title: "Settings Saved",
+              text: "Your color settings have been saved.",
+              icon: "success",
+              background: "var(--dark-card)",
+              confirmButtonColor: "var(--primary)",
+            });
             onRequestClose();
           }}
         >
           Save
-        </Button>
-        <Button
-          style={{ background: "#607d8b", marginLeft: "1rem" }}
+        </button>
+        <button
+          className="player-shot-button secondary"
           onClick={onRequestClose}
         >
           Close
-        </Button>
+        </button>
       </div>
     </Modal>
   );
@@ -396,7 +272,13 @@ export default function PlayerShotDataGAA() {
           (s) => (s.playerName || "").toLowerCase() === playerName.toLowerCase()
         );
         if (!mine.length) {
-          Swal.fire("No Data", `No shots for ${playerName}`, "info").then(() =>
+          Swal.fire({
+            title: "No Data",
+            text: `No shots for ${playerName}`,
+            icon: "info",
+            background: "var(--dark-card)",
+            confirmButtonColor: "var(--primary)",
+          }).then(() =>
             navigate(-1)
           );
           return;
@@ -514,14 +396,33 @@ export default function PlayerShotDataGAA() {
   };
 
   /* ───── Loading / error UI */
-  if (loading)
-    return <div style={{ textAlign: "center", marginTop: "3rem" }}>Loading…</div>;
-  if (error)
+  if (loading) {
     return (
-      <div style={{ color: "red", textAlign: "center", marginTop: "3rem" }}>
-        {error}
+      <div className="player-shot-container">
+        <div className="player-shot-loading">
+          <div className="player-shot-spinner"></div>
+          <p>Loading player shot data...</p>
+        </div>
       </div>
     );
+  }
+  
+  if (error) {
+    return (
+      <div className="player-shot-container">
+        <div className="player-shot-error">
+          <h3>Error</h3>
+          <p>{error}</p>
+          <button 
+            className="player-shot-button primary"
+            onClick={() => navigate(-1)}
+          >
+            <FaArrowLeft style={{ marginRight: '0.5rem' }} /> Go Back
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   /* Legend labels */
   const legendItems = [
@@ -534,16 +435,19 @@ export default function PlayerShotDataGAA() {
 
   /* ───── JSX */
   return (
-    <PageContainer>
-      <Title>{playerName}'s Shot Data</Title>
+    <div className="player-shot-container">
+      <div className="player-shot-header">
+        <h2>{playerName}'s Shot Data</h2>
+      </div>
 
       {/* ───────── FILTER + CONTROLS */}
-      <FiltersContainer>
+      <div className="player-shot-filters">
         {/* dropdown */}
-        <div>
-          <FilterLabel htmlFor="shotType">Shot Type:</FilterLabel>
-          <FilterSelect
+        <div className="player-shot-filter-group">
+          <label className="player-shot-filter-label" htmlFor="shotType">Shot Type:</label>
+          <select
             id="shotType"
+            className="player-shot-filter-select"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           >
@@ -553,20 +457,30 @@ export default function PlayerShotDataGAA() {
                 {act.charAt(0).toUpperCase() + act.slice(1)}
               </option>
             ))}
-          </FilterSelect>
+          </select>
         </div>
 
         {filter && (
-          <Button style={{ background: "#6c757d" }} onClick={() => setFilter("")}>
-            Clear
-          </Button>
+          <button 
+            className="player-shot-button secondary" 
+            onClick={() => setFilter("")}
+          >
+            <FaFilter style={{ marginRight: '0.5rem' }} /> Clear Filter
+          </button>
         )}
 
         {/* download / export */}
-        <Button onClick={() => savePdf(setDownloading, playerName)}>
-          {downloading ? "Downloading…" : "Download PDF"}
-        </Button>
-        <Button
+        <button 
+          className="player-shot-button primary"
+          onClick={() => savePdf(setDownloading, playerName)}
+        >
+          {downloading ? 'Downloading...' : (
+            <><FaDownload style={{ marginRight: '0.5rem' }} /> Download PDF</>
+          )}
+        </button>
+        
+        <button
+          className="player-shot-button primary"
           onClick={() =>
             stageRef.current?.toDataURL({
               pixelRatio: 2,
@@ -579,31 +493,35 @@ export default function PlayerShotDataGAA() {
             })
           }
         >
-          Export PNG
-        </Button>
+          <FaImage style={{ marginRight: '0.5rem' }} /> Export PNG
+        </button>
 
         {/* settings gear */}
-        <GearBox>
-          <GearButton title="Settings" onClick={() => setShowSettings(true)}>
-            ⚙️
-          </GearButton>
-        </GearBox>
-      </FiltersContainer>
+        <div className="player-shot-gear-box">
+          <button 
+            className="player-shot-gear-button" 
+            title="Settings" 
+            onClick={() => setShowSettings(true)}
+          >
+            <FaCog />
+          </button>
+        </div>
+      </div>
 
       {/* ───────── MAIN CANVAS + STATS */}
-      <Section id="pdf-content">
-        <PitchAndStats>
+      <div className="player-shot-section" id="pdf-content">
+        <div className="player-shot-content">
           {/* pitch */}
-          <PitchWrapper>
+          <div className="player-shot-pitch-wrapper">
             <Stage
               ref={stageRef}
               width={xScale * (pitchW / 2)}
               height={yScale * pitchH}
               style={{
-                background: "#111",
-                border: "2px solid #444",
-                borderRadius: "8px",
-                boxShadow: "0 4px 6px rgba(0,0,0,0.3)"
+                background: "var(--dark)",
+                border: "1px solid var(--primary)",
+                borderRadius: "var(--radius-md)",
+                boxShadow: "var(--shadow-md)"
               }}
             >
               {renderOneSidePitchShots({
@@ -619,96 +537,94 @@ export default function PlayerShotDataGAA() {
             </Stage>
 
             {/* legend */}
-            <LegendContainer>
+            <div className="player-shot-legend">
               {legendItems.map(({ label, key }) => {
-                const col  = dynamic[key];
+                const col = dynamic[key];
                 const fill = typeof col === "string" ? col : col.fill;
                 const needsBorder = key === "setPlayScore" || key === "setPlayMiss";
                 return (
-                  <LegendItem key={key}>
-                  <LegendMarker color={fill} $border={needsBorder} />
+                  <div className="player-shot-legend-item" key={key}>
+                    <span 
+                      className={`player-shot-legend-marker ${needsBorder ? 'border' : ''}`}
+                      style={{ backgroundColor: fill }}
+                    ></span>
                     {label}
-                  </LegendItem>
+                  </div>
                 );
               })}
-            </LegendContainer>
-
-          </PitchWrapper>
+            </div>
+          </div>
 
           {/* stats card */}
-          <StatsCard>
-            <StatsHeading>{playerName} Stats</StatsHeading>
-            <Stat>
+          <div className="player-shot-stats-card">
+            <h3 className="player-shot-stats-heading">{playerName} Stats</h3>
+            <p className="player-shot-stat">
               <strong>Team:</strong> {stats.team}
-            </Stat>
-            <Stat>
+            </p>
+            <p className="player-shot-stat">
               <strong>Shots:</strong> {stats.successfulShots}/{stats.totalShots}
-            </Stat>
-            <Stat>
+            </p>
+            <p className="player-shot-stat">
               <strong>Points:</strong> {stats.points}
-            </Stat>
-            <Stat>
+            </p>
+            <p className="player-shot-stat">
               <strong>Goals:</strong> {stats.goals}
-            </Stat>
-            <Stat>
+            </p>
+            <p className="player-shot-stat">
               <strong>Misses:</strong> {stats.misses}
-            </Stat>
-            <Stat>
+            </p>
+            <p className="player-shot-stat">
               <strong>Off. Marks:</strong> {stats.offensiveMarks}
-            </Stat>
-            <Stat>
+            </p>
+            <p className="player-shot-stat">
               <strong>Frees:</strong> {stats.successfulFrees}/{stats.totalFrees}
-            </Stat>
-            <Stat>
+            </p>
+            <p className="player-shot-stat">
               <strong>45s:</strong> {stats.successful45s}/{stats.total45s}
-            </Stat>
-            <Stat>
+            </p>
+            <p className="player-shot-stat">
               <strong>Total xP:</strong> {stats.totalXP.toFixed(2)}
-            </Stat>
-            <Stat>
+            </p>
+            <p className="player-shot-stat">
               <strong>Total xG:</strong> {stats.totalXG.toFixed(2)}
-            </Stat>
-            <Stat>
+            </p>
+            <p className="player-shot-stat">
               <strong>Avg Dist:</strong> {stats.avgDist.toFixed(2)} m
-            </Stat>
-          </StatsCard>
-        </PitchAndStats>
-      </Section>
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* ───────── Shot‑details modal */}
       {selected && (
         <Modal
-          isOpen
+          isOpen={true}
           onRequestClose={() => setSelected(null)}
-          style={{
-            content: {
-              maxWidth: "500px",
-              margin: "auto",
-              padding: "20px",
-              borderRadius: "8px",
-              background: "#2e2e2e",
-              color: "#fff"
-            }
-          }}
+          className="player-shot-modal-content"
+          overlayClassName="player-shot-modal-overlay"
+          contentLabel="Shot Details"
         >
-          <h2 style={{ marginTop: 0 }}>Shot Details</h2>
-          {DETAIL_FIELDS.map(({ key, label, format }) => {
-            const valRaw = selected[key];
-            if (valRaw === undefined || valRaw === null || valRaw === "") return null;
-            return (
-              <p key={key}>
-                <strong>{label}:</strong> {format(valRaw)}
-              </p>
-            );
-          })}
+          <h2 className="player-shot-modal-title">Shot Details</h2>
+          <div className="player-shot-modal-body">
+            {DETAIL_FIELDS.map(({ key, label, format }) => {
+              const valRaw = selected[key];
+              if (valRaw === undefined || valRaw === null || valRaw === "") return null;
+              return (
+                <div className="player-shot-modal-row" key={key}>
+                  <span className="player-shot-modal-label">{label}:</span>
+                  <span className="player-shot-modal-value">{format(valRaw)}</span>
+                </div>
+              );
+            })}
+          </div>
 
-          <div style={{ textAlign: "right", marginTop: "1rem" }}>
-            <Button
-              style={{ background: "#607d8b" }}
+          <div className="player-shot-modal-actions">
+            <button
+              className="player-shot-button secondary"
               onClick={() => setSelected(null)}
             >
               Close
-            </Button>
+            </button>
           </div>
         </Modal>
       )}
@@ -720,6 +636,6 @@ export default function PlayerShotDataGAA() {
         markerColors={colors}
         setMarkerColors={setColors}
       />
-    </PageContainer>
+    </div>
   );
 }

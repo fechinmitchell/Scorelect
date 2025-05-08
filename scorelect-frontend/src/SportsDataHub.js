@@ -833,9 +833,14 @@ const SportsDataHub = () => {
                         title="View sample"
                         aria-label="View sample"
                       >
-                        {isViewingSample ? <span className="spinner" /> : <FaEye />}
+                        {isViewingSample ? <span className="spinner" /> : (
+                          <>
+                            <FaEye />
+                            <span>Sample</span>
+                          </>
+                        )}
                       </button>
-  
+
                       {needsPurchase ? (
                         <button
                           className="action-button purchase-button"
@@ -844,7 +849,12 @@ const SportsDataHub = () => {
                           title="Purchase dataset"
                           aria-label="Purchase dataset"
                         >
-                          {isPurchasing ? <span className="spinner" /> : <FaShoppingCart />}
+                          {isPurchasing ? <span className="spinner" /> : (
+                            <>
+                              <FaShoppingCart />
+                              <span>Buy</span>
+                            </>
+                          )}
                         </button>
                       ) : (
                         <button
@@ -857,11 +867,14 @@ const SportsDataHub = () => {
                           {loadingOperations[`download-${dataset.id}`] ? (
                             <span className="spinner" />
                           ) : (
-                            <FaDownload />
+                            <>
+                              <FaDownload />
+                              <span>Download</span>
+                            </>
                           )}
                         </button>
                       )}
-  
+
                       <button
                         className="action-button analyze-button"
                         onClick={() => handleAnalyze(dataset)}
@@ -869,9 +882,14 @@ const SportsDataHub = () => {
                         title="Analyze dataset"
                         aria-label="Analyze dataset"
                       >
-                        {isAnalyzing ? <span className="spinner" /> : <AnalyticsIcon />}
+                        {isAnalyzing ? <span className="spinner" /> : (
+                          <>
+                            <AnalyticsIcon />
+                            <span>Analyze</span>
+                          </>
+                        )}
                       </button>
-  
+
                       {(isOwner || isAdmin) && (
                         <button
                           className="action-button delete-button"
@@ -880,7 +898,12 @@ const SportsDataHub = () => {
                           title="Delete dataset"
                           aria-label="Delete dataset"
                         >
-                          {isDeleting ? <span className="spinner" /> : <FaTrash />}
+                          {isDeleting ? <span className="spinner" /> : (
+                            <>
+                              <FaTrash />
+                              <span>Delete</span>
+                            </>
+                          )}
                         </button>
                       )}
                     </div>

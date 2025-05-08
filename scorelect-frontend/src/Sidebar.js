@@ -134,24 +134,24 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
     return false;
   };
 
-  const handleAnalysisAccess = () => {
-    if (!hasAnalysisAccess()) {
-      Swal.fire('Authentication Required', 'Please sign in to access the Analysis page.', 'warning')
-        .then(() => onNavigate('/signin'));
-      return;
-    }
-    if (selectedSport) {
-      if (selectedSport.toUpperCase() === 'SOCCER') {
-        onNavigate('/analysis');
-      } else if (selectedSport.toUpperCase() === 'GAA') {
-        onNavigate('/analysis-gaa');
-      } else {
-        Swal.fire('Sport Not Supported', 'Analysis is available only for Soccer and GAA.', 'info');
-      }
+const handleAnalysisAccess = () => {
+  if (!hasAnalysisAccess()) {
+    Swal.fire('Authentication Required', 'Please sign in to access the Analysis page.', 'warning')
+      .then(() => onNavigate('/signin'));
+    return;
+  }
+  if (selectedSport) {
+    if (selectedSport.toUpperCase() === 'SOCCER') {
+      onNavigate('/analysis-soccer');
+    } else if (selectedSport.toUpperCase() === 'GAA') {
+      onNavigate('/analysis-gaa');
     } else {
-      Swal.fire('Select Sport', 'Please select a sport from the dropdown.', 'warning');
+      Swal.fire('Sport Not Supported', 'Analysis is available only for Soccer and GAA.', 'info');
     }
-  };
+  } else {
+    Swal.fire('Select Sport', 'Please select a sport from the dropdown.', 'warning');
+  }
+};
 
   const handleTrainingClick = () => onNavigate('/training');
 
@@ -284,16 +284,6 @@ const Sidebar = ({ onNavigate, onLogout, onSportChange, selectedSport }) => {
             </button>
           </li>
           <li className="separator">{!collapsed && 'Account'}</li>
-          <li>
-            <button 
-              onClick={handleTeamRosterClick}
-              disabled={!selectedSport}
-              title={!selectedSport ? "Select a sport first" : `${selectedSport} Team Roster`}
-            >
-              <FaUsers className="icon" size={16} />
-              {!collapsed && 'Team Roster'}
-            </button>
-          </li>
           <li>
             <button onClick={fetchUserData} className={`profile-button ${loading ? 'loading' : ''}`}>
               <FaUserCircle className="icon" size={16} />

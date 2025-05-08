@@ -57,6 +57,8 @@ import SessionDetail from './SessionDetail';
 import ManualTagging from './ManualTagging';
 import DashboardHome from './DashboardHome';
 import Players from './Players'; // Import Players from correct location
+import AnalysisSoccer from './AnalysisSoccer';  // Import the new component
+
 
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
@@ -224,6 +226,8 @@ const App = () => {
                   <Route path="*" element={<Navigate replace to="/select-sport" />} />
                   <Route path="/tagging/manual" element={<ManualTagging />} />
                   <Route path="/dashboard" element={<DashboardHome onNavigate={handleNavigate} selectedSport={selectedSport}/>} />
+                  <Route path="/analysis-soccer" element={<AnalysisSoccer />} />
+                  <Route path="/soccer-pitch" element={<SoccerPitch />} />
                   <Route
                     path="/pitch"
                     element={

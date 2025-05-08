@@ -57,7 +57,9 @@ const defaultMapping = {
   'fortyfive post': 'miss',
   'blocked': 'miss',
   'post': 'miss',
-  'sideline wide': 'miss'
+  'sideline wide': 'miss',
+  'offensive mark short': 'miss'
+
 };
 
 // Fallback colors for markers

@@ -3,13 +3,39 @@ import { Layer, Group, Rect, Line, Arc, Text, Circle } from 'react-konva';
 import PropTypes from 'prop-types';
 
 // Utility Functions (unchanged)
-export function translateShotToOneSide(shot, halfLineX, goalX, goalY) {
-  const targetGoal = (shot.x || 0) <= halfLineX ? { x: 0, y: goalY } : { x: goalX, y: goalY };
-  const dx = (shot.x || 0) - targetGoal.x;
-  const dy = (shot.y || 0) - targetGoal.y;
-  const distMeters = Math.sqrt(dx * dx + dy * dy);
-  return { ...shot, distMeters };
-}
+export const translateShotToOneSide = (shot, halfLineX, goalX, goalY) => {
+  // Make a copy of the shot to avoid mutating the original
+  const result = { ...shot };
+  
+  // Parse coordinates or use defaults
+  const x = parseFloat(shot.x) || 0;
+  const y = parseFloat(shot.y) || 0;
+  
+  // Determine which side the shot is from based on X position
+  const isLeftSide = x <= halfLineX;
+  
+  // If the shot is from the right side (past the halfway line),
+  // we need to mirror its X coordinate to show it on the left side
+  if (!isLeftSide) {
+    // Mirror the X coordinate:
+    // If the shot is at x=100 and halfway is at x=72.5, then the mirrored x should be at x=45
+    // The formula is: halfLineX - (x - halfLineX) = 2*halfLineX - x
+    result.x = 2 * halfLineX - x;
+    
+    // Keep track of the original side for reference
+    result.originalSide = 'Right';
+  } else {
+    result.originalSide = 'Left';
+  }
+  
+  // Calculate distance to goal
+  // For shots from the left side (or those we've mirrored to the left), the goal is at (0, goalY)
+  const dx = result.x - 0;  // Distance from x to left goal (at x=0)
+  const dy = result.y - goalY;
+  result.distMeters = Math.sqrt(dx * dx + dy * dy);
+  
+  return result;
+};
 
 export function translateShotToLeftSide(shot, halfLineX) {
   let newX = shot.x;

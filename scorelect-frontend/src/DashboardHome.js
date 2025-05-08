@@ -4,6 +4,8 @@ import Swal from 'sweetalert2';
 import { SavedGamesContext } from './components/SavedGamesContext';
 import { GameContext } from './GameContext';
 import './DashboardHome.css'; // Import the new CSS file
+import InsightsIcon from '@mui/icons-material/Insights';  // Without 'Icon' at the end of the path
+
 
 // Import icons from react-icons
 import { 
@@ -21,7 +23,6 @@ import {
 } from 'react-icons/fa';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
-import InsightsIcon from '@mui/icons-material/Insights';
 
 // Enhanced Feature Card with hover effects and better visual hierarchy
 const FeatureCard = ({ icon: Icon, title, blurb, cta, onClick }) => {
@@ -66,39 +67,173 @@ const RecentGameItem = ({ game, onSelect }) => {
     : 'No date';
   
   // Open in dataset analysis
-  const handleDatasetAnalysis = (e) => {
-    e.stopPropagation(); // Prevent triggering the parent onClick
+const handleDatasetAnalysis = (e) => {
+  e.stopPropagation(); // Prevent triggering the parent onClick
+  
+  Swal.fire({
+    title: 'Opening Analysis Dashboard',
+    text: `Analyzing performance data for ${game.gameName}`,
+    icon: 'info',
+    background: 'var(--dark-card)',
+    confirmButtonColor: 'var(--primary)',
+    showConfirmButton: false,
+    timer: 1500
+  });
+  
+  // Check the sport type and route to the correct dashboard
+  if (game.sport === 'Soccer') {
+    // Soccer pitch dimensions and goal positions used in the soccer analysis dashboard
+    const pitchWidth = 105;  // Width of soccer pitch in meters
+    const pitchHeight = 68;  // Height of soccer pitch in meters
+    const halfLineX = pitchWidth / 2;
+    const goalY = pitchHeight / 2;
     
-    Swal.fire({
-      title: 'Opening Analysis Dashboard',
-      text: `Analyzing performance data for ${game.gameName}`,
-      icon: 'info',
-      background: 'var(--dark-card)',
-      confirmButtonColor: 'var(--primary)',
-      showConfirmButton: false,
-      timer: 1500
+    // Process the game data for soccer analysis
+    const processedGame = {
+      ...game,
+      gameData: (game.gameData || []).map(tag => {
+        // Different handling based on analysis type
+        if ((game.analysisType || 'pitch') === 'video') {
+          // Video analysis - normalize coordinates from percentages (0-100) to meters
+          const rawX = parseFloat(tag.x) || 50;
+          const rawY = parseFloat(tag.y) || 50;
+          
+          // Normalize coordinates to match the analysis dashboard's soccer pitch dimensions
+          const normalizedX = (rawX / 100) * pitchWidth;
+          const normalizedY = (rawY / 100) * pitchHeight;
+          
+          // Determine which goal the shot is targeting based on x position
+          const isLeftSide = normalizedX <= halfLineX;
+          const targetGoalX = isLeftSide ? 0 : pitchWidth;
+          
+          // Calculate distance to goal - required for proper positioning in analysis
+          const dx = normalizedX - targetGoalX;
+          const dy = normalizedY - goalY;
+          const distToGoal = Math.sqrt(dx * dx + dy * dy);
+          
+          // Process position
+          let positionStr = '';
+          if (typeof tag.position === 'string') {
+            positionStr = tag.position;
+          } else if (tag.position && typeof tag.position === 'object') {
+            positionStr = tag.position.type || 'forward';
+          } else {
+            positionStr = 'forward';
+          }
+          
+          return {
+            ...tag,
+            position: positionStr,
+            x: normalizedX,
+            y: normalizedY,
+            distMeters: distToGoal,
+            side: isLeftSide ? 'Left' : 'Right',
+            distanceFromGoal: distToGoal,
+            pressure: tag.pressure || '0',
+            foot: tag.foot || 'Right'
+          };
+        } else {
+          // Process position
+          let positionStr = '';
+          if (typeof tag.position === 'string') {
+            positionStr = tag.position;
+          } else if (tag.position && typeof tag.position === 'object') {
+            positionStr = tag.position.type || 'forward';
+          } else {
+            positionStr = 'forward';
+          }
+          
+          // Calculate distance to goal if not already present
+          let distMeters = tag.distMeters;
+          if (!distMeters && tag.x !== undefined && tag.y !== undefined) {
+            const x = parseFloat(tag.x);
+            const y = parseFloat(tag.y);
+            const isLeftSide = x <= halfLineX;
+            const targetGoalX = isLeftSide ? 0 : pitchWidth;
+            const dx = x - targetGoalX;
+            const dy = y - goalY;
+            distMeters = Math.sqrt(dx * dx + dy * dy);
+          }
+          
+          // Add renderType for proper marker coloring - soccer specific actions
+          let renderType = '';
+          const action = tag.action?.toLowerCase().trim() || '';
+          
+          // Soccer-specific action types
+          if (action === 'goal') {
+            renderType = 'goal';
+          } else if (action === 'shot on target') {
+            renderType = 'shotontarget';
+          } else if (action === 'shot off target' || action.includes('miss')) {
+            renderType = 'shotofftarget';
+          } else if (action === 'penalty goal') {
+            renderType = 'penaltygoal';
+          } else if (action === 'penalty miss') {
+            renderType = 'penaltymiss';
+          } else if (action.includes('free kick') && action.includes('goal')) {
+            renderType = 'freekickgoal';
+          } else if (action.includes('free kick') && (action.includes('miss') || action.includes('saved'))) {
+            renderType = 'freekickmiss';
+          } else if (action.includes('corner')) {
+            renderType = 'corner';
+          } else if (action.includes('pass')) {
+            renderType = 'pass';
+          } else if (action.includes('cross')) {
+            renderType = 'cross';
+          } else if (action.includes('save')) {
+            renderType = 'save';
+          } else if (action.includes('tackle')) {
+            renderType = 'tackle';
+          } else if (action.includes('interception')) {
+            renderType = 'interception';
+          } else {
+            renderType = action;
+          }
+          
+          return {
+            ...tag,
+            position: positionStr,
+            distMeters: distMeters || 30,
+            side: tag.side || (tag.x <= halfLineX ? 'Left' : 'Right'),
+            distanceFromGoal: tag.distanceFromGoal || distMeters || 30,
+            pressure: tag.pressure || '0',
+            foot: tag.foot || 'Right',
+            renderType: renderType
+          };
+        }
+      })
+    };
+    
+    // Navigate to soccer analysis with this game's data
+    const dataForAnalysis = {
+      datasetName: game.datasetName,
+      games: [processedGame]
+    };
+    
+    // The key change is here - adding bypass flags to the navigation state
+    navigate('/analysis/soccer-dashboard', { 
+      state: { 
+        file: dataForAnalysis, 
+        sport: 'Soccer',
+      } 
     });
-    
-    // GAA pitch dimensions and goal positions used in the analysis dashboard
+  } else {
+    // GAA pitch dimensions and goal positions
     const pitchWidth = 145;  // Width of pitch in meters
     const pitchHeight = 88;  // Height of pitch in meters
     const halfLineX = pitchWidth / 2;
     const goalY = pitchHeight / 2;
     
-    // Check if this is pitch or video analysis data
-    const analysisType = game.analysisType || 'pitch';
-    
-    // Process the game data to normalize coordinates for correct positioning
     const processedGame = {
       ...game,
       gameData: (game.gameData || []).map(tag => {
         // Different handling based on analysis type
-        if (analysisType === 'video') {
+        if ((game.analysisType || 'pitch') === 'video') {
           // Video analysis - normalize coordinates from percentages (0-100) to meters
           const rawX = parseFloat(tag.x) || 50;
           const rawY = parseFloat(tag.y) || 50;
           
-          // Normalize coordinates to match the analysis dashboard's 145×88 meter pitch
+          // Normalize coordinates to match the analysis dashboard's GAA pitch dimensions
           const normalizedX = (rawX / 100) * pitchWidth;
           const normalizedY = (rawY / 100) * pitchHeight;
           
@@ -123,12 +258,9 @@ const RecentGameItem = ({ game, onSelect }) => {
           
           return {
             ...tag,
-            // Store position as a string value for compatibility with analysis dashboard
             position: positionStr,
-            // Use the normalized coordinates
             x: normalizedX,
             y: normalizedY,
-            // Add these properties required for proper analysis visualization
             distMeters: distToGoal,
             side: isLeftSide ? 'Left' : 'Right',
             distanceFromGoal: distToGoal,
@@ -136,10 +268,7 @@ const RecentGameItem = ({ game, onSelect }) => {
             foot: tag.foot || 'Right'
           };
         } else {
-          // Pitch analysis - coordinates are already in the correct format
-          // Just ensure position is a string value and add required fields if missing
-          
-          // Handle position string
+          // Pitch analysis - keep original coordinates but ensure all required fields
           let positionStr = '';
           if (typeof tag.position === 'string') {
             positionStr = tag.position;
@@ -162,42 +291,40 @@ const RecentGameItem = ({ game, onSelect }) => {
           }
           
           // Add renderType for proper marker coloring
-          // This maps actions to their visual representation
           let renderType = '';
           const action = tag.action?.toLowerCase().trim() || '';
           
           if (action === 'free' || action === 'fortyfive' || action === 'offensive mark') {
-            renderType = 'setplayscore'; // Green with white ring
+            renderType = 'setplayscore';
           } else if (action.includes('free') && (action.includes('miss') || action.includes('wide') || action.includes('short'))) {
-            renderType = 'setplaymiss'; // Red with white ring
+            renderType = 'setplaymiss';
           } else if (action === 'goal' || action === 'penalty goal') {
-            renderType = action; // Yellow
+            renderType = action;
           } else if (action === 'point') {
-            renderType = 'point'; // Green
-          } else if (action.includes('miss') || action.includes('wide') || action.includes('short')  || action.includes('short')) {
-            renderType = 'miss'; // Red
+            renderType = 'point';
+          } else if (action.includes('miss') || action.includes('wide') || action.includes('short')) {
+            renderType = 'miss';
           } else if (action.includes('block')) {
-            renderType = 'blocked'; // Orange
+            renderType = 'blocked';
           } else {
-            // Default fallback
             renderType = action;
           }
           
           return {
             ...tag,
             position: positionStr,
-            distMeters: distMeters || 30, // Default if missing
+            distMeters: distMeters || 30,
             side: tag.side || (tag.x <= halfLineX ? 'Left' : 'Right'),
             distanceFromGoal: tag.distanceFromGoal || distMeters || 30,
             pressure: tag.pressure || '0',
             foot: tag.foot || 'Right',
-            renderType: renderType // Add renderType for proper coloring
+            renderType: renderType
           };
         }
       })
     };
     
-    // Navigate to analysis with this game's data
+    // Navigate to GAA analysis with this game's data
     const dataForAnalysis = {
       datasetName: game.datasetName,
       games: [processedGame]
@@ -209,7 +336,8 @@ const RecentGameItem = ({ game, onSelect }) => {
         sport: game.sport || 'GAA'
       } 
     });
-  };
+  }
+};
   
   // AI analysis (locked feature)
   const handleAIAnalysis = (e) => {
@@ -317,9 +445,17 @@ const RecentList = ({ games, empty, onSelect, title }) => (
  * so ManualTagging (or PitchGraphic) can boot up instantly.
  */
 const buildVideoNavState = (game) => {
-  // GAA pitch dimensions and goal positions used in the analysis dashboard
-  const pitchWidth = 145;  // Width of pitch in meters
-  const pitchHeight = 88;  // Height of pitch in meters
+  // Use the appropriate pitch dimensions based on sport
+  let pitchWidth, pitchHeight;
+  
+  if (game.sport === 'Soccer') {
+    pitchWidth = 105;  // Soccer pitch width in meters
+    pitchHeight = 68;  // Soccer pitch height in meters
+  } else {
+    pitchWidth = 145;  // GAA pitch width in meters
+    pitchHeight = 88;  // GAA pitch height in meters
+  }
+  
   const halfLineX = pitchWidth / 2;
   const goalY = pitchHeight / 2;
 
@@ -333,7 +469,7 @@ const buildVideoNavState = (game) => {
       const rawX = parseFloat(tag.x) || 50;
       const rawY = parseFloat(tag.y) || 50;
       
-      // Normalize coordinates to match the analysis dashboard's 145×88 meter pitch
+      // Normalize coordinates to match the pitch dimensions based on sport
       // Convert from percentages (0-100) to meters
       const normalizedX = (rawX / 100) * pitchWidth;
       const normalizedY = (rawY / 100) * pitchHeight;
@@ -376,7 +512,7 @@ const buildVideoNavState = (game) => {
   };
 };
 
-const DashboardHome = ({ selectedSport }) => {
+const DashboardHome = ({ selectedSport, onNavigate }) => {
   const { datasets } = useContext(SavedGamesContext);
   const { setLoadedCoords } = useContext(GameContext);
   const navigate = useNavigate();
@@ -407,7 +543,12 @@ const DashboardHome = ({ selectedSport }) => {
       // pass only the coords array into context
       setLoadedCoords(normalizedCoords);
       
-      navigate('/pitch', { state: { gameLoaded: true } });
+      // Route to the appropriate pitch based on sport
+      if (game.sport === 'Soccer') {
+        navigate('/soccer-pitch', { state: { gameLoaded: true } });
+      } else {
+        navigate('/pitch', { state: { gameLoaded: true } });
+      }
     }
   };
   
@@ -426,6 +567,24 @@ const DashboardHome = ({ selectedSport }) => {
     };
   }, [datasets, selectedSport]);
 
+  // Navigate to the correct pitch based on selected sport
+  const handlePitchClick = () => {
+    if (selectedSport === 'Soccer') {
+      navigate('/soccer-pitch');
+    } else {
+      navigate('/pitch');
+    }
+  };
+
+  // Navigate to the correct video analysis tool based on selected sport
+  const handleVideoClick = () => {
+    if (selectedSport === 'Soccer') {
+      navigate('/analysis-soccer', { state: { defaultTab: 'video' } });
+    } else {
+      navigate('/video');
+    }
+  };
+
   return (
     <div className="dashboard-container">
       <div className="dashboard-header">
@@ -442,7 +601,7 @@ const DashboardHome = ({ selectedSport }) => {
           title="Pitch Analysis"
           blurb="Tag events directly on a virtual pitch. Analyze player movements and team formations in real-time."
           cta="Open Pitch Tool"
-          onClick={() => navigate('/pitch')}
+          onClick={handlePitchClick}
         />
 
         {/* Video Analysis */}
@@ -451,7 +610,7 @@ const DashboardHome = ({ selectedSport }) => {
           title="Video Analysis"
           blurb="Upload or load match footage for detailed video analysis. Tag plays, track player movements, and identify key moments."
           cta="Open Video Tool"
-          onClick={() => navigate('/video')}
+          onClick={handleVideoClick}
         />
 
         {/* Team Roster */}

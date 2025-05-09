@@ -58,7 +58,8 @@ const defaultMapping = {
   'blocked': 'miss',
   'post': 'miss',
   'sideline wide': 'miss',
-  'offensive mark short': 'miss'
+  'offensive mark short': 'miss',
+  'pen miss': 'miss'
 
 };
 

@@ -1,11 +1,11 @@
 // src/App.js
 import React, { useState, useEffect, useContext } from 'react';
-import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { getAuth, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
 
-// Existing imports...
+/* ──────────── page + component imports ──────────── */
 import SignIn from './SignIn';
 import SignUp from './SignUp';
 import PitchGraphic from './PitchGraphic';
@@ -56,23 +56,26 @@ import SessionEditor from './SessionEditor';
 import SessionDetail from './SessionDetail';
 import ManualTagging from './ManualTagging';
 import DashboardHome from './DashboardHome';
-import Players from './Players'; // Import Players from correct location
-import AnalysisSoccer from './AnalysisSoccer';  // Import the new component
+import Players from './Players';
+import AnalysisSoccer from './AnalysisSoccer';
 
-
+/* AI-powered dashboard (layout + nested routes) */
+import AIGAADashboard from './AIDashboard/AIGAADashboard';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 const App = () => {
+  /* ──────────── global auth / state ──────────── */
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState('free');
   const navigate = useNavigate();
   const { loadedCoords, setLoadedCoords } = useContext(GameContext);
 
-  const [selectedSport, setSelectedSport] = useState(() => {
-    return localStorage.getItem('selectedSport') || null;
-  });
+  const [selectedSport, setSelectedSport] = useState(() =>
+    localStorage.getItem('selectedSport') || null
+  );
 
+  /* ──────────── auth listener ──────────── */
   useEffect(() => {
     const auth = getAuth();
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
@@ -93,6 +96,7 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
+  /* ──────────── persist sport selection ──────────── */
   useEffect(() => {
     if (selectedSport) {
       localStorage.setItem('selectedSport', selectedSport);
@@ -101,11 +105,12 @@ const App = () => {
     }
   }, [selectedSport]);
 
+  /* ──────────── helpers ──────────── */
   const loadGame = (sport, game) => {
     setSelectedSport(sport);
-    setLoadedCoords(game);                // store the full game object
-    navigate('/pitch', { state: { gameLoaded: true } });   // go straight to the pitch tool
-  };  
+    setLoadedCoords(game);
+    navigate('/pitch', { state: { gameLoaded: true } });
+  };
 
   const handleSportChange = (sport) => {
     setSelectedSport(sport);
@@ -114,9 +119,7 @@ const App = () => {
   };
 
   const handleNavigate = (path) => {
-    if (path === '/') {
-      setLoadedCoords([]);
-    }
+    if (path === '/') setLoadedCoords([]);
     navigate(path);
   };
 
@@ -137,14 +140,11 @@ const App = () => {
     localStorage.removeItem('selectedSport');
   };
 
+  /* ──────────── choose correct pitch component ──────────── */
   const renderSelectedSport = () => {
     if (!selectedSport) return <Navigate replace to="/select-sport" />;
     if (loadedCoords && loadedCoords.analysisType === 'video') {
-      return (
-        <ManualTagging
-          gameData={loadedCoords} // Pass the loaded data as a prop
-        />
-      );
+      return <ManualTagging gameData={loadedCoords} />;
     }
     switch (selectedSport) {
       case 'GAA':
@@ -160,6 +160,7 @@ const App = () => {
     }
   };
 
+  /* ──────────── JSX ──────────── */
   return (
     <SavedGamesProvider>
       <SportsDataHubProvider>
@@ -174,23 +175,16 @@ const App = () => {
               user={user}
               selectedSport={selectedSport}
             />
+
             <div className="content-area">
               <ErrorBoundary>
                 <Routes>
+                  {/* --------------- top-level routes --------------- */}
                   <Route path="/" element={<Navigate replace to="/dashboard" />} />
-                  <Route
-                    path="/select-sport"
-                    element={<SportSelectionPage onSportSelect={handleSportChange} />}
-                  />
+                  <Route path="/select-sport" element={<SportSelectionPage onSportSelect={handleSportChange} />} />
                   <Route path="/upgrade" element={<Upgrade setUserRole={setUserRole} />} />
-                  <Route
-                    path="/saved-games"
-                    element={<SavedGames userType={userRole} onLoadGame={loadGame} selectedSport={selectedSport} />}
-                  />
-                  <Route
-                    path="/profile"
-                    element={user ? <Profile onLogout={handleLogout} apiUrl={API_BASE_URL} /> : <Navigate replace to="/signin" />}
-                  />
+                  <Route path="/saved-games" element={<SavedGames userType={userRole} onLoadGame={loadGame} selectedSport={selectedSport} />} />
+                  <Route path="/profile" element={user ? <Profile onLogout={handleLogout} apiUrl={API_BASE_URL} /> : <Navigate replace to="/signin" />} />
                   <Route path="/signin" element={<SignIn apiUrl={API_BASE_URL} />} />
                   <Route path="/signup" element={<SignUp apiUrl={API_BASE_URL} />} />
                   <Route path="/success" element={<Success setUserRole={setUserRole} />} />
@@ -223,27 +217,22 @@ const App = () => {
                   <Route path="/session-detail/:sessionId" element={<SessionDetail />} />
                   <Route path="/players/:sport" element={<Players />} />
                   <Route path="/players" element={<Players />} />
-                  <Route path="*" element={<Navigate replace to="/select-sport" />} />
                   <Route path="/tagging/manual" element={<ManualTagging />} />
-                  <Route path="/dashboard" element={<DashboardHome onNavigate={handleNavigate} selectedSport={selectedSport}/>} />
+                  <Route path="/dashboard" element={<DashboardHome onNavigate={handleNavigate} selectedSport={selectedSport} />} />
                   <Route path="/analysis-soccer" element={<AnalysisSoccer />} />
                   <Route path="/soccer-pitch" element={<SoccerPitch />} />
-                  <Route
-                    path="/pitch"
-                    element={
-                      <PitchGraphic
-                        userType={userRole}
-                        userId={user?.uid}
-                        apiUrl={API_BASE_URL}
-                      />
-                    }
-                  />
-                  <Route
-                    path="/video"
-                    element={<AnalysisGAA defaultTab="video" />}
-                  />
+
+                  {/* --------------- pitch route --------------- */}
+                  <Route path="/pitch" element={renderSelectedSport()} />
+
+                  {/* --------------- AI dashboard (layout + nested tabs) --------------- */}
+                  <Route path="/ai-dashboard/*" element={<AIGAADashboard />} />
+
+                  {/* --------------- fallback --------------- */}
+                  <Route path="*" element={<Navigate replace to="/select-sport" />} />
                 </Routes>
               </ErrorBoundary>
+
               <Analytics />
               <SpeedInsights />
             </div>

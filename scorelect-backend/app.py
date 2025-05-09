@@ -27,6 +27,8 @@ from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val
 from sklearn.metrics import accuracy_score, classification_report, roc_auc_score  # Model evaluation metrics
 from sklearn.calibration import CalibratedClassifierCV
 from imblearn.over_sampling import SMOTE  # SMOTE for handling class imbalance
+from sklearn.calibration import calibration_curve
+
 
 
 # Optional: Stripe (if used elsewhere in your application)
@@ -2386,391 +2388,349 @@ def recalculate_target_xpoints():
 
     return jsonify({"success": True, "summary": summary}), 200
 
-@app.route('/recalculate-xpoints', methods=['POST'])
+from flask import jsonify, request
+import logging
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, brier_score_loss, confusion_matrix 
+from imblearn.over_sampling import SMOTE
+from sklearn.calibration import CalibratedClassifierCV
+from firebase_admin import storage, firestore
+from matplotlib import pyplot as plt
+import io
+import base64
+
+# ------------------------------------------------------------------
+# Flip this to True once your Firebase app is initialised with a
+# storageBucket; leave False while developing locally/offline.
+# ------------------------------------------------------------------
+GENERATE_VISUALS = False
+# ------------------------------------------------------------------
+
+
+@app.route("/recalculate-xpoints", methods=["POST"])
 def recalculate_xpoints():
     """
-    Recalculates xPoints and xGoals using Logistic Regression + isotonic calibration.
-    Removes the post-processing KNN step to rely directly on model
-    predictions as final xP / xG values.
+    Recalculate xPoints and xGoals for a user + dataset, evaluate two logistic
+    models (points / goals) with isotonic calibration, write results back to
+    Firestore, and return a JSON summary.
     """
-    data = request.get_json()
-    USER_ID = data.get('user_id', "w9ZkqaYVM3dKSqqjWHLDVyh5sVg2")
-    DATASET_NAME = data.get('dataset_name', "GAA All Shots")
+    data = request.get_json() or {}
+    USER_ID      = data.get("user_id",      "w9ZkqaYVM3dKSqqjWHLDVyh5sVg2")
+    DATASET_NAME = data.get("dataset_name", "GAA All Shots")
 
     try:
-        logging.info(f"Starting recalculation for user: {USER_ID}, dataset: {DATASET_NAME}")
+        logging.info(f"=== Recalc start | user={USER_ID} | dataset={DATASET_NAME}")
 
-        # ---------------------------
-        # Step 1: Fetch data from Firestore
-        # ---------------------------
-        games_ref = db.collection('savedGames').document(USER_ID)\
-                      .collection('games')\
-                      .where('datasetName', '==', DATASET_NAME)
-        games_snapshot = games_ref.stream()
-
-        original_games = []
-        all_shots = []
-        game_count = 0
-        for doc in games_snapshot:
-            game_data = doc.to_dict()
-            shots = game_data.get('gameData', [])
-            if shots:
-                original_games.append({
-                    'doc_ref': doc.reference,
-                    'doc_id': doc.id,
-                    'game_data': shots
-                })
-                all_shots.extend(shots)
-                game_count += 1
-
-        logging.info(f"Found {game_count} games under dataset '{DATASET_NAME}'. Total shots: {len(all_shots)}")
+        # ------------------------------------------------- 1. Load shots
+        games_ref = (
+            db.collection("savedGames")
+              .document(USER_ID)
+              .collection("games")
+              .where("datasetName", "==", DATASET_NAME)
+        )
+        originals, all_shots = [], []
+        for g in games_ref.stream():
+            gd = g.to_dict().get("gameData", [])
+            if gd:
+                originals.append({"ref": g.reference, "gameData": gd})
+                all_shots.extend(gd)
 
         if not all_shots:
-            logging.warning(f'No data for dataset "{DATASET_NAME}".')
-            return jsonify({'error': f'No data found for dataset "{DATASET_NAME}".'}), 404
+            return jsonify({"error": "No data found"}), 404
 
-        # ---------------------------
-        # Step 2: Define outcomes
-        # ---------------------------
-        goalOutcomes = {'goal','scores goal','made goal','hit goal','penalty goal'}
-        pointOutcomes = {'point','over','scores point','made point','offensive mark','fortyfive','free'}
-        missOutcomes = {
-            'miss','blocked','post','short','wide','failed','free wide','free short','free post',
-            'offensive mark short','fortyfive short','fortyfive wide','offensive mark wide','offensive mark post',
-            'goal miss','pen miss','sideline wide','fortyfive post'
-        }
+        logging.info(f"Loaded {len(originals)} games — {len(all_shots)} shots")
 
-        indexed_shots = []
-        for g_i, game in enumerate(original_games):
-            for s_i, shot in enumerate(game['game_data']):
-                # get lowercased outcome
-                outcome_str = (shot.get('Outcome') or shot.get('action') or 'unknown').lower().strip()
-                if outcome_str in goalOutcomes:
-                    category = 'goal'
-                elif outcome_str in pointOutcomes:
-                    category = 'point'
+        # ------------------------------------------------- 2. Build DataFrame
+        goal_out   = {"goal", "scores goal", "made goal", "hit goal", "penalty goal"}
+        point_out  = {"point", "over", "scores point", "made point",
+                      "offensive mark", "fortyfive", "free"}
+
+        rows, outcome_counts = [], {"goal": 0, "point": 0, "miss": 0}
+        for gi, g in enumerate(originals):
+            for si, s in enumerate(g["gameData"]):
+                out_raw = (s.get("Outcome") or s.get("action") or "").lower().strip()
+                if out_raw in goal_out:
+                    cat = "goal"
+                elif out_raw in point_out:
+                    cat = "point"
                 else:
-                    category = 'miss'
+                    cat = "miss"
+                outcome_counts[cat] += 1
+                sx, sy = float(s.get("x", 0)), float(s.get("y", 0))
+                dist   = ((145 - sx) ** 2 + (44 - sy) ** 2) ** 0.5
+                rows.append(
+                    {
+                        "gi": gi,
+                        "si": si,
+                        "player":   s.get("playerName", "UNK"),
+                        "team":     s.get("team",       "UNK"),
+                        "action":   s.get("action",     "UNK"),
+                        "cat":      cat,
+                        "x": sx,
+                        "y": sy,
+                        "foot":     (s.get("foot") or "unk").lower(),
+                        "pressure": (s.get("pressure") or "n").lower(),
+                        "dist": dist,
+                        "position": s.get("position", "unk"),
+                    }
+                )
 
-                # Parse coordinates
-                try:
-                    shot_x = float(shot.get('x', 0))
-                    shot_y = float(shot.get('y', 0))
-                except ValueError:
-                    shot_x, shot_y = 0.0, 0.0
+        df = pd.DataFrame(rows)
+        logging.info("DataFrame shape %s", df.shape)
 
-                # Distance from center goal
-                goal_x, goal_y = 145, 44
-                dist = np.sqrt((goal_x - shot_x)**2 + (goal_y - shot_y)**2)
+        # ------------------------------------------------- 3. Targets
+        df["Score_Points"] = np.where(
+            (df["cat"] == "point") & (df["dist"] > 40), 2,
+            np.where(df["cat"] == "point", 1, 0)
+        )
+        df["Score_Goals"]  = (df["cat"] == "goal").astype(int)
 
-                indexed_shots.append({
-                    'g_i': g_i,
-                    's_i': s_i,
-                    'player': shot.get('playerName','Unknown Player'),
-                    'team': shot.get('team','Unknown Team'),
-                    'action': shot.get('action','unknown'),
-                    'category': category,
-                    'x': shot_x,
-                    'y': shot_y,
-                    'foot': shot.get('foot','unknown').lower(),
-                    'pressure': shot.get('pressure','n').lower(),
-                    'shotDistance': dist,
-                    'position': shot.get('position','unknown'),
-                })
-
-        df = pd.DataFrame(indexed_shots)
-        logging.info(f"DataFrame created with shape {df.shape}")
-
-        # ---------------------------
-        # Step 3: Score columns
-        # ---------------------------
-        df['Score_Points'] = df['category'].apply(lambda x: 1 if x == 'point' else 0)
-        df['Score_Goals'] = df['category'].apply(lambda x: 1 if x == 'goal' else 0)
-
-        # ---------------------------
-        # Step 4: Feature Engineering
-        # ---------------------------
-        def is_preferable_side(y_val, foot):
-            # Suppose pitch center Y=44
-            # left if y < 44, right if y > 44
-            # prefer right foot on left side or left foot on right side
-            if y_val < 44:
-                side = 'left'
-            elif y_val > 44:
-                side = 'right'
-            else:
-                side = 'center'
-            if (side == 'left' and foot in ['right','hand']) or \
-               (side == 'right' and foot in ['left','hand']):
-                return 1
-            return 0
-
-        df['Preferred_Side'] = df.apply(lambda r: is_preferable_side(r['y'], r['foot']), axis=1)
-
-        # Let's define if it's a set-play or open-play
-        def shot_type_func(act):
-            act_lower = act.lower()
-            setplay_words = ['free','fortyfive','penalty','offensive mark']
-            for w in setplay_words:
-                if w in act_lower:
-                    return 'set_play'
-            return 'open_play'
-
-        df['shot_type'] = df['action'].apply(shot_type_func)
-        shot_type_map = {'open_play': 0, 'set_play': 1}
-        df['Shot_Type_Value'] = df['shot_type'].map(shot_type_map).fillna(0).astype(int)
-
-        # Pressure * distance
-        pres_map = {'y': 1, 'n': 0}
-        df['Pressure_Value'] = df['pressure'].map(pres_map).fillna(0).astype(int)
-        df['pressure_shotDistance'] = df['Pressure_Value'] * df['shotDistance']
-
-        pos_map = {'goalkeeper': 0, 'back': 1, 'midfielder': 2, 'forward': 3}
-        foot_map = {'right': 0, 'left': 1, 'hand': 2}
-        df['Position_Value'] = df['position'].map(pos_map).fillna(0).astype(int)
-        df['Foot_Value'] = df['foot'].map(foot_map).fillna(0).astype(int)
-
-        def calc_shot_angle(row):
-            goal_x, goal_y = 145, 44
-            dx = goal_x - row['x']
-            dy = goal_y - row['y']
-            angle_rad = np.arctan2(dy, dx)
-            return np.degrees(angle_rad) if dx != 0 else 90.0
-
-        df['Shot_Angle'] = df.apply(calc_shot_angle, axis=1)
-        df['Placed_Ball'] = df['shot_type'].apply(lambda x: 1 if x == 'set_play' else 0)
-
-        # ---------------------------
-        # Step 5: Scale features
-        # ---------------------------
-        scaler = StandardScaler()
-        df[['x_scaled','y_scaled','Shot_Angle','shotDistance']] = scaler.fit_transform(
-            df[['x','y','Shot_Angle','shotDistance']]
+        # ------------------------------------------------- 4. Features
+        df["Preferred_Side"] = np.where(
+            ((df["y"] < 44) & df["foot"].isin(["right", "-hand"])) |
+            ((df["y"] > 44) & df["foot"].isin(["left",  "hand"])),
+            1, 0
         )
 
-        # ---------------------------
-        # Step 6: Prepare X,y
-        # ---------------------------
-        X_cols = [
-            'Preferred_Side','Pressure_Value','Position_Value','Foot_Value',
-            'Shot_Angle','shotDistance','Placed_Ball','Shot_Type_Value','pressure_shotDistance'
+        df["shot_type"] = df["action"].str.lower().apply(
+            lambda a: "set_play"
+            if any(w in a for w in ["free", "fortyfive", "penalty", "offensive mark"])
+            else "open_play"
+        )
+        df["Shot_Type_Value"] = (df["shot_type"] == "set_play").astype(int)
+        df["Pressure_Value"]  = (df["pressure"] == "y").astype(int)
+        df["pressure_dist"]   = df["Pressure_Value"] * df["dist"]
+
+        pos_map  = {"goalkeeper": 0, "back": 1, "midfielder": 2, "forward": 3}
+        foot_map = {"right": 0, "left": 1, "hand": 2}
+        df["Position_Value"] = df["position"].map(pos_map).fillna(0).astype(int)
+        df["Foot_Value"]     = df["foot"].map(foot_map).fillna(0).astype(int)
+
+        df["Shot_Angle"] = np.degrees(np.arctan2(44 - df["y"], 145 - df["x"]))
+        df["Placed_Ball"] = (df["shot_type"] == "set_play").astype(int)
+        df["Beyond_40m"]  = (df["dist"] > 40).astype(int)
+
+        scaler = StandardScaler()
+        df[["x_s", "y_s", "Shot_Angle_s", "dist_s"]] = scaler.fit_transform(
+            df[["x", "y", "Shot_Angle", "dist"]]
+        )
+
+        feat_cols = [
+            "Preferred_Side", "Pressure_Value", "Position_Value", "Foot_Value",
+            "Shot_Angle_s", "dist_s", "Placed_Ball", "Shot_Type_Value",
+            "pressure_dist", "Beyond_40m"
         ]
-        X = df[X_cols].fillna(0).values
-        y_points = df['Score_Points'].values
-        y_goals  = df['Score_Goals'].values
+        X          = df[feat_cols].to_numpy()
+        y_points   = (df["Score_Points"] > 0).astype(int).to_numpy()
+        y_goals    = df["Score_Goals"].to_numpy()
 
-        # ---------------------------
-        # Step 7: Train/Val/Test Splits
-        # ---------------------------
-        X_trainval, X_test, y_points_trainval, y_points_test, y_goals_trainval, y_goals_test = \
-            train_test_split(X, y_points, y_goals, test_size=0.2, random_state=42, stratify=y_points)
+        # ------------------------------------------------- 5. Cross-val metrics
+        kf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        pts_m = {m: [] for m in ["accuracy","precision","recall",
+                                 "f1","roc_auc","brier"]}
+        gls_m = {m: [] for m in ["accuracy","precision","recall",
+                                 "f1","roc_auc","brier"]}
 
-        X_train, X_calib, y_points_train, y_points_calib, y_goals_train, y_goals_calib = \
-            train_test_split(
-                X_trainval, y_points_trainval, y_goals_trainval,
-                test_size=0.3, random_state=42, stratify=y_points_trainval
-            )
+        train_idx = val_idx = test_idx = None
+        for fold, (tr_val, te) in enumerate(kf.split(X, y_points)):
+            if fold == 0:  # remember first split for final model
+                tr, val = train_test_split(
+                    tr_val, test_size=0.3, random_state=42,
+                    stratify=y_points[tr_val]
+                )
+                train_idx, val_idx, test_idx = tr, val, te
 
-        # ---------------------------
-        # Step 8: Model for Points (Logistic Regression)
-        # ---------------------------
-        if len(np.unique(y_points_train)) < 2:
-            logging.warning("All Points = same outcome in train => fallback = 0.5")
-            df['xPoints_Final'] = 0.5
+            # ----- points
+            X_tr, y_tr = X[tr_val], y_points[tr_val]
+            if len(np.unique(y_tr)) > 1:
+                sm = SMOTE(random_state=42, k_neighbors=min(3, y_tr.sum()))
+                X_bal, y_bal = sm.fit_resample(X_tr, y_tr)
+                clf_p = LogisticRegression(class_weight="balanced",
+                                           max_iter=1000, random_state=42)
+                clf_p.fit(X_bal, y_bal)
+                cal_p = CalibratedClassifierCV(estimator=clf_p,
+                                               method="isotonic",
+                                               cv="prefit").fit(
+                    X[val_idx], y_points[val_idx]
+                )
+                prob = cal_p.predict_proba(X[te])[:, 1]
+                pred = (prob >= 0.5).astype(int)
+                pts_m["accuracy"].append(accuracy_score(y_points[te], pred))
+                pts_m["precision"].append(precision_score(y_points[te], pred))
+                pts_m["recall"].append(recall_score(y_points[te], pred))
+                pts_m["f1"].append(f1_score(y_points[te], pred))
+                pts_m["roc_auc"].append(roc_auc_score(y_points[te], prob))
+                pts_m["brier"].append(brier_score_loss(y_points[te], prob))
+
+            # ----- goals
+            X_trg, y_trg = X[tr_val], y_goals[tr_val]
+            if len(np.unique(y_trg)) > 1:
+                smg = SMOTE(random_state=42, k_neighbors=min(3, y_trg.sum()))
+                Xg_bal, yg_bal = smg.fit_resample(X_trg, y_trg)
+                clf_g = LogisticRegression(class_weight={0:1,1:5},
+                                           max_iter=1000, random_state=42)
+                clf_g.fit(Xg_bal, yg_bal)
+                cal_g = CalibratedClassifierCV(estimator=clf_g,
+                                               method="isotonic",
+                                               cv="prefit").fit(
+                    X[val_idx], y_goals[val_idx]
+                )
+                prob_g = cal_g.predict_proba(X[te])[:, 1]
+                pred_g = (prob_g >= 0.3).astype(int)
+                gls_m["accuracy"].append(accuracy_score(y_goals[te], pred_g))
+                gls_m["precision"].append(precision_score(y_goals[te], pred_g))
+                gls_m["recall"].append(recall_score(y_goals[te], pred_g))
+                gls_m["f1"].append(f1_score(y_goals[te], pred_g))
+                gls_m["roc_auc"].append(roc_auc_score(y_goals[te], prob_g))
+                gls_m["brier"].append(brier_score_loss(y_goals[te], prob_g))
+
+        # ------------------------------------------------- 6. Final models
+        X_train, X_val = X[train_idx], X[val_idx]
+        y_pt_tr, y_pt_val = y_points[train_idx], y_points[val_idx]
+        y_gl_tr, y_gl_val = y_goals[train_idx],  y_goals[val_idx]
+
+        # points
+        if len(np.unique(y_pt_tr)) > 1:
+            sm = SMOTE(random_state=42, k_neighbors=min(3, y_pt_tr.sum()))
+            Xb, yb = sm.fit_resample(X_train, y_pt_tr)
+            log_p = LogisticRegression(class_weight="balanced",
+                                       max_iter=1000, random_state=42)
+            log_p.fit(Xb, yb)
+            cal_p = CalibratedClassifierCV(estimator=log_p,
+                                           method="isotonic",
+                                           cv="prefit").fit(X_val, y_pt_val)
+            df["xP_lr"] = cal_p.predict_proba(X)[:, 1]
         else:
-            smote_p = SMOTE(random_state=42, sampling_strategy='auto', k_neighbors=3)
-            X_train_p, y_train_p = smote_p.fit_resample(X_train, y_points_train)
+            df["xP_lr"] = 0.5
 
-            # Logistic Regression (replace RandomForestClassifier)
-            logreg_points = LogisticRegression(
-                class_weight='balanced',  # or any class_weight you prefer
-                random_state=42,
-                max_iter=1000
-            )
-            logreg_points.fit(X_train_p, y_train_p)
-
-            # Calibrate with isotonic
-            cal_points = CalibratedClassifierCV(
-                estimator=logreg_points,
-                method='isotonic',
-                cv='prefit'
-            )
-            cal_points.fit(X_calib, y_points_calib)
-
-            # Evaluate
-            y_points_pred = cal_points.predict(X_test)
-            acc_points = accuracy_score(y_points_test, y_points_pred)
-            logging.info(f"Points: test acc = {acc_points:.3f}")
-
-            # Probability on entire dataset
-            df['xP_lr'] = cal_points.predict_proba(X)[:, 1]
-
-        # ---------------------------
-        # Step 9: Model for Goals (Logistic Regression)
-        # ---------------------------
-        if len(np.unique(y_goals_train)) < 2:
-            logging.warning("All Goals = same outcome => fallback = 0.5")
-            df['xGoals_Final'] = 0.5
-            df['xP_adv_Goals'] = 0.5
+        # goals
+        if len(np.unique(y_gl_tr)) > 1:
+            smg = SMOTE(random_state=42, k_neighbors=min(3, y_gl_tr.sum()))
+            Xgb, ygb = smg.fit_resample(X_train, y_gl_tr)
+            log_g = LogisticRegression(class_weight={0:1,1:5},
+                                       max_iter=1000, random_state=42)
+            log_g.fit(Xgb, ygb)
+            cal_g = CalibratedClassifierCV(estimator=log_g,
+                                           method="isotonic",
+                                           cv="prefit").fit(X_val, y_gl_val)
+            df["xG_lr"] = cal_g.predict_proba(X)[:, 1]
         else:
-            smote_g = SMOTE(random_state=42, sampling_strategy=1.0, k_neighbors=3)
-            X_train_g, y_train_g = smote_g.fit_resample(X_train, y_goals_train)
+            df["xG_lr"] = 0.5
 
-            # Logistic Regression (replace RandomForestClassifier)
-            logreg_goals = LogisticRegression(
-                class_weight={0: 1, 1: 5},  # mimic weighting used before
-                random_state=42,
-                max_iter=1000
-            )
-            logreg_goals.fit(X_train_g, y_train_g)
+        # ------------------------------------------------- 7. Merge final xP/xG
+        df["xPoints_Final"] = np.where(
+            df["cat"] == "point",
+            np.where(df["dist"] > 40, 2 * df["xP_lr"], df["xP_lr"]),
+            np.where(df["cat"] == "miss",
+                     np.where(df["dist"] > 40, 2 * df["xP_lr"], df["xP_lr"]),
+                     0)
+        )
+        df["xGoals_Final"] = np.where(df["cat"] == "goal", df["xG_lr"], 0)
 
-            # Calibrate
-            cal_goals = CalibratedClassifierCV(
-                estimator=logreg_goals,
-                method='isotonic',
-                cv='prefit'
-            )
-            cal_goals.fit(X_calib, y_goals_calib)
+        # ------------------------------------------------- 8. Sanity bounds
+        if not df["xPoints_Final"].between(0, 2).all() or \
+           not df["xGoals_Final"].between(0, 1).all():
+            return jsonify({"error": "xP/xG out of bounds"}), 500
 
-            # Evaluate
-            y_goals_proba_test = cal_goals.predict_proba(X_test)[:, 1]
-            y_goals_pred = (y_goals_proba_test >= 0.3).astype(int)  # threshold=0.3 example
-            acc_goals = accuracy_score(y_goals_test, y_goals_pred)
-            logging.info(f"Goals: test acc = {acc_goals:.3f}")
+        # ------------------------------------------------- 9. Aggregate + summary
+        agg = (
+            df.groupby("player")
+              .agg(Shots=("player","count"),
+                   Points=("Score_Points","sum"),
+                   Goals=("Score_Goals","sum"),
+                   xPoints=("xPoints_Final","sum"),
+                   xGoals=("xGoals_Final","sum"),
+                   TwoPointShots=("Beyond_40m","sum"))
+              .reset_index()
+        )
+        agg["DiffPoints"] = agg["Points"] - agg["xPoints"]
+        agg["DiffGoals"]  = agg["Goals"]  - agg["xGoals"]
 
-            # Probability on entire dataset
-            df['xG_lr'] = cal_goals.predict_proba(X)[:, 1]
-
-        # ---------------------------
-        # Step 10: Merge into xPoints_Final, xGoals_Final
-        # ---------------------------
-        # If you used logistic regression, rename references to xP_lr / xG_lr
-        df['xPoints_Final'] = 0.0
-        df['xGoals_Final']  = 0.0
-
-        for idx, row in df.iterrows():
-            cat = row['category']
-            if cat == 'goal':
-                # This shot is an actual goal => keep xGoals from lr, set xPoints=0
-                df.at[idx, 'xGoals_Final'] = row.get('xG_lr', 0.0)
-            elif cat == 'point':
-                # This shot is an actual point => keep xPoints from lr, set xGoals=0
-                df.at[idx, 'xPoints_Final'] = row.get('xP_lr', 0.0)
-            else:
-                # For "miss" or other => store the logistic probabilities for reference
-                df.at[idx, 'xPoints_Final'] = row.get('xP_lr', 0.0)
-                df.at[idx, 'xGoals_Final']  = row.get('xG_lr', 0.0)
-
-        # Validate: all final are in [0,1]
-        if not df['xPoints_Final'].between(0,1).all():
-            logging.error("Some xPoints_Final outside [0,1].")
-            return jsonify({'error': 'xPoints outside [0,1].'}), 500
-
-        if not df['xGoals_Final'].between(0,1).all():
-            logging.error("Some xGoals_Final outside [0,1].")
-            return jsonify({'error': 'xGoals outside [0,1].'}), 500
-
-        # ---------------------------
-        # Step 11: Aggregate for leaderboard
-        # ---------------------------
-        aggregator = df.groupby('player').agg(
-            Shots=('player','count'),
-            Points=('Score_Points','sum'),
-            Goals=('Score_Goals','sum'),
-            xPoints=('xPoints_Final','mean'),
-            xGoals=('xGoals_Final','mean'),
-        ).reset_index()
-
-        aggregator['DiffPoints'] = aggregator['Points'] - aggregator['xPoints']
-        aggregator['DiffGoals']  = aggregator['Goals']  - aggregator['xGoals']
-
-        final_leaderboard = {
-            'Points_Leaderboard': aggregator.sort_values('DiffPoints', ascending=False).head(20).to_dict(orient='records'),
-            'Goals_Leaderboard':  aggregator.sort_values('DiffGoals', ascending=False).head(20).to_dict(orient='records')
+        summary = {
+            "points_model": {m: (np.mean(v) if v else None) for m, v in pts_m.items()},
+            "goals_model":  {m: (np.mean(v) if v else None) for m, v in gls_m.items()},
+            "total_shots": len(df),
+            "games_processed": len(originals),
+            "outcome_distribution": outcome_counts,
         }
 
-        # ---------------------------
-        # Step 12: Write back to Firestore
-        # ---------------------------
-        batch = db.batch()
-        for idx, row in df.iterrows():
-            g_i = row['g_i']
-            s_i = row['s_i']
-            original_games[g_i]['game_data'][s_i]['xPoints'] = row['xPoints_Final']
-            original_games[g_i]['game_data'][s_i]['xGoals']  = row['xGoals_Final']
+        # ------------------------------------------------- 10. Write xP/xG back
+        batch, shots_upd = db.batch(), 0
+        for gi, g in enumerate(originals):
+            gdata = g["gameData"]
+            for si, s in enumerate(gdata):
+                idx = df.index[(df["gi"] == gi) & (df["si"] == si)][0]
+                s["xPoints"] = float(df.at[idx, "xPoints_Final"])
+                s["xGoals"]  = float(df.at[idx, "xGoals_Final"])
+                shots_upd   += 1
+            batch.set(g["ref"], {"gameData": gdata}, merge=True)
+        batch.commit()
 
+        # ------------------------------------------------- 11. Upload leaderboard CSV (with guard)
+        bucket = None
         try:
-            for g in original_games:
-                doc_ref = g['doc_ref']
-                batch.update(doc_ref, {'gameData': g['game_data']})
-            batch.commit()
-        except Exception as e:
-            logging.error(f"Firestore batch update failed: {e}", exc_info=True)
-            return jsonify({'error': 'Failed updating Firestore'}), 500
+            bucket = storage.bucket()
+        except ValueError:
+            logging.warning("No storage bucket configured – skipping leaderboard upload")
 
-        # Save the leaderboard
-        try:
-            lb_ref = db.collection('savedGames').document(USER_ID)\
-                       .collection('leaderboard').document(DATASET_NAME)
-            lb_ref.set({'leaderboardData': final_leaderboard}, merge=True)
-            logging.info("Leaderboard updated in Firestore.")
-        except Exception as e:
-            logging.error(f"Failed to save leaderboard: {e}", exc_info=True)
-            return jsonify({'error': 'Failed to update leaderboard'}), 500
+        if bucket:
+            blob_path = f"analytics/{USER_ID}/{DATASET_NAME}/leaderboard.csv"
+            bucket.blob(blob_path).upload_from_string(
+                agg.to_csv(index=False), content_type="text/csv"
+            )
 
-        logging.info(f"Recalculation completed for {USER_ID}, dataset: {DATASET_NAME}")
-        return jsonify({'success': True, 'message': 'Recalculation done'}), 200
+        # also save model summary to Firestore
+        db.collection("analytics").document(USER_ID) \
+          .collection("model_summaries").document(DATASET_NAME) \
+          .set({
+              "timestamp": firestore.SERVER_TIMESTAMP,
+              "model_summary": summary,
+              "dataset_name": DATASET_NAME,
+              "user_id": USER_ID,
+          })
+
+        # ------------------------------------------------- 12. Optional heat-map
+        viz_url = None
+        if GENERATE_VISUALS:
+            try:
+                plt.figure(figsize=(12, 8))
+                samp = df.sample(min(2000, len(df))) if len(df) > 2000 else df
+                plt.scatter(samp["x"], samp["y"],
+                            c=samp["xPoints_Final"], cmap="RdYlGn",
+                            alpha=0.7, s=50, vmin=0, vmax=2)
+                plt.colorbar(label="xPoints")
+                plt.plot(145, 44, "ro", markersize=9)
+                plt.xlim(0, 150); plt.ylim(0, 90); plt.grid(True, alpha=.3)
+                plt.title("xPoints distribution"); plt.xlabel("x"); plt.ylabel("y")
+                buf = io.BytesIO(); plt.savefig(buf, format="png"); buf.seek(0)
+                plt.close()
+
+                if bucket:
+                    blob_path = f"analytics/{USER_ID}/{DATASET_NAME}/xpoints_heatmap.png"
+                    bucket.blob(blob_path).upload_from_string(
+                        buf.read(), content_type="image/png"
+                    )
+                    viz_url = f"https://storage.googleapis.com/{bucket.name}/{blob_path}"
+            except Exception as e:
+                logging.warning(f"Heat-map generation failed: {e}")
+
+        # ------------------------------------------------- 13. Response
+        return jsonify({
+            "status": "success",
+            "message": f"Updated {shots_upd} shots",
+            "model_summary": summary,
+            "leaderboard": agg.to_dict("records"),
+            "visualization_url": viz_url
+        }), 200
 
     except Exception as e:
-        logging.error(f"Error recalculating xpoints: {str(e)}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
-    
-def check_admin_status(uid, email=None):
-    """
-    Checks if a user has admin privileges.
-    
-    Args:
-        uid (str): User ID
-        email (str, optional): User email. If not provided, will fetch from user document
-        
-    Returns:
-        bool: True if user has admin privileges, False otherwise
-    """
-    try:
-        if not email:
-            # Fetch user email if not provided
-            user_doc = db.collection('users').document(uid).get()
-            if not user_doc.exists:
-                logging.error(f"User {uid} not found")
-                return False
-            email = user_doc.to_dict().get('email')
-            if not email:
-                logging.error(f"Email not found for user {uid}")
-                return False
-        
-        # Check admin settings
-        admin_config_ref = db.collection('adminSettings').document('datasetConfig')
-        admin_config = admin_config_ref.get()
-        
-        if not admin_config.exists:
-            # If no config exists, create it with the user as admin
-            admin_config_ref.set({
-                'adminUsers': [email],
-                'permissions': {
-                    'datasetPublishing': 3,  # Admin only by default
-                    'datasetViewing': 0      # All users by default
-                }
-            })
-            logging.info(f"Created admin config with {email} as admin")
-            return True
-        
-        # Check if user email is in admin list
-        admin_users = admin_config.to_dict().get('adminUsers', [])
-        return email in admin_users
-    
-    except Exception as e:
-        logging.error(f"Error checking admin status: {str(e)}")
-        return False
+        logging.error("Recalc failed", exc_info=True)
+        return jsonify({"error": "internal server error"}), 500
+
 
 # Middleware function to check dataset publishing permissions
 def check_publish_permissions(uid, userType=None):

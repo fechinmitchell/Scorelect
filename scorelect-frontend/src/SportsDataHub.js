@@ -19,6 +19,7 @@ import {
   FaDownload,
   FaTags,
   FaExclamationCircle,
+  FaRobot,
 } from 'react-icons/fa';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
 import PropTypes from 'prop-types';
@@ -297,50 +298,70 @@ const SportsDataHub = () => {
       html: `
         <div style="text-align: left; margin-bottom: 20px;">
           <p>You now have access to analyze "${selectedDataset.name}" data.</p>
-          <p>Choose how you'd like to analyze your new dataset:</p>
+          <p>Choose how you'd like to proceed:</p>
         </div>
       `,
       icon: 'success',
       background: '#222',
       color: '#fff',
       showCancelButton: true,
-      confirmButtonText: 'Analyze Now',
+      confirmButtonText: 'Access Now',
       confirmButtonColor: '#3a86ff',
       cancelButtonText: 'Later',
       cancelButtonColor: '#6c757d',
-      showDenyButton: true,
-      denyButtonText: 'View in Hub',
-      denyButtonColor: '#6030A0',
     }).then((result) => {
       if (result.isConfirmed) {
-        handleAnalyze(selectedDataset);
+        handleAccessData(selectedDataset);
       }
     });
   };
 
-  const handleAnalyze = async (datasetMeta) => {
-    if (!currentUser) { /* …sign-in prompt… */ return; }
-  
+  const handleAccessData = async (datasetMeta) => {
+    if (!currentUser) {
+      Swal.fire({
+        title: 'Sign In Required',
+        text: 'You need to sign in to access datasets.',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonText: 'Sign In',
+        confirmButtonColor: '#3a86ff',
+        cancelButtonText: 'Cancel'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          navigate('/login', { state: { returnUrl: '/hub' } });
+        }
+      });
+      return;
+    }
+    
+    // Check if user needs to purchase
+    const needsPurchase = datasetMeta.price > 0 && !ownedDatasets.includes(datasetMeta.id);
+    
+    if (needsPurchase) {
+      handlePurchase(datasetMeta);
+      return;
+    }
+    
     setLoadingOperations(prev => ({ ...prev, [`analyze-${datasetMeta.id}`]: true }));
   
     try {
       const token = await currentUser.getIdToken();
-      const res   = await fetch(`${apiUrl}/download-published-dataset`, {
-        method : 'POST',
+      const res = await fetch(`${apiUrl}/download-published-dataset`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization : `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ datasetId: datasetMeta.id }),
       });
   
       if (!res.ok) throw new Error('Could not fetch dataset JSON');
-      const fullDataset = await res.json();          // <<< now we have games[]
+      const fullDataset = await res.json();
   
       // (optional) normalise or migrate if your schema changed
       const formatted = {
         ...fullDataset,
-        games: (fullDataset.games || []).map(g => ({    // ensure every tag has needed fields
+        games: (fullDataset.games || []).map(g => ({
           ...g,
           gameData: (g.gameData || []).map(tag => ({
             ...tag,
@@ -361,8 +382,81 @@ const SportsDataHub = () => {
       setLoadingOperations(prev => ({ ...prev, [`analyze-${datasetMeta.id}`]: false }));
     }
   };
-  
 
+  const handleAnalyzeWithAI = async (dataset) => {
+    if (!currentUser) {
+      Swal.fire({
+        title: 'Sign In Required',
+        text: 'You need to sign in to use AI analysis features.',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonText: 'Sign In',
+        confirmButtonColor: '#3a86ff',
+        cancelButtonText: 'Cancel'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          navigate('/login', { state: { returnUrl: '/hub' } });
+        }
+      });
+      return;
+    }
+    
+    // Check if user needs to purchase
+    const needsPurchase = dataset.price > 0 && !ownedDatasets.includes(dataset.id);
+    
+    if (needsPurchase) {
+      handlePurchase(dataset);
+      return;
+    }
+    
+    setLoadingOperations(prev => ({ ...prev, [`ai-analyze-${dataset.id}`]: true }));
+
+    try {
+      const token = await currentUser.getIdToken();
+      // First get the dataset
+      const res = await fetch(`${apiUrl}/download-published-dataset`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ datasetId: dataset.id }),
+      });
+
+      if (!res.ok) throw new Error('Could not fetch dataset JSON');
+      const fullDataset = await res.json();
+      
+      // Format the dataset for compatibility
+      const formatted = {
+        ...fullDataset,
+        games: (fullDataset.games || []).map(g => ({
+          ...g,
+          gameData: (g.gameData || []).map(tag => ({
+            ...tag,
+            position: typeof tag.position === 'string'
+              ? tag.position
+              : (tag.position?.type || 'forward'),
+          }))
+        }))
+      };
+      
+      // Navigate to the AIGAADashboard route with the dataset
+      navigate('/ai-dashboard', {
+        state: { 
+          file: formatted, 
+          sport: formatted.category || 'GAA',
+          aiMode: true
+        },
+      });
+    } catch (err) {
+      console.error(err);
+      Swal.fire('Error', err.message || 'AI analysis initialization failed', 'error');
+    } finally {
+      setLoadingOperations(prev => ({ ...prev, [`ai-analyze-${dataset.id}`]: false }));
+    }
+  };
+
+  // Keeping this function but it's not directly exposed to users anymore
   const handleDownload = async (dataset) => {
     if (!currentUser) {
       Swal.fire({
@@ -673,7 +767,7 @@ const SportsDataHub = () => {
       <div className="datahub-header">
         <h1>Sports Data Hub</h1>
         <p className="datahub-subtitle">
-          Discover and download high-quality sports datasets for analysis and research
+          Discover and access high-quality sports datasets for analysis and research
         </p>
       </div>
   
@@ -775,8 +869,8 @@ const SportsDataHub = () => {
               {sortedDatasets.map((dataset) => {
                 const isViewingSample = loadingOperations[`viewSample-${dataset.id}`];
                 const isDeleting = loadingOperations[`delete-${dataset.id}`];
-                const isPurchasing = loadingOperations[`purchase-${dataset.id}`];
                 const isAnalyzing = loadingOperations[`analyze-${dataset.id}`];
+                const isAiAnalyzing = loadingOperations[`ai-analyze-${dataset.id}`];
   
                 const isOwner = currentUser ? dataset.creator_uid === currentUser.uid : false;
                 const isAlreadyOwned = ownedDatasets.includes(dataset.id);
@@ -841,51 +935,32 @@ const SportsDataHub = () => {
                         )}
                       </button>
 
-                      {needsPurchase ? (
-                        <button
-                          className="action-button purchase-button"
-                          onClick={() => handlePurchase(dataset)}
-                          disabled={isPurchasing}
-                          title="Purchase dataset"
-                          aria-label="Purchase dataset"
-                        >
-                          {isPurchasing ? <span className="spinner" /> : (
-                            <>
-                              <FaShoppingCart />
-                              <span>Buy</span>
-                            </>
-                          )}
-                        </button>
-                      ) : (
-                        <button
-                          className="action-button download-button"
-                          onClick={() => handleDownload(dataset)}
-                          disabled={loadingOperations[`download-${dataset.id}`]}
-                          title="Download dataset"
-                          aria-label="Download dataset"
-                        >
-                          {loadingOperations[`download-${dataset.id}`] ? (
-                            <span className="spinner" />
-                          ) : (
-                            <>
-                              <FaDownload />
-                              <span>Download</span>
-                            </>
-                          )}
-                        </button>
-                      )}
-
                       <button
                         className="action-button analyze-button"
-                        onClick={() => handleAnalyze(dataset)}
+                        onClick={() => handleAccessData(dataset)}
                         disabled={isAnalyzing}
-                        title="Analyze dataset"
-                        aria-label="Analyze dataset"
+                        title={needsPurchase ? "Purchase Access" : "Access Dataset"}
+                        aria-label={needsPurchase ? "Purchase Access" : "Access Dataset"}
                       >
                         {isAnalyzing ? <span className="spinner" /> : (
                           <>
-                            <AnalyticsIcon />
-                            <span>Analyze</span>
+                            {needsPurchase ? <FaShoppingCart /> : <AnalyticsIcon />}
+                            <span>{needsPurchase ? "Purchase" : "Access Data"}</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        className="action-button ai-button"
+                        onClick={() => handleAnalyzeWithAI(dataset)}
+                        disabled={isAiAnalyzing}
+                        title="Analyze with AI"
+                        aria-label="Analyze with AI"
+                      >
+                        {isAiAnalyzing ? <span className="spinner" /> : (
+                          <>
+                            <FaRobot />
+                            <span>AI Analysis</span>
                           </>
                         )}
                       </button>
@@ -917,6 +992,7 @@ const SportsDataHub = () => {
                 const isViewingSample = loadingOperations[`viewSample-${dataset.id}`];
                 const isDeleting = loadingOperations[`delete-${dataset.id}`];
                 const isAnalyzing = loadingOperations[`analyze-${dataset.id}`];
+                const isAiAnalyzing = loadingOperations[`ai-analyze-${dataset.id}`];
   
                 const isOwner = currentUser ? dataset.creator_uid === currentUser.uid : false;
                 const isAlreadyOwned = ownedDatasets.includes(dataset.id);
@@ -924,11 +1000,11 @@ const SportsDataHub = () => {
   
                 return (
                   <div key={dataset.id} className="dataset-row">
-                    <div className="dataset-row-main" onClick={() => handleViewSample(dataset)}>
+                    <div className="dataset-row-main">
                       <h4>{dataset.name}</h4>
                       <span className="dataset-category">{dataset.category}</span>
                       <span className="dataset-price">
-                        {dataset.price > 0 ? `$${parseFloat(dataset.price).toFixed(2)}` : 'Free'}
+                        {dataset.price > 0 ? `${parseFloat(dataset.price).toFixed(2)}` : 'Free'}
                       </span>
                       {dataset.downloads > 0 && (
                         <span className="dataset-downloads">
@@ -946,47 +1022,42 @@ const SportsDataHub = () => {
                         title="View sample"
                         aria-label="View sample"
                       >
-                        {isViewingSample ? <span className="spinner" /> : <FaEye />}
+                        {isViewingSample ? <span className="spinner" /> : (
+                          <>
+                            <FaEye />
+                            <span className="button-text">Sample</span>
+                          </>
+                        )}
                       </button>
-  
-                      {needsPurchase ? (
-                        <button
-                          className="action-button purchase-button"
-                          onClick={() => handlePurchase(dataset)}
-                          disabled={loadingOperations[`purchase-${dataset.id}`]}
-                          title="Purchase dataset"
-                          aria-label="Purchase dataset"
-                        >
-                          {loadingOperations[`purchase-${dataset.id}`] ? (
-                            <span className="spinner" />
-                          ) : (
-                            <FaShoppingCart />
-                          )}
-                        </button>
-                      ) : (
-                        <button
-                          className="action-button download-button"
-                          onClick={() => handleDownload(dataset)}
-                          disabled={loadingOperations[`download-${dataset.id}`]}
-                          title="Download dataset"
-                          aria-label="Download dataset"
-                        >
-                          {loadingOperations[`download-${dataset.id}`] ? (
-                            <span className="spinner" />
-                          ) : (
-                            <FaDownload />
-                          )}
-                        </button>
-                      )}
   
                       <button
                         className="action-button analyze-button"
-                        onClick={() => handleAnalyze(dataset)}
+                        onClick={() => handleAccessData(dataset)}
                         disabled={isAnalyzing}
-                        title="Analyze dataset"
-                        aria-label="Analyze dataset"
+                        title={needsPurchase ? "Purchase Access" : "Access Dataset"}
+                        aria-label={needsPurchase ? "Purchase Access" : "Access Dataset"}
                       >
-                        {isAnalyzing ? <span className="spinner" /> : <AnalyticsIcon />}
+                        {isAnalyzing ? <span className="spinner" /> : (
+                          <>
+                            {needsPurchase ? <FaShoppingCart /> : <AnalyticsIcon />}
+                            <span className="button-text">{needsPurchase ? "Purchase" : "Access"}</span>
+                          </>
+                        )}
+                      </button>
+                      
+                      <button
+                        className="action-button ai-button"
+                        onClick={() => handleAnalyzeWithAI(dataset)}
+                        disabled={isAiAnalyzing}
+                        title="Analyze with AI"
+                        aria-label="Analyze with AI"
+                      >
+                        {isAiAnalyzing ? <span className="spinner" /> : (
+                          <>
+                            <FaRobot />
+                            <span className="button-text">AI Analysis</span>
+                          </>
+                        )}
                       </button>
   
                       {(isOwner || isAdmin) && (
@@ -997,7 +1068,12 @@ const SportsDataHub = () => {
                           title="Delete dataset"
                           aria-label="Delete dataset"
                         >
-                          {isDeleting ? <span className="spinner" /> : <FaTrash />}
+                          {isDeleting ? <span className="spinner" /> : (
+                            <>
+                              <FaTrash />
+                              <span className="button-text">Delete</span>
+                            </>
+                          )}
                         </button>
                       )}
                     </div>

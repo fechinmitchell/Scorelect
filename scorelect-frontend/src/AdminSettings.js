@@ -12,12 +12,17 @@ import {
   Divider,
   Tabs,
   Tab,
+  CircularProgress,
 } from '@mui/material';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { Brightness4, Brightness7 } from '@mui/icons-material';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
 import Swal from 'sweetalert2';
+import axios from 'axios';                                     // NEW
+
+// NEW – backend root (works in dev & prod if you set REACT_APP_API_URL)
+const BASE_API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 // List the pages (or features) to control
 const features = [
@@ -91,7 +96,10 @@ const getTheme = (mode) =>
         styleOverrides: {
           root: {
             borderRadius: '16px', // Rounded corners
-            boxShadow: mode === 'dark' ? '0 4px 12px rgba(0, 0, 0, 0.5)' : '0 4px 12px rgba(0, 0, 0, 0.1)',
+            boxShadow:
+              mode === 'dark'
+                ? '0 4px 12px rgba(0, 0, 0, 0.5)'
+                : '0 4px 12px rgba(0, 0, 0, 0.1)',
           },
         },
       },
@@ -130,7 +138,12 @@ const AdminSettings = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [adminUsers, setAdminUsers] = useState([]);
   const [newAdminEmail, setNewAdminEmail] = useState('');
-  
+
+  // NEW: model recalculation local state
+  const [datasetName, setDatasetName] = useState('GAA All Shots');
+  const [isCalculating, setIsCalculating] = useState(false);
+  const [modelSummary, setModelSummary] = useState(null);
+
   const navigate = useNavigate();
 
   // Fetch current settings from Firestore on mount
@@ -147,7 +160,7 @@ const AdminSettings = () => {
         features.forEach((feature) => (defaultPermissions[feature.id] = 0));
         setFeaturePermissions(defaultPermissions);
       }
-      
+
       // Dataset permissions
       const datasetRef = doc(firestore, 'adminSettings', 'datasetConfig');
       const datasetSnap = await getDoc(datasetRef);
@@ -159,16 +172,15 @@ const AdminSettings = () => {
         // Initialize default dataset permissions
         const defaultDatasetPerms = {
           datasetPublishing: 3, // Admin Only
-          datasetViewing: 0,    // All Users
+          datasetViewing: 0, // All Users
         };
         setDatasetPerms(defaultDatasetPerms);
-        
+
         // Initialize with current user as admin
-        // In a real app, you'd fetch current user email
         setAdminUsers([]);
       }
     };
-    
+
     fetchSettings();
   }, []);
 
@@ -187,58 +199,109 @@ const AdminSettings = () => {
   const handleFeatureSliderChange = (featureId) => (event, value) => {
     setFeaturePermissions((prev) => ({ ...prev, [featureId]: value }));
   };
-  
+
   const handleDatasetSliderChange = (permId) => (event, value) => {
     setDatasetPerms((prev) => ({ ...prev, [permId]: value }));
   };
-  
+
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
   };
-  
+
   const handleAddAdmin = () => {
     if (!newAdminEmail || !newAdminEmail.includes('@')) {
       Swal.fire('Error', 'Please enter a valid email address', 'error');
       return;
     }
-    
+
     if (adminUsers.includes(newAdminEmail)) {
       Swal.fire('Info', 'This user is already an admin', 'info');
       return;
     }
-    
+
     setAdminUsers([...adminUsers, newAdminEmail]);
     setNewAdminEmail('');
   };
-  
+
   const handleRemoveAdmin = (email) => {
-    setAdminUsers(adminUsers.filter(admin => admin !== email));
+    setAdminUsers(adminUsers.filter((admin) => admin !== email));
   };
 
   const handleSaveSettings = async () => {
     try {
       // Save feature permissions
       await setDoc(
-        doc(firestore, 'adminSettings', 'config'), 
-        { permissions: featurePermissions }, 
+        doc(firestore, 'adminSettings', 'config'),
+        { permissions: featurePermissions },
         { merge: true }
       );
-      
+
       // Save dataset permissions and admin users
       await setDoc(
         doc(firestore, 'adminSettings', 'datasetConfig'),
-        { 
+        {
           permissions: datasetPerms,
-          adminUsers: adminUsers
+          adminUsers: adminUsers,
         },
         { merge: true }
       );
-      
+
       Swal.fire('Success', 'All settings updated successfully.', 'success');
     } catch (error) {
       Swal.fire('Error', error.message, 'error');
     }
   };
+
+  // NEW: Trigger backend recalculation
+  const handleRecalculateModel = async () => {
+    if (!datasetName) {
+      Swal.fire('Error', 'Please enter a dataset name', 'error');
+      return;
+    }
+
+    try {
+      setIsCalculating(true);
+      setModelSummary(null);
+
+      //  use axios + BASE_API_URL so we never hit the React dev-server
+      const response = await axios.post(
+        `${BASE_API_URL}/recalculate-xpoints`,
+        { dataset_name: datasetName }
+      );
+
+      if (response.status !== 200 || response.data.status !== 'success') {
+        throw new Error(response.data.error || 'Failed to recalculate');
+      }
+
+      setModelSummary(response.data.model_summary);
+      Swal.fire('Success', `Recalculation completed for ${datasetName}`, 'success');
+    } catch (error) {
+      Swal.fire('Error', error.message, 'error');
+    } finally {
+      setIsCalculating(false);
+    }
+  };
+
+  const metricsCard = (title, metrics) => (
+    <Box
+      sx={{
+        p: 2,
+        border: '1px solid',
+        borderColor: mode === 'dark' ? '#555' : '#e0e0e0',
+        borderRadius: '8px',
+        mb: 2,
+      }}
+    >
+      <Typography variant="h6" gutterBottom>
+        {title}
+      </Typography>
+      {Object.entries(metrics).map(([key, value]) => (
+        <Typography key={key} variant="body2">
+          {key}: {value === null ? 'n/a' : value.toFixed(3)}
+        </Typography>
+      ))}
+    </Box>
+  );
 
   return (
     <ThemeProvider theme={getTheme(mode)}>
@@ -250,9 +313,10 @@ const AdminSettings = () => {
           alignItems: 'center',
           justifyContent: 'center',
           p: 3,
-          background: mode === 'dark'
-            ? 'linear-gradient(135deg, #1c1a1a, #333)' // Dark gradient
-            : 'linear-gradient(135deg, #f5f5f5, #e0e0e0)', // Light gradient
+          background:
+            mode === 'dark'
+              ? 'linear-gradient(135deg, #1c1a1a, #333)'
+              : 'linear-gradient(135deg, #f5f5f5, #e0e0e0)',
           position: 'relative',
         }}
       >
@@ -269,7 +333,7 @@ const AdminSettings = () => {
           {mode === 'dark' ? <Brightness7 /> : <Brightness4 />}
         </IconButton>
 
-        <Card sx={{ maxWidth: 600, width: '100%', p: 2 }}>
+        <Card sx={{ maxWidth: 700, width: '100%', p: 2 }}>
           <CardContent>
             <Typography
               variant="h4"
@@ -277,23 +341,19 @@ const AdminSettings = () => {
               gutterBottom
               sx={{
                 fontWeight: 'bold',
-                color: mode === 'dark' ? '#fff' : '#1a237e', // White in dark, blue in light
+                color: mode === 'dark' ? '#fff' : '#1a237e',
               }}
             >
               Admin Settings
             </Typography>
-            
-            <Tabs 
-              value={activeTab} 
-              onChange={handleTabChange} 
-              centered
-              sx={{ mb: 3 }}
-            >
+
+            <Tabs value={activeTab} onChange={handleTabChange} centered sx={{ mb: 3 }}>
               <Tab label="Features" />
               <Tab label="Datasets" />
               <Tab label="Admin Users" />
+              <Tab label="Model" />
             </Tabs>
-            
+
             {/* Features Tab */}
             {activeTab === 0 && (
               <>
@@ -304,16 +364,11 @@ const AdminSettings = () => {
                   gutterBottom
                   sx={{ mb: 3 }}
                 >
-                  Adjust access levels for each feature. Use the sliders to control who can access:
-                  <br />0 = All Users, 1 = Free Users, 2 = Premium Users
+                  Adjust access levels for each feature. 0 = All Users, 1 = Free Users, 2 = Premium Users
                 </Typography>
-                
                 {features.map((feature) => (
                   <Box key={feature.id} sx={{ my: 3, px: 2 }}>
-                    <Typography
-                      variant="subtitle1"
-                      sx={{ color: mode === 'dark' ? '#fff' : '#333', mb: 1 }}
-                    >
+                    <Typography variant="subtitle1" sx={{ color: mode === 'dark' ? '#fff' : '#333', mb: 1 }}>
                       {feature.name}
                     </Typography>
                     <Slider
@@ -330,7 +385,7 @@ const AdminSettings = () => {
                 ))}
               </>
             )}
-            
+
             {/* Datasets Tab */}
             {activeTab === 1 && (
               <>
@@ -341,16 +396,11 @@ const AdminSettings = () => {
                   gutterBottom
                   sx={{ mb: 3 }}
                 >
-                  Control who can publish and view datasets in the Sports Data Hub:
-                  <br />0 = All Users, 1 = Free Users, 2 = Premium Users, 3 = Admin Only
+                  Control who can publish and view datasets. 0 = All Users, 1 = Free Users, 2 = Premium Users, 3 = Admin Only
                 </Typography>
-                
                 {datasetPermissions.map((perm) => (
                   <Box key={perm.id} sx={{ my: 3, px: 2 }}>
-                    <Typography
-                      variant="subtitle1"
-                      sx={{ color: mode === 'dark' ? '#fff' : '#333', mb: 1 }}
-                    >
+                    <Typography variant="subtitle1" sx={{ color: mode === 'dark' ? '#fff' : '#333', mb: 1 }}>
                       {perm.name}
                     </Typography>
                     <Slider
@@ -367,7 +417,7 @@ const AdminSettings = () => {
                 ))}
               </>
             )}
-            
+
             {/* Admin Users Tab */}
             {activeTab === 2 && (
               <>
@@ -378,10 +428,8 @@ const AdminSettings = () => {
                   gutterBottom
                   sx={{ mb: 3 }}
                 >
-                  Manage users with admin privileges. Admin users have full access to all features 
-                  and can publish datasets regardless of other settings.
+                  Manage users with admin privileges.
                 </Typography>
-                
                 <Box sx={{ display: 'flex', mb: 3 }}>
                   <input
                     type="email"
@@ -399,19 +447,14 @@ const AdminSettings = () => {
                   <Button
                     onClick={handleAddAdmin}
                     variant="contained"
-                    sx={{
-                      borderRadius: '0 8px 8px 0',
-                      height: '42px',
-                    }}
+                    sx={{ borderRadius: '0 8px 8px 0', height: '42px' }}
                   >
                     Add Admin
                   </Button>
                 </Box>
-                
                 <Typography variant="subtitle1" gutterBottom>
                   Current Admin Users:
                 </Typography>
-                
                 {adminUsers.length === 0 ? (
                   <Typography color="text.secondary" align="center">
                     No admin users defined. Add yourself as the first admin.
@@ -419,7 +462,7 @@ const AdminSettings = () => {
                 ) : (
                   <Box sx={{ maxHeight: '200px', overflowY: 'auto' }}>
                     {adminUsers.map((email) => (
-                      <Box 
+                      <Box
                         key={email}
                         sx={{
                           display: 'flex',
@@ -447,18 +490,79 @@ const AdminSettings = () => {
                 )}
               </>
             )}
-            
+
+            {/* Model Tab */}
+            {activeTab === 3 && (
+              <>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  align="center"
+                  gutterBottom
+                  sx={{ mb: 3 }}
+                >
+                  Recalculate xPoints and xGoals and evaluate model performance.
+                </Typography>
+                <Box sx={{ display: 'flex', mb: 3 }}>
+                  <input
+                    type="text"
+                    placeholder="Dataset name"
+                    value={datasetName}
+                    onChange={(e) => setDatasetName(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      borderRadius: '8px 0 0 8px',
+                      border: '1px solid #ccc',
+                      borderRight: 'none',
+                    }}
+                  />
+                  <Button
+                    onClick={handleRecalculateModel}
+                    variant="contained"
+                    sx={{ borderRadius: '0 8px 8px 0', height: '42px' }}
+                    disabled={isCalculating}
+                  >
+                    Recalculate
+                  </Button>
+                </Box>
+
+                {isCalculating && (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+                    <CircularProgress />
+                  </Box>
+                )}
+
+                {modelSummary && (
+                  <>
+                    <Typography variant="h6" align="center" gutterBottom>
+                      Model Metrics
+                    </Typography>
+                    {metricsCard('Points Model', modelSummary.points_model)}
+                    {metricsCard('Goals Model', modelSummary.goals_model)}
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      align="center"
+                      sx={{ mt: 2 }}
+                    >
+                      Total Shots: {modelSummary.total_shots} | Games Processed: {modelSummary.games_processed}
+                    </Typography>
+                  </>
+                )}
+              </>
+            )}
+
             <Divider sx={{ my: 3 }} />
-            
             <Box sx={{ textAlign: 'center', mt: 4 }}>
               <Button
                 variant="contained"
                 onClick={handleSaveSettings}
                 sx={{
-                  backgroundColor: mode === 'dark' ? '#7b1fa2' : '#1a237e', // Purple in dark, blue in light
+                  backgroundColor: mode === 'dark' ? '#7b1fa2' : '#1a237e',
                   color: '#fff',
                   '&:hover': {
-                    backgroundColor: mode === 'dark' ? '#9c27b0' : '#141b66', // Lighter purple in dark
+                    backgroundColor: mode === 'dark' ? '#9c27b0' : '#141b66',
                   },
                   padding: '12px 24px',
                 }}

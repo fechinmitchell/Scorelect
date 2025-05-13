@@ -650,26 +650,6 @@ def generate_insights():
         return jsonify({'error': f'Failed to generate AI insights: {str(e)}'}), 500  # Respond with error in JSON
 
 
-# Endpoint to manually refresh subscription status
-@app.route('/refresh-subscription-status', methods=['POST'])
-def refresh_subscription_status():
-    try:
-        data = request.json  # Get the JSON data from the request
-        uid = data.get('uid')  # Extract the user ID
-        stripe_customer_id = data.get('stripeCustomerId')  # Extract the Stripe customer ID
-
-        # Validate if UID and Stripe customer ID are provided
-        if not uid or not stripe_customer_id:
-            return jsonify({'error': 'UID and Stripe Customer ID are required.'}), 400  # Respond with error
-
-        # Call function to retrieve and update subscription status
-        retrieve_and_update_subscription(uid, stripe_customer_id)
-        return jsonify({'message': 'Subscription status updated successfully.'})  # Respond with success
-    except Exception as e:
-        logging.error(f"Error refreshing subscription status: {str(e)}")  # Log any errors
-        return jsonify({'error': 'Failed to refresh subscription status.'}), 500  # Respond with error in JSON
-
-
 @app.route('/stripe-webhook', methods=['POST'])
 def stripe_webhook():
     payload = request.get_data(as_text=True)
@@ -761,6 +741,80 @@ def stripe_webhook():
             subscription = event['data']['object']
             handle_subscription_update(subscription)
             logging.info(f"Subscription {subscription['id']} has been updated to status {subscription['status']}.")
+            
+        # New event handler for customer.updated
+        elif event['type'] == 'customer.updated':
+            customer = event['data']['object']
+            customer_id = customer['id']
+            email = customer['email']
+            
+            # Find all users with this email and update their customer ID
+            user_docs = db.collection('users').where('email', '==', email).get()
+            
+            if len(list(user_docs)) > 0:
+                for doc in user_docs:
+                    uid = doc.id
+                    user_ref = db.collection('users').document(uid)
+                    user_ref.update({'stripeCustomerId': customer_id})
+                    logging.info(f"Updated customer ID for user {uid} from webhook")
+                    
+                    # Also check subscription status and update role
+                    try:
+                        subscriptions = stripe.Subscription.list(customer=customer_id)
+                        if subscriptions and subscriptions['data']:
+                            subscription = subscriptions['data'][0]
+                            status = subscription['status']
+                            
+                            if status in ['active', 'trialing']:
+                                user_ref.update({'role': 'paid'})
+                                logging.info(f"Updated user {uid} to 'paid' after customer update")
+                            else:
+                                user_ref.update({'role': 'free'})
+                                logging.info(f"Updated user {uid} to 'free' after customer update, status: {status}")
+                    except Exception as sub_error:
+                        logging.error(f"Error checking subscription after customer update: {str(sub_error)}")
+            else:
+                logging.info(f"No users found with email {email} for customer {customer_id}")
+
+        # New event handler for invoice.paid
+        elif event['type'] == 'invoice.paid':
+            invoice = event['data']['object']
+            customer_id = invoice['customer']
+            subscription_id = invoice.get('subscription')
+            
+            if customer_id and subscription_id:
+                # Find users with this customer ID
+                user_docs = db.collection('users').where('stripeCustomerId', '==', customer_id).get()
+                
+                if len(list(user_docs)) > 0:
+                    for doc in user_docs:
+                        uid = doc.id
+                        user_ref = db.collection('users').document(uid)
+                        user_ref.update({
+                            'subscriptionId': subscription_id,
+                            'role': 'paid'
+                        })
+                        logging.info(f"Updated user {uid} to 'paid' after invoice payment")
+                else:
+                    # Try to find by email as fallback
+                    try:
+                        customer = stripe.Customer.retrieve(customer_id)
+                        email = customer.get('email')
+                        
+                        if email:
+                            email_user_docs = db.collection('users').where('email', '==', email).get()
+                            
+                            for doc in email_user_docs:
+                                uid = doc.id
+                                user_ref = db.collection('users').document(uid)
+                                user_ref.update({
+                                    'stripeCustomerId': customer_id,
+                                    'subscriptionId': subscription_id,
+                                    'role': 'paid'
+                                })
+                                logging.info(f"Updated user {uid} with customer ID {customer_id} and role 'paid' after invoice payment (found by email)")
+                    except Exception as e:
+                        logging.error(f"Error finding user by email after invoice payment: {str(e)}")
 
         else:
             logging.warning(f"Unhandled event type: {event['type']}")
@@ -901,7 +955,71 @@ def handle_checkout_session_completed(session):
     except Exception as e:
         logging.error(f"Error handling checkout.session.completed: {str(e)}")  # Log any errors
         
-
+@app.route('/refresh-subscription-status', methods=['POST'])
+def refresh_subscription_status():
+    try:
+        data = request.json
+        uid = data.get('uid')
+        email = data.get('email')
+        stripe_customer_id = data.get('stripeCustomerId')
+        
+        if not uid:
+            return jsonify({'error': 'UID is required'}), 400
+            
+        # Get user info
+        user_ref = db.collection('users').document(uid)
+        user_doc = user_ref.get()
+        
+        if not user_doc.exists:
+            return jsonify({'error': 'User not found'}), 404
+            
+        user_data = user_doc.to_dict()
+        
+        # Try to use provided stripeCustomerId first
+        if stripe_customer_id:
+            try:
+                retrieve_and_update_subscription(uid, stripe_customer_id)
+                return jsonify({'message': 'Subscription refreshed by customer ID'}), 200
+            except Exception as e:
+                logging.warning(f"Failed to refresh by customer ID: {str(e)}")
+                # Continue to email search
+        else:
+            # If no stripeCustomerId provided, try to use the one from user data
+            stripe_customer_id = user_data.get('stripeCustomerId')
+            if stripe_customer_id:
+                try:
+                    retrieve_and_update_subscription(uid, stripe_customer_id)
+                    return jsonify({'message': 'Subscription refreshed by customer ID from database'}), 200
+                except Exception as e:
+                    logging.warning(f"Failed to refresh by customer ID from database: {str(e)}")
+                    # Continue to email search
+        
+        # If we get here, we're falling back to email search
+        if email:
+            try:
+                customers = stripe.Customer.list(email=email)
+                if customers and customers.data:
+                    customer = customers.data[0]
+                    new_customer_id = customer.id
+                    
+                    # Update the stored customer ID
+                    user_ref.update({'stripeCustomerId': new_customer_id})
+                    
+                    # Retrieve and update subscription status
+                    retrieve_and_update_subscription(uid, new_customer_id)
+                    return jsonify({'message': 'Subscription refreshed by email'}), 200
+                else:
+                    return jsonify({'message': 'No customer found with this email'}), 404
+            except Exception as e:
+                logging.error(f"Error searching by email: {str(e)}")
+                return jsonify({'error': str(e)}), 500
+        else:
+            return jsonify({'error': 'Email is required for customer search'}), 400
+    
+    except Exception as e:
+        logging.error(f"Error refreshing subscription: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+    
 @app.route('/get-user-data', methods=['POST'])
 def get_user_data():
     try:
@@ -923,48 +1041,89 @@ def get_user_data():
 
         # Fetch the Stripe customer ID from Firestore data
         stripe_customer_id = user_data.get('stripeCustomerId')
+        email = user_data.get('email')
 
-        if not stripe_customer_id:
-            # No Stripe customer ID in Firestore, try to find the customer on Stripe by email
-            email = user_data.get('email')
-            if email:
-                # Search Stripe for the customer by email
-                customers = stripe.Customer.list(email=email).data
-                if customers:
-                    stripe_customer_id = customers[0].id  # Get the Stripe customer ID
-                    logging.info(f"Found Stripe customer ID for {email}: {stripe_customer_id}")
-
-                    # Save the Stripe customer ID to Firestore
+        # First, try the saved customer ID
+        if stripe_customer_id:
+            # Try to get subscriptions by customer ID
+            try:
+                subscriptions = stripe.Subscription.list(customer=stripe_customer_id)
+                
+                if subscriptions and subscriptions['data']:
+                    # Handle active subscription as before
+                    subscription = subscriptions['data'][0]
+                    status = subscription['status']
                     user_ref = db.collection('users').document(uid)
-                    user_ref.set({'stripeCustomerId': stripe_customer_id}, merge=True)
-                    logging.info(f"Saved Stripe customer ID {stripe_customer_id} for UID: {uid}")
+                    
+                    if status in ['active', 'trialing']:
+                        user_ref.set({'role': 'paid'}, merge=True)
+                        user_data['role'] = 'paid'
+                        logging.info(f"Updated user {uid} to 'paid' plan by customer ID.")
+                    else:
+                        user_ref.set({'role': 'free'}, merge=True)
+                        user_data['role'] = 'free'
+                        logging.info(f"Updated user {uid} to 'free' plan due to subscription status: {status}")
+                    
+                    # Return the updated user data
+                    return jsonify(user_data)
+            except Exception as e:
+                logging.warning(f"Error finding subscription by customer ID: {str(e)}")
+                # Continue to email search
+        
+        # If we get here, either customer ID was not found or no subscription was found
+        # Search by email as a fallback
+        if email:
+            try:
+                # Search for customers with this email
+                customers = stripe.Customer.list(email=email)
+                
+                if customers and customers['data']:
+                    # Get the first matching customer
+                    customer = customers['data'][0]
+                    new_customer_id = customer.id
+                    
+                    # Save this customer ID to the user record
+                    user_ref = db.collection('users').document(uid)
+                    user_ref.update({'stripeCustomerId': new_customer_id})
+                    user_data['stripeCustomerId'] = new_customer_id
+                    logging.info(f"Updated customer ID for {uid} to {new_customer_id}")
+                    
+                    # Check for subscriptions with this customer
+                    subscriptions = stripe.Subscription.list(customer=new_customer_id)
+                    
+                    if subscriptions and subscriptions['data']:
+                        subscription = subscriptions['data'][0]
+                        status = subscription['status']
+                        
+                        if status in ['active', 'trialing']:
+                            user_ref.set({'role': 'paid'}, merge=True)
+                            user_data['role'] = 'paid'
+                            logging.info(f"Updated user {uid} to 'paid' plan by email search.")
+                        else:
+                            user_ref.set({'role': 'free'}, merge=True)
+                            user_data['role'] = 'free'
+                            logging.info(f"User {uid} found by email but subscription status is: {status}")
+                    else:
+                        user_ref.set({'role': 'free'}, merge=True)
+                        user_data['role'] = 'free'
+                        logging.info(f"No active subscription found for email: {email}")
                 else:
-                    logging.warning(f"No Stripe customer found for email: {email}")
-                    return jsonify(user_data)  # Return user data without Stripe info
-
-        # Retrieve the subscription from Stripe
-        subscriptions = stripe.Subscription.list(customer=stripe_customer_id)
-
-        if subscriptions and subscriptions['data']:
-            subscription = subscriptions['data'][0]  # Get the first subscription
-            status = subscription['status']  # Get the subscription status (e.g., 'active', 'canceled')
-
-            # Update the Firestore user's role based on subscription status
-            user_ref = db.collection('users').document(uid)
-            if status in ['active', 'trialing']:
-                user_ref.set({'role': 'paid'}, merge=True)  # Set role to 'paid'
-                logging.info(f"Updated user {uid} to 'paid' plan.")
-                user_data['role'] = 'paid'  # Update the local data being returned
-            else:
-                user_ref.set({'role': 'free'}, merge=True)  # Set role to 'free'
-                logging.info(f"Updated user {uid} to 'free' plan due to subscription status: {status}")
-                user_data['role'] = 'free'  # Update the local data being returned
+                    user_ref = db.collection('users').document(uid)
+                    user_ref.set({'role': 'free'}, merge=True)
+                    user_data['role'] = 'free'
+                    logging.info(f"No Stripe customer found for email: {email}")
+            except Exception as e:
+                logging.error(f"Error searching by email: {str(e)}")
+                user_ref = db.collection('users').document(uid)
+                user_ref.set({'role': 'free'}, merge=True)
+                user_data['role'] = 'free'
         else:
-            logging.warning(f"No active subscription found for customer {stripe_customer_id}.")
-            user_ref.set({'role': 'free'}, merge=True)  # Set role to 'free' if no active subscription found
-            user_data['role'] = 'free'  # Update the local data being returned
+            user_ref = db.collection('users').document(uid)
+            user_ref.set({'role': 'free'}, merge=True)
+            user_data['role'] = 'free'
+            logging.warning(f"No email found for user {uid}")
 
-        # Return the user data (including the role: 'paid' or 'free')
+        # Return the user data
         return jsonify(user_data)
     except Exception as e:
         logging.error(f"Error retrieving user data: {str(e)}")

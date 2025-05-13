@@ -29,6 +29,7 @@ const features = [
   { id: 'analysis', name: 'Analysis Page' },
   { id: 'training', name: 'Training Page' },
   { id: 'savedGames', name: 'Saved Games' },
+  { id: 'aiAnalysis', name: 'AI Analysis' }, // New feature added
 ];
 
 // Dataset-specific permissions
@@ -157,7 +158,10 @@ const AdminSettings = () => {
       } else {
         // Initialize default permissions (0 = All Users)
         const defaultPermissions = {};
-        features.forEach((feature) => (defaultPermissions[feature.id] = 0));
+        features.forEach((feature) => {
+          // Set aiAnalysis to premium only (2) by default
+          defaultPermissions[feature.id] = feature.id === 'aiAnalysis' ? 2 : 0;
+        });
         setFeaturePermissions(defaultPermissions);
       }
 

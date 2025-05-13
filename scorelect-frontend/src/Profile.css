@@ -1,147 +1,305 @@
-/* src/Profile.css */
+/* src/Profile.css - Dark Mode Styling */
+
+/* ===== VARIABLES ===== */
+:root {
+  /* Dark Mode Color Palette - Matching AnalysisGAA */
+  --primary: #733FAA;         /* Original purple */
+  --primary-light: #8C52CC;   /* Lighter purple */
+  --primary-dark: #6030A0;    /* Darker purple */
+  --secondary: #9B66D9;       /* Secondary purple */
+  --accent: #FF79C6;          /* Pink accent */
+  --dark: #0F0A1B;            /* Very dark purple/black */
+  --dark-alt: #1A1232;        /* Dark purple background */
+  --dark-card: #251943;       /* Slightly lighter for cards */
+  --light: #E6E6FA;           /* Lavender white */
+  --gray-light: #465171;      /* Medium-dark gray with purple tint */
+  --gray: #738194;            /* Medium gray */
+  --gray-dark: #9BAACB;       /* Light gray */
+  --success: #50FA7B;         /* Green */
+  --warning: #FFBF4D;         /* Amber */
+  --danger: #FF5555;          /* Red */
+  
+  /* Typography */
+  --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-secondary: 'Poppins', 'Inter', sans-serif;
+  
+  /* Spacing */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-xxl: 3rem;
+  
+  /* Border Radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  
+  /* Transitions */
+  --transition-fast: 150ms ease-in-out;
+  --transition-normal: 250ms ease-in-out;
+  --transition-slow: 350ms ease-in-out;
+  
+  /* Glows */
+  --glow-primary: 0 0 15px rgba(115, 63, 170, 0.5);
+  --glow-accent: 0 0 15px rgba(255, 121, 198, 0.5);
+}
 
 /* Profile container */
 .profile-container {
-  background-color: #ffffff; /* White background */
-  padding: 40px;
-  border-radius: 10px;
   max-width: 800px;
-  margin: 50px auto; /* Center the container */
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); /* Subtle shadow */
-  color: #333; /* Dark text color */
-  text-align: center;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  margin: 50px auto;
+  padding: var(--space-xl);
+  background: linear-gradient(145deg, var(--dark-alt), var(--dark-card));
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(115, 63, 170, 0.2);
+  box-shadow: var(--shadow-lg);
+  color: var(--light);
+  font-family: var(--font-primary);
+  transition: var(--transition-normal);
+}
+
+.profile-container:hover {
+  box-shadow: var(--shadow-xl), var(--glow-primary);
+  border-color: rgba(115, 63, 170, 0.4);
 }
 
 /* User info section */
-.user-info {
+.profile-user-info {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 20px;
+  margin-bottom: var(--space-xl);
+  background: linear-gradient(145deg, rgba(115, 63, 170, 0.1), rgba(115, 63, 170, 0.2));
+  padding: var(--space-lg);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  border: 1px solid rgba(115, 63, 170, 0.3);
 }
 
 .avatar-icon {
   font-size: 4rem;
-  color: #4caf50; /* Green color to indicate active status */
-  margin-right: 15px;
+  color: var(--accent);
+  margin-right: var(--space-lg);
+  filter: drop-shadow(0 0 8px rgba(255, 121, 198, 0.5));
 }
 
-.user-info p {
-  font-size: 1.1rem;
-  color: #555; /* Slightly darker for better readability */
+.profile-user-info p {
+  font-size: 1.2rem;
+  color: var(--light);
+}
+
+.profile-user-info p strong {
+  color: var(--gray-dark);
+  font-weight: 500;
+  margin-right: var(--space-xs);
 }
 
 /* Profile headings */
 .profile-container h2 {
-  font-size: 2.0rem;
-  margin-bottom: 20px;
-  color: #333;
+  font-family: var(--font-secondary);
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: var(--space-xl);
+  position: relative;
+  text-align: center;
+  text-shadow: 0 0 10px rgba(115, 63, 170, 0.4);
+}
+
+.profile-container h2::after {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  height: 4px;
+  background-color: var(--accent);
+  border-radius: 4px;
+  box-shadow: var(--glow-accent);
 }
 
 .profile-container h3 {
   font-size: 1.8rem;
-  margin-top: 30px;
-  margin-bottom: 15px;
-  color: #4caf50; /* Green to indicate subscription details */
+  margin-top: var(--space-xl);
+  margin-bottom: var(--space-md);
+  color: var(--secondary);
+  font-weight: 600;
+  text-shadow: 0 0 5px rgba(155, 102, 217, 0.3);
 }
 
 /* Paragraphs */
 .profile-container p {
   font-size: 1.1rem;
-  margin-bottom: 15px;
+  margin-bottom: var(--space-md);
+  color: var(--gray-dark);
+  line-height: 1.6;
 }
 
-.profile-container p strong {
-  color: #555; /* Darker color for labels */
+/* Debug Information */
+.debug-info {
+  margin-top: var(--space-xl);
+  padding: var(--space-lg);
+  background: rgba(115, 63, 170, 0.1);
+  border-radius: var(--radius-md);
+  border: 1px dashed rgba(115, 63, 170, 0.4);
+  transition: var(--transition-normal);
 }
 
-/* Error message styling */
-.error-message {
-  background-color: #ffdddd; /* Light red background */
-  border-left: 6px solid #f44336; /* Red border on the left */
-  margin-bottom: 20px;
-  padding: 10px;
-  text-align: left;
-  border-radius: 5px;
-  color: #a94442; /* Dark red text */
+.debug-info:hover {
+  background: rgba(115, 63, 170, 0.15);
+  border-color: var(--primary);
+}
+
+.debug-info h4 {
+  font-size: 1.1rem;
+  color: var(--secondary);
+  margin-bottom: var(--space-sm);
+  font-weight: 600;
+}
+
+.debug-info pre {
+  background: rgba(0, 0, 0, 0.2);
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  color: var(--light);
+  font-family: monospace;
+  font-size: 0.9rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 /* Buttons */
 .profile-container button {
-  padding: 10px 20px;
-  margin: 10px;
-  font-size: 1rem;
-  border: none;
-  border-radius: 5px;
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  transition: var(--transition-normal);
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  border: none;
+  box-shadow: var(--shadow-sm);
+  text-transform: none;
+  font-family: var(--font-primary);
+  margin: var(--space-md) auto;
+  font-size: 1rem;
+  min-width: 180px;
 }
 
 /* Logout button */
 .logout-button {
-  background-color: #f44336; /* Red */
-  color: white;
+  background-color: var(--danger);
+  color: var(--light);
 }
 
 .logout-button:hover {
-  background-color: #d32f2f; /* Darker red on hover */
+  background-color: #ff4040;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md), 0 0 10px rgba(255, 85, 85, 0.5);
 }
 
 /* Cancel subscription button */
 .cancel-button {
-  background-color: #ff9800; /* Orange */
-  color: white;
+  background-color: var(--warning);
+  color: var(--dark);
 }
 
 .cancel-button:hover {
-  background-color: #e68900; /* Darker orange on hover */
+  background-color: #f1b541;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md), 0 0 10px rgba(255, 191, 77, 0.5);
 }
 
 /* Renew/Subscribe button */
 .renew-button {
-  background-color: #4caf50; /* Green */
-  color: white;
+  background-color: var(--success);
+  color: var(--dark);
 }
 
 .renew-button:hover {
-  background-color: #43a047; /* Darker green on hover */
+  background-color: #3acb60;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md), 0 0 10px rgba(80, 250, 123, 0.5);
 }
 
-/* Withdraw section */
-.withdraw-section {
-  display: flex;
-  justify-content: center;
+/* Refresh button */
+.refresh-button {
+  background-color: var(--primary);
+  color: var(--light);
+  margin-top: var(--space-lg);
+}
+
+.refresh-button:hover {
+  background-color: var(--primary-dark);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md), var(--glow-primary);
+}
+
+.refresh-button:disabled {
+  background-color: var(--gray-light);
+  color: var(--light);
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Subscription Section */
+.subscription-section {
+  background: linear-gradient(145deg, rgba(115, 63, 170, 0.1), rgba(115, 63, 170, 0.2));
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  margin: var(--space-xl) 0;
+  border: 1px solid rgba(115, 63, 170, 0.3);
+  transition: var(--transition-normal);
+}
+
+.subscription-section:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg), var(--glow-primary);
+  border-color: var(--primary);
+}
+
+/* Premium Badge */
+.premium-badge {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 15px;
+  background: linear-gradient(45deg, var(--primary), var(--secondary));
+  color: var(--light);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-lg);
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: var(--space-md);
+  box-shadow: var(--glow-primary);
 }
 
-.withdraw-section input[type="number"] {
-  padding: 8px;
-  width: 200px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
+.premium-badge svg {
+  margin-right: var(--space-xs);
 }
 
-.withdraw-button {
-  background-color: #17a2b8; /* Teal */
-  color: white;
-}
-
-.withdraw-button:hover {
-  background-color: #138496; /* Darker teal on hover */
-}
-
-/* Spinner styling (if used) */
+/* Spinner styling for loading states */
 .spinner {
-  border: 8px solid #f3f3f3; /* Light gray */
-  border-top: 8px solid #4caf50; /* Green */
+  border: 4px solid rgba(115, 63, 170, 0.2);
+  border-top: 4px solid var(--primary);
   border-radius: 50%;
-  width: 60px;
-  height: 60px;
-  animation: spin 2s linear infinite;
-  margin: 20px auto;
+  width: 20px;
+  height: 20px;
+  animation: spin 1s linear infinite;
+  margin-right: var(--space-sm);
 }
 
 @keyframes spin {
@@ -150,11 +308,10 @@
 }
 
 /* Responsive Design */
-
-/* Tablets and small desktops */
 @media (max-width: 768px) {
   .profile-container {
-    padding: 30px;
+    padding: var(--space-lg);
+    margin: 30px auto;
   }
 
   .profile-container h2 {
@@ -165,66 +322,66 @@
     font-size: 1.5rem;
   }
 
-  .user-info p {
-    font-size: 1rem;
+  .profile-user-info {
+    flex-direction: column;
+    text-align: center;
   }
 
   .avatar-icon {
-    font-size: 3rem;
-    margin-right: 10px;
-  }
-
-  .profile-container p {
-    font-size: 1rem;
+    margin-right: 0;
+    margin-bottom: var(--space-md);
   }
 
   .profile-container button {
-    font-size: 0.9rem;
-    padding: 8px 16px;
-  }
-
-  .spinner {
-    width: 50px;
-    height: 50px;
-    border-width: 6px;
+    width: 100%;
   }
 }
 
-/* Mobile devices */
 @media (max-width: 480px) {
   .profile-container {
-    padding: 20px;
+    padding: var(--space-md);
+    margin: 20px auto;
   }
 
   .profile-container h2 {
-    font-size: 1.5rem;
+    font-size: 1.8rem;
   }
 
   .profile-container h3 {
-    font-size: 1.2rem;
+    font-size: 1.3rem;
   }
 
-  .user-info p {
-    font-size: 0.9rem;
-  }
-
-  .avatar-icon {
-    font-size: 2.5rem;
-    margin-right: 8px;
-  }
-
-  .profile-container p {
-    font-size: 0.9rem;
-  }
-
-  .profile-container button {
+  .debug-info pre {
     font-size: 0.8rem;
-    padding: 6px 12px;
   }
+}
 
-  .spinner {
-    width: 40px;
-    height: 40px;
-    border-width: 4px;
-  }
+/* Sidebar integration styles - Ensure no conflicts with sidebar.css */
+.sidebar-profile-btn {
+  position: relative;
+  overflow: hidden;
+  background-color: transparent;
+  color: white;
+  padding: 8px 12px;
+  font-size: 0.95rem;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  display: flex;
+  align-items: center;
+}
+
+.sidebar-profile-btn.loading {
+  pointer-events: none;
+  color: #fff;
+}
+
+.sidebar-profile-btn.loading::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 100%;
+  background-color: rgba(0, 0, 0, 0.1);
 }

@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { SavedGamesContext } from './components/SavedGamesContext';
 import { GameContext } from './GameContext';
+import { useAuth } from './AuthContext';
+import { doc, getDoc } from 'firebase/firestore';
+import { firestore } from './firebase';
 import './DashboardHome.css'; // Import the new CSS file
 import InsightsIcon from '@mui/icons-material/Insights';  // Without 'Icon' at the end of the path
-
 
 // Import icons from react-icons
 import { 
@@ -45,6 +47,9 @@ const RecentGameItem = ({ game, onSelect }) => {
   const [isOverflowing, setIsOverflowing] = useState(false);
   const textRef = useRef(null);
   const navigate = useNavigate();
+  const { currentUser } = useAuth(); // Get current user from auth context
+  const [permissions, setPermissions] = useState({});
+  const [userLevel, setUserLevel] = useState(0); // 0=all, 1=free, 2=premium
   
   // Check if text is overflowing on mount and window resize
   useEffect(() => {
@@ -60,6 +65,35 @@ const RecentGameItem = ({ game, onSelect }) => {
     
     return () => window.removeEventListener('resize', checkOverflow);
   }, [game.gameName]);
+  
+  // Fetch permissions from Firestore when component mounts
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      try {
+        // Get feature permissions
+        const featuresRef = doc(firestore, 'adminSettings', 'config');
+        const featuresSnap = await getDoc(featuresRef);
+        if (featuresSnap.exists()) {
+          setPermissions(featuresSnap.data().permissions || {});
+        }
+        
+        // Determine user level
+        // This is where you determine if the user is free/premium based on your authentication
+        // Adjust this logic based on how your app stores premium status
+        if (currentUser && currentUser.premium) {
+          setUserLevel(2); // Premium user
+        } else if (currentUser) {
+          setUserLevel(1); // Free user
+        } else {
+          setUserLevel(0); // Guest or anonymous user
+        }
+      } catch (error) {
+        console.error("Error fetching permissions:", error);
+      }
+    };
+    
+    fetchPermissions();
+  }, [currentUser]);
   
   // Format the date if available
   const formattedDate = game.matchDate 
@@ -339,35 +373,76 @@ const handleDatasetAnalysis = (e) => {
   }
 };
   
-  // AI analysis (locked feature)
+  // AI analysis - NOW CHECKS PERMISSIONS
   const handleAIAnalysis = (e) => {
     e.stopPropagation(); // Prevent triggering the parent onClick
     
-    Swal.fire({
-      title: 'Premium Feature',
-      html: `
-        <div style="text-align: left; color: var(--light)">
-          <p>AI-powered match analysis is a premium feature that provides:</p>
-          <ul style="margin-left: 20px">
-            <li>Advanced performance metrics</li>
-            <li>Predictive play patterns</li>
-            <li>Player improvement recommendations</li>
-            <li>Tactical suggestions</li>
-          </ul>
-        </div>
-      `,
-      icon: 'info',
-      background: 'var(--dark-card)',
-      confirmButtonColor: 'var(--primary)',
-      confirmButtonText: 'Upgrade',
-      showCancelButton: true,
-      cancelButtonText: 'Maybe Later',
-      cancelButtonColor: 'var(--gray-light)'
-    }).then((result) => {
-      if (result.isConfirmed) {
-        navigate('/upgrade');
+    // Check if user has access to AI analysis feature
+    // Get aiAnalysis permission level from admin settings
+    const aiAnalysisPermission = permissions['aiAnalysis'] ?? 2; // Default to premium only if not set
+    
+    if (userLevel >= aiAnalysisPermission) {
+      // User has permission, navigate to AI dashboard
+      Swal.fire({
+        title: 'Opening AI Analysis',
+        text: `Analyzing performance data for ${game.gameName}`,
+        icon: 'info',
+        background: 'var(--dark-card)',
+        confirmButtonColor: 'var(--primary)',
+        showConfirmButton: false,
+        timer: 1500
+      });
+      
+      // Navigate to the appropriate AI dashboard based on sport
+      if (game.sport === 'Soccer') {
+        navigate('/ai-soccer-dashboard', { 
+          state: { 
+            file: { 
+              datasetName: game.datasetName,
+              games: [game] 
+            }, 
+            sport: 'Soccer'
+          } 
+        });
+      } else {
+        navigate('/ai-dashboard', { 
+          state: { 
+            file: { 
+              datasetName: game.datasetName,
+              games: [game] 
+            }, 
+            sport: game.sport || 'GAA'
+          } 
+        });
       }
-    });
+    } else {
+      // Show premium feature popup for non-premium users
+      Swal.fire({
+        title: 'Premium Feature',
+        html: `
+          <div style="text-align: left; color: var(--light)">
+            <p>AI-powered match analysis is a premium feature that provides:</p>
+            <ul style="margin-left: 20px">
+              <li>Advanced performance metrics</li>
+              <li>Predictive play patterns</li>
+              <li>Player improvement recommendations</li>
+              <li>Tactical suggestions</li>
+            </ul>
+          </div>
+        `,
+        icon: 'info',
+        background: 'var(--dark-card)',
+        confirmButtonColor: 'var(--primary)',
+        confirmButtonText: 'Upgrade',
+        showCancelButton: true,
+        cancelButtonText: 'Maybe Later',
+        cancelButtonColor: 'var(--gray-light)'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          navigate('/upgrade');
+        }
+      });
+    }
   };
     
   return (
@@ -400,14 +475,14 @@ const handleDatasetAnalysis = (e) => {
           <InsightsIcon style={{ fontSize: 16 }} />
         </button>
         
-        {/* AI Analysis Button (Locked) */}
+        {/* AI Analysis Button (Checks permissions) */}
         <button
           className="action-btn ai"
           onClick={handleAIAnalysis}
-          title="AI Analysis (Premium)"
+          title="AI Analysis"
         >
           <AutoAwesomeIcon style={{ fontSize: 14 }} />
-          <div className="premium-dot"></div>
+          {(permissions['aiAnalysis'] ?? 2) > 0 && <div className="premium-dot"></div>}
         </button>
       </div>
     </div>
@@ -612,15 +687,6 @@ const DashboardHome = ({ selectedSport, onNavigate }) => {
           cta="Open Video Tool"
           onClick={handleVideoClick}
         />
-
-        {/* Team Roster */}
-        {/* <FeatureCard
-          icon={FaUsers}
-          title="Team Roster"
-          blurb={`Manage your ${selectedSport || 'team'} squad. Add players, set positions, track injury status, and maintain contact information.`}
-          cta="View Team Roster"
-          onClick={selectedSport ? () => navigate(`/players/${selectedSport.toLowerCase()}`) : () => Swal.fire('Select Sport', 'Please select a sport first to view team roster.', 'warning')}
-        /> */}
 
         {/* Data Hub */}
         <FeatureCard

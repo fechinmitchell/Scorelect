@@ -144,6 +144,7 @@ const AdminSettings = () => {
   const [datasetName, setDatasetName] = useState('GAA All Shots');
   const [isCalculating, setIsCalculating] = useState(false);
   const [modelSummary, setModelSummary] = useState(null);
+  const [totalMetrics, setTotalMetrics] = useState(null);
 
   const navigate = useNavigate();
 
@@ -266,6 +267,7 @@ const AdminSettings = () => {
     try {
       setIsCalculating(true);
       setModelSummary(null);
+      setTotalMetrics(null);
 
       //  use axios + BASE_API_URL so we never hit the React dev-server
       const response = await axios.post(
@@ -273,39 +275,72 @@ const AdminSettings = () => {
         { dataset_name: datasetName }
       );
 
-      if (response.status !== 200 || response.data.status !== 'success') {
+      console.log('Recalculation response:', response.data);
+
+      // Check if we have a success status or if the response contains expected data
+      if (response.status !== 200 || 
+          (response.data.status && response.data.status !== 'success')) {
         throw new Error(response.data.error || 'Failed to recalculate');
       }
 
-      setModelSummary(response.data.model_summary);
+      // Map the response data properly
+      let summary = response.data.model_summary;
+      let metrics = response.data.total_metrics;
+      
+      // If there's no model_summary or total_metrics, check alternative structures
+      if (!summary && response.data.status === 'success') {
+        // The data might be directly in the response
+        summary = response.data;
+      }
+      
+      if (!metrics && response.data.total_shots !== undefined) {
+        // Metrics might be at the top level
+        metrics = {
+          total_shots: response.data.total_shots,
+          total_games: response.data.total_games || response.data.games_processed || 0
+        };
+      }
+
+      console.log('Processed model summary:', summary);
+      console.log('Processed total metrics:', metrics);
+
+      setModelSummary(summary);
+      setTotalMetrics(metrics);
       Swal.fire('Success', `Recalculation completed for ${datasetName}`, 'success');
     } catch (error) {
+      console.error('Recalculation error:', error);
       Swal.fire('Error', error.message, 'error');
     } finally {
       setIsCalculating(false);
     }
   };
 
-  const metricsCard = (title, metrics) => (
-    <Box
-      sx={{
-        p: 2,
-        border: '1px solid',
-        borderColor: mode === 'dark' ? '#555' : '#e0e0e0',
-        borderRadius: '8px',
-        mb: 2,
-      }}
-    >
-      <Typography variant="h6" gutterBottom>
-        {title}
-      </Typography>
-      {Object.entries(metrics).map(([key, value]) => (
-        <Typography key={key} variant="body2">
-          {key}: {value === null ? 'n/a' : value.toFixed(3)}
+  const metricsCard = (title, metrics) => {
+    if (!metrics || typeof metrics !== 'object') return null; // ⬅️ early-out guard
+    
+    return (
+      <Box
+        sx={{
+          p: 2,
+          border: '1px solid',
+          borderColor: mode === 'dark' ? '#555' : '#e0e0e0',
+          borderRadius: '8px',
+          mb: 2,
+        }}
+      >
+        <Typography variant="h6" gutterBottom>
+          {title}
         </Typography>
-      ))}
-    </Box>
-  );
+        {Object.entries(metrics).map(([k, v]) => (
+          <Typography key={k} variant="body2">
+            {k}: {v == null || Number.isNaN(v) ? 'n/a' 
+              : typeof v === 'number' ? v.toFixed(3) 
+              : v}
+          </Typography>
+        ))}
+      </Box>
+    );
+  };
 
   return (
     <ThemeProvider theme={getTheme(mode)}>
@@ -542,16 +577,40 @@ const AdminSettings = () => {
                     <Typography variant="h6" align="center" gutterBottom>
                       Model Metrics
                     </Typography>
-                    {metricsCard('Points Model', modelSummary.points_model)}
-                    {metricsCard('Goals Model', modelSummary.goals_model)}
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      align="center"
-                      sx={{ mt: 2 }}
-                    >
-                      Total Shots: {modelSummary.total_shots} | Games Processed: {modelSummary.games_processed}
-                    </Typography>
+                    
+                    {/* Check for the presence of required objects and render accordingly */}
+                    {modelSummary.points_open_model && metricsCard('Points – Open Play', modelSummary.points_open_model)}
+                    {modelSummary.points_set_model && metricsCard('Points – Set Play', modelSummary.points_set_model)}
+                    {modelSummary.goals_model && metricsCard('Goals Model', modelSummary.goals_model)}
+                    
+                    {/* Fallback display for if the response structure is different */}
+                    {!modelSummary.points_open_model && !modelSummary.points_set_model && !modelSummary.goals_model && (
+                      <>
+                        <Box sx={{ mb: 2 }}>
+                          <Typography align="center" variant="subtitle1" gutterBottom>
+                            Model Summary Details
+                          </Typography>
+                          <Typography variant="body2">
+                            {Object.entries(modelSummary).map(([key, value]) => (
+                              <div key={key}>
+                                {key}: {typeof value === 'number' ? value.toFixed(3) : JSON.stringify(value)}
+                              </div>
+                            ))}
+                          </Typography>
+                        </Box>
+                      </>
+                    )}
+
+                    {totalMetrics && (
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        align="center"
+                        sx={{ mt: 2 }}
+                      >
+                        Total Shots: {totalMetrics.total_shots} | Games Processed: {totalMetrics.total_games || totalMetrics.games_processed}
+                      </Typography>
+                    )}
                   </>
                 )}
               </>

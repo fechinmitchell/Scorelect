@@ -2718,13 +2718,13 @@ import matplotlib.pyplot as plt
 # import seaborn as sns
 from sklearn.inspection import permutation_importance
 
+
 @app.route("/recalculate-xpoints", methods=["POST"])
 def recalculate_xpoints():
     """
     Maximum-accuracy xPoints calculation with state-of-the-art sports analytics techniques.
-    Fixed to handle NaN values properly and with improved set play modeling.
+    Uses a unified model approach where set plays are integrated directly into the primary model.
     """
-    # Import required dependencies
     import numpy as np
     import pandas as pd
     from sklearn.linear_model import LogisticRegression
@@ -2739,7 +2739,6 @@ def recalculate_xpoints():
     import logging
     import time
     
-    # Start timing the function
     start_time = time.time()
     
     data = request.get_json() or {}
@@ -2749,7 +2748,6 @@ def recalculate_xpoints():
     try:
         logging.info(f"=== xPoints calculation start | user={USER_ID} | dataset={DATASET_NAME}")
 
-        # ------------------------------------------------- 1. Load shots
         games_ref = (
             db.collection("savedGames")
               .document(USER_ID)
@@ -2768,7 +2766,6 @@ def recalculate_xpoints():
 
         logging.info(f"Loaded {len(originals)} games — {len(all_shots)} shots")
 
-        # ------------------------------------------------- 2. Build DataFrame
         goal_out = {"goal", "scores goal", "made goal", "hit goal", "penalty goal"}
         point_out = {"point", "over", "scores point", "made point", "offensive mark", 
                     "fortyfive", "free", "point scored", "free scored"}
@@ -2779,7 +2776,6 @@ def recalculate_xpoints():
             for si, s in enumerate(g["gameData"]):
                 action_raw = (s.get("Outcome") or s.get("action") or "").lower().strip()
                 
-                # Categorize the shot
                 if any(term in action_raw for term in goal_out):
                     cat = "goal"
                 elif any(term in action_raw for term in point_out):
@@ -2789,17 +2785,14 @@ def recalculate_xpoints():
                     
                 outcome_counts[cat] += 1
                 
-                # Get coordinates
                 try:
                     sx = float(s.get("x", 0))
                     sy = float(s.get("y", 0))
                 except (ValueError, TypeError):
                     sx, sy = 0, 0
                 
-                # Calculate distance
                 dist_to_goal = ((145 - sx) ** 2 + (44 - sy) ** 2) ** 0.5
                 
-                # Basic row data
                 row = {
                     "gi": gi,
                     "si": si,
@@ -2819,11 +2812,8 @@ def recalculate_xpoints():
         df = pd.DataFrame(rows)
         logging.info(f"DataFrame shape {df.shape}")
 
-        # ------------------------------------------------- 3. Target Variables
-        # Custom scoring system for GAA
-        df["point_value"] = np.where(df["dist"] > 40, 2, 1)  # 2 points for shots beyond 40m
+        df["point_value"] = np.where(df["dist"] > 40, 2, 1)
         
-        # Target variables
         df["Score_Points"] = np.where(
             (df["cat"] == "point") & (df["dist"] > 40), 2,
             np.where(df["cat"] == "point", 1, 0)
@@ -2831,66 +2821,69 @@ def recalculate_xpoints():
         df["Score_Goals"] = (df["cat"] == "goal").astype(int)
         df["Score_Binary_Points"] = (df["cat"] == "point").astype(int)
         
-        # ------------------------------------------------- 4. Feature Engineering
-        
-        # Angle calculation
         df["Shot_Angle"] = np.degrees(np.arctan2(44 - df["y"], 145 - df["x"]))
         df["Shot_Angle_Abs"] = df["Shot_Angle"].abs()
         
-        # Distance to sideline
         df["dist_to_sideline"] = np.minimum(df["y"], 88 - df["y"])
         
-        # Advanced geometric features
         df["dist_squared"] = df["dist"] ** 2
         df["dist_log"] = np.log1p(df["dist"])
         df["angle_squared"] = df["Shot_Angle_Abs"] ** 2
         
-        # Interaction features
         df["dist_angle_interaction"] = df["dist"] * df["Shot_Angle_Abs"] / 90
         
-        # Central zone indicator
         df["is_central_zone"] = ((df["Shot_Angle_Abs"] < 30) & (df["dist"] < 35)).astype(int)
         
-        # ------------------------------------------------- IMPROVED SET PLAY IDENTIFICATION
-        # More precise set play pattern for accurate identification
         strict_set_play_pattern = r'\b(free|penalty|45|fortyfive|sideline|mark)\b'
         df["is_setplay"] = df["action"].str.contains(strict_set_play_pattern, case=False, regex=True, na=False).astype(int)
         
-        # Log set play identification stats
-        set_play_count = df["is_setplay"].sum()
+        df["set_play_subtype"] = "open_play"
+        df.loc[df["is_setplay"] == 1, "set_play_subtype"] = "other"
+        
+        df.loc[df["is_setplay"] == 1 & df["action"].str.contains(r"\bpenalty\b", case=False, na=False, regex=True), "set_play_subtype"] = "penalty"
+        df.loc[df["is_setplay"] == 1 & df["action"].str.contains(r"\bfree\b|\bfreekick\b", case=False, na=False, regex=True), "set_play_subtype"] = "free"
+        df.loc[df["is_setplay"] == 1 & df["action"].str.contains(r"\b45\b|\bfortyfive\b", case=False, na=False, regex=True), "set_play_subtype"] = "45"
+        df.loc[df["is_setplay"] == 1 & df["action"].str.contains(r"\bmark\b|\boffensive mark\b", case=False, na=False, regex=True), "set_play_subtype"] = "mark"
+        df.loc[df["is_setplay"] == 1 & df["action"].str.contains(r"\bsideline\b|\bside line\b", case=False, na=False, regex=True), "set_play_subtype"] = "sideline"
+        
+        df["is_penalty"] = (df["set_play_subtype"] == "penalty").astype(int)
+        df["is_free"] = (df["set_play_subtype"] == "free").astype(int)
+        df["is_45"] = (df["set_play_subtype"] == "45").astype(int)
+        df["is_mark"] = (df["set_play_subtype"] == "mark").astype(int)
+        df["is_sideline"] = (df["set_play_subtype"] == "sideline").astype(int)
+        
         set_play_mask = df["is_setplay"] == 1
         open_play_mask = ~set_play_mask
+        penalty_mask = df["set_play_subtype"] == "penalty"
         
-        # Calculate baseline success rates for debugging
         set_play_success_rate = df.loc[set_play_mask, "Score_Binary_Points"].mean() if set_play_mask.any() else 0
         open_play_success_rate = df.loc[open_play_mask, "Score_Binary_Points"].mean() if open_play_mask.any() else 0
-        
-        # Diagnostic: If set play success rate is extremely high, check classification
-        if set_play_success_rate > 0.9 and set_play_mask.any():
-            logging.warning(f"Unusually high set play success rate: {set_play_success_rate:.3f}")
-            logging.info(f"Set play outcomes: {df.loc[set_play_mask, 'cat'].value_counts().to_dict()}")
-            
-            # Check if action terms give any clues
-            action_terms = df.loc[set_play_mask, 'action'].str.extract(f'({strict_set_play_pattern})', expand=False)
-            logging.info(f"Set play action terms: {action_terms.value_counts(dropna=False).to_dict()}")
-            
-            # If we have too few misses in set plays, we may need to adjust expectations
-            set_play_misses = (df.loc[set_play_mask, "cat"] == "miss").sum()
-            if set_play_misses < set_play_mask.sum() * 0.1:
-                logging.warning(f"Very few set play misses detected ({set_play_misses} of {set_play_mask.sum()})")
-                logging.warning("Adjusting set play model to account for high success rate")
         
         logging.info(f"Set plays: {set_play_mask.sum()}, Open plays: {open_play_mask.sum()}")
         logging.info(f"Set play success rate: {set_play_success_rate:.3f}, Open play success rate: {open_play_success_rate:.3f}")
         
-        # Pressure mapping
+        subtype_counts = df["set_play_subtype"].value_counts().to_dict()
+        
+        subtype_success_rates = {}
+        for subtype in df["set_play_subtype"].unique():
+            subtype_mask = df["set_play_subtype"] == subtype
+            if subtype_mask.sum() >= 3:
+                subtype_success_rates[subtype] = df.loc[subtype_mask, "Score_Binary_Points"].mean()
+        
+        logging.info(f"Set play types: {subtype_counts}")
+        logging.info(f"Success rates by type: {subtype_success_rates}")
+        
+        df["setplay_distance"] = df["is_setplay"] * df["dist"]
+        df["setplay_angle"] = df["is_setplay"] * df["Shot_Angle_Abs"]
+        df["penalty_distance"] = df["is_penalty"] * df["dist"]
+        df["free_distance"] = df["is_free"] * df["dist"]
+        
         pressure_map = {
             'none': 0, 'low': 0.33, 'medium': 0.67, 'high': 1.0, 
             'n': 0, 'y': 1, '': 0, 'no': 0, 'yes': 1
         }
         df["pressure_value"] = df["pressure"].map(pressure_map).fillna(0)
         
-        # Position mapping
         position_map = {
             'goalkeeper': 0, 'goalie': 0, 'keeper': 0,
             'back': 1, 'defender': 1, 'defense': 1,
@@ -2901,11 +2894,9 @@ def recalculate_xpoints():
             lambda p: position_map.get(p.lower().strip() if isinstance(p, str) else "unknown", 2)
         )
         
-        # Foot preference
         df["is_right_foot"] = df["foot"].str.contains("right", case=False, na=False).astype(int)
         df["is_left_foot"] = df["foot"].str.contains("left", case=False, na=False).astype(int)
         
-        # Side advantage
         df["is_left_side"] = (df["y"] < 44).astype(int)
         df["preferred_side_advantage"] = np.where(
             ((df["is_left_side"] == 1) & (df["is_left_foot"] == 1)) |
@@ -2913,17 +2904,13 @@ def recalculate_xpoints():
             1, 0
         )
         
-        # Distance zones - Fixed to handle NaN values
-        # Create categorical bins first
         df["distance_zone_cat"] = pd.cut(
             df["dist"], 
             bins=[0, 20, 30, 40, 50, 60, 100],
             labels=["0", "1", "2", "3", "4", "5"]
         )
-        # Convert to int with proper NaN handling
         df["distance_zone"] = pd.to_numeric(df["distance_zone_cat"], errors='coerce').fillna(0).astype(int)
         
-        # Angle zones - Fixed to handle NaN values
         df["angle_zone_cat"] = pd.cut(
             df["Shot_Angle_Abs"], 
             bins=[0, 15, 30, 45, 60, 90],
@@ -2931,99 +2918,75 @@ def recalculate_xpoints():
         )
         df["angle_zone"] = pd.to_numeric(df["angle_zone_cat"], errors='coerce').fillna(0).astype(int)
         
-        # Clean up temporary columns
         df = df.drop(["distance_zone_cat", "angle_zone_cat"], axis=1)
         
-        # Edge case handling
         df["is_extreme_angle"] = (df["Shot_Angle_Abs"] > 60).astype(int)
         df["is_long_shot"] = (df["dist"] > 60).astype(int)
         df["is_very_close"] = (df["dist"] < 10).astype(int)
         df["is_beyond_40m"] = (df["dist"] > 40).astype(int)
         
-        # Shot difficulty components
         df["technical_difficulty"] = df["dist"] * np.sin(np.radians(df["Shot_Angle_Abs"] + 5))
         df["pressure_penalty"] = df["pressure_value"] * (1 + 0.5 * df["is_extreme_angle"])
         
-        # Interaction between pressure and distance
         df["pressure_dist"] = df["pressure_value"] * df["dist"]
         
-        # ------------------------------------------------- 5. Shot Clustering
-        
-        # Create features for clustering
         cluster_features = df[['dist', 'Shot_Angle_Abs', 'pressure_value', 'is_setplay']].values
         
-        # Scale features
         cluster_scaler = StandardScaler()
         scaled_cluster_features = cluster_scaler.fit_transform(cluster_features)
         
-        # Determine number of clusters
         n_clusters = min(8, max(3, len(df) // 300))
         
         try:
-            # Create clusters
             kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
             df['shot_cluster'] = kmeans.fit_predict(scaled_cluster_features)
             
-            # Calculate cluster statistics
             cluster_stats = df.groupby('shot_cluster').agg({
                 'Score_Binary_Points': 'mean',
                 'Score_Goals': 'mean'
             }).reset_index()
             
-            # Rename columns
             cluster_stats.columns = ['shot_cluster', 'cluster_point_rate', 'cluster_goal_rate']
             
-            # Merge cluster stats back
             df = df.merge(cluster_stats, on='shot_cluster', how='left')
             
-            # Fill missing values
             for col in ['cluster_point_rate', 'cluster_goal_rate']:
                 df[col] = df[col].fillna(df[col].mean())
                 
         except Exception as cluster_error:
             logging.warning(f"Error in clustering: {cluster_error}")
-            # Create default columns
             df['cluster_point_rate'] = df['Score_Binary_Points'].mean()
             df['cluster_goal_rate'] = df['Score_Goals'].mean()
         
-        # ------------------------------------------------- 6. Player Performance Model
-        
-        # Calculate prior rates
         points_prior = df["Score_Binary_Points"].mean()
         goals_prior = df["Score_Goals"].mean()
         
-        # Regularization strength
         k_points = 15
         k_goals = 25
         
         if len(df["player"].unique()) > 5:
-            # For point rates
             player_point_stats = df.groupby("player").agg({
                 "player": "count",
                 "Score_Binary_Points": "sum"
             })
             player_point_stats.columns = ["shots", "point_successes"]
             
-            # Apply Bayesian smoothing
             player_point_stats["smoothed_point_rate"] = (
                 (player_point_stats["point_successes"] + points_prior * k_points) / 
                 (player_point_stats["shots"] + k_points)
             )
             
-            # For goal rates
             player_goal_stats = df.groupby("player").agg({
                 "player": "count",
                 "Score_Goals": "sum"
             })
             player_goal_stats.columns = ["shots", "goal_successes"]
             
-            # Apply Bayesian smoothing
             player_goal_stats["smoothed_goal_rate"] = (
                 (player_goal_stats["goal_successes"] + goals_prior * k_goals) / 
                 (player_goal_stats["shots"] + k_goals)
             )
             
-            # Merge back to main dataframe
             df = df.merge(
                 player_point_stats["smoothed_point_rate"],
                 left_on="player", right_index=True, how="left"
@@ -3034,83 +2997,66 @@ def recalculate_xpoints():
                 left_on="player", right_index=True, how="left"
             )
             
-            # Fill missing values
             df["smoothed_point_rate"] = df["smoothed_point_rate"].fillna(points_prior)
             df["smoothed_goal_rate"] = df["smoothed_goal_rate"].fillna(goals_prior)
         else:
-            # Use global rates
             df["smoothed_point_rate"] = points_prior
             df["smoothed_goal_rate"] = goals_prior
         
-        # ------------------------------------------------- 7. Feature Selection
-        
-        # Core features
         core_features = [
             "dist", "Shot_Angle_Abs", "pressure_value", "position_value",
-            "is_setplay", "dist_to_sideline", "preferred_side_advantage", 
+            "is_setplay", "is_penalty", "is_free", "is_45", "is_mark", "is_sideline",
+            "dist_to_sideline", "preferred_side_advantage", 
             "distance_zone", "angle_zone", "is_central_zone", "is_extreme_angle",
             "is_long_shot", "is_very_close", "is_beyond_40m"
         ]
         
-        # Non-linear transformations
         nonlinear_features = [
             "dist_squared", "dist_log", "angle_squared",
             "dist_angle_interaction", "technical_difficulty"
         ]
         
-        # Interaction features
         interaction_features = [
-            "pressure_dist"
+            "pressure_dist", "setplay_distance", "setplay_angle",
+            "penalty_distance", "free_distance"
         ]
         
-        # Player features
         player_features = [
             "smoothed_point_rate", "smoothed_goal_rate"
         ]
         
-        # Cluster features
         cluster_features = [
             "cluster_point_rate", "cluster_goal_rate"
         ]
         
-        # Final feature selection
         point_features = core_features + nonlinear_features + interaction_features + player_features + cluster_features
         goal_features = core_features + nonlinear_features + interaction_features + player_features + cluster_features
         
-        # Filter to existing columns
         point_features = [f for f in point_features if f in df.columns]
         goal_features = [f for f in goal_features if f in df.columns]
         
-        # ------------------------------------------------- 8. Model Training
-        
-        # Prepare data - we'll train on open play only and handle set plays separately
-        X_points = df.loc[open_play_mask, point_features].values
-        y_points = df.loc[open_play_mask, "Score_Binary_Points"].values
+        X_points = df[point_features].values
+        y_points = df["Score_Binary_Points"].values
         
         X_goals = df[goal_features].values
         y_goals = df["Score_Goals"].values
         
-        # Split into train/test for points
         X_points_train, X_points_test, y_points_train, y_points_test = train_test_split(
             X_points, y_points, test_size=0.25, random_state=42, stratify=y_points
         )
         
-        # Split for goals
         X_goals_train, X_goals_test, y_goals_train, y_goals_test = train_test_split(
             X_goals, y_goals, test_size=0.25, random_state=42, stratify=y_goals
         )
         
-        # Scale features - points
         points_scaler = StandardScaler().fit(X_points_train)
         X_points_train_scaled = points_scaler.transform(X_points_train)
         X_points_test_scaled = points_scaler.transform(X_points_test)
         
-        # Scale features - goals
         goals_scaler = StandardScaler().fit(X_goals_train)
         X_goals_train_scaled = goals_scaler.transform(X_goals_train)
         X_goals_test_scaled = goals_scaler.transform(X_goals_test)
         
-        # Check for SMOTE
         has_smote = False
         try:
             from imblearn.over_sampling import SMOTE
@@ -3118,10 +3064,8 @@ def recalculate_xpoints():
         except ImportError:
             logging.warning("imblearn not installed - skipping SMOTE")
         
-        # Apply SMOTE if available
         if has_smote:
             try:
-                # For points
                 if np.sum(y_points_train) >= 5:
                     points_smote = SMOTE(random_state=42, k_neighbors=min(5, np.sum(y_points_train) - 1))
                     X_points_train_resampled, y_points_train_resampled = points_smote.fit_resample(
@@ -3130,7 +3074,6 @@ def recalculate_xpoints():
                 else:
                     X_points_train_resampled, y_points_train_resampled = X_points_train_scaled, y_points_train
                 
-                # For goals
                 if np.sum(y_goals_train) >= 3:
                     goals_smote = SMOTE(random_state=42, k_neighbors=min(3, np.sum(y_goals_train) - 1))
                     X_goals_train_resampled, y_goals_train_resampled = goals_smote.fit_resample(
@@ -3146,21 +3089,16 @@ def recalculate_xpoints():
             X_points_train_resampled, y_points_train_resampled = X_points_train_scaled, y_points_train
             X_goals_train_resampled, y_goals_train_resampled = X_goals_train_scaled, y_goals_train
         
-        # ------------------------------------------------- 9. Train Multiple Models
-        
-        # Points models
         log_p = LogisticRegression(class_weight="balanced", C=0.8, max_iter=1000, random_state=42)
         gb_p = GradientBoostingClassifier(n_estimators=150, learning_rate=0.05, max_depth=3, 
                                          min_samples_split=20, random_state=42)
         rf_p = RandomForestClassifier(n_estimators=100, max_depth=4, class_weight='balanced', 
                                      random_state=42)
         
-        # Train points models
         log_p.fit(X_points_train_resampled, y_points_train_resampled)
         gb_p.fit(X_points_train_resampled, y_points_train_resampled)
         rf_p.fit(X_points_train_resampled, y_points_train_resampled)
         
-        # Calibrate points models
         cal_log_p = CalibratedClassifierCV(log_p, method='isotonic', cv='prefit')
         cal_log_p.fit(X_points_train_scaled, y_points_train)
         
@@ -3170,19 +3108,16 @@ def recalculate_xpoints():
         cal_rf_p = CalibratedClassifierCV(rf_p, method='isotonic', cv='prefit')
         cal_rf_p.fit(X_points_train_scaled, y_points_train)
         
-        # Goals models
         log_g = LogisticRegression(class_weight={0:1, 1:8}, C=0.5, max_iter=1000, random_state=42)
         gb_g = GradientBoostingClassifier(n_estimators=200, learning_rate=0.03, max_depth=3, 
                                          min_samples_split=10, random_state=42)
         rf_g = RandomForestClassifier(n_estimators=150, max_depth=3, class_weight={0:1, 1:10}, 
                                      random_state=42)
         
-        # Train goals models
         log_g.fit(X_goals_train_resampled, y_goals_train_resampled)
         gb_g.fit(X_goals_train_resampled, y_goals_train_resampled)
         rf_g.fit(X_goals_train_resampled, y_goals_train_resampled)
         
-        # Calibrate goals models
         cal_log_g = CalibratedClassifierCV(log_g, method='isotonic', cv='prefit')
         cal_log_g.fit(X_goals_train_scaled, y_goals_train)
         
@@ -3192,32 +3127,25 @@ def recalculate_xpoints():
         cal_rf_g = CalibratedClassifierCV(rf_g, method='isotonic', cv='prefit')
         cal_rf_g.fit(X_goals_train_scaled, y_goals_train)
         
-        # ------------------------------------------------- 10. Evaluate and Weight Models
-        
-        # Get predictions for points models
         log_p_probs = cal_log_p.predict_proba(X_points_test_scaled)[:, 1]
         gb_p_probs = cal_gb_p.predict_proba(X_points_test_scaled)[:, 1]
         rf_p_probs = cal_rf_p.predict_proba(X_points_test_scaled)[:, 1]
         
-        # Calculate performance metrics
         log_p_brier = brier_score_loss(y_points_test, log_p_probs)
         gb_p_brier = brier_score_loss(y_points_test, gb_p_probs)
         rf_p_brier = brier_score_loss(y_points_test, rf_p_probs)
         
-        # Calculate weights
         total_inv_brier_p = (1/log_p_brier) + (1/gb_p_brier) + (1/rf_p_brier)
         log_p_weight = (1/log_p_brier) / total_inv_brier_p
         gb_p_weight = (1/gb_p_brier) / total_inv_brier_p
         rf_p_weight = (1/rf_p_brier) / total_inv_brier_p
         
-        # Ensemble predictions
         points_ensemble_probs = (
             log_p_weight * log_p_probs +
             gb_p_weight * gb_p_probs +
             rf_p_weight * rf_p_probs
         )
         
-        # Do the same for goals
         log_g_probs = cal_log_g.predict_proba(X_goals_test_scaled)[:, 1]
         gb_g_probs = cal_gb_g.predict_proba(X_goals_test_scaled)[:, 1]
         rf_g_probs = cal_rf_g.predict_proba(X_goals_test_scaled)[:, 1]
@@ -3236,22 +3164,21 @@ def recalculate_xpoints():
             gb_g_weight * gb_g_probs +
             rf_g_weight * rf_g_probs
         )
+
+        # Calculate Overall Model Metrics - THIS WAS MISSING
+        # We need to compute these metrics before they're referenced later in the code
         
-        # ------------------------------------------------- 11. Apply Calibration Factors
-        
-        # For points
+        # Apply standard calibration for initial metrics calculation
+        points_calibration_factor = 1.0
         if np.mean(points_ensemble_probs) > 0 and np.mean(y_points_test) > 0:
             points_calibration_factor = np.mean(y_points_test) / np.mean(points_ensemble_probs)
             points_calibration_factor = min(max(points_calibration_factor, 0.8), 1.2)
-        else:
-            points_calibration_factor = 1.0
             
         calibrated_points_probs = points_ensemble_probs * points_calibration_factor
         calibrated_points_probs = np.clip(calibrated_points_probs, 0, 1)
         
         # For goals
         GOAL_CALIBRATION_FACTOR = 0.65
-        
         if np.sum(y_goals_test) >= 5 and np.mean(goals_ensemble_probs) > 0:
             goal_ratio = np.mean(y_goals_test) / np.mean(goals_ensemble_probs)
             GOAL_CALIBRATION_FACTOR = 0.6 * GOAL_CALIBRATION_FACTOR + 0.4 * goal_ratio
@@ -3266,7 +3193,6 @@ def recalculate_xpoints():
         optimal_point_threshold = thresholds[optimal_idx]
         
         optimal_goal_threshold = 0.15
-        
         if np.sum(y_goals_test) >= 5:
             fpr_g, tpr_g, thresholds_g = roc_curve(y_goals_test, calibrated_goals_probs)
             if len(thresholds_g) > 1:
@@ -3278,10 +3204,8 @@ def recalculate_xpoints():
         points_preds = (calibrated_points_probs >= optimal_point_threshold).astype(int)
         goals_preds = (calibrated_goals_probs >= optimal_goal_threshold).astype(int)
         
-        # ------------------------------------------------- 12. Calculate Metrics
-        
-        # Points metrics
-        pts_metrics = {
+        # Calculate overall model metrics
+        overall_pts_metrics = {
             "accuracy": accuracy_score(y_points_test, points_preds),
             "precision": precision_score(y_points_test, points_preds),
             "recall": recall_score(y_points_test, points_preds),
@@ -3293,7 +3217,7 @@ def recalculate_xpoints():
         }
         
         # Goals metrics
-        gls_metrics = {
+        overall_gls_metrics = {
             "accuracy": accuracy_score(y_goals_test, goals_preds),
             "precision": precision_score(y_goals_test, goals_preds),
             "recall": recall_score(y_goals_test, goals_preds),
@@ -3307,13 +3231,13 @@ def recalculate_xpoints():
         # R² for points
         points_weights = np.ones_like(y_points_test, dtype=float)
         points_weights[y_points_test == 1] = 2.0
-        
+       
         weighted_mean = np.average(y_points_test, weights=points_weights)
         total_ss = np.sum(points_weights * (y_points_test - weighted_mean)**2)
         residual_ss = np.sum(points_weights * (y_points_test - calibrated_points_probs)**2)
-        
+       
         points_r2 = 1 - (residual_ss / total_ss) if total_ss > 0 else 0
-        pts_metrics["r_squared"] = points_r2
+        overall_pts_metrics["r_squared"] = points_r2
         
         # R² for goals
         goals_weights = np.ones_like(y_goals_test, dtype=float)
@@ -3324,22 +3248,136 @@ def recalculate_xpoints():
         residual_ss_g = np.sum(goals_weights * (y_goals_test - calibrated_goals_probs)**2)
         
         goals_r2 = 1 - (residual_ss_g / total_ss_g) if total_ss_g > 0 else 0
-        gls_metrics["r_squared"] = goals_r2
+        overall_gls_metrics["r_squared"] = goals_r2
         
         # Confusion matrices
-        pts_metrics["confusion_matrix"] = confusion_matrix(y_points_test, points_preds).tolist()
-        gls_metrics["confusion_matrix"] = confusion_matrix(y_goals_test, goals_preds).tolist()
+        overall_pts_metrics["confusion_matrix"] = confusion_matrix(y_points_test, points_preds).tolist()
+        overall_gls_metrics["confusion_matrix"] = confusion_matrix(y_goals_test, goals_preds).tolist()
         
-        # ------------------------------------------------- 13. Generate Full Dataset Predictions
+        # Create test masks for specific shot types
+        test_indices = np.arange(len(df))[X_points_train.shape[0]:]
+        test_set_play_mask = set_play_mask.iloc[test_indices].values
+        test_open_play_mask = open_play_mask.iloc[test_indices].values
         
-        # Scale the entire open play dataset
+        # Calculate set play specific metrics
+        if np.sum(test_set_play_mask) >= 5:
+            set_play_y_test = y_points_test[test_set_play_mask]
+            set_play_probs = calibrated_points_probs[test_set_play_mask]
+            set_play_preds = points_preds[test_set_play_mask]
+            
+            set_play_pts_metrics = {
+                "accuracy": accuracy_score(set_play_y_test, set_play_preds),
+                "precision": precision_score(set_play_y_test, set_play_preds, zero_division=0),
+                "recall": recall_score(set_play_y_test, set_play_preds, zero_division=0),
+                "f1": f1_score(set_play_y_test, set_play_preds, zero_division=0),
+                "brier": brier_score_loss(set_play_y_test, set_play_probs),
+                "mean_pred": np.mean(set_play_probs),
+                "mean_actual": np.mean(set_play_y_test),
+                "count": int(np.sum(test_set_play_mask))
+            }
+            
+            # Add ROC AUC if we have both positive and negative samples
+            if len(np.unique(set_play_y_test)) > 1:
+                set_play_pts_metrics["roc_auc"] = roc_auc_score(set_play_y_test, set_play_probs)
+            else:
+                set_play_pts_metrics["roc_auc"] = 0.5  # Default for single-class
+                
+            # Calculate R²
+            if np.var(set_play_y_test) > 0:
+                set_play_ss_tot = np.sum((set_play_y_test - np.mean(set_play_y_test)) ** 2)
+                set_play_ss_res = np.sum((set_play_y_test - set_play_probs) ** 2)
+                set_play_r2 = 1 - (set_play_ss_res / set_play_ss_tot) if set_play_ss_tot > 0 else 0
+                set_play_pts_metrics["r_squared"] = set_play_r2
+            else:
+                set_play_pts_metrics["r_squared"] = 0.0
+        else:
+            # Not enough set play samples in test set
+            set_play_pts_metrics = {
+                "accuracy": 0.0, "precision": 0.0, "recall": 0.0, "f1": 0.0,
+                "roc_auc": 0.5, "brier": 0.0, "r_squared": 0.0,
+                "mean_pred": 0.0, "mean_actual": 0.0, "count": 0
+            }
+            
+        # Calculate open play specific metrics
+        if np.sum(test_open_play_mask) >= 5:
+            open_play_y_test = y_points_test[test_open_play_mask]
+            open_play_probs = calibrated_points_probs[test_open_play_mask]
+            open_play_preds = points_preds[test_open_play_mask]
+            
+            open_play_pts_metrics = {
+                "accuracy": accuracy_score(open_play_y_test, open_play_preds),
+                "precision": precision_score(open_play_y_test, open_play_preds, zero_division=0),
+                "recall": recall_score(open_play_y_test, open_play_preds, zero_division=0),
+                "f1": f1_score(open_play_y_test, open_play_preds, zero_division=0),
+                "brier": brier_score_loss(open_play_y_test, open_play_probs),
+                "mean_pred": np.mean(open_play_probs),
+                "mean_actual": np.mean(open_play_y_test),
+                "count": int(np.sum(test_open_play_mask))
+            }
+            
+            # Add ROC AUC if we have both positive and negative samples
+            if len(np.unique(open_play_y_test)) > 1:
+                open_play_pts_metrics["roc_auc"] = roc_auc_score(open_play_y_test, open_play_probs)
+            else:
+                open_play_pts_metrics["roc_auc"] = 0.5  # Default for single-class
+                
+            # Calculate R²
+            if np.var(open_play_y_test) > 0:
+                open_play_ss_tot = np.sum((open_play_y_test - np.mean(open_play_y_test)) ** 2)
+                open_play_ss_res = np.sum((open_play_y_test - open_play_probs) ** 2)
+                open_play_r2 = 1 - (open_play_ss_res / open_play_ss_tot) if open_play_ss_tot > 0 else 0
+                open_play_pts_metrics["r_squared"] = open_play_r2
+            else:
+                open_play_pts_metrics["r_squared"] = 0.0
+        else:
+            # Not enough open play samples in test set
+            open_play_pts_metrics = {
+                "accuracy": 0.0, "precision": 0.0, "recall": 0.0, "f1": 0.0,
+                "roc_auc": 0.5, "brier": 0.0, "r_squared": 0.0,
+                "mean_pred": 0.0, "mean_actual": 0.0, "count": 0
+            }
+            
+        # Calculate separate calibration factors for open play and set play
+        # For open play
+        if np.sum(test_open_play_mask) > 0 and np.mean(points_ensemble_probs[test_open_play_mask]) > 0:
+            open_play_points = points_ensemble_probs[test_open_play_mask]
+            open_play_actual = y_points_test[test_open_play_mask]
+            open_play_calibration_factor = np.mean(open_play_actual) / np.mean(open_play_points)
+            open_play_calibration_factor = min(max(open_play_calibration_factor, 0.7), 1.2)
+        else:
+            open_play_calibration_factor = 1.0
+        
+        # For set play - use a more conservative calibration to avoid excessively high probabilities
+        if np.sum(test_set_play_mask) > 0 and np.mean(points_ensemble_probs[test_set_play_mask]) > 0:
+            set_play_points = points_ensemble_probs[test_set_play_mask]
+            set_play_actual = y_points_test[test_set_play_mask]
+            set_play_calibration_factor = np.mean(set_play_actual) / np.mean(set_play_points)
+            
+            # For set plays, apply stricter bounds to avoid inflated xPoints
+            set_play_calibration_factor = min(max(set_play_calibration_factor, 0.6), 0.9)
+            
+            # If we have sufficient data, we can analyze by subtype
+            set_play_subtype_calibration = {}
+            for subtype in ["penalty", "free", "45", "mark", "sideline"]:
+                subtype_mask = df.iloc[test_indices]["set_play_subtype"] == subtype
+                if subtype_mask.sum() >= 5:
+                    subtype_probs = points_ensemble_probs[subtype_mask]
+                    subtype_actual = y_points_test[subtype_mask]
+                    if np.mean(subtype_probs) > 0:
+                        subtype_factor = np.mean(subtype_actual) / np.mean(subtype_probs)
+                        subtype_factor = min(max(subtype_factor, 0.5), 0.95)
+                        set_play_subtype_calibration[subtype] = subtype_factor
+        else:
+            set_play_calibration_factor = 0.8  # Conservative default
+            set_play_subtype_calibration = {}
+        
+        # Generate predictions from each model for the entire dataset
         X_points_full = df[point_features].values
         X_goals_full = df[goal_features].values
         
         X_points_full_scaled = points_scaler.transform(X_points_full)
         X_goals_full_scaled = goals_scaler.transform(X_goals_full)
         
-        # Generate predictions from each model
         log_p_full_probs = cal_log_p.predict_proba(X_points_full_scaled)[:, 1]
         gb_p_full_probs = cal_gb_p.predict_proba(X_points_full_scaled)[:, 1]
         rf_p_full_probs = cal_rf_p.predict_proba(X_points_full_scaled)[:, 1]
@@ -3361,413 +3399,62 @@ def recalculate_xpoints():
             rf_g_weight * rf_g_full_probs
         )
         
-        # Apply calibration to get final open play xPoints
-        df["xPoints_open"] = np.clip(df["xPoints_raw"] * points_calibration_factor, 0, 1)
+        # Apply separate calibration factors for open play and set play shots
+        df["xPoints"] = df["xPoints_raw"].copy()
+        
+        # Apply open play calibration
+        open_play_indices = df[df["is_setplay"] == 0].index
+        df.loc[open_play_indices, "xPoints"] = np.clip(
+            df.loc[open_play_indices, "xPoints_raw"] * open_play_calibration_factor, 0, 0.95)
+        
+        # Apply set play calibration
+        set_play_indices = df[df["is_setplay"] == 1].index
+        df.loc[set_play_indices, "xPoints"] = np.clip(
+            df.loc[set_play_indices, "xPoints_raw"] * set_play_calibration_factor, 0, 0.9)
+        
+        # Apply subtype-specific calibrations if available
+        for subtype, factor in set_play_subtype_calibration.items():
+            subtype_indices = df[df["set_play_subtype"] == subtype].index
+            if not subtype_indices.empty:
+                df.loc[subtype_indices, "xPoints"] = np.clip(
+                    df.loc[subtype_indices, "xPoints_raw"] * factor, 0, 0.88)
+        
+        # Final sanity check to cap any extreme values by shot difficulty
+        for idx, row in df.iterrows():
+            # Additional caps based on angle and distance
+            if row["is_extreme_angle"] == 1 and row["Shot_Angle_Abs"] > 75:
+                df.at[idx, "xPoints"] = min(df.at[idx, "xPoints"], 0.7)
+            if row["dist"] > 65:  # Very long shots
+                df.at[idx, "xPoints"] = min(df.at[idx, "xPoints"], 0.6)
         
         # Apply calibration for goals
-        df["xGoals"] = np.clip(df["xGoals_raw"] * GOAL_CALIBRATION_FACTOR, 0, 1)
+        df["xGoals"] = np.clip(df["xGoals_raw"] * GOAL_CALIBRATION_FACTOR, 0, 0.9)
         
-        # ------------------------------------------------- ENHANCED SET PLAY MODELING
+        # Set category for UI display
+        df["category"] = np.where(df["is_setplay"] == 1, "setPlayScore", "openPlayScore")
         
-        # Only proceed if we have set plays
-        set_play_mask = df["is_setplay"] == 1
+        # Get importance from Random Forest model (most interpretable)
+        points_importance = rf_p.feature_importances_
+        goals_importance = rf_g.feature_importances_
         
-        if set_play_mask.sum() > 0:
-            logging.info(f"Implementing refined set play model for {set_play_mask.sum()} set plays")
-            
-            # 1. Identify specific set play types
-            df.loc[set_play_mask, "set_play_subtype"] = "other"
-            df.loc[set_play_mask & df["action"].str.contains(r"\bpenalty\b", case=False, na=False, regex=True), "set_play_subtype"] = "penalty"
-            df.loc[set_play_mask & df["action"].str.contains(r"\bfree\b|\bfreekick\b", case=False, na=False, regex=True), "set_play_subtype"] = "free"
-            df.loc[set_play_mask & df["action"].str.contains(r"\b45\b|\bfortyfive\b", case=False, na=False, regex=True), "set_play_subtype"] = "45"
-            df.loc[set_play_mask & df["action"].str.contains(r"\bmark\b|\boffensive mark\b", case=False, na=False, regex=True), "set_play_subtype"] = "mark"
-            df.loc[set_play_mask & df["action"].str.contains(r"\bsideline\b|\bside line\b", case=False, na=False, regex=True), "set_play_subtype"] = "sideline"
-            
-            # Log subtypes for analysis
-            subtype_counts = df.loc[set_play_mask, "set_play_subtype"].value_counts().to_dict()
-            logging.info(f"Set play subtypes: {subtype_counts}")
-            
-            # 2. Calculate success rates by set play subtype
-            subtype_success_rates = {}
-            for subtype in df.loc[set_play_mask, "set_play_subtype"].unique():
-                subtype_mask = set_play_mask & (df["set_play_subtype"] == subtype)
-                if subtype_mask.sum() >= 3:
-                    subtype_success_rates[subtype] = df.loc[subtype_mask, "Score_Binary_Points"].mean()
-            
-            logging.info(f"Set play success rates by type: {subtype_success_rates}")
-            
-            # 3. Determine if we're in a high success environment
-            baseline_set_play_rate = df.loc[set_play_mask, "Score_Binary_Points"].mean()
-            high_success_mode = baseline_set_play_rate > 0.85
-            
-            # 4. Create position-based analysis
-            # Distance bins
-            df["dist_bin"] = pd.cut(
-                df["dist"], 
-                bins=[0, 20, 30, 40, 50, 60, 100],
-                labels=["0-20m", "20-30m", "30-40m", "40-50m", "50-60m", "60m+"]
-            )
-            
-            # Angle bins
-            df["angle_bin"] = pd.cut(
-                df["Shot_Angle_Abs"], 
-                bins=[0, 15, 30, 45, 60, 90],
-                labels=["0-15°", "15-30°", "30-45°", "45-60°", "60-90°"]
-            )
-            
-            # Calculate success rates by position
-            pos_rates = {}
-            for dist_bin in df.loc[set_play_mask, "dist_bin"].unique():
-                for angle_bin in df.loc[set_play_mask, "angle_bin"].unique():
-                    pos_key = f"{dist_bin}_{angle_bin}"
-                    pos_mask = set_play_mask & (df["dist_bin"] == dist_bin) & (df["angle_bin"] == angle_bin)
-                    
-                    if pos_mask.sum() >= 3:
-                        pos_rates[pos_key] = df.loc[pos_mask, "Score_Binary_Points"].mean()
-            
-            # 5. Player performance analysis
-            player_set_play_rates = {}
-            
-            for player in df.loc[set_play_mask, "player"].unique():
-                player_mask = set_play_mask & (df["player"] == player)
-                player_shots = df.loc[player_mask]
-                
-                if len(player_shots) >= 3:
-                    successes = player_shots["Score_Binary_Points"].sum()
-                    attempts = len(player_shots)
-                    
-                    # Apply appropriate Bayesian smoothing
-                    alpha_prior = max(2, baseline_set_play_rate * 5)
-                    beta_prior = max(1, (1 - baseline_set_play_rate) * 5)
-                    smoothed_rate = (successes + alpha_prior) / (attempts + alpha_prior + beta_prior)
-                    
-                    player_set_play_rates[player] = {
-                        "raw_rate": successes / attempts,
-                        "smoothed_rate": smoothed_rate,
-                        "attempts": attempts
-                    }
-                    
-                    # Calculate rates by set play type if enough data
-                    for subtype in player_shots["set_play_subtype"].unique():
-                        subtype_mask = player_shots["set_play_subtype"] == subtype
-                        if subtype_mask.sum() >= 2:
-                            subtype_successes = player_shots.loc[subtype_mask, "Score_Binary_Points"].sum()
-                            subtype_attempts = subtype_mask.sum()
-                            
-                            alpha_subtype = max(1, baseline_set_play_rate * 3)
-                            beta_subtype = max(1, (1 - baseline_set_play_rate) * 3)
-                            subtype_smoothed = (subtype_successes + alpha_subtype) / (subtype_attempts + alpha_subtype + beta_subtype)
-                            
-                            player_set_play_rates[player][subtype] = {
-                                "raw_rate": subtype_successes / subtype_attempts,
-                                "smoothed_rate": subtype_smoothed,
-                                "attempts": subtype_attempts
-                            }
-            
-            # 6. Calculate base xPoints for each set play type
-            set_play_base_rates = {}
-            for subtype, success_rate in subtype_success_rates.items():
-                # Use actual success rates with minor adjustments
-                if high_success_mode:
-                    # In high success mode, use rates close to actual
-                    set_play_base_rates[subtype] = success_rate * 0.95  # Slight conservative adjustment
-                else:
-                    # In normal mode, use standard expectations
-                    if subtype == "penalty":
-                        set_play_base_rates[subtype] = 0.85
-                    elif subtype == "free":
-                        set_play_base_rates[subtype] = 0.75
-                    elif subtype == "45":
-                        set_play_base_rates[subtype] = 0.60
-                    elif subtype == "mark":
-                        set_play_base_rates[subtype] = 0.70
-                    elif subtype == "sideline":
-                        set_play_base_rates[subtype] = 0.50
-                    else:
-                        set_play_base_rates[subtype] = 0.65
-            
-            # Fill any missing subtypes with defaults
-            for subtype in ["penalty", "free", "45", "mark", "sideline", "other"]:
-                if subtype not in set_play_base_rates:
-                    if high_success_mode:
-                        set_play_base_rates[subtype] = baseline_set_play_rate * 0.95
-                    else:
-                        set_play_base_rates[subtype] = {"penalty": 0.85, "free": 0.75, "45": 0.60, 
-                                                       "mark": 0.70, "sideline": 0.50, "other": 0.65}[subtype]
-            
-            # 7. Calculate xPoints for each set play
-            for i, row in df.loc[set_play_mask].iterrows():
-                subtype = row["set_play_subtype"]
-                
-                # Start with base rate for this set play type
-                base_rate = set_play_base_rates.get(subtype, set_play_base_rates["other"])
-                
-                # Calculate position factor
-                pos_key = f"{row['dist_bin']}_{row['angle_bin']}"
-                if pos_key in pos_rates:
-                    # If we have data for this position, use it
-                    pos_success = pos_rates[pos_key]
-                    pos_factor = pos_success / baseline_set_play_rate if baseline_set_play_rate > 0 else 1.0
-                else:
-                    # Otherwise calculate from distance and angle
-                    # Different scaling for high success environments
-                    if high_success_mode:
-                        # More gradual falloff in high success environments
-                        distance_scale = 60  # Longer distance tolerance
-                        angle_scale = 45     # Wider angle tolerance
-                    else:
-                        # Steeper falloff in normal environments
-                        distance_scale = 40
-                        angle_scale = 35
-                        
-                    # Calculate factors
-                    dist_factor = np.exp(-row["dist"] / distance_scale)
-                    angle_factor = np.exp(-row["Shot_Angle_Abs"] / angle_scale)
-                    
-                    # Combine with appropriate weighting
-                    pos_factor = (dist_factor * 0.7) + (angle_factor * 0.3)
-                
-                # Player skill factor
-                player = row["player"]
-                player_factor = 1.0  # Default
-                
-                if player in player_set_play_rates:
-                    player_data = player_set_play_rates[player]
-                    
-                    # Check if we have subtype-specific data
-                    if subtype in player_data and isinstance(player_data[subtype], dict):
-                        player_rate = player_data[subtype]["smoothed_rate"]
-                        player_attempts = player_data[subtype]["attempts"]
-                        confidence = min(0.8, player_attempts / 5)  # Up to 80% weight on player-specific data
-                    else:
-                        # Fall back to overall set play rate
-                        player_rate = player_data["smoothed_rate"]
-                        player_attempts = player_data["attempts"]
-                        confidence = min(0.6, player_attempts / 10)  # Lower max weight for general data
-                    
-                    # Calculate relative skill
-                    player_avg = player_rate / baseline_set_play_rate if baseline_set_play_rate > 0 else 1.0
-                    
-                    # Apply with appropriate confidence weighting
-                    player_factor = (player_avg * confidence) + (1.0 * (1 - confidence))
-                    
-                    # Cap the adjustment
-                    player_factor = min(max(player_factor, 0.9), 1.1)
-                
-                # Pressure factor (modest impact for set plays)
-                pressure_factor = 1.0 - (0.1 * row["pressure_value"])
-                
-                # Combine all factors to get raw xPoints
-                xp_raw = base_rate * pos_factor * player_factor * pressure_factor
-                
-                # Apply subtype-specific bounds
-                if subtype == "penalty":
-                    penalty_success = subtype_success_rates.get("penalty", 0.85)
-                    if penalty_success < 0.5:  # Failed penalties
-                        xp = np.clip(xp_raw, 0.2, 0.6)
-                    else:  # Successful penalties
-                        xp = np.clip(xp_raw, 0.7, 0.98)
-                elif high_success_mode:
-                    # Higher minimum values in high success environments
-                    if row["dist"] < 30 and row["Shot_Angle_Abs"] < 30:
-                        # Central close shots - very high success
-                        xp = np.clip(xp_raw, 0.85, 0.98)
-                    elif row["dist"] < 40 and row["Shot_Angle_Abs"] < 45:
-                        # Moderate difficulty - still high success
-                        xp = np.clip(xp_raw, 0.75, 0.95)
-                    else:
-                        # More difficult shots - wider range
-                        xp = np.clip(xp_raw, 0.65, 0.9)
-                else:
-                    # Normal environment - wider range of values
-                    xp = np.clip(xp_raw, 0.3, 0.95)
-                
-                # Store final xPoints
-                df.loc[i, "xPoints"] = xp
-            
-            # 8. Apply calibration if needed
-            actual_mean = df.loc[set_play_mask, "Score_Binary_Points"].mean()
-            predicted_mean = df.loc[set_play_mask, "xPoints"].mean()
-            
-            if abs(actual_mean - predicted_mean) > 0.05 and predicted_mean > 0:
-                # Calculate calibration factor
-                calibration_factor = actual_mean / predicted_mean
-                calibration_factor = min(max(calibration_factor, 0.9), 1.2)  # Reasonable bounds
-                
-                # Apply calibration with variance preservation
-                # Use different amounts of scaling for different parts of the distribution
-                for i, row in df.loc[set_play_mask].iterrows():
-                    current_xp = row["xPoints"]
-                    
-                    # Determine amount of calibration based on where in the distribution this falls
-                    if current_xp > predicted_mean:
-                        # Above average shots: apply less calibration to maintain distinction
-                        scaling = 0.7
-                    else:
-                        # Below average shots: apply more calibration
-                        scaling = 1.0
-                        
-                    # Apply weighted calibration
-                    adjustment = (calibration_factor - 1.0) * scaling
-                    new_xp = current_xp * (1.0 + adjustment)
-                    
-                    # Ensure reasonable bounds
-                    if high_success_mode:
-                        new_xp = np.clip(new_xp, 0.6, 0.98)
-                    else:
-                        new_xp = np.clip(new_xp, 0.3, 0.95)
-                        
-                    df.loc[i, "xPoints"] = new_xp
-                    
-                logging.info(f"Applied variance-preserving calibration: {calibration_factor:.4f}")
-            
-            # 9. For penalty handling, check if we have unusual success rates
-            penalty_mask = set_play_mask & (df["set_play_subtype"] == "penalty")
-            if penalty_mask.sum() >= 3:
-                penalty_success = df.loc[penalty_mask, "Score_Binary_Points"].mean()
-                other_success = df.loc[set_play_mask & ~penalty_mask, "Score_Binary_Points"].mean()
-                
-                # If penalties have dramatically different success rate
-                if abs(penalty_success - other_success) > 0.4:
-                    logging.warning(f"Penalties have significantly different success rate ({penalty_success:.2f}) compared to other set plays ({other_success:.2f})")
-                    
-                    # Adjust penalty predictions to better match actual rates
-                    penalty_predicted = df.loc[penalty_mask, "xPoints"].mean()
-                    
-                    if penalty_predicted > 0:
-                        penalty_factor = penalty_success / penalty_predicted
-                        penalty_factor = min(max(penalty_factor, 0.5), 2.0)
-                        
-                        df.loc[penalty_mask, "xPoints"] = df.loc[penalty_mask, "xPoints"] * penalty_factor
-                        df.loc[penalty_mask, "xPoints"] = np.clip(
-                            df.loc[penalty_mask, "xPoints"], 
-                            max(0.1, penalty_success - 0.2), 
-                            min(0.98, penalty_success + 0.2)
-                        )
-                        
-                        logging.info(f"Adjusted penalty xPoints to better match actual success rate")
-            
-            # 10. For open play shots, use the model predictions
-            df.loc[~set_play_mask, "xPoints"] = df.loc[~set_play_mask, "xPoints_open"]
-            
-            # 11. For UI display, add category field
-            df["category"] = np.where(set_play_mask, "setPlayScore", "openPlayScore")
-            
-            # 12. Log detailed stats to verify we have proper variation
-            xp_min = df.loc[set_play_mask, "xPoints"].min()
-            xp_max = df.loc[set_play_mask, "xPoints"].max()
-            xp_mean = df.loc[set_play_mask, "xPoints"].mean()
-            xp_std = df.loc[set_play_mask, "xPoints"].std()
-            xp_unique_count = df.loc[set_play_mask, "xPoints"].nunique()
-            
-            # Get distribution of values
-            xp_counts = {}
-            for subtype in df.loc[set_play_mask, "set_play_subtype"].unique():
-                subtype_mask = set_play_mask & (df["set_play_subtype"] == subtype)
-                if subtype_mask.sum() >= 3:
-                    xp_counts[subtype] = {
-                        "count": int(subtype_mask.sum()),
-                        "min": float(df.loc[subtype_mask, "xPoints"].min()),
-                        "max": float(df.loc[subtype_mask, "xPoints"].max()),
-                        "mean": float(df.loc[subtype_mask, "xPoints"].mean()),
-                        "std": float(df.loc[subtype_mask, "xPoints"].std())
-                    }
-            
-            logging.info(f"Set play xPoints stats - min: {xp_min:.4f}, max: {xp_max:.4f}, mean: {xp_mean:.4f}, std: {xp_std:.4f}")
-            logging.info(f"Number of unique xPoints values: {xp_unique_count}")
-            logging.info(f"Set play xPoints by subtype: {xp_counts}")
-            
-            # Calculate metrics for set plays
-            set_play_thresh = 0.75 if high_success_mode else 0.5  # Adjust threshold for high success environments
-            
-            # Calculate metrics using the appropriate threshold
-            set_play_preds = (df.loc[set_play_mask, "xPoints"] > set_play_thresh).astype(int)
-            set_play_actuals = df.loc[set_play_mask, "Score_Binary_Points"].values
-            
-            # Calculate standard metrics
-            set_play_metrics = {
-                "accuracy": float(accuracy_score(set_play_actuals, set_play_preds)),
-                "precision": float(precision_score(set_play_actuals, set_play_preds, zero_division=1.0)),
-                "recall": float(recall_score(set_play_actuals, set_play_preds, zero_division=1.0)),
-                "f1": float(f1_score(set_play_actuals, set_play_preds, zero_division=1.0)),
-                "actual_success_rate": float(baseline_set_play_rate),
-                "predicted_mean": float(xp_mean),
-                "min": float(xp_min),
-                "max": float(xp_max),
-                "count": int(set_play_mask.sum()),
-                "high_success_mode": int(high_success_mode)  # Store as int for JSON compatibility
-            }
-            
-            # Add AUC if we have both positive and negative examples
-            if len(np.unique(set_play_actuals)) > 1:
-                set_play_metrics["roc_auc"] = float(roc_auc_score(set_play_actuals, df.loc[set_play_mask, "xPoints"]))
-            else:
-                set_play_metrics["roc_auc"] = float(0.75)  # Default value for single-class data
-            
-            # Add brier score
-            set_play_metrics["brier"] = float(brier_score_loss(set_play_actuals, df.loc[set_play_mask, "xPoints"]))
-            
-            # Calculate custom R²
-            y_true = set_play_actuals
-            y_pred = df.loc[set_play_mask, "xPoints"].values
-            
-            # Custom R² calculation for high success environments
-            if high_success_mode and np.var(y_true) < 0.05:
-                # For nearly perfect success cases, use a modified approach
-                success_avg = np.mean(df.loc[set_play_mask & (df["Score_Binary_Points"] == 1), "xPoints"])
-                
-                if np.sum(y_true == 0) > 0:
-                    # If we have some failures, compare predictions for success vs. failure
-                    failure_avg = np.mean(df.loc[set_play_mask & (df["Score_Binary_Points"] == 0), "xPoints"])
-                    if success_avg > failure_avg:
-                        # Good model: gives higher xPoints to successful shots
-                        separation = (success_avg - failure_avg) / success_avg
-                        r2 = max(0.0, separation)
-                    else:
-                        # Poor model: gives lower xPoints to successful shots
-                        r2 = 0.0
-                else:
-                    # All successes, evaluate by spread of predictions
-                    # A good model should still show variance based on shot difficulty
-                    r2 = min(0.5, xp_std * 5)  # Scale std dev to get reasonable R²
-            else:
-                # Standard R² calculation
-                ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
-                ss_res = np.sum((y_true - y_pred) ** 2)
-                r2 = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
-            
-            set_play_metrics["r_squared"] = float(r2)
-            
-            # Add calibration factor and threshold
-            set_play_metrics["calibration_factor"] = float(1.0)  # Already applied directly
-            set_play_metrics["optimal_threshold"] = float(set_play_thresh)
-            
-            # Create set play stats dict
-            set_play_stats = set_play_metrics
-        else:
-            # If no set plays, just use the open play model for all shots
-            df["xPoints"] = df["xPoints_open"]
-            df["category"] = "openPlayScore"
-            
-            # Create placeholder set play stats
-            set_play_stats = {
-                "accuracy": float(0.0),
-                "precision": float(0.0),
-                "recall": float(0.0),
-                "f1": float(0.0),
-                "roc_auc": float(0.0),
-                "brier": float(0.0),
-                "r_squared": float(0.0),
-                "calibration_factor": float(0.0),
-                "optimal_threshold": float(0.0),
-                "actual_success_rate": float(0.0),
-                "predicted_mean": float(0.0),
-                "min": float(0.0),
-                "max": float(0.0),
-                "count": int(0)
-            }
+        # Create dictionaries of feature importance
+        points_feature_importance = dict(zip(point_features, points_importance))
+        goals_feature_importance = dict(zip(goal_features, goals_importance))
         
-        # ------------------------------------------------- 14. Custom Scoring and Quality
+        # Check if set play features are important
+        set_play_importance = {
+            "is_setplay": points_feature_importance.get("is_setplay", 0),
+            "is_penalty": points_feature_importance.get("is_penalty", 0),
+            "is_free": points_feature_importance.get("is_free", 0),
+            "is_45": points_feature_importance.get("is_45", 0),
+            "is_mark": points_feature_importance.get("is_mark", 0),
+            "is_sideline": points_feature_importance.get("is_sideline", 0),
+            "setplay_distance": points_feature_importance.get("setplay_distance", 0),
+            "setplay_angle": points_feature_importance.get("setplay_angle", 0)
+        }
+        
+        # Log set play feature importance
+        logging.info(f"Set play feature importance: {set_play_importance}")
         
         # Custom GAA scoring system
         df["xP_weighted"] = df["xPoints"] * df["point_value"]  # 1 or 2 points based on distance
@@ -3777,8 +3464,6 @@ def recalculate_xpoints():
         df["point_quality"] = df["xPoints"].rank(pct=True)
         df["goal_quality"] = df["xGoals"].rank(pct=True)
         df["shot_quality"] = df["xP_adv"].rank(pct=True)
-        
-        # ------------------------------------------------- 15. Expected vs Actual Analysis
         
         # Calculate expected and actual values
         total_expected_points = df["xP_weighted"].sum()
@@ -3796,7 +3481,7 @@ def recalculate_xpoints():
             axis=1
         ).sum()
         
-        # ------------------------------------------------- 16. Player Analysis
+        # Player Analysis
         player_stats = []
 
         # Get unique players
@@ -3872,7 +3557,7 @@ def recalculate_xpoints():
         if not agg.empty:
             agg = agg.sort_values("Shots", ascending=False)
         
-        # ------------------------------------------------- 17. Update Original Data
+        # Update Original Data
         batch, shots_upd = db.batch(), 0
         for gi, g in enumerate(originals):
             gdata = g["gameData"]
@@ -3893,7 +3578,6 @@ def recalculate_xpoints():
             batch.set(g["ref"], {"gameData": gdata}, merge=True)
         batch.commit()
         
-        # ------------------------------------------------- 18. Save Results to Firebase
         # Handle Firebase storage
         try:
             try:
@@ -3921,15 +3605,17 @@ def recalculate_xpoints():
             "timestamp": firestore.SERVER_TIMESTAMP,
             "dataset_name": DATASET_NAME,
             "user_id": USER_ID,
-            "points_model_accuracy": float(pts_metrics["accuracy"]),
-            "points_model_r_squared": float(pts_metrics["r_squared"]),
-            "points_model_auc": float(pts_metrics["roc_auc"]),
-            "points_model_f1": float(pts_metrics["f1"]),
+            "points_model_accuracy": float(overall_pts_metrics["accuracy"]),
+            "points_model_r_squared": float(overall_pts_metrics["r_squared"]),
+            "points_model_auc": float(overall_pts_metrics["roc_auc"]),
+            "points_model_f1": float(overall_pts_metrics["f1"]),
             "points_model_calibration_factor": float(points_calibration_factor),
-            "goals_model_accuracy": float(gls_metrics["accuracy"]),
-            "goals_model_r_squared": float(gls_metrics["r_squared"]),
-            "goals_model_auc": float(gls_metrics["roc_auc"]),
-            "goals_model_f1": float(gls_metrics["f1"]),
+            "set_play_calibration_factor": float(set_play_calibration_factor),
+            "open_play_calibration_factor": float(open_play_calibration_factor),
+            "goals_model_accuracy": float(overall_gls_metrics["accuracy"]),
+            "goals_model_r_squared": float(overall_gls_metrics["r_squared"]),
+            "goals_model_auc": float(overall_gls_metrics["roc_auc"]),
+            "goals_model_f1": float(overall_gls_metrics["f1"]),
             "goals_model_calibration_factor": float(GOAL_CALIBRATION_FACTOR),
             "ensemble_weights_points_log": float(log_p_weight),
             "ensemble_weights_points_gb": float(gb_p_weight),
@@ -3946,71 +3632,73 @@ def recalculate_xpoints():
             "total_shots": int(len(df)),
             "total_games": int(len(originals)),
             "set_play_success_rate": float(set_play_success_rate) if set_play_mask.any() else 0.0,
+            "open_play_success_rate": float(open_play_success_rate) if open_play_mask.any() else 0.0,
             "set_play_count": int(set_play_mask.sum()),
+            "open_play_count": int(open_play_mask.sum()),
             "execution_time_seconds": float(time.time() - start_time)
         }
         
-        # Add set play subtype info if available - Ensure all values are JSON serializable
+        # Add set play importance metrics
+        for feat, imp in set_play_importance.items():
+            model_summary[f"importance_{feat}"] = float(imp)
+        
+        # Add set play subtype info if available
         if set_play_mask.sum() > 0 and "set_play_subtype" in df.columns:
             for subtype in df.loc[set_play_mask, "set_play_subtype"].unique():
-                subtype_mask = set_play_mask & (df["set_play_subtype"] == subtype)
-                if subtype_mask.sum() >= 3:
-                    model_summary[f"setplay_{subtype}_count"] = int(subtype_mask.sum())
-                    model_summary[f"setplay_{subtype}_success_rate"] = float(df.loc[subtype_mask, "Score_Binary_Points"].mean())
-                    model_summary[f"setplay_{subtype}_xp_mean"] = float(df.loc[subtype_mask, "xPoints"].mean())
-        
-        # Include high success mode flag if applicable - Ensure it's JSON serializable
-        if set_play_mask.sum() > 0 and "high_success_mode" in set_play_stats:
-            # Store as integer (1 or 0) which is JSON serializable
-            model_summary["set_play_high_success_mode"] = int(set_play_stats["high_success_mode"])
+                if subtype != "open_play":  # Skip open play
+                    subtype_mask = df["set_play_subtype"] == subtype
+                    if subtype_mask.sum() >= 3:
+                        model_summary[f"setplay_{subtype}_count"] = int(subtype_mask.sum())
+                        model_summary[f"setplay_{subtype}_success_rate"] = float(df.loc[subtype_mask, "Score_Binary_Points"].mean())
+                        model_summary[f"setplay_{subtype}_xp_mean"] = float(df.loc[subtype_mask, "xPoints"].mean())
+                        if subtype in set_play_subtype_calibration:
+                            model_summary[f"setplay_{subtype}_calibration"] = float(set_play_subtype_calibration[subtype])
         
         # Save to Firestore
         try:
             db.collection("analytics").document(USER_ID) \
-              .collection("model_summaries").document(DATASET_NAME) \
-              .set(model_summary)
+                .collection("model_summaries").document(DATASET_NAME) \
+                .set(model_summary)
         except Exception as db_error:
             logging.warning(f"Error saving model summary to Firestore: {db_error}")
         
-        # ------------------------------------------------- 19. Return Response
+        # Return Response
         execution_time = time.time() - start_time
-        logging.info(f"Enhanced xPoints calculation completed in {execution_time:.2f} seconds")
+        logging.info(f"Unified xPoints model calculation completed in {execution_time:.2f} seconds")
         
-        # Create open play metrics for frontend
-        open_play_metrics = {
-            "accuracy": float(pts_metrics["accuracy"]),
-            "precision": float(pts_metrics["precision"]),
-            "recall": float(pts_metrics["recall"]),
-            "f1": float(pts_metrics["f1"]),
-            "roc_auc": float(pts_metrics["roc_auc"]),
-            "brier": float(pts_metrics["brier"]),
-            "r_squared": float(pts_metrics["r_squared"]),
-            "calibration_factor": float(points_calibration_factor),
-            "optimal_threshold": float(optimal_point_threshold)
+        # Format metrics for the frontend to match the expected structure
+        frontend_model_summary = {
+            "points_open_model": open_play_pts_metrics,
+            "points_set_model": set_play_pts_metrics,
+            "goals_model": overall_gls_metrics,
+            "feature_importance": {
+                "set_play_features": set_play_importance,
+                "top_features": dict(sorted(points_feature_importance.items(), key=lambda x: x[1], reverse=True)[:10])
+            },
+            "calibration": {
+                "open_play": open_play_calibration_factor,
+                "set_play": set_play_calibration_factor,
+                "set_play_subtypes": set_play_subtype_calibration
+            }
         }
         
-        # Create set play subtype metrics if available
+        # Create set play subtype metrics for the frontend
         set_play_subtype_metrics = {}
         if set_play_mask.sum() > 0 and "set_play_subtype" in df.columns:
             for subtype in df.loc[set_play_mask, "set_play_subtype"].unique():
-                subtype_mask = set_play_mask & (df["set_play_subtype"] == subtype)
-                if subtype_mask.sum() >= 3:
-                    subtype_actual = df.loc[subtype_mask, "Score_Binary_Points"].mean()
-                    subtype_pred = df.loc[subtype_mask, "xPoints"].mean()
-                    set_play_subtype_metrics[subtype] = {
-                        "count": int(subtype_mask.sum()),
-                        "actual_rate": float(subtype_actual),
-                        "predicted_rate": float(subtype_pred),
-                        "diff": float(subtype_actual - subtype_pred)
-                    }
-        
-        # Create model summary for frontend - Ensure all values are JSON serializable
-        frontend_model_summary = {
-            "points_open_model": open_play_metrics,
-            "points_set_model": set_play_stats,
-            "goals_model": gls_metrics
-        }
-        
+                if subtype != "open_play":  # Skip open play
+                    subtype_mask = df["set_play_subtype"] == subtype
+                    if subtype_mask.sum() >= 3:
+                        subtype_actual = df.loc[subtype_mask, "Score_Binary_Points"].mean()
+                        subtype_pred = df.loc[subtype_mask, "xPoints"].mean()
+                        set_play_subtype_metrics[subtype] = {
+                            "count": int(subtype_mask.sum()),
+                            "actual_rate": float(subtype_actual),
+                            "predicted_rate": float(subtype_pred),
+                            "diff": float(subtype_actual - subtype_pred),
+                            "calibration_factor": float(set_play_subtype_calibration.get(subtype, set_play_calibration_factor))
+                        }
+                        
         # Add set play subtype metrics if available
         if set_play_subtype_metrics:
             frontend_model_summary["set_play_subtypes"] = set_play_subtype_metrics
@@ -4018,7 +3706,7 @@ def recalculate_xpoints():
         # Return response
         return jsonify({
             "status": "success",
-            "message": f"Updated {shots_upd} shots with advanced xPoints values",
+            "message": f"Updated {shots_upd} shots with unified xPoints model values",
             "execution_time_seconds": float(execution_time),
             "model_summary": frontend_model_summary,
             "leaderboard": agg.to_dict("records"),
@@ -4032,15 +3720,17 @@ def recalculate_xpoints():
                 "expected_total_value": float(total_expected_value),
                 "actual_total_value": float(total_actual_value),
                 "set_play_count": int(set_play_mask.sum()),
-                "open_play_count": int(open_play_mask.sum())
+                "open_play_count": int(open_play_mask.sum()),
+                "set_play_success_rate": float(set_play_success_rate),
+                "open_play_success_rate": float(open_play_success_rate)
             }
         }), 200
 
     except Exception as e:
-        logging.error("High accuracy recalc failed", exc_info=True)
+        logging.error("Unified xPoints model calculation failed", exc_info=True)
         return jsonify({
             "status": "error",
-            "message": "Error in xPoints calculation",
+            "message": "Error in unified xPoints calculation",
             "error": str(e)
         }), 500
 

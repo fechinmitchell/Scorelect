@@ -60,7 +60,6 @@ const defaultMapping = {
   'sideline wide': 'miss',
   'offensive mark short': 'miss',
   'pen miss': 'miss'
-
 };
 
 // Fallback colors for markers
@@ -82,6 +81,65 @@ const fallbackLegendColors = {
   setplaymiss: { fill: 'var(--danger)', stroke: 'white' },
   'penalty goal': 'var(--penalty-color)',
   blocked: 'var(--blocked-color)'
+};
+
+// Two-pointer logic functions
+const calculateDistanceFromGoalLine = (x, y, pitchWidth = 145, pitchHeight = 88) => {
+  // Goal line is at x = pitchWidth (145m)
+  // Goal center is at y = pitchHeight/2 (44m)
+  const goalLineX = pitchWidth;
+  const goalCenterY = pitchHeight / 2;
+  
+  // Calculate distance from the shot position to goal line center
+  const deltaX = goalLineX - x;
+  const deltaY = Math.abs(goalCenterY - y);
+  
+  return Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+};
+
+const calculateTwoPointerValue = (shot, pitchWidth = 145, pitchHeight = 88) => {
+  const action = (shot.action || '').toLowerCase().trim();
+  
+  // Goals are worth 3 points
+  if (action === 'goal' || action === 'penalty goal') {
+    return 3;
+  }
+  
+  // Must be a scoring shot (point) for 1-2 point logic
+  const isScoringShot = action === 'point' || action === 'free';
+  if (!isScoringShot) return 1; // Not a scoring shot, default to 1
+  
+  // Check if it's a 45 - always 1 point
+  const isFrom45 = action.includes('45') || action.includes('fortyfive') || 
+                   (shot.action || '').toLowerCase().includes('45');
+  if (isFrom45) return 1;
+  
+  // Use the already calculated distMeters if available (from translateShotToOneSide)
+  // Otherwise calculate it using the translated coordinates
+  let distanceFromGoal;
+  if (shot.distMeters) {
+    distanceFromGoal = shot.distMeters;
+  } else {
+    // If no distMeters, we need to translate first then calculate
+    const translatedShot = translateShotToOneSide(shot, pitchWidth/2, pitchWidth, pitchHeight/2);
+    distanceFromGoal = translatedShot.distMeters;
+  }
+  
+  // Must be at or outside 40m arc
+  const isAtOrOutsideArc = distanceFromGoal >= 40;
+  
+  // Check if touched in flight (new property we'll add)
+  const touchedInFlight = shot.touchedInFlight || false;
+  
+  // Check if it's from play, mark, or free (excluding 45s)
+  const isKickedFromPlayMarkOrFree = true; // Most shots qualify unless specifically excluded
+  
+  // Apply two-pointer logic for points and frees
+  if (isKickedFromPlayMarkOrFree && isAtOrOutsideArc && !touchedInFlight && !isFrom45) {
+    return 2; // Two-pointer
+  }
+  
+  return 1; // Standard point
 };
 
 // Predictive "models" for xP and xG
@@ -177,6 +235,12 @@ const calculateMissingMetrics = games =>
         }
         s.xP_adv = s.xPoints * 0.7 + (s.xGoals||0) * 0.3;
       }
+      
+      // Calculate point value for two-pointer logic
+      if (typeof s.pointValue !== 'number') {
+        s.pointValue = calculateTwoPointerValue(s);
+      }
+      
       return s;
     })
   }));
@@ -187,7 +251,6 @@ function flattenShots(games = []) {
 }
 const getRenderType = (raw, map) =>
   map[raw?.toLowerCase().trim()] || raw?.toLowerCase().trim();
-
 
 // Pitch view component
 function PitchView({ allShots, xScale, yScale, halfLineX, goalX, goalY, onShotClick, colors, legendColors }) {
@@ -207,6 +270,32 @@ function PitchView({ allShots, xScale, yScale, halfLineX, goalX, goalY, onShotCl
           {renderOneSidePitchShots({ shots: allShots, colors, xScale, yScale, onShotClick, halfLineX, goalX, goalY })}
           {renderLegendOneSideShots(legendColors, xScale * (pitchWidth / 2), yScale * pitchHeight)}
         </Stage>
+      </div>
+      
+      {/* Two-pointer legend */}
+      <div className="two-pointer-legend">
+        <div className="legend-item">
+          <div className="legend-circle untouched"></div>
+          <span>Untouched Shot</span>
+        </div>
+        <div className="legend-item">
+          <div className="legend-circle touched"></div>
+          <span>Touched in Flight</span>
+        </div>
+        <div className="legend-item">
+          <div className="legend-circle two-pointer"></div>
+          <span>Two-Pointer (≥40m, Untouched)</span>
+        </div>
+      </div>
+      
+      <div className="touch-instructions">
+        <h4>Two-Pointer Rules:</h4>
+        <ul>
+          <li>Click any shot to view details and toggle touch status in the modal</li>
+          <li>Shots ≥40m from goal and untouched = 2 points</li>
+          <li>45-yard frees are always 1 point regardless of distance</li>
+          <li>Touched shots are always 1 point</li>
+        </ul>
       </div>
     </div>
   );
@@ -373,7 +462,7 @@ export default function GAAAnalysisDashboard() {
   // data
   const [games, setGames] = useState([]);
   const [summary, setSummary] = useState({
-    totalShots:0, totalGoals:0, totalPoints:0, totalMisses:0
+    totalShots:0, totalGoals:0, totalPoints:0, totalMisses:0, totalTwoPointers:0, totalOnePointers:0
   });
   const [teamAggregatedData, setTeamAggregatedData] = useState({});
   const [teamScorers, setTeamScorers] = useState({});
@@ -385,7 +474,23 @@ export default function GAAAnalysisDashboard() {
   const halfLineX = pitchWidth / 2;
   const goalX = pitchWidth, goalY = pitchHeight / 2;
 
-  // dynamic colors memo
+  // Function to update a specific shot using unique identifier
+  const updateShotInGames = (updatedShot) => {
+    setGames(prevGames => 
+      prevGames.map(game => ({
+        ...game,
+        gameData: game.gameData.map(shot => {
+          // More precise matching using multiple properties
+          const isMatch = shot.x === selectedShot.x && 
+                         shot.y === selectedShot.y && 
+                         shot.minute === selectedShot.minute && 
+                         shot.playerName === selectedShot.playerName &&
+                         shot.action === selectedShot.action;
+          return isMatch ? updatedShot : shot;
+        })
+      }))
+    );
+  };
 
   // Fix for dynamicColors to ensure consistent object structure
   const dynamicColors = useMemo(() => ({
@@ -479,12 +584,20 @@ export default function GAAAnalysisDashboard() {
     setGames(filtered);
 
     const shots = flattenShots(filtered);
-    const s = { totalShots:0, totalGoals:0, totalPoints:0, totalMisses:0 };
+    const s = { totalShots:0, totalGoals:0, totalPoints:0, totalMisses:0, totalTwoPointers:0, totalOnePointers:0 };
     shots.forEach(sh => {
       s.totalShots++;
       const act = (sh.action||'').toLowerCase().trim();
       if (act==='goal'||act==='penalty goal') s.totalGoals++;
-      else if (act==='point') s.totalPoints++;
+      else if (act==='point') {
+        const pointValue = sh.pointValue || calculateTwoPointerValue(sh);
+        s.totalPoints += pointValue;
+        if (pointValue === 2) {
+          s.totalTwoPointers++;
+        } else {
+          s.totalOnePointers++;
+        }
+      }
       else if (/miss|wide|short|blocked|post/.test(act)) s.totalMisses++;
     });
     setSummary(s);
@@ -510,7 +623,8 @@ export default function GAAAnalysisDashboard() {
           freeAttempts:0, freeScored:0,
           offensiveMarkAttempts:0, offensiveMarkScored:0,
           fortyFiveAttempts:0, fortyFiveScored:0,
-          twoPointerAttempts:0, twoPointerScored:0
+          twoPointerAttempts:0, twoPointerScored:0,
+          totalTwoPointers:0, totalOnePointers:0
         };
         distAcc[team] = 0;
         scorerMap[team] = {};
@@ -521,22 +635,54 @@ export default function GAAAnalysisDashboard() {
   
       const act = (sh.action||'').toLowerCase().trim();
       const name = sh.playerName||'NoName';
+      const pointValue = sh.pointValue || calculateTwoPointerValue(sh);
   
-          if (act==='goal'||act==='penalty goal') {
+      if (act==='goal'||act==='penalty goal') {
         agg[team].goals++;
         agg[team].successfulShots++;
-        // Add successful goal to scorer
+        // Add successful goal to scorer (worth 3 points)
         if (name) {
-          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0};
+          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0};
           scorerMap[team][name].goals++;
         }
       } else if (act==='point') {
-        agg[team].points++;
+        agg[team].points += pointValue;
         agg[team].successfulShots++;
+        
+        if (pointValue === 2) {
+          agg[team].totalTwoPointers++;
+        } else {
+          agg[team].totalOnePointers++;
+        }
+        
         // Add successful point to scorer
         if (name) {
-          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0};
-          scorerMap[team][name].points++;
+          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0};
+          scorerMap[team][name].points += pointValue;
+          if (pointValue === 2) {
+            scorerMap[team][name].twoPointers = (scorerMap[team][name].twoPointers || 0) + 1;
+          }
+        }
+      } else if (act==='free') {
+        // Handle frees - they can be worth 1 or 2 points
+        agg[team].freeAttempts++;
+        agg[team].freeScored++;
+        agg[team].successfulShots++;
+        agg[team].points += pointValue;
+        
+        if (pointValue === 2) {
+          agg[team].totalTwoPointers++;
+        } else {
+          agg[team].totalOnePointers++;
+        }
+        
+        // Add successful free to scorer
+        if (name) {
+          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0};
+          scorerMap[team][name].points += pointValue;
+          if (pointValue === 2) {
+            scorerMap[team][name].twoPointers = (scorerMap[team][name].twoPointers || 0) + 1;
+          }
         }
       } else if (act==='offensive mark') {
         agg[team].offensiveMarkAttempts++;
@@ -544,21 +690,15 @@ export default function GAAAnalysisDashboard() {
         agg[team].successfulShots++;
         // Add successful offensive mark as a point for the scorer
         if (name) {
-          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0};
+          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0};
           scorerMap[team][name].points++;
         }
       }
       
       if (act.startsWith('free')) {
-        agg[team].freeAttempts++;
-        if (act==='free') {
-          agg[team].freeScored++;
-          agg[team].successfulShots++;
-          // Add successful free as a point for the scorer
-          if (name) {
-            scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0};
-            scorerMap[team][name].points++;
-          }
+        // Only count non-successful frees here (misses)
+        if (act !== 'free') {
+          agg[team].freeAttempts++;
         }
       }
       
@@ -569,7 +709,7 @@ export default function GAAAnalysisDashboard() {
           agg[team].successfulShots++;
           // Add successful 45/fortyfive as a point for the scorer
           if (name) {
-            scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0};
+            scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0};
             scorerMap[team][name].points++;
           }
         }
@@ -597,7 +737,6 @@ export default function GAAAnalysisDashboard() {
     
     return { aggregator: agg, scorersMap: scorerMap };
   }, [games, halfLineX, goalX, goalY]);
-
 
   useEffect(() => {
     setTeamAggregatedData(aggregatedData.aggregator);
@@ -663,14 +802,54 @@ export default function GAAAnalysisDashboard() {
     }
   };
 
-  // SHOT CLICK HANDLER
-  const handleShotClick = shot => {
+  // SHOT CLICK HANDLER - Just show details, don't toggle
+  const handleShotClick = (shot) => {
     setSelectedShot(translateShotToOneSide(shot, halfLineX, goalX, goalY));
+  };
+
+  // Toggle touch status for a specific shot
+  const toggleShotTouchStatus = (shot) => {
+    const updatedShot = {
+      ...shot,
+      touchedInFlight: !shot.touchedInFlight,
+      pointValue: calculateTwoPointerValue({
+        ...shot,
+        touchedInFlight: !shot.touchedInFlight
+      })
+    };
+    
+    updateShotInGames(updatedShot);
+    setSelectedShot(translateShotToOneSide(updatedShot, halfLineX, goalX, goalY));
+    
+    // Show notification
+    const touchStatus = updatedShot.touchedInFlight ? 'touched' : 'untouched';
+    const pointValue = updatedShot.pointValue;
+    
+    Swal.fire({
+      title: `Shot marked as ${touchStatus}`,
+      text: `This shot is now worth ${pointValue} point(s)`,
+      icon: 'info',
+      timer: 1500,
+      showConfirmButton: false,
+      background: 'var(--dark-card)',
+      color: 'var(--light)'
+    });
   };
 
   // RENDER SELECTED SHOT DETAILS
   function renderSelectedShotDetails() {
     if (!selectedShot) return null;
+    
+    // Use the already translated shot coordinates for distance calculation
+    const pointValue = selectedShot.pointValue || calculateTwoPointerValue(selectedShot);
+    const distanceFromGoal = selectedShot.distMeters || calculateDistanceFromGoalLine(
+      selectedShot.x || 0, 
+      selectedShot.y || 0, 
+      145, 
+      88
+    );
+    const isScoring = ['point', 'goal', 'free'].includes((selectedShot.action || '').toLowerCase());
+    
     return (
       <div>
         <h2 className="gaa-modal-title">Shot Details</h2>
@@ -692,9 +871,44 @@ export default function GAAAnalysisDashboard() {
             <span className="gaa-stat-value">{selectedShot.action || 'N/A'}</span>
           </div>
           <div className="gaa-stat-row">
-            <span className="gaa-stat-label">Distance:</span>
-            <span className="gaa-stat-value">{selectedShot.distMeters?.toFixed(1) || 'N/A'} m</span>
+            <span className="gaa-stat-label">Distance from Goal:</span>
+            <span className="gaa-stat-value">{distanceFromGoal.toFixed(1)} m</span>
           </div>
+          
+          {isScoring && (
+            <>
+              <div className={`gaa-stat-row ${selectedShot.touchedInFlight ? 'highlight-touched' : ''}`}>
+                <span className="gaa-stat-label">Touch Status:</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span className="gaa-stat-value" style={{ 
+                    color: selectedShot.touchedInFlight ? '#FF6B6B' : '#50FA7B',
+                    fontWeight: 'bold'
+                  }}>
+                    {selectedShot.touchedInFlight ? 'TOUCHED' : 'UNTOUCHED'}
+                  </span>
+                  <button
+                    className={`touch-toggle-btn ${selectedShot.touchedInFlight ? 'touched' : 'untouched'}`}
+                    onClick={() => toggleShotTouchStatus(selectedShot)}
+                  >
+                    {selectedShot.touchedInFlight ? 'MARK UNTOUCHED' : 'MARK TOUCHED'}
+                  </button>
+                </div>
+              </div>
+              <div className={`gaa-stat-row ${pointValue === 2 ? 'highlight-two-pointer' : pointValue === 3 ? 'highlight-goal' : ''}`}>
+                <span className="gaa-stat-label">Point Value:</span>
+                <span className="gaa-stat-value" style={{ 
+                  color: pointValue === 3 ? '#FFFF33' : pointValue === 2 ? '#FFFF33' : '#50FA7B',
+                  fontWeight: 'bold',
+                  fontSize: '1.2em'
+                }}>
+                  {pointValue} point{pointValue !== 1 ? 's' : ''}
+                  {pointValue === 2 && <span className="two-pointer-badge">2PT</span>}
+                  {pointValue === 3 && <span className="two-pointer-badge" style={{background: 'linear-gradient(45deg, #FFD700, #FFA500)'}}>GOAL</span>}
+                </span>
+              </div>
+            </>
+          )}
+          
           <div className="gaa-stat-row">
             <span className="gaa-stat-label">Foot:</span>
             <span className="gaa-stat-value">{selectedShot.foot || 'N/A'}</span>
@@ -716,6 +930,20 @@ export default function GAAAnalysisDashboard() {
             <span className="gaa-stat-value">{typeof selectedShot.xP_adv === 'number' ? selectedShot.xP_adv.toFixed(2) : 'N/A'}</span>
           </div>
         </div>
+        
+        {isScoring && (
+          <div style={{ 
+            padding: '10px', 
+            background: 'rgba(115, 63, 170, 0.1)', 
+            borderRadius: '5px',
+            marginBottom: '15px',
+            textAlign: 'center'
+          }}>
+            <small style={{ color: 'var(--gray-dark)' }}>
+              Use the toggle button above to mark whether this shot was touched in flight
+            </small>
+          </div>
+        )}
       </div>
     );
   }
@@ -800,6 +1028,14 @@ export default function GAAAnalysisDashboard() {
               <p className="gaa-tile-value">{summary.totalPoints}</p>
             </div>
             <div className="gaa-tile">
+              <h5 className="gaa-tile-title">Two-Pointers</h5>
+              <p className="gaa-tile-value" style={{ color: '#FFFF33' }}>{summary.totalTwoPointers}</p>
+            </div>
+            <div className="gaa-tile">
+              <h5 className="gaa-tile-title">One-Pointers</h5>
+              <p className="gaa-tile-value">{summary.totalOnePointers}</p>
+            </div>
+            <div className="gaa-tile">
               <h5 className="gaa-tile-title">Total Misses</h5>
               <p className="gaa-tile-value">{summary.totalMisses}</p>
             </div>
@@ -846,6 +1082,22 @@ export default function GAAAnalysisDashboard() {
                       <span className="gaa-stat-label">Misses:</span>
                       <span className="gaa-stat-value">{stats.misses}</span>
                     </div>
+                    
+                    {/* Two-pointer summary */}
+                    <div className="team-two-pointer-summary">
+                      <h4>Two-Pointer Breakdown</h4>
+                      <div className="two-pointer-stats">
+                        <div className="two-pointer-stat">
+                          <div className="value">{stats.totalTwoPointers}</div>
+                          <div className="label">Two-Pointers</div>
+                        </div>
+                        <div className="two-pointer-stat">
+                          <div className="value">{stats.totalOnePointers}</div>
+                          <div className="label">One-Pointers</div>
+                        </div>
+                      </div>
+                    </div>
+                    
                     <div className="gaa-stat-row">
                       <span className="gaa-stat-label">Offensive Marks:</span>
                       <span className="gaa-stat-value">{formatCategory(stats.offensiveMarkAttempts, stats.offensiveMarkScored)}</span>
@@ -859,7 +1111,7 @@ export default function GAAAnalysisDashboard() {
                       <span className="gaa-stat-value">{formatCategory(stats.fortyFiveAttempts, stats.fortyFiveScored)}</span>
                     </div>
                     <div className="gaa-stat-row">
-                      <span className="gaa-stat-label">2‑Pointers:</span>
+                      <span className="gaa-stat-label">2‑Point Attempts:</span>
                       <span className="gaa-stat-value">{formatCategory(stats.twoPointerAttempts, stats.twoPointerScored)}</span>
                     </div>
                     <div className="gaa-stat-row">
@@ -873,6 +1125,7 @@ export default function GAAAnalysisDashboard() {
                       : Object.entries(teamScorers[team]).map(([p, v]) => (
                           <div key={p} className="gaa-scorer-item">
                             {p}: {v.goals}g, {v.points}p
+                            {v.twoPointers > 0 && <span className="two-pointer-badge">{v.twoPointers} x 2PT</span>}
                           </div>
                         ))
                     }

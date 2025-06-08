@@ -135,6 +135,54 @@ const PitchGraphic = () => {
 
     const [uploadedDataset, setUploadedDataset] = useState(null);
 
+    const [isRefreshingDatasets, setIsRefreshingDatasets] = useState(false);
+
+    const handleRefreshDatasets = async () => {
+      if (!user) return;
+      
+      setIsRefreshingDatasets(true);
+      try {
+        const token = await user.getIdToken();
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/list-datasets`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ uid: user.uid }),
+        });
+    
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Failed to refresh datasets:', errorData.error || response.statusText);
+          setDatasetsFetchError(true);
+          Swal.fire('Error', 'Failed to refresh datasets.', 'error');
+          return;
+        }
+    
+        const data = await response.json();
+        setAvailableDatasets(data.datasets);
+        setDatasetsFetchError(false);
+        console.log('Datasets refreshed successfully:', data.datasets);
+        
+        // Show success message
+        Swal.fire({
+          title: 'Success',
+          text: 'Datasets refreshed successfully!',
+          icon: 'success',
+          timer: 1500,
+          showConfirmButton: false
+        });
+        
+      } catch (error) {
+        console.error('Error refreshing datasets:', error);
+        setDatasetsFetchError(true);
+        Swal.fire('Error', 'Network error while refreshing datasets.', 'error');
+      } finally {
+        setIsRefreshingDatasets(false);
+      }
+    };
+
     // When opening the review modal, copy the current coordinates:
     const toggleReviewModal = () => {
       // If opening (i.e. modal currently closed) then copy coords into reviewData
@@ -2431,65 +2479,181 @@ const handleUploadRawData = (event) => {
   </Modal>
 )}
 
-      {/* Save Game Modal */}
-      <Modal
-        isOpen={isSaveModalOpen}
-        onRequestClose={() => setIsSaveModalOpen(false)}
-        contentLabel="Save Game"
+  <Modal
+    isOpen={isSaveModalOpen}
+    onRequestClose={() => setIsSaveModalOpen(false)}
+    contentLabel="Save Game"
+    style={{
+      content: {
+        top: '50%',
+        left: '50%',
+        right: 'auto',
+        bottom: 'auto',
+        marginRight: '-50%',
+        transform: 'translate(-50%, -50%)',
+        width: '80%',
+        maxHeight: '80%',
+        overflowY: 'auto',
+        background: '#2e2e2e',
+        padding: '30px',
+        borderRadius: '10px',
+        boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
+      },
+      overlay: {
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        zIndex: 1000,
+      },
+    }}
+  >
+    <h2 style={{ marginBottom: '20px', color: '#fff' }}>Save Game</h2>
+
+    {/* Warning Message if Datasets Failed to Fetch */}
+    {datasetsFetchError && (
+      <div
         style={{
-          content: {
-            top: '50%',
-            left: '50%',
-            right: 'auto',
-            bottom: 'auto',
-            marginRight: '-50%',
-            transform: 'translate(-50%, -50%)',
-            width: '80%',
-            maxHeight: '80%',
-            overflowY: 'auto',
-            background: '#2e2e2e',
-            padding: '30px',
-            borderRadius: '10px',
-            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
-          },
-          overlay: {
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            zIndex: 1000,
-          },
+          color: '#dc3545',
+          marginBottom: '15px',
+          padding: '10px',
+          border: '1px solid #dc3545',
+          borderRadius: '5px',
+          backgroundColor: '#f8d7da',
         }}
       >
-        <h2 style={{ marginBottom: '20px', color: '#fff' }}>Save Game</h2>
+        <strong>Warning:</strong> Failed to fetch datasets. You can still save your game, but saving to a dataset won't be available.
+      </div>
+    )}
 
-        {/* Warning Message if Datasets Failed to Fetch */}
-        {datasetsFetchError && (
-          <div
-            style={{
-              color: '#dc3545',
-              marginBottom: '15px',
-              padding: '10px',
-              border: '1px solid #dc3545',
-              borderRadius: '5px',
-              backgroundColor: '#f8d7da',
-            }}
-          >
-            <strong>Warning:</strong> Failed to fetch datasets. You can still save your game, but saving to a dataset won't be available.
-          </div>
-        )}
+    {/* Game Name Input */}
+    <div style={{ marginBottom: '20px' }}>
+      <label
+        htmlFor="gameName"
+        style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#fff' }}
+      >
+        Game Name:
+      </label>
+      <input
+        type="text"
+        id="gameName"
+        value={gameName}
+        onChange={(e) => setGameName(e.target.value)}
+        placeholder="Enter game name"
+        style={{
+          width: '100%',
+          padding: '10px',
+          borderRadius: '5px',
+          border: '1px solid #ccc',
+        }}
+      />
+    </div>
 
-        {/* Game Name Input */}
-        <div style={{ marginBottom: '20px' }}>
+    {/* Match Date Input */}
+    <div style={{ marginBottom: '20px' }}>
+      <label
+        htmlFor="matchDate"
+        style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#fff' }}
+      >
+        Match Date:
+      </label>
+      <input
+        type="date"
+        id="matchDate"
+        value={matchDate}
+        onChange={(e) => setMatchDate(e.target.value)}
+        style={{
+          width: '100%',
+          padding: '10px',
+          borderRadius: '5px',
+          border: '1px solid #ccc',
+        }}
+      />
+    </div>
+
+    {/* Save to Dataset Section with Refresh Button */}
+    <div style={{ marginBottom: '20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+        <label
+          htmlFor="saveToDataset"
+          style={{ fontWeight: 'bold', color: '#fff', marginRight: '10px' }}
+        >
+          Save to Dataset:
+        </label>
+        <button
+          onClick={handleRefreshDatasets}
+          disabled={isRefreshingDatasets}
+          style={{
+            padding: '5px 10px',
+            backgroundColor: isRefreshingDatasets ? '#6c757d' : '#007bff',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: isRefreshingDatasets ? 'not-allowed' : 'pointer',
+            fontSize: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+          }}
+          title="Refresh the list of available datasets"
+        >
+          {isRefreshingDatasets && (
+            <span
+              style={{
+                width: '12px',
+                height: '12px',
+                border: '2px solid #f3f3f3',
+                borderTop: '2px solid #fff',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+              }}
+            ></span>
+          )}
+          {isRefreshingDatasets ? 'Refreshing...' : 'Refresh'}
+        </button>
+      </div>
+      
+      <select
+        id="saveToDataset"
+        value={saveToDataset ? selectedDataset : ''}
+        onChange={(e) => {
+          const value = e.target.value;
+          if (value === '') {
+            setSaveToDataset(false);
+            setSelectedDataset('');
+            setNewDatasetName('');
+          } else {
+            setSaveToDataset(true);
+            setSelectedDataset(value);
+          }
+        }}
+        style={{
+          width: '100%',
+          padding: '10px',
+          borderRadius: '5px',
+          border: '1px solid #ccc',
+        }}
+      >
+        <option value="">-- Select a Dataset --</option>
+        {availableDatasets.map((dataset, index) => (
+          <option key={index} value={dataset}>
+            {dataset}
+          </option>
+        ))}
+        <option value="new">Create New Dataset</option>
+      </select>
+
+      {saveToDataset && selectedDataset === 'new' && (
+        <div style={{ marginTop: '15px' }}>
           <label
-            htmlFor="gameName"
+            htmlFor="newDatasetName"
             style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#fff' }}
           >
-            Game Name:
+            New Dataset Name:
           </label>
           <input
             type="text"
-            id="gameName"
-            value={gameName}
-            onChange={(e) => setGameName(e.target.value)}
-            placeholder="Enter game name"
+            id="newDatasetName"
+            value={newDatasetName}
+            onChange={(e) => setNewDatasetName(e.target.value)}
+            placeholder="Enter new dataset name"
             style={{
               width: '100%',
               padding: '10px',
@@ -2497,189 +2661,106 @@ const handleUploadRawData = (event) => {
               border: '1px solid #ccc',
             }}
           />
-        </div>
-
-        {/* Match Date Input */}
-        <div style={{ marginBottom: '20px' }}>
-          <label
-            htmlFor="matchDate"
-            style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#fff' }}
-          >
-            Match Date:
-          </label>
-          <input
-            type="date"
-            id="matchDate"
-            value={matchDate}
-            onChange={(e) => setMatchDate(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px',
-              borderRadius: '5px',
-              border: '1px solid #ccc',
-            }}
-          />
-        </div>
-
-        {/* Save to Dataset Section */}
-        <div style={{ marginBottom: '20px' }}>
-          <label
-            htmlFor="saveToDataset"
-            style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#fff' }}
-          >
-            Save to Dataset:
-          </label>
-          <select
-            id="saveToDataset"
-            value={saveToDataset ? selectedDataset : ''}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value === '') {
-                setSaveToDataset(false);
-                setSelectedDataset('');
-                setNewDatasetName('');
-              } else {
-                setSaveToDataset(true);
-                setSelectedDataset(value);
-              }
-            }}
-            style={{
-              width: '100%',
-              padding: '10px',
-              borderRadius: '5px',
-              border: '1px solid #ccc',
-            }}
-          >
-            <option value="">-- Select a Dataset --</option>
-            {availableDatasets.map((dataset, index) => (
-              <option key={index} value={dataset}>
-                {dataset}
-              </option>
-            ))}
-            <option value="new">Create New Dataset</option>
-          </select>
-
-          {saveToDataset && selectedDataset === 'new' && (
-            <div style={{ marginTop: '15px' }}>
-              <label
-                htmlFor="newDatasetName"
-                style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#fff' }}
-              >
-                New Dataset Name:
-              </label>
-              <input
-                type="text"
-                id="newDatasetName"
-                value={newDatasetName}
-                onChange={(e) => setNewDatasetName(e.target.value)}
-                placeholder="Enter new dataset name"
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  borderRadius: '5px',
-                  border: '1px solid #ccc',
-                }}
-              />
-              {duplicateDatasetError && (
-                <div
-                  style={{
-                    color: '#dc3545',
-                    marginTop: '5px',
-                    padding: '5px',
-                    border: '1px solid #dc3545',
-                    borderRadius: '5px',
-                    backgroundColor: '#f8d7da',
-                  }}
-                >
-                  <strong>Error:</strong> Dataset name already exists. Please choose a different name.
-                </div>
-              )}
+          {duplicateDatasetError && (
+            <div
+              style={{
+                color: '#dc3545',
+                marginTop: '5px',
+                padding: '5px',
+                border: '1px solid #dc3545',
+                borderRadius: '5px',
+                backgroundColor: '#f8d7da',
+              }}
+            >
+              <strong>Error:</strong> Dataset name already exists. Please choose a different name.
             </div>
           )}
         </div>
+      )}
+    </div>
 
-        {/* Modal Buttons */}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'flex-end',
-            gap: '10px',
-            marginTop: '30px',
-          }}
-        >
-          {/* New: Review Data Button */}
-          <button
-            onClick={toggleReviewModal}
+    {/* Modal Buttons */}
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'flex-end',
+        gap: '10px',
+        marginTop: '30px',
+      }}
+    >
+      {/* Review Data Button */}
+      <button
+        onClick={toggleReviewModal}
+        style={{
+          padding: '10px 20px',
+          backgroundColor: '#007bff',
+          color: '#fff',
+          border: 'none',
+          borderRadius: '5px',
+          cursor: 'pointer',
+        }}
+      >
+        Review Data
+      </button>
+      <button
+        onClick={handleSaveGame}
+        disabled={saveButtonStatus === 'loading'}
+        style={{
+          padding: '10px 20px',
+          backgroundColor: '#28a745',
+          color: '#fff',
+          border: 'none',
+          borderRadius: '5px',
+          cursor: saveButtonStatus === 'loading' ? 'not-allowed' : 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '5px',
+        }}
+      >
+        {saveButtonStatus === 'loading' && (
+          <span
+            className="spinner"
             style={{
-              padding: '10px 20px',
-              backgroundColor: '#007bff',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer',
+              width: '16px',
+              height: '16px',
+              border: '2px solid #f3f3f3',
+              borderTop: '2px solid #fff',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
             }}
-          >
-            Review Data
-          </button>
-          <button
-            onClick={handleSaveGame}
-            disabled={saveButtonStatus === 'loading'}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#28a745',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: saveButtonStatus === 'loading' ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px',
-            }}
-          >
-            {saveButtonStatus === 'loading' && (
-              <span
-                className="spinner"
-                style={{
-                  width: '16px',
-                  height: '16px',
-                  border: '2px solid #f3f3f3',
-                  borderTop: '2px solid #fff',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite',
-                }}
-              ></span>
-            )}
-            {saveButtonStatus === 'success' ? (
-              <span>&#10004; Saved!</span>
-            ) : saveButtonStatus === 'error' ? (
-              <span>&#10008; Error</span>
-            ) : (
-              'Save Game'
-            )}
-          </button>
-          <button
-            onClick={() => setIsSaveModalOpen(false)}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#dc3545',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer',
-            }}
-          >
-            Exit
-          </button>
-        </div>
-        <style>
-          {`
-            @keyframes spin {
-              0% { transform: rotate(0deg); }
-              100% { transform: rotate(360deg); }
-            }
-          `}
-        </style>
-      </Modal>
+          ></span>
+        )}
+        {saveButtonStatus === 'success' ? (
+          <span>&#10004; Saved!</span>
+        ) : saveButtonStatus === 'error' ? (
+          <span>&#10008; Error</span>
+        ) : (
+          'Save Game'
+        )}
+      </button>
+      <button
+        onClick={() => setIsSaveModalOpen(false)}
+        style={{
+          padding: '10px 20px',
+          backgroundColor: '#dc3545',
+          color: '#fff',
+          border: 'none',
+          borderRadius: '5px',
+          cursor: 'pointer',
+        }}
+      >
+        Exit
+      </button>
+    </div>
+    <style>
+      {`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}
+    </style>
+  </Modal>
 
 
       <Modal

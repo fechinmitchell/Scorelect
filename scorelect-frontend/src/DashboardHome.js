@@ -653,10 +653,23 @@ const DashboardHome = ({ selectedSport, onNavigate }) => {
 
   // Navigate to the correct video analysis tool based on selected sport
   const handleVideoClick = () => {
-    if (selectedSport === 'Soccer') {
-      navigate('/analysis-soccer', { state: { defaultTab: 'video' } });
-    } else {
-      navigate('/video');
+    switch (selectedSport) {
+      case 'Soccer':
+        navigate('/analysis-soccer', { state: { defaultTab: 'video' } });
+        break;
+      case 'GAA':
+        navigate('/analysis-gaa', { state: { defaultTab: 'video' } });
+        break;
+      case 'Basketball':
+        navigate('/analysis-basketball', { state: { defaultTab: 'video' } });
+        break;
+      case 'American Football':
+        navigate('/analysis-american-football', { state: { defaultTab: 'video' } });
+        break;
+      default:
+        // Fallback to GAA if sport not recognized
+        navigate('/analysis-gaa', { state: { defaultTab: 'video' } });
+        break;
     }
   };
 

@@ -164,29 +164,18 @@ const DatasetAnalysis = () => {
   }, [parsedData, selectedUserDataset, datasets]);
 
   const handleContinue = () => {
-    let data = parsedData || datasets[selectedUserDataset];
+    const data = parsedData || (selectedUserDataset && datasets[selectedUserDataset]);
     if (!data) {
-      Swal.fire({
-        title: 'No Dataset',
-        text: 'Upload or select a dataset first.',
+      return Swal.fire({
+        title: 'No Data',
+        text: 'Please select or upload a dataset first.',
         icon: 'warning',
         background: 'var(--dark-card)',
         color: 'var(--light)',
         confirmButtonColor: 'var(--primary)'
       });
-      return;
     }
-  
-    // Filter to selected match if needed
-    if (selectedMatch !== 'all') {
-      data = {
-        ...data,
-        games: data.games.filter(
-          (g) => (g.gameId || g.gameName) === selectedMatch
-        )
-      };
-    }
-  
+
     // Add normalization logic for coordinates
     const pitchWidth = 105;  // Width of soccer pitch in meters
     const pitchHeight = 68;  // Height of soccer pitch in meters
@@ -559,7 +548,7 @@ const VideoAnalysis = () => {
         confirmButtonColor: 'var(--primary)'
       });
     }
-    navigate('/tagging/manual', {
+    navigate('/manual-tagging-soccer', {
       state: { file: file || null, youtubeUrl: youtubeUrl || null, sport: 'Soccer' }
     });
   };

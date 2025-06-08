@@ -10,7 +10,7 @@ import PropTypes from 'prop-types';
 import PublishDataset from './PublishDataset';
 import UpdateDataset from './UpdateDataset';
 import { getFirestore, collection, getDocs } from 'firebase/firestore';
-import { FaVideo, FaMap, FaSync } from 'react-icons/fa';
+import { FaVideo, FaMap, FaSync, FaExchangeAlt } from 'react-icons/fa';
 
 async function parseJSONNoNaN(response) {
   const rawText = await response.text();
@@ -32,6 +32,9 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [analysisFilter, setAnalysisFilter] = useState('all');
+  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
+  const [selectedGameToMove, setSelectedGameToMove] = useState(null);
+  const [sourceDataset, setSourceDataset] = useState(null);
 
   const handlePublishSuccess = () => {
     Swal.fire('Published!', 'Dataset has been published successfully.', 'success');
@@ -210,6 +213,76 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
         }
       }
     });
+  };
+
+  // New function to handle moving a game to another dataset
+  const handleMoveGame = (game, currentDatasetName) => {
+    setSelectedGameToMove(game);
+    setSourceDataset(currentDatasetName);
+    setIsMoveModalOpen(true);
+  };
+
+  const closeMoveModal = () => {
+    setIsMoveModalOpen(false);
+    setSelectedGameToMove(null);
+    setSourceDataset(null);
+  };
+
+  const moveGameToDataset = async (targetDatasetName) => {
+    const user = auth.currentUser;
+    if (!user) {
+      Swal.fire({
+        title: 'Error',
+        text: 'User not authenticated.',
+        icon: 'error',
+        background: 'var(--dark-card)',
+        confirmButtonColor: 'var(--primary)',
+      });
+      return;
+    }
+
+    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`${apiUrl}/move-game`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          uid: user.uid,
+          gameId: selectedGameToMove.gameId || selectedGameToMove.gameName,
+          sourceDataset: sourceDataset,
+          targetDataset: targetDatasetName,
+        }),
+      });
+
+      const resultData = await parseJSONNoNaN(response);
+      if (response.ok) {
+        Swal.fire({
+          title: 'Moved!',
+          text: `Game "${selectedGameToMove.gameName}" has been moved to dataset "${targetDatasetName}".`,
+          icon: 'success',
+          background: 'var(--dark-card)',
+          confirmButtonColor: 'var(--primary)',
+        });
+        fetchSavedGames();
+        closeMoveModal();
+      } else {
+        throw new Error(resultData.error || 'Failed to move the game.');
+      }
+    } catch (error) {
+      console.error('Error moving game:', error);
+      Swal.fire({
+        title: 'Error',
+        text: error.message || 'Failed to move the game.',
+        icon: 'error',
+        background: 'var(--dark-card)',
+        confirmButtonColor: 'var(--primary)',
+      });
+    }
   };
 
   const handleDownloadDataset = async (datasetName) => {
@@ -442,6 +515,11 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
 
   const datasetKeys = Object.keys(filteredDatasets);
 
+  // Get available target datasets for moving (excluding the source dataset)
+  const getAvailableTargetDatasets = () => {
+    return datasetKeys.filter(datasetName => datasetName !== sourceDataset);
+  };
+
   return (
     <div className="saved-games-container">
       <div className="header-container">
@@ -482,6 +560,36 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
         <span><FaVideo className="analysis-icon video" /> Video Analysis</span>
         <span><FaMap className="analysis-icon pitch" /> Pitch Analysis</span>
       </div>
+
+      {/* Move Game Modal */}
+      {isMoveModalOpen && selectedGameToMove && (
+        <div className="modal-overlay" onClick={closeMoveModal}>
+          <div className="move-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Move Game to Different Dataset</h3>
+              <button className="modal-close" onClick={closeMoveModal}>×</button>
+            </div>
+            <div className="modal-content">
+              <p>Move <strong>"{selectedGameToMove.gameName}"</strong> from <strong>"{sourceDataset}"</strong> to:</p>
+              <div className="dataset-selection">
+                {getAvailableTargetDatasets().length === 0 ? (
+                  <p className="no-datasets">No other datasets available. Create a new dataset first.</p>
+                ) : (
+                  getAvailableTargetDatasets().map(datasetName => (
+                    <button
+                      key={datasetName}
+                      className="dataset-option"
+                      onClick={() => moveGameToDataset(datasetName)}
+                    >
+                      {datasetName}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isPublishModalOpen && selectedDataset && (
         <PublishDataset
@@ -577,6 +685,13 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
                               onClick={() => handleLoadGame(game)}
                             >
                               Load
+                            </button>
+                            <button
+                              className="move-button"
+                              onClick={() => handleMoveGame(game, datasetName)}
+                              title="Move to different dataset"
+                            >
+                              <FaExchangeAlt />
                             </button>
                             <button
                               className="delete-button"

@@ -58,6 +58,7 @@ import ManualTagging from './ManualTagging';
 import DashboardHome from './DashboardHome';
 import Players from './Players';
 import AnalysisSoccer from './AnalysisSoccer';
+import ManualTaggingSoccer from './ManualTaggingSoccer';
 
 /* AI-powered dashboard (layout + nested routes) */
 import AIGAADashboard from './AIDashboard/AIGAADashboard';
@@ -221,6 +222,8 @@ const App = () => {
                   <Route path="/dashboard" element={<DashboardHome onNavigate={handleNavigate} selectedSport={selectedSport} />} />
                   <Route path="/analysis-soccer" element={<AnalysisSoccer />} />
                   <Route path="/soccer-pitch" element={<SoccerPitch />} />
+                  <Route path="/manual-tagging-soccer" element={<ManualTaggingSoccer />} />
+
 
                   {/* --------------- pitch route --------------- */}
                   <Route path="/pitch" element={renderSelectedSport()} />

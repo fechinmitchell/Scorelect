@@ -4096,6 +4096,157 @@ def add_admin_user():
         logging.error(f"Error adding admin user: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
+# Replace the existing move-game endpoint in your Flask backend with this corrected version
+
+@app.route('/move-game', methods=['POST'])
+def move_game():
+    """Move a game from one dataset to another in the savedGames collection structure"""
+    try:
+        # Get the request data
+        data = request.get_json()
+        uid = data.get('uid')
+        game_id = data.get('gameId')
+        source_dataset = data.get('sourceDataset')
+        target_dataset = data.get('targetDataset')
+        
+        # Validate required fields
+        if not all([uid, game_id, source_dataset, target_dataset]):
+            logging.error("Missing required fields for move game")
+            return jsonify({'error': 'Missing required fields: uid, gameId, sourceDataset, targetDataset'}), 400
+        
+        if source_dataset == target_dataset:
+            logging.error("Source and target datasets are the same")
+            return jsonify({'error': 'Source and target datasets cannot be the same'}), 400
+        
+        # Check if user exists
+        user_doc = db.collection('users').document(uid).get()
+        if not user_doc.exists:
+            logging.error(f"User {uid} not found")
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Reference to the user's games collection (matches your SavedGames structure)
+        games_ref = db.collection('savedGames').document(uid).collection('games')
+        
+        # Find the game to move in the source dataset
+        source_query = games_ref.where('datasetName', '==', source_dataset)
+        source_games = list(source_query.stream())
+        
+        game_to_move = None
+        game_doc_ref = None
+        
+        # Look for the game by gameId or gameName (document ID)
+        for game_doc in source_games:
+            if game_doc.id == game_id:  # Check document ID first
+                game_to_move = game_doc.to_dict()
+                game_doc_ref = game_doc.reference
+                break
+            
+            # Also check if gameId matches a field in the document
+            game_data = game_doc.to_dict()
+            if game_data.get('gameId') == game_id or game_data.get('gameName') == game_id:
+                game_to_move = game_data
+                game_doc_ref = game_doc.reference
+                break
+        
+        if game_to_move is None:
+            logging.error(f"Game {game_id} not found in source dataset {source_dataset}")
+            return jsonify({'error': f'Game "{game_id}" not found in source dataset "{source_dataset}"'}), 404
+        
+        # Check if target dataset exists (has at least one game)
+        target_query = games_ref.where('datasetName', '==', target_dataset)
+        target_games = list(target_query.stream())
+        
+        # If target dataset doesn't exist, we'll create it by updating the game
+        # (The dataset is implicit - it exists when games reference it)
+        
+        # Update the game's dataset name
+        game_to_move['datasetName'] = target_dataset
+        
+        # Update the game document with the new dataset name
+        game_doc_ref.update(game_to_move)
+        
+        game_name = game_to_move.get('gameName', game_doc_ref.id)
+        
+        logging.info(f"Successfully moved game '{game_name}' from '{source_dataset}' to '{target_dataset}' for user {uid}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Game "{game_name}" moved successfully from "{source_dataset}" to "{target_dataset}"'
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error moving game: {str(e)}")
+        return jsonify({'error': f'Failed to move game: {str(e)}'}), 500
+
+
+# Alternative version using Firestore transactions for better data consistency
+@app.route('/move-game-transaction', methods=['POST'])
+def move_game_with_transaction():
+    """Move a game between datasets using Firestore transactions for data consistency"""
+    try:
+        data = request.get_json()
+        uid = data.get('uid')
+        game_id = data.get('gameId')
+        source_dataset = data.get('sourceDataset')
+        target_dataset = data.get('targetDataset')
+        
+        # Validate inputs
+        if not all([uid, game_id, source_dataset, target_dataset]):
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        if source_dataset == target_dataset:
+            return jsonify({'error': 'Source and target datasets cannot be the same'}), 400
+        
+        # Reference to the user's games collection
+        games_ref = db.collection('savedGames').document(uid).collection('games')
+        
+        # Find the game document
+        game_doc_ref = games_ref.document(game_id)
+        
+        @firestore.transactional
+        def move_game_transaction(transaction):
+            # Get the game document
+            game_doc = transaction.get(game_doc_ref)
+            
+            if not game_doc.exists:
+                raise ValueError(f'Game "{game_id}" not found')
+            
+            game_data = game_doc.to_dict()
+            current_dataset = game_data.get('datasetName')
+            
+            # Verify the game is in the source dataset
+            if current_dataset != source_dataset:
+                raise ValueError(f'Game is in dataset "{current_dataset}", not "{source_dataset}"')
+            
+            # Update the game's dataset name
+            game_data['datasetName'] = target_dataset
+            
+            # Update the document
+            transaction.update(game_doc_ref, game_data)
+            
+            return game_data
+        
+        # Execute the transaction
+        moved_game = move_game_transaction(db.transaction())
+        
+        game_name = moved_game.get('gameName', game_id)
+        
+        logging.info(f"Successfully moved game '{game_name}' from '{source_dataset}' to '{target_dataset}' for user {uid}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Game "{game_name}" moved successfully from "{source_dataset}" to "{target_dataset}"',
+            'game': moved_game
+        }), 200
+        
+    except ValueError as ve:
+        logging.error(f"Validation error in move game: {str(ve)}")
+        return jsonify({'error': str(ve)}), 400
+    except Exception as e:
+        logging.error(f"Error in move game transaction: {str(e)}")
+        return jsonify({'error': f'Failed to move game: {str(e)}'}), 500
+    
 # Endpoint to remove an admin user
 @app.route('/remove-admin-user', methods=['POST'])
 def remove_admin_user():

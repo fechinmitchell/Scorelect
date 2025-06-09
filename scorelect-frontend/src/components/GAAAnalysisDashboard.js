@@ -458,6 +458,7 @@ export default function GAAAnalysisDashboard() {
   const [filterOptions, setFilterOptions] = useState({
     matches: [], teams: [], players: [], actions: []
   });
+  const [matchesData, setMatchesData] = useState([]); // Store full match data for display
 
   // data
   const [games, setGames] = useState([]);
@@ -545,14 +546,38 @@ export default function GAAAnalysisDashboard() {
     setGames(filled);
 
     const m = new Set(), t = new Set(), p = new Set(), a = new Set();
+    const matchMap = new Map(); // Store match data for display
+    
     filled.forEach(g => {
-      g.match && m.add(g.match);
+      // Use gameId or gameName as the match identifier, just like in AnalysisGAA.js
+      const matchId = g.gameId || g.gameName;
+      if (matchId) {
+        m.add(matchId);
+        // Store match data for better display
+        matchMap.set(matchId, {
+          id: matchId,
+          name: g.gameName || matchId,
+          date: g.matchDate
+        });
+      } else {
+        console.warn('Game missing gameId/gameName:', g);
+      }
+      
       (g.gameData||[]).forEach(sh => {
         sh.team       && t.add(sh.team);
         sh.playerName && p.add(sh.playerName);
         sh.action     && a.add(sh.action);
       });
     });
+    
+    setFilterOptions({
+      matches: Array.from(m),
+      teams:   Array.from(t),
+      players: Array.from(p),
+      actions: Array.from(a)
+    });
+    setMatchesData(Array.from(matchMap.values()));
+    
     setFilterOptions({
       matches: Array.from(m),
       teams:   Array.from(t),
@@ -564,16 +589,28 @@ export default function GAAAnalysisDashboard() {
   // APPLY FILTERS & SUMMARY
   useEffect(() => {
     let filtered = file?.games || [];
+    
+    // Debug: Log initial games and match filter
+    console.log('Initial games:', filtered.length);
+    console.log('Match filter:', appliedFilters.match);
+    console.log('Available matches:', filterOptions.matches);
+    
     if (appliedFilters.match) {
-      filtered = filtered.filter(g => g.match === appliedFilters.match);
+      filtered = filtered.filter(g => {
+        // Use the same logic as AnalysisGAA.js
+        const matchId = g.gameId || g.gameName;
+        return matchId === appliedFilters.match;
+      });
+      console.log('After match filter:', filtered.length);
     }
+    
     ['team','player','action'].forEach(f => {
       if (appliedFilters[f]) {
         filtered = filtered.map(g => ({
           ...g,
           gameData: (g.gameData||[]).filter(sh =>
             f === 'player'
-              ? sh.playerName === appliedFilters.player    // compare to the real field
+              ? sh.playerName === appliedFilters.player
               : sh[f] === appliedFilters[f]
           )
         }));
@@ -601,7 +638,7 @@ export default function GAAAnalysisDashboard() {
       else if (/miss|wide|short|blocked|post/.test(act)) s.totalMisses++;
     });
     setSummary(s);
-  }, [file, appliedFilters]);
+  }, [file, appliedFilters, filterOptions.matches]);
 
   // MAP SHOTS TO RENDER TYPES
   const shotsWithRenderType = useMemo(
@@ -624,7 +661,8 @@ export default function GAAAnalysisDashboard() {
           offensiveMarkAttempts:0, offensiveMarkScored:0,
           fortyFiveAttempts:0, fortyFiveScored:0,
           twoPointerAttempts:0, twoPointerScored:0,
-          totalTwoPointers:0, totalOnePointers:0
+          totalTwoPointers:0, totalOnePointers:0,
+          totalXP: 0, totalXG: 0  // Add xP and xG totals
         };
         distAcc[team] = 0;
         scorerMap[team] = {};
@@ -632,6 +670,14 @@ export default function GAAAnalysisDashboard() {
       agg[team].totalShots++;
       const tShot = translateShotToOneSide(sh, halfLineX, goalX, goalY);
       distAcc[team] += tShot.distMeters;
+      
+      // Add xP and xG to team totals
+      if (typeof sh.xPoints === 'number') {
+        agg[team].totalXP += sh.xPoints;
+      }
+      if (typeof sh.xGoals === 'number') {
+        agg[team].totalXG += sh.xGoals;
+      }
   
       const act = (sh.action||'').toLowerCase().trim();
       const name = sh.playerName||'NoName';
@@ -642,8 +688,10 @@ export default function GAAAnalysisDashboard() {
         agg[team].successfulShots++;
         // Add successful goal to scorer (worth 3 points)
         if (name) {
-          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0};
+          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0, xP:0, xG:0};
           scorerMap[team][name].goals++;
+          scorerMap[team][name].xP += sh.xPoints || 0;
+          scorerMap[team][name].xG += sh.xGoals || 0;
         }
       } else if (act==='point') {
         agg[team].points += pointValue;
@@ -657,8 +705,10 @@ export default function GAAAnalysisDashboard() {
         
         // Add successful point to scorer
         if (name) {
-          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0};
+          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0, xP:0, xG:0};
           scorerMap[team][name].points += pointValue;
+          scorerMap[team][name].xP += sh.xPoints || 0;
+          scorerMap[team][name].xG += sh.xGoals || 0;
           if (pointValue === 2) {
             scorerMap[team][name].twoPointers = (scorerMap[team][name].twoPointers || 0) + 1;
           }
@@ -678,8 +728,10 @@ export default function GAAAnalysisDashboard() {
         
         // Add successful free to scorer
         if (name) {
-          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0};
+          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0, xP:0, xG:0};
           scorerMap[team][name].points += pointValue;
+          scorerMap[team][name].xP += sh.xPoints || 0;
+          scorerMap[team][name].xG += sh.xGoals || 0;
           if (pointValue === 2) {
             scorerMap[team][name].twoPointers = (scorerMap[team][name].twoPointers || 0) + 1;
           }
@@ -690,8 +742,17 @@ export default function GAAAnalysisDashboard() {
         agg[team].successfulShots++;
         // Add successful offensive mark as a point for the scorer
         if (name) {
-          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0};
+          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0, xP:0, xG:0};
           scorerMap[team][name].points++;
+          scorerMap[team][name].xP += sh.xPoints || 0;
+          scorerMap[team][name].xG += sh.xGoals || 0;
+        }
+      } else {
+        // For all other shots (including misses), still track xP and xG
+        if (name) {
+          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0, xP:0, xG:0};
+          scorerMap[team][name].xP += sh.xPoints || 0;
+          scorerMap[team][name].xG += sh.xGoals || 0;
         }
       }
       
@@ -709,8 +770,10 @@ export default function GAAAnalysisDashboard() {
           agg[team].successfulShots++;
           // Add successful 45/fortyfive as a point for the scorer
           if (name) {
-            scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0};
+            scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0, xP:0, xG:0};
             scorerMap[team][name].points++;
+            scorerMap[team][name].xP += sh.xPoints || 0;
+            scorerMap[team][name].xG += sh.xGoals || 0;
           }
         }
       }
@@ -965,7 +1028,12 @@ export default function GAAAnalysisDashboard() {
               onChange={e => setAppliedFilters(prev => ({ ...prev, match: e.target.value }))}
             >
               <option value="">All Matches</option>
-              {filterOptions.matches.map(m => <option key={m} value={m}>{m}</option>)}
+              {matchesData.map((match) => (
+                <option key={match.id} value={match.id}>
+                  {match.name}
+                  {match.date && ` (${new Date(match.date).toLocaleDateString()})`}
+                </option>
+              ))}
             </select>
             <select
               className="gaa-filter-select"
@@ -1075,8 +1143,38 @@ export default function GAAAnalysisDashboard() {
                       <span className="gaa-stat-value">{stats.points}</span>
                     </div>
                     <div className="gaa-stat-row">
+                      <span className="gaa-stat-label">Expected Points (xP):</span>
+                      <span className="gaa-stat-value">
+                        {(stats.totalXP || 0).toFixed(2)}
+                        {stats.points > 0 && stats.totalXP > 0 && (
+                          <span style={{ 
+                            marginLeft: '0.5rem', 
+                            fontSize: '0.9em',
+                            color: stats.points > stats.totalXP ? 'var(--success)' : 'var(--danger)'
+                          }}>
+                            ({stats.points > stats.totalXP ? '+' : ''}{(stats.points - stats.totalXP).toFixed(1)})
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="gaa-stat-row">
                       <span className="gaa-stat-label">Goals:</span>
                       <span className="gaa-stat-value">{stats.goals}</span>
+                    </div>
+                    <div className="gaa-stat-row">
+                      <span className="gaa-stat-label">Expected Goals (xG):</span>
+                      <span className="gaa-stat-value">
+                        {(stats.totalXG || 0).toFixed(2)}
+                        {stats.goals > 0 && stats.totalXG > 0 && (
+                          <span style={{ 
+                            marginLeft: '0.5rem', 
+                            fontSize: '0.9em',
+                            color: stats.goals > stats.totalXG ? 'var(--success)' : 'var(--danger)'
+                          }}>
+                            ({stats.goals > stats.totalXG ? '+' : ''}{(stats.goals - stats.totalXG).toFixed(1)})
+                          </span>
+                        )}
+                      </span>
                     </div>
                     <div className="gaa-stat-row">
                       <span className="gaa-stat-label">Misses:</span>
@@ -1085,7 +1183,7 @@ export default function GAAAnalysisDashboard() {
                     
                     {/* Two-pointer summary */}
                     <div className="team-two-pointer-summary">
-                      <h4>Two-Pointer Breakdown</h4>
+                      <h4>Points Breakdown</h4>
                       <div className="two-pointer-stats">
                         <div className="two-pointer-stat">
                           <div className="value">{stats.totalTwoPointers}</div>
@@ -1122,12 +1220,32 @@ export default function GAAAnalysisDashboard() {
                     <h4 className="gaa-scorers-title">Scorers</h4>
                     {Object.entries(teamScorers[team]||{}).length === 0
                       ? <p>No scorers found</p>
-                      : Object.entries(teamScorers[team]).map(([p, v]) => (
-                          <div key={p} className="gaa-scorer-item">
-                            {p}: {v.goals}g, {v.points}p
-                            {v.twoPointers > 0 && <span className="two-pointer-badge">{v.twoPointers} x 2PT</span>}
-                          </div>
-                        ))
+                      : Object.entries(teamScorers[team])
+                          .sort((a, b) => {
+                            // Sort by total points scored (goals*3 + points), then by xP
+                            const aTotal = (a[1].goals * 3) + a[1].points;
+                            const bTotal = (b[1].goals * 3) + b[1].points;
+                            if (aTotal !== bTotal) return bTotal - aTotal;
+                            return (b[1].xP || 0) - (a[1].xP || 0);
+                          })
+                          .map(([p, v]) => (
+                            <div key={p} className="gaa-scorer-item">
+                              <div className="scorer-main-line">
+                                {p}: {v.goals}g, {v.points}p
+                                {v.twoPointers > 0 && <span className="two-pointer-badge">{v.twoPointers} x 2PT</span>}
+                              </div>
+                              <div className="scorer-stats-line">
+                                xP: {(v.xP || 0).toFixed(2)}, xG: {(v.xG || 0).toFixed(2)}
+                                {((v.goals + v.points) > 0 || v.xP > 0) && (
+                                  <span className="scorer-performance" style={{ 
+                                    color: (v.goals + v.points) > (v.xP + v.xG) ? 'var(--success)' : 'var(--danger)'
+                                  }}>
+                                    ({(v.goals + v.points) > (v.xP + v.xG) ? '+' : ''}{((v.goals + v.points) - (v.xP + v.xG)).toFixed(1)})
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))
                     }
                   </div>
                 ))}

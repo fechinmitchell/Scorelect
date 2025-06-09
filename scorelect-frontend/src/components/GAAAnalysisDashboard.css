@@ -645,12 +645,35 @@
   font-weight: 500;
 }
 
+/* ===== SCORER ITEM STYLES ===== */
 .gaa-scorer-item {
   padding: var(--space-xs) 0;
   color: var(--light);
   display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: var(--space-xs);
+}
+
+.scorer-main-line {
+  display: flex;
   align-items: center;
   flex-wrap: wrap;
+  font-weight: 500;
+  color: var(--light);
+}
+
+.scorer-stats-line {
+  font-size: 0.85em;
+  color: var(--gray-dark);
+  padding-left: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.scorer-performance {
+  font-weight: 600;
 }
 
 /* ===== RECALCULATE BUTTON ===== */
@@ -834,5 +857,13 @@
   
   .gaa-scorer-item {
     font-size: 0.9em;
+  }
+  
+  .scorer-main-line {
+    font-size: 0.9em;
+  }
+  
+  .scorer-stats-line {
+    font-size: 0.8em;
   }
 }

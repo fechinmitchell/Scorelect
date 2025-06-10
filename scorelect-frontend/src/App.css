@@ -10,6 +10,12 @@ body {
   flex-direction: column;
   height: 100vh;
   background-color: #0F0A1B; /* Dark background for the app */
+  margin-left: 200px; /* Add this - same as sidebar width */
+  transition: margin-left 0.3s ease; /* Add smooth transition */
+}
+
+.app.sidebar-collapsed { /* Add this new rule */
+  margin-left: 50px; /* Same as collapsed sidebar width */
 }
 
 .main-container {
@@ -22,6 +28,7 @@ body {
   flex: 1;
   padding: 1rem;
   overflow: auto;
+  width: 100%; /* Add this to ensure full width */
 }
 
 .pitch-container {
@@ -34,22 +41,33 @@ body {
 }
 
 @media (max-width: 768px) {
+  .app {
+    margin-left: 50px; /* Collapsed sidebar width on tablets */
+  }
+  
+  .app.sidebar-collapsed {
+    margin-left: 50px;
+  }
+
   .main-container {
     flex-direction: column;
     overflow: auto;
   }
 
-  .sidebar {
-    width: 100%;
-    margin-bottom: 20px;
-  }
-
-  .sidebar.collapsed {
-    width: 100%;
-  }
-
   .content-area {
     padding: 0.5rem;
+  }
+}
+
+/* Mobile portrait mode - adjust for bottom bar */
+@media only screen and (max-width: 768px) and (orientation: portrait) {
+  .app {
+    margin-left: 0; /* No left margin on mobile */
+    margin-bottom: 60px; /* Space for bottom navigation bar */
+  }
+  
+  .app.sidebar-collapsed {
+    margin-left: 0;
   }
 }
 

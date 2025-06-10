@@ -493,6 +493,67 @@ export default function GAAAnalysisDashboard() {
     );
   };
 
+  // Dynamic filter options updater
+  const updateFilterOptions = (gamesData, currentFilters) => {
+    const m = new Set(), t = new Set(), p = new Set(), a = new Set();
+    const matchMap = new Map();
+    
+    // Filter games based on selected match
+    let filteredGames = gamesData;
+    if (currentFilters.match) {
+      filteredGames = gamesData.filter(g => {
+        const matchId = g.gameId || g.gameName;
+        return matchId === currentFilters.match;
+      });
+    }
+    
+    // Collect all matches (unfiltered)
+    gamesData.forEach(g => {
+      const matchId = g.gameId || g.gameName;
+      if (matchId) {
+        m.add(matchId);
+        matchMap.set(matchId, {
+          id: matchId,
+          name: g.gameName || matchId,
+          date: g.matchDate
+        });
+      }
+    });
+    
+    // Now collect teams, players, and actions from filtered games
+    filteredGames.forEach(g => {
+      (g.gameData || []).forEach(sh => {
+        // If team filter is applied, only add players from that team
+        if (currentFilters.team) {
+          if (sh.team === currentFilters.team) {
+            sh.playerName && p.add(sh.playerName);
+          }
+          // Still add all teams and actions from the filtered matches
+          sh.team && t.add(sh.team);
+          sh.action && a.add(sh.action);
+        } else {
+          // No team filter, add all from filtered matches
+          sh.team && t.add(sh.team);
+          sh.playerName && p.add(sh.playerName);
+          sh.action && a.add(sh.action);
+        }
+      });
+    });
+    
+    // If a player is selected but no longer in the filtered list, keep it
+    if (currentFilters.player && !p.has(currentFilters.player)) {
+      p.add(currentFilters.player);
+    }
+    
+    setFilterOptions({
+      matches: Array.from(m),
+      teams: Array.from(t).sort(),
+      players: Array.from(p).sort(),
+      actions: Array.from(a).sort()
+    });
+    setMatchesData(Array.from(matchMap.values()));
+  };
+
   // Fix for dynamicColors to ensure consistent object structure
   const dynamicColors = useMemo(() => ({
     goal: markerColors.goal || fallbackColors.goal,
@@ -545,46 +606,17 @@ export default function GAAAnalysisDashboard() {
     const filled = calculateMissingMetrics(file.games || []);
     setGames(filled);
 
-    const m = new Set(), t = new Set(), p = new Set(), a = new Set();
-    const matchMap = new Map(); // Store match data for display
-    
-    filled.forEach(g => {
-      // Use gameId or gameName as the match identifier, just like in AnalysisGAA.js
-      const matchId = g.gameId || g.gameName;
-      if (matchId) {
-        m.add(matchId);
-        // Store match data for better display
-        matchMap.set(matchId, {
-          id: matchId,
-          name: g.gameName || matchId,
-          date: g.matchDate
-        });
-      } else {
-        console.warn('Game missing gameId/gameName:', g);
-      }
-      
-      (g.gameData||[]).forEach(sh => {
-        sh.team       && t.add(sh.team);
-        sh.playerName && p.add(sh.playerName);
-        sh.action     && a.add(sh.action);
-      });
-    });
-    
-    setFilterOptions({
-      matches: Array.from(m),
-      teams:   Array.from(t),
-      players: Array.from(p),
-      actions: Array.from(a)
-    });
-    setMatchesData(Array.from(matchMap.values()));
-    
-    setFilterOptions({
-      matches: Array.from(m),
-      teams:   Array.from(t),
-      players: Array.from(p),
-      actions: Array.from(a)
-    });
+    // Get initial unfiltered options
+    updateFilterOptions(filled, {});
   }, [file, sport, navigate]);
+
+  // Update filter options when filters change
+  useEffect(() => {
+    if (!file?.games) return;
+    
+    // Update filter options based on current filter selections
+    updateFilterOptions(file.games, appliedFilters);
+  }, [appliedFilters.match, appliedFilters.team, file?.games]);
 
   // APPLY FILTERS & SUMMARY
   useEffect(() => {
@@ -1025,7 +1057,15 @@ export default function GAAAnalysisDashboard() {
             <select
               className="gaa-filter-select"
               value={appliedFilters.match}
-              onChange={e => setAppliedFilters(prev => ({ ...prev, match: e.target.value }))}
+              onChange={e => {
+                const newMatch = e.target.value;
+                setAppliedFilters(prev => ({ 
+                  ...prev, 
+                  match: newMatch,
+                  // Clear player filter when match changes (optional)
+                  player: ''
+                }));
+              }}
             >
               <option value="">All Matches</option>
               {matchesData.map((match) => (
@@ -1038,17 +1078,28 @@ export default function GAAAnalysisDashboard() {
             <select
               className="gaa-filter-select"
               value={appliedFilters.team}
-              onChange={e => setAppliedFilters(prev => ({ ...prev, team: e.target.value }))}
+              onChange={e => {
+                const newTeam = e.target.value;
+                setAppliedFilters(prev => ({ 
+                  ...prev, 
+                  team: newTeam,
+                  // Clear player filter when team changes (optional)
+                  player: ''
+                }));
+              }}
             >
               <option value="">All Teams</option>
               {filterOptions.teams.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
             <select
-              className="gaa-filter-select"
+              className="gaa-filter-select has-parent-filter"
               value={appliedFilters.player}
               onChange={e => setAppliedFilters(prev => ({ ...prev, player: e.target.value }))}
+              disabled={filterOptions.players.length === 0}
             >
-              <option value="">All Players</option>
+              <option value="">
+                {filterOptions.players.length === 0 ? 'No Players Available' : 'All Players'}
+              </option>
               {filterOptions.players.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
             <select
@@ -1080,6 +1131,13 @@ export default function GAAAnalysisDashboard() {
             </div>
           </div>
         </div>
+
+        {/* Show helper text when filters are active */}
+        {(appliedFilters.match || appliedFilters.team) && (
+          <div className="filter-helper-text">
+            Player filter shows only players from selected {appliedFilters.team ? 'team' : 'match'}
+          </div>
+        )}
 
         <div className="gaa-summary-section">
           <div className="gaa-tiles-container">

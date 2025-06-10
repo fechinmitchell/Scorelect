@@ -1,49 +1,86 @@
 /* Sidebar Styles */
 .sidebar {
-  width: 230px;
+  width: 200px; /* Reduced from 230px */
   background-color: #5e2e8f;
   color: white;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 15px;
+  padding: 12px; /* Reduced from 15px */
   transition: width 0.3s ease;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+}
+
+/* Add scrollbar styling for sidebar */
+.sidebar::-webkit-scrollbar {
+  width: 4px; /* Thinner scrollbar */
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.5);
 }
 
 .sidebar.collapsed {
-  width: 60px;
+  width: 50px; /* Reduced from 60px */
   align-items: center;
 }
 
 .sidebar .user-info {
-  margin-bottom: 15px;
+  margin-bottom: 12px;
   text-align: center;
+  flex-shrink: 0;
 }
 
 .logo {
-  width: 90%;
-  margin-bottom: 15px;
+  width: 85%; /* Slightly smaller */
+  margin-bottom: 12px;
+  max-width: 150px; /* Reduced from 180px */
 }
 
 .sidebar.collapsed .logo {
-  display: none; /* Hide the logo when sidebar is collapsed */
+  display: none;
+}
+
+nav {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 nav ul {
   list-style-type: none;
   padding: 0;
   width: 100%;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 nav ul li {
-  margin: 8px 0;
+  margin: 6px 0; /* Reduced from 8px */
   width: 100%;
 }
 
 nav ul li.separator {
-  margin: 15px 0 8px;
-  padding-left: 15px;
-  font-size: 0.85rem;
+  margin: 12px 0 6px;
+  padding-left: 12px;
+  font-size: 0.8rem; /* Slightly smaller */
   text-transform: uppercase;
   color: #ccc;
 }
@@ -54,23 +91,30 @@ nav ul li label {
   background-color: transparent;
   color: white;
   border: none;
-  padding: 8px 12px;
+  padding: 7px 10px; /* Reduced padding */
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.9rem; /* Slightly smaller */
   text-align: left;
   display: flex;
   align-items: center;
+  white-space: nowrap;
 }
 
 nav ul li button .icon,
 nav ul li label .icon {
   margin-right: 8px;
-  font-size: 1.1rem;
+  font-size: 1rem; /* Slightly smaller */
+  flex-shrink: 0;
 }
 
 .sidebar.collapsed nav ul li button .icon,
 .sidebar.collapsed nav ul li label .icon {
   margin-right: 0;
+}
+
+.sidebar.collapsed nav ul li button,
+.sidebar.collapsed nav ul li label {
+  justify-content: center; /* Center icon when collapsed */
 }
 
 nav ul li button:hover,
@@ -83,10 +127,11 @@ nav ul li label:hover {
   background: none;
   border: none;
   color: white;
-  font-size: 1.4rem;
+  font-size: 1.2rem; /* Smaller */
   cursor: pointer;
   align-self: flex-end;
-  margin-bottom: 15px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
 }
 
 .toggle-button:focus {
@@ -97,12 +142,13 @@ nav ul li label:hover {
 .sport-select-label {
   display: flex;
   flex-direction: column;
-  align-items: flex-start; /* Align text to the left edge */
+  align-items: flex-start;
+  width: 100%;
 }
 
 .select-sport-text {
-  font-size: 0.95rem;
-  margin-bottom: 5px;
+  font-size: 0.9rem;
+  margin-bottom: 4px;
 }
 
 .sport-select-label select {
@@ -110,10 +156,11 @@ nav ul li label:hover {
   background-color: #501387;
   border: none;
   color: white;
-  padding: 4px;
+  padding: 4px 6px;
   border-radius: 5px;
-  font-size: 0.9rem;
+  font-size: 0.85rem; /* Smaller */
   margin-bottom: 5px;
+  min-height: 28px;
 }
 
 .sidebar.collapsed .sport-select-label select,
@@ -126,8 +173,8 @@ nav ul li label:hover {
   overflow: hidden;
   background-color: transparent;
   color: white;
-  padding: 8px 12px;
-  font-size: 0.95rem;
+  padding: 7px 10px;
+  font-size: 0.9rem;
   border: none;
   cursor: pointer;
   transition: background-color 0.3s ease;
@@ -150,14 +197,64 @@ nav ul li label:hover {
   background-color: rgba(0, 0, 0, 0.1);
 }
 
-/* Existing media query */
+/* Responsive for different screen heights */
+@media (max-height: 700px) {
+  .sidebar {
+    padding: 8px;
+  }
+  
+  nav ul li {
+    margin: 4px 0;
+  }
+  
+  nav ul li.separator {
+    margin: 8px 0 4px;
+    font-size: 0.75rem;
+  }
+  
+  nav ul li button,
+  nav ul li label {
+    padding: 5px 8px;
+    font-size: 0.85rem;
+  }
+  
+  .logo {
+    max-width: 130px;
+    margin-bottom: 8px;
+  }
+}
+
+/* Very small height screens */
+@media (max-height: 500px) {
+  nav ul li {
+    margin: 2px 0;
+  }
+  
+  nav ul li button,
+  nav ul li label {
+    padding: 4px 6px;
+    font-size: 0.8rem;
+  }
+  
+  nav ul li button .icon,
+  nav ul li label .icon {
+    font-size: 0.9rem;
+  }
+  
+  .logo {
+    max-width: 100px;
+    margin-bottom: 6px;
+  }
+}
+
+/* Existing media query for width */
 @media (max-width: 768px) {
   .sidebar {
-    width: 60px;
+    width: 50px;
   }
 
   .sidebar.collapsed {
-    width: 60px;
+    width: 50px;
   }
 
   .toggle-button {
@@ -165,7 +262,7 @@ nav ul li label:hover {
   }
 }
 
-/* New media query for portrait mode on small screens */
+/* Mobile portrait mode - horizontal bottom bar */
 @media only screen and (max-width: 768px) and (orientation: portrait) {
   .sidebar {
     width: 100%;
@@ -173,9 +270,12 @@ nav ul li label:hover {
     position: fixed;
     bottom: 0;
     left: 0;
+    top: auto;
     flex-direction: row;
     align-items: center;
     padding: 0;
+    overflow-y: hidden;
+    overflow-x: auto;
   }
 
   .sidebar.collapsed {
@@ -184,15 +284,16 @@ nav ul li label:hover {
   }
 
   .toggle-button {
-    display: none; /* Hide the toggle button */
+    display: none;
   }
 
   .sidebar .user-info {
-    display: none; /* Hide the logo */
+    display: none;
   }
 
   nav {
     width: 100%;
+    height: 100%;
   }
 
   nav ul {
@@ -201,13 +302,16 @@ nav ul li label:hover {
     justify-content: space-around;
     align-items: center;
     width: 100%;
-    padding: 0;
+    padding: 0 10px;
     margin: 0;
+    height: 100%;
   }
 
   nav ul li {
     margin: 0;
     width: auto;
+    flex: 1;
+    max-width: 80px;
   }
 
   nav ul li.separator {
@@ -216,27 +320,42 @@ nav ul li label:hover {
 
   nav ul li button,
   nav ul li label {
-    padding: 0;
+    padding: 5px;
     background-color: transparent;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    font-size: 0.8rem;
+    font-size: 0.7rem;
     color: white;
-    width: auto;
+    width: 100%;
+    height: 100%;
   }
 
   nav ul li button .icon,
   nav ul li label .icon {
-    margin: 0;
+    margin: 0 0 2px 0;
     font-size: 1.2rem;
   }
 
   .sport-select-label {
-    display: none; /* Hide sport selection */
+    display: none;
   }
 
   .profile-button {
-    padding: 0;
+    padding: 5px;
+  }
+  
+  /* Hide text on very small screens */
+  @media (max-width: 400px) {
+    nav ul li button,
+    nav ul li label {
+      font-size: 0;
+    }
+    
+    nav ul li button .icon,
+    nav ul li label .icon {
+      font-size: 1.4rem;
+      margin: 0;
+    }
   }
 }

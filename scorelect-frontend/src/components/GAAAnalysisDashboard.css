@@ -1,4 +1,4 @@
-/* GAAAnalysisDashboard.css - Modern Dark Theme with Two-Pointer Logic */
+/* GAAAnalysisDashboard.css - Modern Dark Theme with Two-Pointer Logic & Dynamic Filters */
 
 /* ===== VARIABLES ===== */
 :root {
@@ -132,6 +132,25 @@
   display: flex;
   gap: var(--space-sm);
   align-items: center;
+  position: relative;
+}
+
+/* Visual feedback for interconnected filters */
+.gaa-controls-group::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    transparent, 
+    var(--primary) 20%, 
+    var(--primary) 80%, 
+    transparent
+  );
+  opacity: 0.2;
+  z-index: -1;
 }
 
 .gaa-filter-select {
@@ -149,6 +168,35 @@
   border-color: var(--accent);
   box-shadow: var(--glow-accent);
   outline: none;
+}
+
+/* Indicate when a filter is affected by another filter */
+.gaa-filter-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  border-color: var(--gray-light);
+}
+
+.gaa-filter-select.has-parent-filter {
+  border-left: 3px solid var(--primary);
+  padding-left: calc(var(--space-md) - 2px);
+}
+
+/* Highlight active filters */
+.gaa-filter-select:not([value=""]):not(:disabled) {
+  border-color: var(--accent);
+  background-color: rgba(115, 63, 170, 0.1);
+}
+
+/* Add helper text */
+.filter-helper-text {
+  font-size: 0.75rem;
+  color: var(--gray-dark);
+  margin-top: calc(var(--space-xs) * -1);
+  margin-bottom: var(--space-md);
+  text-align: center;
+  opacity: 0.8;
+  font-style: italic;
 }
 
 /* ===== BUTTON STYLES ===== */

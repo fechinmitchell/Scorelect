@@ -4306,3 +4306,280 @@ def remove_admin_user():
     
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
+
+
+@app.route('/run-xp-model', methods=['POST'])
+def run_xp_model():
+    """
+    Simplified xP model that uses historical data to predict shot success
+    without complex adjustments or calibration factors
+    """
+    import numpy as np
+    import pandas as pd
+    from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.neighbors import KNeighborsClassifier
+    from sklearn.model_selection import train_test_split, cross_val_score
+    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+    from sklearn.preprocessing import StandardScaler
+    import time
+    
+    try:
+        data = request.get_json()
+        uid = data.get('uid')
+        source_dataset = data.get('source_dataset')
+        target_dataset = data.get('target_dataset')
+        model_type = data.get('model_type', 'random_forest')
+        
+        if not all([uid, source_dataset, target_dataset]):
+            return jsonify({'error': 'Missing required parameters'}), 400
+        
+        start_time = time.time()
+        
+        # Load source dataset for training
+        source_games = db.collection('savedGames').document(uid)\
+            .collection('games').where('datasetName', '==', source_dataset).stream()
+        
+        source_shots = []
+        for game in source_games:
+            game_data = game.to_dict().get('gameData', [])
+            source_shots.extend(game_data)
+        
+        if len(source_shots) < 100:
+            return jsonify({'error': 'Not enough training data (minimum 100 shots)'}), 400
+        
+        # Create training dataframe
+        df = pd.DataFrame(source_shots)
+        
+        # Simple feature engineering
+        df['x'] = pd.to_numeric(df.get('x', 0), errors='coerce').fillna(0)
+        df['y'] = pd.to_numeric(df.get('y', 0), errors='coerce').fillna(0)
+        
+        # Calculate basic features
+        goal_x, goal_y = 145, 44
+        df['distance'] = np.sqrt((df['x'] - goal_x)**2 + (df['y'] - goal_y)**2)
+        df['angle'] = np.degrees(np.arctan2(np.abs(df['y'] - goal_y), goal_x - df['x']))
+        
+        # Create simple categorical mappings
+        position_map = {
+            'forward': 3, 'midfielder': 2, 'back': 1, 'goalkeeper': 0
+        }
+        df['position_value'] = df.get('position', 'midfielder').apply(
+            lambda x: position_map.get(str(x).lower(), 2)
+        )
+        
+        pressure_map = {
+            'high': 3, 'medium': 2, 'low': 1, 'none': 0
+        }
+        df['pressure_value'] = df.get('pressure', 'none').apply(
+            lambda x: pressure_map.get(str(x).lower(), 0)
+        )
+        
+        # Simple outcome classification
+        positive_outcomes = {'point', 'goal', 'scores', 'over'}
+        df['success'] = df.get('action', '').apply(
+            lambda x: 1 if any(outcome in str(x).lower() for outcome in positive_outcomes) else 0
+        )
+        
+        # Player historical success rate (simple)
+        player_success = df.groupby('playerName')['success'].agg(['mean', 'count'])
+        player_success['smoothed_rate'] = (
+            (player_success['mean'] * player_success['count'] + 0.3 * 10) / 
+            (player_success['count'] + 10)
+        )
+        df = df.merge(
+            player_success['smoothed_rate'], 
+            left_on='playerName', 
+            right_index=True, 
+            how='left'
+        ).fillna(0.3)
+        
+        # Select features
+        features = ['distance', 'angle', 'position_value', 'pressure_value', 'smoothed_rate']
+        X = df[features].values
+        y = df['success'].values
+        
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42, stratify=y
+        )
+        
+        # Scale features
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        
+        # Train selected model
+        models = {
+            'random_forest': RandomForestClassifier(
+                n_estimators=100, 
+                max_depth=5, 
+                random_state=42
+            ),
+            'logistic': LogisticRegression(
+                C=1.0, 
+                random_state=42
+            ),
+            'gradient_boost': GradientBoostingClassifier(
+                n_estimators=100,
+                learning_rate=0.1,
+                max_depth=3,
+                random_state=42
+            ),
+            'knn': KNeighborsClassifier(
+                n_neighbors=20,
+                weights='distance'
+            )
+        }
+        
+        model = models.get(model_type, models['random_forest'])
+        model.fit(X_train_scaled, y_train)
+        
+        # Evaluate model
+        y_pred = model.predict(X_test_scaled)
+        y_pred_proba = model.predict_proba(X_test_scaled)[:, 1]
+        
+        # Calculate metrics
+        metrics = {
+            'accuracy': float(accuracy_score(y_test, y_pred)),
+            'precision': float(precision_score(y_test, y_pred, zero_division=0)),
+            'recall': float(recall_score(y_test, y_pred, zero_division=0)),
+            'f1_score': float(f1_score(y_test, y_pred, zero_division=0)),
+            'auc_roc': float(roc_auc_score(y_test, y_pred_proba)) if len(np.unique(y_test)) > 1 else 0.5
+        }
+        
+        # Cross-validation score
+        cv_scores = cross_val_score(model, X_train_scaled, y_train, cv=5, scoring='f1')
+        metrics['cv_f1_mean'] = float(cv_scores.mean())
+        metrics['cv_f1_std'] = float(cv_scores.std())
+        
+        # Apply to target dataset
+        target_games = db.collection('savedGames').document(uid)\
+            .collection('games').where('datasetName', '==', target_dataset).stream()
+        
+        updated_games = []
+        total_shots = 0
+        
+        for game in target_games:
+            game_data = game.to_dict()
+            shots = game_data.get('gameData', [])
+            
+            for shot in shots:
+                # Extract features
+                x = float(shot.get('x', 0))
+                y = float(shot.get('y', 0))
+                distance = np.sqrt((x - goal_x)**2 + (y - goal_y)**2)
+                angle = np.degrees(np.arctan2(np.abs(y - goal_y), goal_x - x))
+                
+                position_value = position_map.get(
+                    str(shot.get('position', 'midfielder')).lower(), 2
+                )
+                pressure_value = pressure_map.get(
+                    str(shot.get('pressure', 'none')).lower(), 0
+                )
+                
+                # Get player success rate
+                player_name = shot.get('playerName', 'Unknown')
+                player_rate = player_success.get('smoothed_rate', {}).get(player_name, 0.3)
+                
+                # Predict
+                shot_features = np.array([[distance, angle, position_value, pressure_value, player_rate]])
+                shot_features_scaled = scaler.transform(shot_features)
+                
+                xP = float(model.predict_proba(shot_features_scaled)[0, 1])
+                
+                # Update shot with simple xP
+                shot['xP'] = xP
+                shot['model_type'] = model_type
+                total_shots += 1
+            
+            # Update game in Firestore
+            game.reference.update({'gameData': shots})
+            updated_games.append(game.id)
+        
+        # Calculate summary statistics
+        execution_time = time.time() - start_time
+        
+        # Save model run to history
+        model_run = {
+            'timestamp': firestore.SERVER_TIMESTAMP,
+            'model_type': model_type,
+            'source_dataset': source_dataset,
+            'target_dataset': target_dataset,
+            'metrics': metrics,
+            'total_shots_updated': total_shots,
+            'execution_time': execution_time,
+            'training_size': len(df),
+            'features_used': features
+        }
+        
+        db.collection('modelRuns').document(uid).collection('history').add(model_run)
+        
+        return jsonify({
+            'success': True,
+            'model_type': model_type,
+            'metrics': metrics,
+            'shots_updated': total_shots,
+            'games_updated': len(updated_games),
+            'execution_time': round(execution_time, 2)
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error in run_xp_model: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/get-model-history', methods=['POST'])
+def get_model_history():
+    """Get history of model runs for the leaderboard"""
+    try:
+        data = request.get_json()
+        uid = data.get('uid')
+        
+        if not uid:
+            return jsonify({'error': 'UID required'}), 400
+        
+        # Get last 20 model runs
+        history = db.collection('modelRuns').document(uid)\
+            .collection('history').order_by('timestamp', direction=firestore.Query.DESCENDING)\
+            .limit(20).stream()
+        
+        runs = []
+        for doc in history:
+            run_data = doc.to_dict()
+            run_data['id'] = doc.id
+            # Convert timestamp to ISO format if it exists
+            if run_data.get('timestamp'):
+                run_data['timestamp'] = run_data['timestamp'].isoformat() if hasattr(run_data['timestamp'], 'isoformat') else str(run_data['timestamp'])
+            runs.append(run_data)
+        
+        return jsonify({'history': runs}), 200
+        
+    except Exception as e:
+        logging.error(f"Error getting model history: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/get-user-datasets', methods=['POST'])
+def get_user_datasets():
+    """Get list of datasets for a user"""
+    try:
+        data = request.get_json()
+        uid = data.get('uid')
+        
+        if not uid:
+            return jsonify({'error': 'UID required'}), 400
+        
+        # Get unique dataset names
+        games = db.collection('savedGames').document(uid).collection('games').stream()
+        
+        datasets = set()
+        for game in games:
+            dataset_name = game.to_dict().get('datasetName', 'Default')
+            datasets.add(dataset_name)
+        
+        return jsonify({'datasets': sorted(list(datasets))}), 200
+        
+    except Exception as e:
+        logging.error(f"Error getting datasets: {str(e)}")
+        return jsonify({'error': str(e)}), 500

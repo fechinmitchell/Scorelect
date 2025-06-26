@@ -13,15 +13,31 @@ import {
   Tabs,
   Tab,
   CircularProgress,
+  Grid,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Chip,
 } from '@mui/material';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { Brightness4, Brightness7 } from '@mui/icons-material';
+import { Brightness4, Brightness7, Refresh as RefreshIcon } from '@mui/icons-material';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
 import Swal from 'sweetalert2';
-import axios from 'axios';                                     // NEW
+import axios from 'axios';
 
-// NEW – backend root (works in dev & prod if you set REACT_APP_API_URL)
+// Backend root URL
 const BASE_API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 // List the pages (or features) to control
@@ -29,7 +45,7 @@ const features = [
   { id: 'analysis', name: 'Analysis Page' },
   { id: 'training', name: 'Training Page' },
   { id: 'savedGames', name: 'Saved Games' },
-  { id: 'aiAnalysis', name: 'AI Analysis' }, // New feature added
+  { id: 'aiAnalysis', name: 'AI Analysis' },
 ];
 
 // Dataset-specific permissions
@@ -53,7 +69,7 @@ const datasetPublishingMarks = [
   { value: 3, label: 'Admin Only' },
 ];
 
-// Theme configuration matching AdminLogin.js
+// Theme configuration
 const getTheme = (mode) =>
   createTheme({
     palette: {
@@ -61,34 +77,34 @@ const getTheme = (mode) =>
       ...(mode === 'dark'
         ? {
             background: {
-              default: '#1c1a1a', // Dark background
-              paper: '#333', // Card background
+              default: '#1c1a1a',
+              paper: '#333',
             },
             text: {
-              primary: '#fff', // White text
-              secondary: '#ccc', // Subtle gray for labels
+              primary: '#fff',
+              secondary: '#ccc',
             },
             primary: {
-              main: '#7b1fa2', // Purple for buttons in dark mode
+              main: '#7b1fa2',
             },
             action: {
-              hover: '#444', // Hover effect for other elements
+              hover: '#444',
             },
           }
         : {
             background: {
-              default: '#f5f5f5', // Light background
-              paper: '#fff', // Card background
+              default: '#f5f5f5',
+              paper: '#fff',
             },
             text: {
-              primary: '#333', // Dark text
-              secondary: '#666', // Subtle gray for labels
+              primary: '#333',
+              secondary: '#666',
             },
             primary: {
-              main: '#1a237e', // Dark blue for buttons in light mode
+              main: '#1a237e',
             },
             action: {
-              hover: '#e0e0e0', // Hover effect for buttons
+              hover: '#e0e0e0',
             },
           }),
     },
@@ -96,7 +112,7 @@ const getTheme = (mode) =>
       MuiCard: {
         styleOverrides: {
           root: {
-            borderRadius: '16px', // Rounded corners
+            borderRadius: '16px',
             boxShadow:
               mode === 'dark'
                 ? '0 4px 12px rgba(0, 0, 0, 0.5)'
@@ -107,8 +123,8 @@ const getTheme = (mode) =>
       MuiButton: {
         styleOverrides: {
           root: {
-            borderRadius: '12px', // Rounded buttons
-            textTransform: 'none', // No uppercase
+            borderRadius: '12px',
+            textTransform: 'none',
             padding: '10px 20px',
             fontWeight: 500,
           },
@@ -117,7 +133,7 @@ const getTheme = (mode) =>
       MuiSlider: {
         styleOverrides: {
           root: {
-            color: mode === 'dark' ? '#7b1fa2' : '#1a237e', // Purple in dark, blue in light
+            color: mode === 'dark' ? '#7b1fa2' : '#1a237e',
           },
           thumb: {
             width: 16,
@@ -135,16 +151,19 @@ const getTheme = (mode) =>
 const AdminSettings = () => {
   const [featurePermissions, setFeaturePermissions] = useState({});
   const [datasetPerms, setDatasetPerms] = useState({});
-  const [mode, setMode] = useState(() => localStorage.getItem('theme') || 'dark'); // Default to dark
+  const [mode, setMode] = useState(() => localStorage.getItem('theme') || 'dark');
   const [activeTab, setActiveTab] = useState(0);
   const [adminUsers, setAdminUsers] = useState([]);
   const [newAdminEmail, setNewAdminEmail] = useState('');
 
-  // NEW: model recalculation local state
-  const [datasetName, setDatasetName] = useState('GAA All Shots');
+  // Model tab state
+  const [userDatasets, setUserDatasets] = useState([]);
+  const [sourceDataset, setSourceDataset] = useState('');
+  const [targetDataset, setTargetDataset] = useState('');
+  const [selectedModel, setSelectedModel] = useState('random_forest');
   const [isCalculating, setIsCalculating] = useState(false);
-  const [modelSummary, setModelSummary] = useState(null);
-  const [totalMetrics, setTotalMetrics] = useState(null);
+  const [modelResult, setModelResult] = useState(null);
+  const [modelHistory, setModelHistory] = useState([]);
 
   const navigate = useNavigate();
 
@@ -160,7 +179,6 @@ const AdminSettings = () => {
         // Initialize default permissions (0 = All Users)
         const defaultPermissions = {};
         features.forEach((feature) => {
-          // Set aiAnalysis to premium only (2) by default
           defaultPermissions[feature.id] = feature.id === 'aiAnalysis' ? 2 : 0;
         });
         setFeaturePermissions(defaultPermissions);
@@ -174,20 +192,48 @@ const AdminSettings = () => {
         setDatasetPerms(data.permissions || {});
         setAdminUsers(data.adminUsers || []);
       } else {
-        // Initialize default dataset permissions
         const defaultDatasetPerms = {
-          datasetPublishing: 3, // Admin Only
-          datasetViewing: 0, // All Users
+          datasetPublishing: 3,
+          datasetViewing: 0,
         };
         setDatasetPerms(defaultDatasetPerms);
-
-        // Initialize with current user as admin
         setAdminUsers([]);
       }
     };
 
     fetchSettings();
+    fetchUserDatasets();
+    fetchModelHistory();
   }, []);
+
+  // Fetch user datasets for model tab
+  const fetchUserDatasets = async () => {
+    try {
+      const response = await axios.post(`${BASE_API_URL}/get-user-datasets`, {
+        uid: 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2', // TODO: Replace with actual user ID
+      });
+      const datasets = response.data.datasets || [];
+      setUserDatasets(datasets);
+      if (datasets.length > 0) {
+        setSourceDataset(datasets[0]);
+        setTargetDataset(datasets[0]);
+      }
+    } catch (error) {
+      console.error('Error fetching datasets:', error);
+    }
+  };
+
+  // Fetch model history for leaderboard
+  const fetchModelHistory = async () => {
+    try {
+      const response = await axios.post(`${BASE_API_URL}/get-model-history`, {
+        uid: 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2', // TODO: Replace with actual user ID
+      });
+      setModelHistory(response.data.history || []);
+    } catch (error) {
+      console.error('Error fetching model history:', error);
+    }
+  };
 
   // Toggle theme and save to localStorage
   const toggleTheme = () => {
@@ -234,14 +280,12 @@ const AdminSettings = () => {
 
   const handleSaveSettings = async () => {
     try {
-      // Save feature permissions
       await setDoc(
         doc(firestore, 'adminSettings', 'config'),
         { permissions: featurePermissions },
         { merge: true }
       );
 
-      // Save dataset permissions and admin users
       await setDoc(
         doc(firestore, 'adminSettings', 'datasetConfig'),
         {
@@ -257,89 +301,44 @@ const AdminSettings = () => {
     }
   };
 
-  // NEW: Trigger backend recalculation
-  const handleRecalculateModel = async () => {
-    if (!datasetName) {
-      Swal.fire('Error', 'Please enter a dataset name', 'error');
+  // Run simple xP model
+  const handleRunSimpleModel = async () => {
+    if (!sourceDataset || !targetDataset) {
+      Swal.fire('Error', 'Please select both source and target datasets', 'error');
       return;
     }
 
     try {
       setIsCalculating(true);
-      setModelSummary(null);
-      setTotalMetrics(null);
+      setModelResult(null);
 
-      //  use axios + BASE_API_URL so we never hit the React dev-server
-      const response = await axios.post(
-        `${BASE_API_URL}/recalculate-xpoints`,
-        { dataset_name: datasetName }
+      const response = await axios.post(`${BASE_API_URL}/run-xp-model`, {
+        uid: 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2', // TODO: Replace with actual user ID
+        source_dataset: sourceDataset,
+        target_dataset: targetDataset,
+        model_type: selectedModel,
+      });
+
+      setModelResult(response.data);
+      await fetchModelHistory();
+      
+      Swal.fire(
+        'Success',
+        `Model completed! Updated ${response.data.shots_updated} shots with ${(response.data.metrics.accuracy * 100).toFixed(1)}% accuracy`,
+        'success'
       );
-
-      console.log('Recalculation response:', response.data);
-
-      // Check if we have a success status or if the response contains expected data
-      if (response.status !== 200 || 
-          (response.data.status && response.data.status !== 'success')) {
-        throw new Error(response.data.error || 'Failed to recalculate');
-      }
-
-      // Map the response data properly
-      let summary = response.data.model_summary;
-      let metrics = response.data.total_metrics;
-      
-      // If there's no model_summary or total_metrics, check alternative structures
-      if (!summary && response.data.status === 'success') {
-        // The data might be directly in the response
-        summary = response.data;
-      }
-      
-      if (!metrics && response.data.total_shots !== undefined) {
-        // Metrics might be at the top level
-        metrics = {
-          total_shots: response.data.total_shots,
-          total_games: response.data.total_games || response.data.games_processed || 0
-        };
-      }
-
-      console.log('Processed model summary:', summary);
-      console.log('Processed total metrics:', metrics);
-
-      setModelSummary(summary);
-      setTotalMetrics(metrics);
-      Swal.fire('Success', `Recalculation completed for ${datasetName}`, 'success');
     } catch (error) {
-      console.error('Recalculation error:', error);
-      Swal.fire('Error', error.message, 'error');
+      console.error('Model run error:', error);
+      Swal.fire('Error', error.response?.data?.error || 'Failed to run model', 'error');
     } finally {
       setIsCalculating(false);
     }
   };
 
-  const metricsCard = (title, metrics) => {
-    if (!metrics || typeof metrics !== 'object') return null; // ⬅️ early-out guard
-    
-    return (
-      <Box
-        sx={{
-          p: 2,
-          border: '1px solid',
-          borderColor: mode === 'dark' ? '#555' : '#e0e0e0',
-          borderRadius: '8px',
-          mb: 2,
-        }}
-      >
-        <Typography variant="h6" gutterBottom>
-          {title}
-        </Typography>
-        {Object.entries(metrics).map(([k, v]) => (
-          <Typography key={k} variant="body2">
-            {k}: {v == null || Number.isNaN(v) ? 'n/a' 
-              : typeof v === 'number' ? v.toFixed(3) 
-              : v}
-          </Typography>
-        ))}
-      </Box>
-    );
+  const getMetricColor = (value) => {
+    if (value >= 0.8) return '#4caf50';
+    if (value >= 0.7) return '#ff9800';
+    return '#f44336';
   };
 
   return (
@@ -540,79 +539,245 @@ const AdminSettings = () => {
                   gutterBottom
                   sx={{ mb: 3 }}
                 >
-                  Recalculate xPoints and xGoals and evaluate model performance.
+                  Run simplified xP models on your datasets and compare performance
                 </Typography>
-                <Box sx={{ display: 'flex', mb: 3 }}>
-                  <input
-                    type="text"
-                    placeholder="Dataset name"
-                    value={datasetName}
-                    onChange={(e) => setDatasetName(e.target.value)}
-                    style={{
-                      flex: 1,
-                      padding: '10px',
-                      borderRadius: '8px 0 0 8px',
-                      border: '1px solid #ccc',
-                      borderRight: 'none',
-                    }}
-                  />
-                  <Button
-                    onClick={handleRecalculateModel}
-                    variant="contained"
-                    sx={{ borderRadius: '0 8px 8px 0', height: '42px' }}
-                    disabled={isCalculating}
-                  >
-                    Recalculate
-                  </Button>
+
+                {/* Dataset Selection */}
+                <Box sx={{ mb: 3 }}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <FormControl fullWidth>
+                        <InputLabel>Training Dataset</InputLabel>
+                        <Select
+                          value={sourceDataset}
+                          onChange={(e) => setSourceDataset(e.target.value)}
+                          label="Training Dataset"
+                        >
+                          {userDatasets.map((dataset) => (
+                            <MenuItem key={dataset} value={dataset}>
+                              {dataset}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <FormControl fullWidth>
+                        <InputLabel>Target Dataset</InputLabel>
+                        <Select
+                          value={targetDataset}
+                          onChange={(e) => setTargetDataset(e.target.value)}
+                          label="Target Dataset"
+                        >
+                          {userDatasets.map((dataset) => (
+                            <MenuItem key={dataset} value={dataset}>
+                              {dataset}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                  </Grid>
                 </Box>
 
-                {isCalculating && (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
-                    <CircularProgress />
+                {/* Model Type Selection */}
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Select Model Type
+                  </Typography>
+                  <RadioGroup
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    row
+                  >
+                    <FormControlLabel 
+                      value="random_forest" 
+                      control={<Radio />} 
+                      label={
+                        <Box>
+                          <Typography variant="body2">Random Forest</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Balanced accuracy
+                          </Typography>
+                        </Box>
+                      } 
+                    />
+                    <FormControlLabel 
+                      value="logistic" 
+                      control={<Radio />} 
+                      label={
+                        <Box>
+                          <Typography variant="body2">Logistic</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Fast & simple
+                          </Typography>
+                        </Box>
+                      } 
+                    />
+                    <FormControlLabel 
+                      value="gradient_boost" 
+                      control={<Radio />} 
+                      label={
+                        <Box>
+                          <Typography variant="body2">Gradient Boost</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            High accuracy
+                          </Typography>
+                        </Box>
+                      } 
+                    />
+                    <FormControlLabel 
+                      value="knn" 
+                      control={<Radio />} 
+                      label={
+                        <Box>
+                          <Typography variant="body2">K-NN</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Similar shots
+                          </Typography>
+                        </Box>
+                      } 
+                    />
+                  </RadioGroup>
+                </Box>
+
+                {/* Run Button */}
+                <Button
+                  onClick={handleRunSimpleModel}
+                  variant="contained"
+                  fullWidth
+                  size="large"
+                  disabled={isCalculating}
+                  sx={{ mb: 3 }}
+                >
+                  {isCalculating ? (
+                    <>
+                      <CircularProgress size={20} sx={{ mr: 1 }} />
+                      Running Model...
+                    </>
+                  ) : (
+                    'Run Simple Model'
+                  )}
+                </Button>
+
+                {/* Current Results */}
+                {modelResult && (
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="h6" gutterBottom>
+                      Results: {modelResult.model_type.replace('_', ' ')}
+                    </Typography>
+                    <Grid container spacing={2}>
+                      {['accuracy', 'precision', 'recall', 'f1_score', 'auc_roc'].map((metric) => (
+                        <Grid item xs={6} sm={4} md={2.4} key={metric}>
+                          <Box
+                            sx={{
+                              p: 2,
+                              border: '1px solid',
+                              borderColor: mode === 'dark' ? '#555' : '#e0e0e0',
+                              borderRadius: '8px',
+                              textAlign: 'center',
+                            }}
+                          >
+                            <Typography variant="caption" color="text.secondary">
+                              {metric.replace('_', ' ').toUpperCase()}
+                            </Typography>
+                            <Typography variant="h5">
+                              {(modelResult.metrics[metric] * 100).toFixed(1)}%
+                            </Typography>
+                            <Box
+                              sx={{
+                                height: 4,
+                                bgcolor: getMetricColor(modelResult.metrics[metric]),
+                                borderRadius: 2,
+                                mt: 1,
+                              }}
+                            />
+                          </Box>
+                        </Grid>
+                      ))}
+                    </Grid>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                      Updated {modelResult.shots_updated} shots in {modelResult.execution_time}s
+                    </Typography>
                   </Box>
                 )}
 
-                {modelSummary && (
-                  <>
-                    <Typography variant="h6" align="center" gutterBottom>
-                      Model Metrics
+                {/* Model History Leaderboard */}
+                <Box sx={{ mt: 3 }}>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                    🏆 Model Leaderboard
+                    <IconButton size="small" onClick={fetchModelHistory} sx={{ ml: 1 }}>
+                      <RefreshIcon />
+                    </IconButton>
+                  </Typography>
+                  <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
+                    <Table stickyHeader size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Rank</TableCell>
+                          <TableCell>Model</TableCell>
+                          <TableCell>Dataset</TableCell>
+                          <TableCell align="right">F1 Score</TableCell>
+                          <TableCell align="right">Accuracy</TableCell>
+                          <TableCell align="right">Shots</TableCell>
+                          <TableCell>Date</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {modelHistory
+                          .sort((a, b) => (b.metrics?.f1_score || 0) - (a.metrics?.f1_score || 0))
+                          .map((run, index) => (
+                            <TableRow key={run.id} hover>
+                              <TableCell>
+                                {index === 0 && '🥇'}
+                                {index === 1 && '🥈'}
+                                {index === 2 && '🥉'}
+                                {index > 2 && index + 1}
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={run.model_type?.replace('_', ' ')}
+                                  size="small"
+                                  color={run.model_type === selectedModel ? 'primary' : 'default'}
+                                />
+                              </TableCell>
+                              <TableCell>{run.target_dataset}</TableCell>
+                              <TableCell align="right">
+                                <strong>{((run.metrics?.f1_score || 0) * 100).toFixed(1)}%</strong>
+                              </TableCell>
+                              <TableCell align="right">
+                                {((run.metrics?.accuracy || 0) * 100).toFixed(1)}%
+                              </TableCell>
+                              <TableCell align="right">{run.total_shots_updated || 0}</TableCell>
+                              <TableCell>
+                                {run.timestamp ? new Date(run.timestamp).toLocaleDateString() : 'N/A'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                  {modelHistory.length === 0 && (
+                    <Typography color="text.secondary" align="center" sx={{ py: 3 }}>
+                      No model runs yet. Run your first model to see results!
                     </Typography>
-                    
-                    {/* Check for the presence of required objects and render accordingly */}
-                    {modelSummary.points_open_model && metricsCard('Points – Open Play', modelSummary.points_open_model)}
-                    {modelSummary.points_set_model && metricsCard('Points – Set Play', modelSummary.points_set_model)}
-                    {modelSummary.goals_model && metricsCard('Goals Model', modelSummary.goals_model)}
-                    
-                    {/* Fallback display for if the response structure is different */}
-                    {!modelSummary.points_open_model && !modelSummary.points_set_model && !modelSummary.goals_model && (
-                      <>
-                        <Box sx={{ mb: 2 }}>
-                          <Typography align="center" variant="subtitle1" gutterBottom>
-                            Model Summary Details
-                          </Typography>
-                          <Typography variant="body2">
-                            {Object.entries(modelSummary).map(([key, value]) => (
-                              <div key={key}>
-                                {key}: {typeof value === 'number' ? value.toFixed(3) : JSON.stringify(value)}
-                              </div>
-                            ))}
-                          </Typography>
-                        </Box>
-                      </>
-                    )}
+                  )}
+                </Box>
 
-                    {totalMetrics && (
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        align="center"
-                        sx={{ mt: 2 }}
-                      >
-                        Total Shots: {totalMetrics.total_shots} | Games Processed: {totalMetrics.total_games || totalMetrics.games_processed}
-                      </Typography>
-                    )}
-                  </>
-                )}
+                {/* Info Box */}
+                <Box
+                  sx={{
+                    mt: 3,
+                    p: 2,
+                    bgcolor: mode === 'dark' ? '#424242' : '#f5f5f5',
+                    borderRadius: 1,
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    ℹ️ Simple xP model predicts shot success using distance, angle, player position, 
+                    pressure, and historical player performance. No complex calibrations applied.
+                  </Typography>
+                </Box>
               </>
             )}
 

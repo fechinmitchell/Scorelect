@@ -353,10 +353,6 @@ def save_game():
         logging.error(f"Error saving game: {str(e)}")
         return jsonify(error=str(e)), 400
 
-# In your app.py, replace the /load-games endpoint with this:
-
-# Replace your /load-games endpoint in app.py with this:
-
 @app.route('/load-games', methods=['POST'])
 def load_games():
     try:
@@ -371,54 +367,81 @@ def load_games():
         
         # Fetch user's saved games from Firestore
         saved_games_ref = db.collection('users').document(user_id).collection('savedGames')
-        saved_games_docs = saved_games_ref.stream()
+        
+        # First, let's check if the collection exists and has documents
+        saved_games_docs = list(saved_games_ref.stream())
+        logging.info(f"Found {len(saved_games_docs)} documents in savedGames collection")
         
         saved_games = []
         game_count = 0
         
         for doc in saved_games_docs:
-            if game_count >= 100:  # Lower limit to prevent memory issues
+            if game_count >= 100:  # Limit to prevent memory issues
                 logging.warning(f"User {user_id} has more than 100 games, limiting response")
                 break
+            
+            try:
+                game_data = doc.to_dict()
+                if not game_data:
+                    logging.warning(f"Empty document found: {doc.id}")
+                    continue
                 
-            game_data = doc.to_dict()
-            game_data['gameId'] = doc.id
-            
-            # Create a lightweight version of the game
-            lightweight_game = {
-                'gameId': doc.id,
-                'gameName': game_data.get('gameName', 'Untitled'),
-                'sport': game_data.get('sport', 'Unknown'),
-                'matchDate': game_data.get('matchDate'),
-                'datasetName': game_data.get('datasetName', 'Uncategorized'),
-                'analysisType': game_data.get('analysisType', 'pitch'),
-                'createdAt': game_data.get('createdAt'),
-                'updatedAt': game_data.get('updatedAt'),
-            }
-            
-            # Add video-specific fields if present
-            if 'youtubeUrl' in game_data:
-                lightweight_game['youtubeUrl'] = game_data['youtubeUrl']
-            
-            # Add teams data if present (usually small)
-            if 'teamsData' in game_data:
-                lightweight_game['teamsData'] = game_data['teamsData']
-            
-            # Add a count of game data items instead of the actual data
-            if 'gameData' in game_data:
-                if isinstance(game_data['gameData'], list):
-                    lightweight_game['gameDataCount'] = len(game_data['gameData'])
-                elif isinstance(game_data['gameData'], dict):
-                    lightweight_game['gameDataCount'] = len(game_data['gameData'])
-                else:
-                    lightweight_game['gameDataCount'] = 0
-            
-            # Only include full data if specifically requested
-            if include_game_data:
-                lightweight_game['gameData'] = game_data.get('gameData', [])
-            
-            saved_games.append(lightweight_game)
-            game_count += 1
+                # Log the first game's structure for debugging
+                if game_count == 0:
+                    logging.info(f"First game structure: {list(game_data.keys())}")
+                
+                # Create a lightweight version of the game
+                lightweight_game = {
+                    'gameId': doc.id,
+                    'gameName': game_data.get('gameName', game_data.get('name', 'Untitled')),
+                    'sport': game_data.get('sport', 'Unknown'),
+                    'matchDate': game_data.get('matchDate', game_data.get('date')),
+                    'datasetName': game_data.get('datasetName', 'Uncategorized'),
+                    'analysisType': game_data.get('analysisType', 'pitch'),
+                }
+                
+                # Add timestamps if available
+                if 'createdAt' in game_data:
+                    lightweight_game['createdAt'] = game_data['createdAt']
+                if 'updatedAt' in game_data:
+                    lightweight_game['updatedAt'] = game_data['updatedAt']
+                
+                # Add video-specific fields if present
+                if 'youtubeUrl' in game_data:
+                    lightweight_game['youtubeUrl'] = game_data['youtubeUrl']
+                
+                # Add teams data if present (usually small)
+                if 'teamsData' in game_data:
+                    lightweight_game['teamsData'] = game_data['teamsData']
+                
+                # Add a count of game data items
+                if 'gameData' in game_data:
+                    if isinstance(game_data['gameData'], list):
+                        lightweight_game['gameDataCount'] = len(game_data['gameData'])
+                    elif isinstance(game_data['gameData'], dict):
+                        lightweight_game['gameDataCount'] = len(game_data['gameData'])
+                    else:
+                        lightweight_game['gameDataCount'] = 0
+                elif 'coordinates' in game_data:
+                    # Some games might use 'coordinates' instead of 'gameData'
+                    if isinstance(game_data['coordinates'], list):
+                        lightweight_game['gameDataCount'] = len(game_data['coordinates'])
+                    else:
+                        lightweight_game['gameDataCount'] = 0
+                
+                # Only include full data if specifically requested
+                if include_game_data:
+                    if 'gameData' in game_data:
+                        lightweight_game['gameData'] = game_data['gameData']
+                    elif 'coordinates' in game_data:
+                        lightweight_game['gameData'] = game_data['coordinates']
+                
+                saved_games.append(lightweight_game)
+                game_count += 1
+                
+            except Exception as e:
+                logging.error(f"Error processing game document {doc.id}: {str(e)}")
+                continue
         
         # Also fetch the list of published datasets
         published_datasets = []
@@ -430,6 +453,9 @@ def load_games():
                 dataset_data = doc.to_dict()
                 dataset_name = dataset_data.get('datasetName', doc.id)
                 published_datasets.append(dataset_name)
+                
+            logging.info(f"Found {len(published_datasets)} published datasets")
+            
         except Exception as e:
             logging.warning(f"Error fetching published datasets: {str(e)}")
         
@@ -438,19 +464,16 @@ def load_games():
             'publishedDatasets': published_datasets
         }
         
-        # Log the response size
-        response_json = jsonify(response_data)
+        # Log the response details
         logging.info(f"Loaded {len(saved_games)} games for user {user_id}, response size: ~{len(str(response_data))} bytes")
         
-        return response_json, 200
+        return jsonify(response_data), 200
         
     except Exception as e:
         logging.error(f"Error loading games: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-
-# Add this endpoint to your app.py:
 
 @app.route('/load-game-by-id', methods=['POST'])
 def load_game_by_id():

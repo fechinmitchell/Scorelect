@@ -1,13 +1,11 @@
 // src/components/SavedGamesContext.js
-
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect, useCallback } from 'react';
 import { getAuth } from 'firebase/auth';
-import Swal from 'sweetalert2';
 
 export const SavedGamesContext = createContext();
 
 /**
- * parseJSONNoNaN: same approach as in SavedGames.js
+ * parseJSONNoNaN: same approach as in backend to handle NaN values
  */
 async function parseJSONNoNaN(response) {
   const rawText = await response.text();
@@ -24,92 +22,154 @@ export const SavedGamesProvider = ({ children }) => {
   const [fetchError, setFetchError] = useState(null);
   const auth = getAuth();
 
-  const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
-
-  /**
-   * Fetches the saved games for the authenticated user and groups them by dataset.
-   */
-  const fetchSavedGames = async () => {
+  const fetchSavedGames = useCallback(async () => {
     const user = auth.currentUser;
     if (!user) {
-      console.warn('User not authenticated, cannot fetch saved games.');
+      console.log('SavedGamesContext: No authenticated user');
+      setDatasets({});
       setLoading(false);
       return;
     }
 
+    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+    console.log('SavedGamesContext: Fetching from API URL:', apiUrl);
+
+    setLoading(true);
+    setFetchError(null);
+
     try {
       const token = await user.getIdToken();
-
-      // 1) Fetch saved games
+      console.log('SavedGamesContext: Got auth token, making request...');
+      
       const response = await fetch(`${apiUrl}/load-games`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ uid: user.uid }),
+        body: JSON.stringify({ 
+          uid: user.uid,
+          includeGameData: false  // Don't include heavy game data
+        }),
       });
 
+      console.log('SavedGamesContext: Response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch saved games.');
+        const errorText = await response.text();
+        console.error('SavedGamesContext: Error response:', errorText);
+        throw new Error(`Failed to fetch saved games: ${response.status} ${errorText}`);
       }
 
-      // Safely parse
-      const gamesList = await parseJSONNoNaN(response);
-      console.log('Fetched games list:', gamesList);
+      const result = await parseJSONNoNaN(response);
+      console.log('SavedGamesContext: Fetched result:', result);
 
-      // 2) Fetch all published datasets created by the user
-      const datasetsResponse = await fetch(`${apiUrl}/list-published-datasets`, {
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      // Transform the data into the expected format
+      const transformedDatasets = {};
+      
+      if (result.savedGames && Array.isArray(result.savedGames)) {
+        console.log(`SavedGamesContext: Processing ${result.savedGames.length} games`);
+        
+        result.savedGames.forEach(game => {
+          const datasetName = game.datasetName || 'Uncategorized';
+          
+          if (!transformedDatasets[datasetName]) {
+            transformedDatasets[datasetName] = {
+              games: [],
+              isPublished: false
+            };
+          }
+          
+          // Don't include the heavy gameData in the listing
+          const { gameData, ...lightweightGame } = game;
+          transformedDatasets[datasetName].games.push(lightweightGame);
+        });
+      }
+
+      // Check which datasets are published
+      if (result.publishedDatasets && Array.isArray(result.publishedDatasets)) {
+        result.publishedDatasets.forEach(datasetName => {
+          if (transformedDatasets[datasetName]) {
+            transformedDatasets[datasetName].isPublished = true;
+          }
+        });
+      }
+
+      console.log('SavedGamesContext: Transformed datasets:', Object.keys(transformedDatasets));
+      setDatasets(transformedDatasets);
+      setLoading(false);
+    } catch (error) {
+      console.error('SavedGamesContext: Error fetching saved games:', error);
+      setFetchError(error.message);
+      setDatasets({});
+      setLoading(false);
+    }
+  }, [auth]);
+
+  // Function to fetch full game data when needed
+  const fetchFullGameData = useCallback(async (gameId) => {
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+    console.log('SavedGamesContext: Fetching full game data for:', gameId);
+
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`${apiUrl}/load-game-by-id`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ uid: user.uid }),
+        body: JSON.stringify({ 
+          uid: user.uid,
+          gameId: gameId
+        }),
       });
 
-      if (!datasetsResponse.ok) {
-        throw new Error('Failed to fetch published datasets.');
+      console.log('SavedGamesContext: Full game data response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('SavedGamesContext: Error fetching full game data:', errorText);
+        throw new Error(`Failed to fetch game data: ${response.status}`);
       }
 
-      // Safely parse
-      const publishedDatasetsData = await parseJSONNoNaN(datasetsResponse);
-      const publishedDatasetNames = new Set(publishedDatasetsData.datasets);
+      const result = await parseJSONNoNaN(response);
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
 
-      // Group games by datasetName
-      const groupedDatasets = gamesList.reduce((acc, game) => {
-        const dataset = game.datasetName || 'Default';
-        if (!acc[dataset]) {
-          acc[dataset] = { games: [], isPublished: false };
-        }
-        acc[dataset].games.push(game);
-
-        // Check if the dataset is published
-        if (publishedDatasetNames.has(dataset)) {
-          acc[dataset].isPublished = true;
-        }
-        return acc;
-      }, {});
-
-      console.log('Grouped Datasets:', groupedDatasets);
-
-      setDatasets(groupedDatasets);
-      setFetchError(null);
+      console.log('SavedGamesContext: Fetched full game data successfully');
+      return result.game;
     } catch (error) {
-      console.error('Error fetching saved games:', error);
-      setFetchError(error.message || 'Failed to fetch saved games.');
-    } finally {
-      setLoading(false);
+      console.error('SavedGamesContext: Error fetching full game data:', error);
+      throw error;
     }
-  };
+  }, [auth]);
 
   useEffect(() => {
     fetchSavedGames();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth.currentUser]); // Re-fetch if the user changes
+  }, [fetchSavedGames]);
+
+  const value = {
+    datasets,
+    loading,
+    fetchError,
+    fetchSavedGames,
+    fetchFullGameData
+  };
 
   return (
-    <SavedGamesContext.Provider value={{ datasets, loading, fetchError, fetchSavedGames }}>
+    <SavedGamesContext.Provider value={value}>
       {children}
     </SavedGamesContext.Provider>
   );

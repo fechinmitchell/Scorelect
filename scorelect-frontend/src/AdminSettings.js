@@ -34,6 +34,7 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { Brightness4, Brightness7, Refresh as RefreshIcon } from '@mui/icons-material';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
+import { getAuth } from 'firebase/auth';
 import Swal from 'sweetalert2';
 import axios from 'axios';
 
@@ -155,6 +156,8 @@ const AdminSettings = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [adminUsers, setAdminUsers] = useState([]);
   const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [currentUserEmail, setCurrentUserEmail] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Model tab state
   const [userDatasets, setUserDatasets] = useState([]);
@@ -166,17 +169,68 @@ const AdminSettings = () => {
   const [modelHistory, setModelHistory] = useState([]);
 
   const navigate = useNavigate();
+  const auth = getAuth();
+
+  // Check if current user is admin
+  const checkAdminStatus = async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      Swal.fire({
+        title: 'Authentication Required',
+        text: 'Please sign in to access admin settings.',
+        icon: 'warning',
+        confirmButtonColor: '#7b1fa2',
+      }).then(() => {
+        navigate('/signin');
+      });
+      return false;
+    }
+
+    setCurrentUserEmail(user.email);
+
+    // Get admin settings from Firestore
+    const datasetRef = doc(firestore, 'adminSettings', 'datasetConfig');
+    const datasetSnap = await getDoc(datasetRef);
+    
+    if (datasetSnap.exists()) {
+      const data = datasetSnap.data();
+      const adminEmails = data.adminUsers || [];
+      const isUserAdmin = adminEmails.includes(user.email);
+      setIsAdmin(isUserAdmin);
+      
+      if (!isUserAdmin) {
+        Swal.fire({
+          title: 'Access Denied',
+          text: 'You do not have admin privileges.',
+          icon: 'error',
+          confirmButtonColor: '#7b1fa2',
+        }).then(() => {
+          navigate('/');
+        });
+        return false;
+      }
+    } else {
+      // If no admin config exists, the first user becomes admin
+      setIsAdmin(true);
+      setAdminUsers([user.email]);
+    }
+    
+    return true;
+  };
 
   // Fetch current settings from Firestore on mount
   useEffect(() => {
-    const fetchSettings = async () => {
+    const initializeAdmin = async () => {
+      const hasAccess = await checkAdminStatus();
+      if (!hasAccess) return;
+
       // Feature permissions
       const featuresRef = doc(firestore, 'adminSettings', 'config');
       const featuresSnap = await getDoc(featuresRef);
       if (featuresSnap.exists()) {
         setFeaturePermissions(featuresSnap.data().permissions || {});
       } else {
-        // Initialize default permissions (0 = All Users)
+        // Initialize default permissions
         const defaultPermissions = {};
         features.forEach((feature) => {
           defaultPermissions[feature.id] = feature.id === 'aiAnalysis' ? 2 : 0;
@@ -197,21 +251,34 @@ const AdminSettings = () => {
           datasetViewing: 0,
         };
         setDatasetPerms(defaultDatasetPerms);
-        setAdminUsers([]);
+        
+        // Set current user as first admin if no admins exist
+        if (auth.currentUser?.email) {
+          setAdminUsers([auth.currentUser.email]);
+        }
       }
+
+      // Fetch datasets and model history
+      fetchUserDatasets();
+      fetchModelHistory();
     };
 
-    fetchSettings();
-    fetchUserDatasets();
-    fetchModelHistory();
+    initializeAdmin();
   }, []);
 
   // Fetch user datasets for model tab
   const fetchUserDatasets = async () => {
     try {
-      const response = await axios.post(`${BASE_API_URL}/get-user-datasets`, {
-        uid: 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2', // TODO: Replace with actual user ID
-      });
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const token = await user.getIdToken();
+      const response = await axios.post(
+        `${BASE_API_URL}/get-user-datasets`,
+        { uid: user.uid },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
       const datasets = response.data.datasets || [];
       setUserDatasets(datasets);
       if (datasets.length > 0) {
@@ -220,15 +287,28 @@ const AdminSettings = () => {
       }
     } catch (error) {
       console.error('Error fetching datasets:', error);
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to load datasets. Please try again.',
+        icon: 'error',
+        confirmButtonColor: '#7b1fa2',
+      });
     }
   };
 
   // Fetch model history for leaderboard
   const fetchModelHistory = async () => {
     try {
-      const response = await axios.post(`${BASE_API_URL}/get-model-history`, {
-        uid: 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2', // TODO: Replace with actual user ID
-      });
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const token = await user.getIdToken();
+      const response = await axios.post(
+        `${BASE_API_URL}/get-model-history`,
+        { uid: user.uid },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
       setModelHistory(response.data.history || []);
     } catch (error) {
       console.error('Error fetching model history:', error);
@@ -275,11 +355,39 @@ const AdminSettings = () => {
   };
 
   const handleRemoveAdmin = (email) => {
+    // Prevent removing yourself
+    if (email === currentUserEmail) {
+      Swal.fire({
+        title: 'Cannot Remove',
+        text: 'You cannot remove yourself as admin.',
+        icon: 'warning',
+        confirmButtonColor: '#7b1fa2',
+      });
+      return;
+    }
+
+    // Ensure at least one admin remains
+    if (adminUsers.length <= 1) {
+      Swal.fire({
+        title: 'Cannot Remove',
+        text: 'At least one admin must remain.',
+        icon: 'warning',
+        confirmButtonColor: '#7b1fa2',
+      });
+      return;
+    }
+
     setAdminUsers(adminUsers.filter((admin) => admin !== email));
   };
 
   const handleSaveSettings = async () => {
     try {
+      // Ensure current user remains in admin list
+      let finalAdminList = [...adminUsers];
+      if (!finalAdminList.includes(currentUserEmail) && currentUserEmail) {
+        finalAdminList.push(currentUserEmail);
+      }
+
       await setDoc(
         doc(firestore, 'adminSettings', 'config'),
         { permissions: featurePermissions },
@@ -290,21 +398,36 @@ const AdminSettings = () => {
         doc(firestore, 'adminSettings', 'datasetConfig'),
         {
           permissions: datasetPerms,
-          adminUsers: adminUsers,
+          adminUsers: finalAdminList,
         },
         { merge: true }
       );
 
-      Swal.fire('Success', 'All settings updated successfully.', 'success');
+      Swal.fire({
+        title: 'Success',
+        text: 'All settings updated successfully.',
+        icon: 'success',
+        confirmButtonColor: '#7b1fa2',
+      });
     } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+      Swal.fire({
+        title: 'Error',
+        text: error.message,
+        icon: 'error',
+        confirmButtonColor: '#7b1fa2',
+      });
     }
   };
 
   // Run simple xP model
   const handleRunSimpleModel = async () => {
     if (!sourceDataset || !targetDataset) {
-      Swal.fire('Error', 'Please select both source and target datasets', 'error');
+      Swal.fire({
+        title: 'Error',
+        text: 'Please select both source and target datasets',
+        icon: 'error',
+        confirmButtonColor: '#7b1fa2',
+      });
       return;
     }
 
@@ -312,24 +435,40 @@ const AdminSettings = () => {
       setIsCalculating(true);
       setModelResult(null);
 
-      const response = await axios.post(`${BASE_API_URL}/run-xp-model`, {
-        uid: 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2', // TODO: Replace with actual user ID
-        source_dataset: sourceDataset,
-        target_dataset: targetDataset,
-        model_type: selectedModel,
-      });
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      const token = await user.getIdToken();
+      const response = await axios.post(
+        `${BASE_API_URL}/run-xp-model`,
+        {
+          uid: user.uid,
+          source_dataset: sourceDataset,
+          target_dataset: targetDataset,
+          model_type: selectedModel,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
       setModelResult(response.data);
       await fetchModelHistory();
       
-      Swal.fire(
-        'Success',
-        `Model completed! Updated ${response.data.shots_updated} shots with ${(response.data.metrics.accuracy * 100).toFixed(1)}% accuracy`,
-        'success'
-      );
+      Swal.fire({
+        title: 'Success',
+        text: `Model completed! Updated ${response.data.shots_updated} shots with ${(response.data.metrics.accuracy * 100).toFixed(1)}% accuracy`,
+        icon: 'success',
+        confirmButtonColor: '#7b1fa2',
+      });
     } catch (error) {
       console.error('Model run error:', error);
-      Swal.fire('Error', error.response?.data?.error || 'Failed to run model', 'error');
+      Swal.fire({
+        title: 'Error',
+        text: error.response?.data?.error || 'Failed to run model',
+        icon: 'error',
+        confirmButtonColor: '#7b1fa2',
+      });
     } finally {
       setIsCalculating(false);
     }
@@ -340,6 +479,28 @@ const AdminSettings = () => {
     if (value >= 0.7) return '#ff9800';
     return '#f44336';
   };
+
+  // Show loading if checking admin status
+  if (!isAdmin && currentUserEmail === '') {
+    return (
+      <ThemeProvider theme={getTheme(mode)}>
+        <CssBaseline />
+        <Box
+          sx={{
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: mode === 'dark'
+              ? 'linear-gradient(135deg, #1c1a1a, #333)'
+              : 'linear-gradient(135deg, #f5f5f5, #e0e0e0)',
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      </ThemeProvider>
+    );
+  }
 
   return (
     <ThemeProvider theme={getTheme(mode)}>
@@ -384,6 +545,17 @@ const AdminSettings = () => {
             >
               Admin Settings
             </Typography>
+            
+            {currentUserEmail && (
+              <Typography
+                variant="caption"
+                align="center"
+                display="block"
+                sx={{ mb: 2, color: 'text.secondary' }}
+              >
+                Logged in as: {currentUserEmail}
+              </Typography>
+            )}
 
             <Tabs value={activeTab} onChange={handleTabChange} centered sx={{ mb: 3 }}>
               <Tab label="Features" />
@@ -480,6 +652,8 @@ const AdminSettings = () => {
                       borderRadius: '8px 0 0 8px',
                       border: '1px solid #ccc',
                       borderRight: 'none',
+                      backgroundColor: mode === 'dark' ? '#424242' : '#fff',
+                      color: mode === 'dark' ? '#fff' : '#333',
                     }}
                   />
                   <Button
@@ -511,14 +685,28 @@ const AdminSettings = () => {
                           border: '1px solid',
                           borderColor: mode === 'dark' ? '#555' : '#e0e0e0',
                           borderRadius: '8px',
+                          backgroundColor: email === currentUserEmail 
+                            ? (mode === 'dark' ? '#4a4a4a' : '#f0f0f0')
+                            : 'transparent',
                         }}
                       >
-                        <Typography>{email}</Typography>
+                        <Typography>
+                          {email}
+                          {email === currentUserEmail && (
+                            <Chip 
+                              label="You" 
+                              size="small" 
+                              sx={{ ml: 1 }} 
+                              color="primary"
+                            />
+                          )}
+                        </Typography>
                         <Button
                           variant="outlined"
                           color="error"
                           size="small"
                           onClick={() => handleRemoveAdmin(email)}
+                          disabled={email === currentUserEmail || adminUsers.length <= 1}
                         >
                           Remove
                         </Button>
@@ -552,6 +740,7 @@ const AdminSettings = () => {
                           value={sourceDataset}
                           onChange={(e) => setSourceDataset(e.target.value)}
                           label="Training Dataset"
+                          disabled={userDatasets.length === 0}
                         >
                           {userDatasets.map((dataset) => (
                             <MenuItem key={dataset} value={dataset}>
@@ -568,6 +757,7 @@ const AdminSettings = () => {
                           value={targetDataset}
                           onChange={(e) => setTargetDataset(e.target.value)}
                           label="Target Dataset"
+                          disabled={userDatasets.length === 0}
                         >
                           {userDatasets.map((dataset) => (
                             <MenuItem key={dataset} value={dataset}>
@@ -578,6 +768,17 @@ const AdminSettings = () => {
                       </FormControl>
                     </Grid>
                   </Grid>
+                  
+                  {userDatasets.length === 0 && (
+                    <Typography 
+                      variant="caption" 
+                      color="text.secondary" 
+                      display="block" 
+                      sx={{ mt: 1, textAlign: 'center' }}
+                    >
+                      No datasets found. Please create and save some games first.
+                    </Typography>
+                  )}
                 </Box>
 
                 {/* Model Type Selection */}
@@ -647,7 +848,7 @@ const AdminSettings = () => {
                   variant="contained"
                   fullWidth
                   size="large"
-                  disabled={isCalculating}
+                  disabled={isCalculating || userDatasets.length === 0}
                   sx={{ mb: 3 }}
                 >
                   {isCalculating ? (

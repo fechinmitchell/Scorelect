@@ -22,7 +22,7 @@ async function parseJSONNoNaN(response) {
 }
 
 const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
-  const { datasets, loading, fetchError, fetchSavedGames } = useContext(SavedGamesContext);
+  const { datasets, loading, fetchError, fetchSavedGames, fetchFullGameData } = useContext(SavedGamesContext);
   const { fetchPublishedDatasets } = useContext(SportsDataHubContext);
   const auth = getAuth();
   const { setLoadedCoords } = useContext(GameContext);
@@ -53,15 +53,33 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     return game.analysisType;
   };
 
-  // Updated part of handleLoadGame in SavedGames.js
+  // Updated handleLoadGame function
   const handleLoadGame = async (game) => {
-    // normalize gameData into an array
-    let normalizedData = Array.isArray(game.gameData)
-      ? game.gameData
-      : Object.values(game.gameData || {});
+    try {
+      // Show loading message
+      Swal.fire({
+        title: 'Loading Game...',
+        text: 'Please wait while we load your game data.',
+        allowOutsideClick: false,
+        background: 'var(--dark-card)',
+        color: 'var(--light)',
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
 
-    if (normalizedData.length > 0) {
-      try {
+      // Fetch the full game data including gameData array
+      const fullGameData = await fetchFullGameData(game.gameId || game.gameName);
+      
+      // Close loading dialog
+      Swal.close();
+
+      // normalize gameData into an array
+      let normalizedData = Array.isArray(fullGameData.gameData)
+        ? fullGameData.gameData
+        : Object.values(fullGameData.gameData || {});
+
+      if (normalizedData.length > 0) {
         // Ensure each item has the necessary properties for PitchGraphic
         const processedData = normalizedData.map(item => {
           // Ensure position property exists
@@ -91,52 +109,53 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
         });
 
         // Check if this is a video analysis
-        if (getAnalysisType(game) === 'video') {
-          console.log('Loading video analysis game:', game.gameName);
-          console.log('Analysis type:', getAnalysisType(game));
+        if (getAnalysisType(fullGameData) === 'video') {
+          console.log('Loading video analysis game:', fullGameData.gameName);
+          console.log('Analysis type:', getAnalysisType(fullGameData));
           
           // For video analysis, navigate to ManualTagging with the data
           navigate('/tagging/manual', {
             state: {
-              youtubeUrl: game.youtubeUrl,
+              youtubeUrl: fullGameData.youtubeUrl,
               tags: processedData,
-              teamsData: game.teamsData,
-              datasetName: game.datasetName || game.gameName,
-              sport: game.sport
+              teamsData: fullGameData.teamsData,
+              datasetName: fullGameData.datasetName || fullGameData.gameName,
+              sport: fullGameData.sport
             }
           });
           Swal.fire({
             title: 'Success',
-            text: `Video analysis "${game.gameName}" loaded successfully!`,
+            text: `Video analysis "${fullGameData.gameName}" loaded successfully!`,
             icon: 'success',
             background: 'var(--dark-card)',
             confirmButtonColor: 'var(--primary)',
           });
         } else {
           // For pitch analysis, use the existing onLoadGame function
-          onLoadGame(game.sport, processedData);
+          onLoadGame(fullGameData.sport, processedData);
           Swal.fire({
             title: 'Success',
-            text: `Game "${game.gameName}" loaded successfully!`,
+            text: `Game "${fullGameData.gameName}" loaded successfully!`,
             icon: 'success',
             background: 'var(--dark-card)',
             confirmButtonColor: 'var(--primary)',
           });
         }
-      } catch (error) {
-        console.error('Error loading game data:', error);
+      } else {
         Swal.fire({
           title: 'Error',
-          text: 'Failed to load game data.',
+          text: 'Game data is empty or corrupted.',
           icon: 'error',
           background: 'var(--dark-card)',
           confirmButtonColor: 'var(--primary)',
         });
       }
-    } else {
+    } catch (error) {
+      console.error('Error loading game data:', error);
+      Swal.close(); // Close loading dialog if still open
       Swal.fire({
         title: 'Error',
-        text: 'Game data is empty or corrupted.',
+        text: error.message || 'Failed to load game data.',
         icon: 'error',
         background: 'var(--dark-card)',
         confirmButtonColor: 'var(--primary)',

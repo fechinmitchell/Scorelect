@@ -353,36 +353,145 @@ def save_game():
         logging.error(f"Error saving game: {str(e)}")
         return jsonify(error=str(e)), 400
 
+# In your app.py, replace the /load-games endpoint with this:
 
-# Endpoint to load saved games from Firestore, optionally filtered by datasetName
+# Replace your /load-games endpoint in app.py with this:
+
 @app.route('/load-games', methods=['POST'])
 def load_games():
     try:
-        data = request.json  # Get the JSON data from the request
-        user_id = data.get('uid')  # Extract the user ID
-
-        # Validate if user ID is provided
+        data = request.json
+        user_id = data.get('uid')
+        include_game_data = data.get('includeGameData', False)  # Default to False
+        
         if not user_id:
-            logging.error("UID not provided for loading games.")
-            return jsonify({'error': 'UID is required.'}), 400
-
-        # Reference the saved games collection in Firestore for the user
-        games_ref = db.collection('savedGames').document(user_id).collection('games')
-
-        games_snapshot = games_ref.stream()
-        games = []  # Initialize an empty list to hold the games
-
-        # Iterate over the documents in the games collection
-        for doc in games_snapshot:
-            game_data = doc.to_dict()  # Convert each document to a dictionary
-            game_data['gameName'] = doc.id  # Add the document ID as the game name
-            games.append(game_data)  # Add the game data to the list
-
-        logging.info(f"Loaded {len(games)} games for user {user_id}.")
-        return jsonify(games), 200  # Return the list of games in JSON
+            return jsonify({'error': 'User ID is required'}), 400
+        
+        logging.info(f"Loading games for user {user_id}, includeGameData: {include_game_data}")
+        
+        # Fetch user's saved games from Firestore
+        saved_games_ref = db.collection('users').document(user_id).collection('savedGames')
+        saved_games_docs = saved_games_ref.stream()
+        
+        saved_games = []
+        game_count = 0
+        
+        for doc in saved_games_docs:
+            if game_count >= 100:  # Lower limit to prevent memory issues
+                logging.warning(f"User {user_id} has more than 100 games, limiting response")
+                break
+                
+            game_data = doc.to_dict()
+            game_data['gameId'] = doc.id
+            
+            # Create a lightweight version of the game
+            lightweight_game = {
+                'gameId': doc.id,
+                'gameName': game_data.get('gameName', 'Untitled'),
+                'sport': game_data.get('sport', 'Unknown'),
+                'matchDate': game_data.get('matchDate'),
+                'datasetName': game_data.get('datasetName', 'Uncategorized'),
+                'analysisType': game_data.get('analysisType', 'pitch'),
+                'createdAt': game_data.get('createdAt'),
+                'updatedAt': game_data.get('updatedAt'),
+            }
+            
+            # Add video-specific fields if present
+            if 'youtubeUrl' in game_data:
+                lightweight_game['youtubeUrl'] = game_data['youtubeUrl']
+            
+            # Add teams data if present (usually small)
+            if 'teamsData' in game_data:
+                lightweight_game['teamsData'] = game_data['teamsData']
+            
+            # Add a count of game data items instead of the actual data
+            if 'gameData' in game_data:
+                if isinstance(game_data['gameData'], list):
+                    lightweight_game['gameDataCount'] = len(game_data['gameData'])
+                elif isinstance(game_data['gameData'], dict):
+                    lightweight_game['gameDataCount'] = len(game_data['gameData'])
+                else:
+                    lightweight_game['gameDataCount'] = 0
+            
+            # Only include full data if specifically requested
+            if include_game_data:
+                lightweight_game['gameData'] = game_data.get('gameData', [])
+            
+            saved_games.append(lightweight_game)
+            game_count += 1
+        
+        # Also fetch the list of published datasets
+        published_datasets = []
+        try:
+            published_ref = db.collection('users').document(user_id).collection('publishedDatasets')
+            published_docs = published_ref.stream()
+            
+            for doc in published_docs:
+                dataset_data = doc.to_dict()
+                dataset_name = dataset_data.get('datasetName', doc.id)
+                published_datasets.append(dataset_name)
+        except Exception as e:
+            logging.warning(f"Error fetching published datasets: {str(e)}")
+        
+        response_data = {
+            'savedGames': saved_games,
+            'publishedDatasets': published_datasets
+        }
+        
+        # Log the response size
+        response_json = jsonify(response_data)
+        logging.info(f"Loaded {len(saved_games)} games for user {user_id}, response size: ~{len(str(response_data))} bytes")
+        
+        return response_json, 200
+        
     except Exception as e:
         logging.error(f"Error loading games: {str(e)}")
-        return jsonify({'error': str(e)}), 400
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+# Add this endpoint to your app.py:
+
+@app.route('/load-game-by-id', methods=['POST'])
+def load_game_by_id():
+    try:
+        data = request.json
+        user_id = data.get('uid')
+        game_id = data.get('gameId')
+        
+        if not user_id or not game_id:
+            return jsonify({'error': 'User ID and Game ID are required'}), 400
+        
+        logging.info(f"Loading full game data for user {user_id}, game {game_id}")
+        
+        # Fetch the specific game from Firestore
+        game_ref = db.collection('users').document(user_id).collection('savedGames').document(game_id)
+        game_doc = game_ref.get()
+        
+        if not game_doc.exists:
+            logging.error(f"Game not found: {game_id} for user {user_id}")
+            return jsonify({'error': 'Game not found'}), 404
+        
+        game_data = game_doc.to_dict()
+        game_data['gameId'] = game_doc.id
+        
+        # Log the size of the game data
+        game_data_size = len(str(game_data))
+        logging.info(f"Loaded game {game_id} successfully, size: ~{game_data_size} bytes")
+        
+        # If the game data is too large, we might need to paginate or compress
+        if game_data_size > 5000000:  # 5MB
+            logging.warning(f"Game {game_id} is very large: {game_data_size} bytes")
+        
+        return jsonify({
+            'game': game_data
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error loading game by ID: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 # Endpoint to delete an entire dataset (all games within a dataset) for a user
 @app.route('/delete-dataset', methods=['POST'])

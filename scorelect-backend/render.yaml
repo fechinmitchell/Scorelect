@@ -3,7 +3,7 @@ services:
     name: scorelect-backend
     env: python
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn app:app"
+    startCommand: "gunicorn app:app --timeout 120 --workers 2"
     envVars:
       - key: STRIPE_SECRET_KEY
         sync: false

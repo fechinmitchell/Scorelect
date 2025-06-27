@@ -5187,8 +5187,8 @@ def run_advanced_xp_model():
 @app.route('/run-cmc-model', methods=['POST'])
 def run_cmc_model():
     """
-    CMC (Championship Model Concept) - Based on the notebook approach with improvements
-    Features preferred side calculation and placed ball detection
+    CMC (Championship Model Concept) - Updated to handle 2-point scoring
+    Features preferred side calculation, placed ball detection, and 2-point arc awareness
     """
     import numpy as np
     import pandas as pd
@@ -5213,7 +5213,7 @@ def run_cmc_model():
         
         # Load source dataset for training
         source_games = db.collection('savedGames').document(uid)\
-            .collection('games').where('datasetName', '==', source_dataset).stream()
+            .collection('games').filter('datasetName', '==', source_dataset).stream()
         
         source_shots = []
         for game in source_games:
@@ -5238,6 +5238,10 @@ def run_cmc_model():
         # Calculate distance and angle
         df['distance'] = np.sqrt((df['x'] - goal_x)**2 + (df['y'] - goal_y)**2)
         df['angle'] = np.degrees(np.arctan2(np.abs(df['y'] - goal_y), goal_x - df['x']))
+        
+        # CRITICAL: Identify 2-point attempts (outside 40m arc)
+        # In GAA, 40m = 40 meters from goal, not from the end line
+        df['beyond_40m'] = (df['distance'] > 40).astype(int)
         
         # CMC Special Feature 1: Preferred Side Calculation
         def is_preferable_side(y, foot):
@@ -5292,23 +5296,41 @@ def run_cmc_model():
         df['shot_angle_radians'] = np.arctan2(df['y'] - goal_y, goal_x - df['x'])
         df['shot_angle_degrees'] = np.degrees(df['shot_angle_radians'])
         
-        # Create outcome variable
+        # Create outcome variable with WEIGHTED scoring
         positive_outcomes = {'point', 'goal', 'scores', 'over'}
-        df['success'] = df.get('action', '').astype(str).str.lower().apply(
+        df['success'] = df['action_lower'].apply(
             lambda x: 1 if any(outcome in x for outcome in positive_outcomes) else 0
         )
         
-        # Filter out goals if specified (like in the notebook)
-        # But we'll keep them for better training
+        # Calculate ACTUAL points scored (accounting for 2-pointers)
+        def calculate_points_value(row):
+            action = row['action_lower']
+            if 'goal' in action:
+                return 3.0
+            elif any(outcome in action for outcome in ['point', 'scores', 'over']):
+                # Check if it's a 2-pointer (beyond 40m or marked as 2PT)
+                if row['beyond_40m'] or '2pt' in action.lower():
+                    return 2.0
+                else:
+                    return 1.0
+            else:
+                return 0.0
         
-        # Calculate player statistics (simplified version)
+        df['points_value'] = df.apply(calculate_points_value, axis=1)
+        
+        # Calculate player statistics with WEIGHTED success
         player_stats = df.groupby('playerName').agg({
-            'success': ['mean', 'count']
+            'points_value': ['mean', 'sum'],
+            'success': 'count'
         })
-        player_stats.columns = ['success_rate', 'shot_count']
+        player_stats.columns = ['avg_points_per_shot', 'total_points', 'shot_count']
+        
+        # Bayesian smoothing for player quality based on points per shot
+        overall_avg_points = df['points_value'].mean()
+        prior_weight = 20
         player_stats['player_quality'] = (
-            (player_stats['success_rate'] * player_stats['shot_count'] + 0.3 * 10) / 
-            (player_stats['shot_count'] + 10)
+            (player_stats['avg_points_per_shot'] * player_stats['shot_count'] + overall_avg_points * prior_weight) / 
+            (player_stats['shot_count'] + prior_weight)
         )
         
         # Merge player stats back
@@ -5318,9 +5340,9 @@ def run_cmc_model():
             right_index=True, 
             how='left'
         )
-        df['player_quality'] = df['player_quality'].fillna(0.3)
+        df['player_quality'] = df['player_quality'].fillna(overall_avg_points)
         
-        # CMC Model Features (based on notebook)
+        # CMC Model Features (enhanced with 2-point awareness)
         features = [
             'preferred_side',      # CMC special feature
             'pressure_value', 
@@ -5329,22 +5351,27 @@ def run_cmc_model():
             'shot_angle_degrees',  # Using angle like notebook
             'distance',            # Shot distance
             'placed_ball',         # CMC special feature
-            'player_quality'       # Added for better accuracy
+            'beyond_40m',          # NEW: Critical for 2-point detection
+            'player_quality'       # Based on points per shot
         ]
         
         X = df[features].copy()
         X = X.replace([np.inf, -np.inf], np.nan).fillna(0)
+        
+        # For training, we'll predict success (binary) but weight by points value
         y = df['success'].values
+        sample_weights = df['points_value'].apply(lambda x: 2.0 if x >= 2 else 1.0).values
         
         logging.info(f"Training data shape: {X.shape}, Success rate: {y.mean():.3f}")
+        logging.info(f"2-point attempts: {df['beyond_40m'].sum()}, Avg points per shot: {df['points_value'].mean():.3f}")
         
         # Check target variation
         if len(np.unique(y)) < 2:
             return jsonify({'error': 'Not enough variation in outcomes'}), 400
         
         # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42, stratify=y
+        X_train, X_test, y_train, y_test, sw_train, sw_test = train_test_split(
+            X, y, sample_weights, test_size=0.2, random_state=42, stratify=y
         )
         
         # Scale features
@@ -5352,16 +5379,16 @@ def run_cmc_model():
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
         
-        # Train CMC model (Logistic Regression as in notebook)
-        logging.info("Training CMC logistic regression model")
+        # Train CMC model with sample weights for 2-point emphasis
+        logging.info("Training CMC logistic regression model with 2-point awareness")
         model = LogisticRegression(
             max_iter=1000,
             C=1.0,
             random_state=42,
-            class_weight='balanced'  # Handle imbalanced classes
+            class_weight='balanced'
         )
         
-        model.fit(X_train_scaled, y_train)
+        model.fit(X_train_scaled, y_train, sample_weight=sw_train)
         
         # Evaluate model
         y_pred = model.predict(X_test_scaled)
@@ -5380,10 +5407,11 @@ def run_cmc_model():
         metrics['feature_importance'] = feature_importance
         
         logging.info(f"CMC model metrics: {metrics}")
+        logging.info(f"Beyond 40m coefficient: {feature_importance.get('beyond_40m', 0):.3f}")
         
         # Apply to target dataset
         target_games = db.collection('savedGames').document(uid)\
-            .collection('games').where('datasetName', '==', target_dataset).stream()
+            .collection('games').filter('datasetName', '==', target_dataset).stream()
         
         updated_games = []
         total_shots = 0
@@ -5401,6 +5429,7 @@ def run_cmc_model():
                     # Calculate CMC features
                     distance = np.sqrt((x - goal_x)**2 + (y - goal_y)**2)
                     shot_angle_degrees = np.degrees(np.arctan2(y - goal_y, goal_x - x))
+                    beyond_40m = int(distance > 40)
                     
                     # Preferred side
                     foot = str(shot.get('foot', 'right')).lower()
@@ -5421,7 +5450,7 @@ def run_cmc_model():
                     
                     # Get player quality
                     player_name = shot.get('playerName', 'Unknown')
-                    player_quality = player_stats.loc[player_name, 'player_quality'] if player_name in player_stats.index else 0.3
+                    player_quality = player_stats.loc[player_name, 'player_quality'] if player_name in player_stats.index else overall_avg_points
                     
                     # Create feature array
                     shot_features = np.array([[
@@ -5432,29 +5461,38 @@ def run_cmc_model():
                         shot_angle_degrees,
                         distance,
                         placed_ball,
+                        beyond_40m,
                         player_quality
                     ]])
                     
                     shot_features = np.nan_to_num(shot_features, nan=0.0, posinf=0.0, neginf=0.0)
                     shot_features_scaled = scaler.transform(shot_features)
                     
-                    # Predict xP
+                    # Predict xP (probability of scoring)
                     xP = float(model.predict_proba(shot_features_scaled)[0, 1])
+                    
+                    # Calculate expected POINTS (not just probability)
+                    # If it's a 2-point attempt, multiply xP by 2
+                    expected_points = xP * 2.0 if beyond_40m else xP
                     
                     # Update shot data
                     shot['xP'] = min(max(xP, 0.0), 1.0)
-                    shot['model_type'] = 'cmc'
+                    shot['xPoints'] = expected_points  # NEW: Expected points value
+                    shot['model_type'] = 'cmc_v2'
                     shot['cmc_features'] = {
                         'preferred_side': preferred_side,
                         'placed_ball': placed_ball,
-                        'shot_angle': round(shot_angle_degrees, 2)
+                        'beyond_40m': beyond_40m,
+                        'shot_angle': round(shot_angle_degrees, 2),
+                        'distance': round(distance, 2)
                     }
                     total_shots += 1
                     
                 except Exception as e:
                     logging.warning(f"Failed to process shot: {str(e)}")
                     shot['xP'] = 0.3
-                    shot['model_type'] = 'cmc'
+                    shot['xPoints'] = 0.3
+                    shot['model_type'] = 'cmc_v2'
             
             # Update game in Firestore
             try:
@@ -5468,7 +5506,7 @@ def run_cmc_model():
         # Save model run to history
         model_run = {
             'timestamp': firestore.SERVER_TIMESTAMP,
-            'model_type': 'cmc',
+            'model_type': 'cmc_v2',
             'source_dataset': source_dataset,
             'target_dataset': target_dataset,
             'metrics': metrics,
@@ -5479,7 +5517,8 @@ def run_cmc_model():
             'cmc_specific': {
                 'uses_preferred_side': True,
                 'uses_placed_ball': True,
-                'uses_arctan2_angle': True
+                'uses_arctan2_angle': True,
+                'handles_2_pointers': True  # NEW
             }
         }
         
@@ -5492,11 +5531,11 @@ def run_cmc_model():
         del df, X, y, X_train, X_test, model
         gc.collect()
         
-        logging.info(f"CMC model run completed successfully in {execution_time:.2f}s")
+        logging.info(f"CMC v2 model run completed successfully in {execution_time:.2f}s")
         
         return jsonify({
             'success': True,
-            'model_type': 'cmc',
+            'model_type': 'cmc_v2',
             'metrics': metrics,
             'shots_updated': total_shots,
             'games_updated': len(updated_games),
@@ -5504,7 +5543,8 @@ def run_cmc_model():
             'cmc_features': {
                 'preferred_side': 'Considers if shot is from player\'s preferred side',
                 'placed_ball': 'Identifies placed balls (frees, penalties, etc.)',
-                'shot_angle': 'Uses arctan2 for precise angle calculation'
+                'shot_angle': 'Uses arctan2 for precise angle calculation',
+                'beyond_40m': 'Accounts for 2-point scoring from outside 40m arc'
             }
         }), 200
         

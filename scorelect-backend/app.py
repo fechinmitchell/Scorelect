@@ -5213,7 +5213,7 @@ def run_cmc_model():
         
         # Load source dataset for training
         source_games = db.collection('savedGames').document(uid)\
-            .collection('games').filter('datasetName', '==', source_dataset).stream()
+            .collection('games').where('datasetName', '==', source_dataset).stream()
         
         source_shots = []
         for game in source_games:
@@ -5411,7 +5411,7 @@ def run_cmc_model():
         
         # Apply to target dataset
         target_games = db.collection('savedGames').document(uid)\
-            .collection('games').filter('datasetName', '==', target_dataset).stream()
+            .collection('games').where('datasetName', '==', target_dataset).stream()
         
         updated_games = []
         total_shots = 0

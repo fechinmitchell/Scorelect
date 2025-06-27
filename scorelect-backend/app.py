@@ -4776,3 +4776,739 @@ def get_user_datasets():
     except Exception as e:
         logging.error(f"Error getting datasets: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/reset-xp-values', methods=['POST'])
+def reset_xp_values():
+    """Reset all xP values to 0 for a specific dataset"""
+    try:
+        data = request.get_json()
+        uid = data.get('uid')
+        dataset_name = data.get('dataset_name')
+        
+        if not all([uid, dataset_name]):
+            return jsonify({'error': 'Missing required parameters'}), 400
+        
+        logging.info(f"Resetting xP values for dataset: {dataset_name}")
+        
+        # Get all games in the dataset
+        games = db.collection('savedGames').document(uid)\
+            .collection('games').where('datasetName', '==', dataset_name).stream()
+        
+        updated_count = 0
+        shots_reset = 0
+        
+        for game in games:
+            game_data = game.to_dict()
+            shots = game_data.get('gameData', [])
+            
+            # Reset xP for each shot
+            for shot in shots:
+                if 'xP' in shot:
+                    shot['xP'] = 0.0
+                    shot['model_type'] = 'reset'
+                    shots_reset += 1
+            
+            # Update game in Firestore
+            try:
+                game.reference.update({'gameData': shots})
+                updated_count += 1
+            except Exception as e:
+                logging.error(f"Failed to update game {game.id}: {str(e)}")
+        
+        return jsonify({
+            'success': True,
+            'games_updated': updated_count,
+            'shots_reset': shots_reset
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error in reset_xp_values: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/run-advanced-xp-model', methods=['POST'])
+def run_advanced_xp_model():
+    """
+    Advanced xP model with configurable parameters for better accuracy
+    """
+    import numpy as np
+    import pandas as pd
+    from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.neighbors import KNeighborsClassifier
+    from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.feature_selection import SelectKBest, f_classif
+    import time
+    import gc
+    
+    try:
+        data = request.get_json()
+        uid = data.get('uid')
+        source_dataset = data.get('source_dataset')
+        target_dataset = data.get('target_dataset')
+        model_type = data.get('model_type', 'random_forest')
+        
+        # Advanced parameters
+        train_size = data.get('train_size', 0.8)  # Training data percentage
+        use_feature_selection = data.get('use_feature_selection', False)
+        use_grid_search = data.get('use_grid_search', False)
+        balance_classes = data.get('balance_classes', False)
+        add_interaction_features = data.get('add_interaction_features', False)
+        
+        if not all([uid, source_dataset, target_dataset]):
+            return jsonify({'error': 'Missing required parameters'}), 400
+        
+        logging.info(f"Starting advanced xP model: {model_type} with train_size={train_size}")
+        start_time = time.time()
+        
+        # Load source dataset
+        source_games = db.collection('savedGames').document(uid)\
+            .collection('games').where('datasetName', '==', source_dataset).stream()
+        
+        source_shots = []
+        for game in source_games:
+            game_data = game.to_dict().get('gameData', [])
+            source_shots.extend(game_data)
+        
+        if len(source_shots) < 100:
+            return jsonify({'error': 'Not enough training data (minimum 100 shots)'}), 400
+        
+        # Create training dataframe
+        df = pd.DataFrame(source_shots)
+        
+        # Fix pandas warnings
+        df['x'] = pd.to_numeric(df.get('x', 0), errors='coerce').fillna(0)
+        df['y'] = pd.to_numeric(df.get('y', 0), errors='coerce').fillna(0)
+        
+        # Calculate basic features
+        goal_x, goal_y = 145, 44
+        df['distance'] = np.sqrt((df['x'] - goal_x)**2 + (df['y'] - goal_y)**2)
+        df['angle'] = np.degrees(np.arctan2(np.abs(df['y'] - goal_y), goal_x - df['x']))
+        
+        # Additional features for better accuracy
+        df['distance_squared'] = df['distance'] ** 2
+        df['log_distance'] = np.log1p(df['distance'])
+        df['angle_rad'] = np.radians(df['angle'])
+        df['sin_angle'] = np.sin(df['angle_rad'])
+        df['cos_angle'] = np.cos(df['angle_rad'])
+        
+        # Zone-based features
+        df['central_zone'] = ((df['y'] > 30) & (df['y'] < 58)).astype(int)
+        df['penalty_area'] = (df['x'] > 125).astype(int)
+        
+        # Position and pressure mappings
+        position_map = {'forward': 3, 'midfielder': 2, 'back': 1, 'goalkeeper': 0}
+        df['position_value'] = df.get('position', 'midfielder').astype(str).str.lower().map(position_map).fillna(2)
+        
+        pressure_map = {'high': 3, 'medium': 2, 'low': 1, 'none': 0}
+        df['pressure_value'] = df.get('pressure', 'none').astype(str).str.lower().map(pressure_map).fillna(0)
+        
+        # Outcome classification
+        positive_outcomes = {'point', 'goal', 'scores', 'over'}
+        df['success'] = df.get('action', '').astype(str).str.lower().apply(
+            lambda x: 1 if any(outcome in x for outcome in positive_outcomes) else 0
+        )
+        
+        # Enhanced player success rate with more sophisticated smoothing
+        player_stats = df.groupby('playerName').agg({
+            'success': ['mean', 'count', 'std']
+        }).fillna(0)
+        player_stats.columns = ['success_rate', 'shot_count', 'success_std']
+        
+        # Bayesian smoothing with dynamic prior
+        overall_success_rate = df['success'].mean()
+        prior_weight = 20  # Increased for more stable estimates
+        player_stats['smoothed_rate'] = (
+            (player_stats['success_rate'] * player_stats['shot_count'] + overall_success_rate * prior_weight) / 
+            (player_stats['shot_count'] + prior_weight)
+        )
+        player_stats['player_consistency'] = 1 / (1 + player_stats['success_std'])
+        
+        # Merge player stats
+        df = df.merge(
+            player_stats[['smoothed_rate', 'player_consistency']], 
+            left_on='playerName', 
+            right_index=True, 
+            how='left'
+        )
+        df['smoothed_rate'] = df['smoothed_rate'].fillna(overall_success_rate)
+        df['player_consistency'] = df['player_consistency'].fillna(1.0)
+        
+        # Feature list
+        features = [
+            'distance', 'angle', 'distance_squared', 'log_distance',
+            'sin_angle', 'cos_angle', 'central_zone', 'penalty_area',
+            'position_value', 'pressure_value', 'smoothed_rate', 'player_consistency'
+        ]
+        
+        # Add interaction features if requested
+        if add_interaction_features:
+            df['distance_x_angle'] = df['distance'] * df['angle']
+            df['distance_x_pressure'] = df['distance'] * df['pressure_value']
+            df['position_x_zone'] = df['position_value'] * df['central_zone']
+            features.extend(['distance_x_angle', 'distance_x_pressure', 'position_x_zone'])
+        
+        X = df[features].copy()
+        X = X.replace([np.inf, -np.inf], np.nan).fillna(0)
+        y = df['success'].values
+        
+        # Check target variation
+        if len(np.unique(y)) < 2:
+            return jsonify({'error': 'Not enough variation in outcomes'}), 400
+        
+        # Split data with configurable train size
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=(1 - train_size), random_state=42, stratify=y
+        )
+        
+        # Feature selection if requested
+        if use_feature_selection:
+            selector = SelectKBest(f_classif, k=min(10, len(features)))
+            X_train = selector.fit_transform(X_train, y_train)
+            X_test = selector.transform(X_test)
+            selected_features = [features[i] for i in selector.get_support(indices=True)]
+            logging.info(f"Selected features: {selected_features}")
+        
+        # Scale features
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        
+        # Model configurations with class balancing
+        class_weight = 'balanced' if balance_classes else None
+        
+        models = {
+            'random_forest': RandomForestClassifier(
+                n_estimators=100 if not use_grid_search else 50,
+                max_depth=5,
+                min_samples_split=5,
+                min_samples_leaf=2,
+                class_weight=class_weight,
+                random_state=42,
+                n_jobs=-1
+            ),
+            'logistic': LogisticRegression(
+                C=1.0,
+                class_weight=class_weight,
+                random_state=42,
+                max_iter=1000
+            ),
+            'gradient_boost': GradientBoostingClassifier(
+                n_estimators=100 if not use_grid_search else 50,
+                learning_rate=0.1,
+                max_depth=4,
+                min_samples_split=5,
+                subsample=0.8,
+                random_state=42
+            ),
+            'knn': KNeighborsClassifier(
+                n_neighbors=min(30, len(X_train) // 10),
+                weights='distance',
+                metric='minkowski',
+                p=2,
+                n_jobs=-1
+            )
+        }
+        
+        model = models.get(model_type, models['random_forest'])
+        
+        # Grid search for hyperparameter tuning if requested
+        if use_grid_search and model_type in ['random_forest', 'gradient_boost']:
+            logging.info("Performing grid search for hyperparameters...")
+            
+            param_grids = {
+                'random_forest': {
+                    'n_estimators': [50, 100],
+                    'max_depth': [3, 5, 7],
+                    'min_samples_split': [2, 5, 10]
+                },
+                'gradient_boost': {
+                    'n_estimators': [50, 100],
+                    'learning_rate': [0.05, 0.1, 0.15],
+                    'max_depth': [3, 4, 5]
+                }
+            }
+            
+            grid_search = GridSearchCV(
+                model,
+                param_grids.get(model_type, {}),
+                cv=3,
+                scoring='f1',
+                n_jobs=-1
+            )
+            grid_search.fit(X_train_scaled, y_train)
+            model = grid_search.best_estimator_
+            logging.info(f"Best parameters: {grid_search.best_params_}")
+        else:
+            model.fit(X_train_scaled, y_train)
+        
+        # Evaluate model
+        y_pred = model.predict(X_test_scaled)
+        y_pred_proba = model.predict_proba(X_test_scaled)[:, 1]
+        
+        metrics = {
+            'accuracy': float(accuracy_score(y_test, y_pred)),
+            'precision': float(precision_score(y_test, y_pred, zero_division=0)),
+            'recall': float(recall_score(y_test, y_pred, zero_division=0)),
+            'f1_score': float(f1_score(y_test, y_pred, zero_division=0)),
+            'auc_roc': float(roc_auc_score(y_test, y_pred_proba)) if len(np.unique(y_test)) > 1 else 0.5
+        }
+        
+        # Feature importance for tree-based models
+        if hasattr(model, 'feature_importances_'):
+            feature_importance = dict(zip(
+                features if not use_feature_selection else selected_features,
+                model.feature_importances_
+            ))
+            metrics['feature_importance'] = feature_importance
+        
+        # Apply to target dataset
+        target_games = db.collection('savedGames').document(uid)\
+            .collection('games').where('datasetName', '==', target_dataset).stream()
+        
+        updated_games = []
+        total_shots = 0
+        
+        for game in target_games:
+            game_data = game.to_dict()
+            shots = game_data.get('gameData', [])
+            
+            for shot in shots:
+                try:
+                    # Extract all features
+                    x = float(shot.get('x', 0))
+                    y = float(shot.get('y', 0))
+                    distance = np.sqrt((x - goal_x)**2 + (y - goal_y)**2)
+                    angle = np.degrees(np.arctan2(np.abs(y - goal_y), goal_x - x))
+                    
+                    # Calculate additional features
+                    shot_features = {
+                        'distance': distance,
+                        'angle': angle,
+                        'distance_squared': distance ** 2,
+                        'log_distance': np.log1p(distance),
+                        'sin_angle': np.sin(np.radians(angle)),
+                        'cos_angle': np.cos(np.radians(angle)),
+                        'central_zone': int((y > 30) and (y < 58)),
+                        'penalty_area': int(x > 125),
+                        'position_value': position_map.get(str(shot.get('position', 'midfielder')).lower(), 2),
+                        'pressure_value': pressure_map.get(str(shot.get('pressure', 'none')).lower(), 0),
+                        'smoothed_rate': player_stats.loc[shot.get('playerName', 'Unknown'), 'smoothed_rate'] if shot.get('playerName', 'Unknown') in player_stats.index else overall_success_rate,
+                        'player_consistency': player_stats.loc[shot.get('playerName', 'Unknown'), 'player_consistency'] if shot.get('playerName', 'Unknown') in player_stats.index else 1.0
+                    }
+                    
+                    if add_interaction_features:
+                        shot_features['distance_x_angle'] = distance * angle
+                        shot_features['distance_x_pressure'] = distance * shot_features['pressure_value']
+                        shot_features['position_x_zone'] = shot_features['position_value'] * shot_features['central_zone']
+                    
+                    # Create feature array
+                    feature_array = np.array([[shot_features[f] for f in features]])
+                    
+                    if use_feature_selection:
+                        feature_array = selector.transform(feature_array)
+                    
+                    feature_array = np.nan_to_num(feature_array, nan=0.0, posinf=0.0, neginf=0.0)
+                    feature_array_scaled = scaler.transform(feature_array)
+                    
+                    xP = float(model.predict_proba(feature_array_scaled)[0, 1])
+                    
+                    shot['xP'] = min(max(xP, 0.0), 1.0)
+                    shot['model_type'] = f"{model_type}_advanced"
+                    shot['model_params'] = {
+                        'train_size': train_size,
+                        'feature_selection': use_feature_selection,
+                        'grid_search': use_grid_search,
+                        'balance_classes': balance_classes
+                    }
+                    total_shots += 1
+                    
+                except Exception as e:
+                    logging.warning(f"Failed to process shot: {str(e)}")
+                    shot['xP'] = overall_success_rate
+                    shot['model_type'] = f"{model_type}_advanced"
+            
+            # Update game
+            try:
+                game.reference.update({'gameData': shots})
+                updated_games.append(game.id)
+            except Exception as e:
+                logging.error(f"Failed to update game {game.id}: {str(e)}")
+        
+        execution_time = time.time() - start_time
+        
+        # Enhanced model run record
+        model_run = {
+            'timestamp': firestore.SERVER_TIMESTAMP,
+            'model_type': model_type,
+            'is_advanced': True,
+            'source_dataset': source_dataset,
+            'target_dataset': target_dataset,
+            'metrics': metrics,
+            'total_shots_updated': total_shots,
+            'execution_time': execution_time,
+            'training_size': len(df),
+            'features_used': features if not use_feature_selection else selected_features,
+            'parameters': {
+                'train_size': train_size,
+                'use_feature_selection': use_feature_selection,
+                'use_grid_search': use_grid_search,
+                'balance_classes': balance_classes,
+                'add_interaction_features': add_interaction_features
+            }
+        }
+        
+        try:
+            db.collection('modelRuns').document(uid).collection('history').add(model_run)
+        except Exception as e:
+            logging.warning(f"Failed to save model run history: {str(e)}")
+        
+        # Cleanup
+        del df, X, y, X_train, X_test, model
+        gc.collect()
+        
+        return jsonify({
+            'success': True,
+            'model_type': f"{model_type}_advanced",
+            'metrics': metrics,
+            'shots_updated': total_shots,
+            'games_updated': len(updated_games),
+            'execution_time': round(execution_time, 2),
+            'parameters': model_run['parameters']
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error in run_advanced_xp_model: {str(e)}")
+        gc.collect()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/run-cmc-model', methods=['POST'])
+def run_cmc_model():
+    """
+    CMC (Championship Model Concept) - Based on the notebook approach with improvements
+    Features preferred side calculation and placed ball detection
+    """
+    import numpy as np
+    import pandas as pd
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+    from sklearn.preprocessing import StandardScaler
+    import time
+    import gc
+    
+    try:
+        data = request.get_json()
+        uid = data.get('uid')
+        source_dataset = data.get('source_dataset')
+        target_dataset = data.get('target_dataset')
+        
+        if not all([uid, source_dataset, target_dataset]):
+            return jsonify({'error': 'Missing required parameters'}), 400
+        
+        logging.info(f"Starting CMC model for user {uid}")
+        start_time = time.time()
+        
+        # Load source dataset for training
+        source_games = db.collection('savedGames').document(uid)\
+            .collection('games').where('datasetName', '==', source_dataset).stream()
+        
+        source_shots = []
+        for game in source_games:
+            game_data = game.to_dict().get('gameData', [])
+            source_shots.extend(game_data)
+        
+        logging.info(f"Loaded {len(source_shots)} shots for training")
+        
+        if len(source_shots) < 100:
+            return jsonify({'error': 'Not enough training data (minimum 100 shots)'}), 400
+        
+        # Create training dataframe
+        df = pd.DataFrame(source_shots)
+        
+        # Fix pandas warnings
+        df['x'] = pd.to_numeric(df.get('x', 0), errors='coerce').fillna(0)
+        df['y'] = pd.to_numeric(df.get('y', 0), errors='coerce').fillna(0)
+        
+        # Goal coordinates
+        goal_x, goal_y = 145, 44
+        
+        # Calculate distance and angle
+        df['distance'] = np.sqrt((df['x'] - goal_x)**2 + (df['y'] - goal_y)**2)
+        df['angle'] = np.degrees(np.arctan2(np.abs(df['y'] - goal_y), goal_x - df['x']))
+        
+        # CMC Special Feature 1: Preferred Side Calculation
+        def is_preferable_side(y, foot):
+            """Determines if shot is from player's preferred side"""
+            side = 'center'
+            if y < 44:
+                side = 'left'
+            elif y > 44:
+                side = 'right'
+            
+            # Right-footed players prefer shooting from left side and vice versa
+            # Hand passes are always considered preferred
+            if ((side == 'left' and foot == 'right') or 
+                (side == 'right' and foot == 'left') or 
+                (foot == 'hand')):
+                return 1
+            else:
+                return 0
+        
+        # Apply preferred side calculation
+        df['foot'] = df.get('foot', 'right').fillna('right').str.lower()
+        df['preferred_side'] = df.apply(
+            lambda row: is_preferable_side(row['y'], row['foot']), 
+            axis=1
+        )
+        
+        # CMC Special Feature 2: Placed Ball Detection
+        # Detect if it's a placed ball (free, penalty, 45, sideline)
+        placed_ball_indicators = ['free', 'penalty', '45', 'sideline', 'placed']
+        df['action_lower'] = df.get('action', '').astype(str).str.lower()
+        df['placed_ball'] = df['action_lower'].apply(
+            lambda x: 1 if any(indicator in x for indicator in placed_ball_indicators) else 0
+        )
+        
+        # Map categorical variables
+        position_map = {
+            'forward': 3, 'midfielder': 2, 'back': 1, 'goalkeeper': 0
+        }
+        df['position_value'] = df.get('position', 'midfielder').astype(str).str.lower().map(position_map).fillna(2)
+        
+        pressure_map = {
+            'high': 3, 'medium': 2, 'low': 1, 'none': 0, 'y': 2, 'n': 0
+        }
+        df['pressure_value'] = df.get('pressure', 'none').astype(str).str.lower().map(pressure_map).fillna(0)
+        
+        foot_map = {
+            'right': 0, 'left': 1, 'hand': 2
+        }
+        df['foot_value'] = df['foot'].map(foot_map).fillna(0)
+        
+        # CMC Feature 3: Shot Angle (using arctan2 like in notebook)
+        df['shot_angle_radians'] = np.arctan2(df['y'] - goal_y, goal_x - df['x'])
+        df['shot_angle_degrees'] = np.degrees(df['shot_angle_radians'])
+        
+        # Create outcome variable
+        positive_outcomes = {'point', 'goal', 'scores', 'over'}
+        df['success'] = df.get('action', '').astype(str).str.lower().apply(
+            lambda x: 1 if any(outcome in x for outcome in positive_outcomes) else 0
+        )
+        
+        # Filter out goals if specified (like in the notebook)
+        # But we'll keep them for better training
+        
+        # Calculate player statistics (simplified version)
+        player_stats = df.groupby('playerName').agg({
+            'success': ['mean', 'count']
+        })
+        player_stats.columns = ['success_rate', 'shot_count']
+        player_stats['player_quality'] = (
+            (player_stats['success_rate'] * player_stats['shot_count'] + 0.3 * 10) / 
+            (player_stats['shot_count'] + 10)
+        )
+        
+        # Merge player stats back
+        df = df.merge(
+            player_stats[['player_quality']], 
+            left_on='playerName', 
+            right_index=True, 
+            how='left'
+        )
+        df['player_quality'] = df['player_quality'].fillna(0.3)
+        
+        # CMC Model Features (based on notebook)
+        features = [
+            'preferred_side',      # CMC special feature
+            'pressure_value', 
+            'position_value', 
+            'foot_value', 
+            'shot_angle_degrees',  # Using angle like notebook
+            'distance',            # Shot distance
+            'placed_ball',         # CMC special feature
+            'player_quality'       # Added for better accuracy
+        ]
+        
+        X = df[features].copy()
+        X = X.replace([np.inf, -np.inf], np.nan).fillna(0)
+        y = df['success'].values
+        
+        logging.info(f"Training data shape: {X.shape}, Success rate: {y.mean():.3f}")
+        
+        # Check target variation
+        if len(np.unique(y)) < 2:
+            return jsonify({'error': 'Not enough variation in outcomes'}), 400
+        
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42, stratify=y
+        )
+        
+        # Scale features
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        
+        # Train CMC model (Logistic Regression as in notebook)
+        logging.info("Training CMC logistic regression model")
+        model = LogisticRegression(
+            max_iter=1000,
+            C=1.0,
+            random_state=42,
+            class_weight='balanced'  # Handle imbalanced classes
+        )
+        
+        model.fit(X_train_scaled, y_train)
+        
+        # Evaluate model
+        y_pred = model.predict(X_test_scaled)
+        y_pred_proba = model.predict_proba(X_test_scaled)[:, 1]
+        
+        metrics = {
+            'accuracy': float(accuracy_score(y_test, y_pred)),
+            'precision': float(precision_score(y_test, y_pred, zero_division=0)),
+            'recall': float(recall_score(y_test, y_pred, zero_division=0)),
+            'f1_score': float(f1_score(y_test, y_pred, zero_division=0)),
+            'auc_roc': float(roc_auc_score(y_test, y_pred_proba)) if len(np.unique(y_test)) > 1 else 0.5
+        }
+        
+        # Feature importance (coefficients for logistic regression)
+        feature_importance = dict(zip(features, model.coef_[0]))
+        metrics['feature_importance'] = feature_importance
+        
+        logging.info(f"CMC model metrics: {metrics}")
+        
+        # Apply to target dataset
+        target_games = db.collection('savedGames').document(uid)\
+            .collection('games').where('datasetName', '==', target_dataset).stream()
+        
+        updated_games = []
+        total_shots = 0
+        
+        for game in target_games:
+            game_data = game.to_dict()
+            shots = game_data.get('gameData', [])
+            
+            for shot in shots:
+                try:
+                    # Extract features for prediction
+                    x = float(shot.get('x', 0))
+                    y = float(shot.get('y', 0))
+                    
+                    # Calculate CMC features
+                    distance = np.sqrt((x - goal_x)**2 + (y - goal_y)**2)
+                    shot_angle_degrees = np.degrees(np.arctan2(y - goal_y, goal_x - x))
+                    
+                    # Preferred side
+                    foot = str(shot.get('foot', 'right')).lower()
+                    preferred_side = is_preferable_side(y, foot)
+                    
+                    # Placed ball detection
+                    action_text = str(shot.get('action', '')).lower()
+                    placed_ball = 1 if any(ind in action_text for ind in placed_ball_indicators) else 0
+                    
+                    # Map categorical values
+                    position_value = position_map.get(
+                        str(shot.get('position', 'midfielder')).lower(), 2
+                    )
+                    pressure_value = pressure_map.get(
+                        str(shot.get('pressure', 'none')).lower(), 0
+                    )
+                    foot_value = foot_map.get(foot, 0)
+                    
+                    # Get player quality
+                    player_name = shot.get('playerName', 'Unknown')
+                    player_quality = player_stats.loc[player_name, 'player_quality'] if player_name in player_stats.index else 0.3
+                    
+                    # Create feature array
+                    shot_features = np.array([[
+                        preferred_side,
+                        pressure_value,
+                        position_value,
+                        foot_value,
+                        shot_angle_degrees,
+                        distance,
+                        placed_ball,
+                        player_quality
+                    ]])
+                    
+                    shot_features = np.nan_to_num(shot_features, nan=0.0, posinf=0.0, neginf=0.0)
+                    shot_features_scaled = scaler.transform(shot_features)
+                    
+                    # Predict xP
+                    xP = float(model.predict_proba(shot_features_scaled)[0, 1])
+                    
+                    # Update shot data
+                    shot['xP'] = min(max(xP, 0.0), 1.0)
+                    shot['model_type'] = 'cmc'
+                    shot['cmc_features'] = {
+                        'preferred_side': preferred_side,
+                        'placed_ball': placed_ball,
+                        'shot_angle': round(shot_angle_degrees, 2)
+                    }
+                    total_shots += 1
+                    
+                except Exception as e:
+                    logging.warning(f"Failed to process shot: {str(e)}")
+                    shot['xP'] = 0.3
+                    shot['model_type'] = 'cmc'
+            
+            # Update game in Firestore
+            try:
+                game.reference.update({'gameData': shots})
+                updated_games.append(game.id)
+            except Exception as e:
+                logging.error(f"Failed to update game {game.id}: {str(e)}")
+        
+        execution_time = time.time() - start_time
+        
+        # Save model run to history
+        model_run = {
+            'timestamp': firestore.SERVER_TIMESTAMP,
+            'model_type': 'cmc',
+            'source_dataset': source_dataset,
+            'target_dataset': target_dataset,
+            'metrics': metrics,
+            'total_shots_updated': total_shots,
+            'execution_time': execution_time,
+            'training_size': len(df),
+            'features_used': features,
+            'cmc_specific': {
+                'uses_preferred_side': True,
+                'uses_placed_ball': True,
+                'uses_arctan2_angle': True
+            }
+        }
+        
+        try:
+            db.collection('modelRuns').document(uid).collection('history').add(model_run)
+        except Exception as e:
+            logging.warning(f"Failed to save model run history: {str(e)}")
+        
+        # Clean up memory
+        del df, X, y, X_train, X_test, model
+        gc.collect()
+        
+        logging.info(f"CMC model run completed successfully in {execution_time:.2f}s")
+        
+        return jsonify({
+            'success': True,
+            'model_type': 'cmc',
+            'metrics': metrics,
+            'shots_updated': total_shots,
+            'games_updated': len(updated_games),
+            'execution_time': round(execution_time, 2),
+            'cmc_features': {
+                'preferred_side': 'Considers if shot is from player\'s preferred side',
+                'placed_ball': 'Identifies placed balls (frees, penalties, etc.)',
+                'shot_angle': 'Uses arctan2 for precise angle calculation'
+            }
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error in run_cmc_model: {str(e)}")
+        gc.collect()
+        return jsonify({'error': str(e)}), 500

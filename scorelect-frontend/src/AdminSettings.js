@@ -29,9 +29,24 @@ import {
   TableRow,
   Paper,
   Chip,
+  Switch,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Alert,
+  Tooltip,
 } from '@mui/material';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { Brightness4, Brightness7, Refresh as RefreshIcon } from '@mui/icons-material';
+import { 
+  Brightness4, 
+  Brightness7, 
+  Refresh as RefreshIcon,
+  ExpandMore as ExpandMoreIcon,
+  RestartAlt as ResetIcon,
+  Science as ScienceIcon,
+  Tune as TuneIcon,
+  Info as InfoIcon,
+} from '@mui/icons-material';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { getAuth } from 'firebase/auth';
@@ -167,6 +182,14 @@ const AdminSettings = () => {
   const [isCalculating, setIsCalculating] = useState(false);
   const [modelResult, setModelResult] = useState(null);
   const [modelHistory, setModelHistory] = useState([]);
+
+  // Advanced model settings
+  const [trainSize, setTrainSize] = useState(80);
+  const [useFeatureSelection, setUseFeatureSelection] = useState(false);
+  const [useGridSearch, setUseGridSearch] = useState(false);
+  const [balanceClasses, setBalanceClasses] = useState(false);
+  const [addInteractionFeatures, setAddInteractionFeatures] = useState(false);
+  const [advancedMode, setAdvancedMode] = useState(false);
 
   const navigate = useNavigate();
   const auth = getAuth();
@@ -419,6 +442,72 @@ const AdminSettings = () => {
     }
   };
 
+  // Reset xP values function
+  const handleResetXP = async () => {
+    if (!targetDataset) {
+      Swal.fire({
+        title: 'Error',
+        text: 'Please select a target dataset to reset',
+        icon: 'error',
+        confirmButtonColor: '#7b1fa2',
+      });
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: 'Reset xP Values?',
+      text: `This will set all xP values to 0 in the "${targetDataset}" dataset. This action cannot be undone.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d32f2f',
+      cancelButtonColor: '#666',
+      confirmButtonText: 'Yes, reset all xP',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      setIsCalculating(true);
+      const user = auth.currentUser;
+      if (!user) throw new Error('User not authenticated');
+
+      const token = await user.getIdToken();
+      const response = await axios.post(
+        `${BASE_API_URL}/reset-xp-values`,
+        {
+          uid: user.uid,
+          dataset_name: targetDataset,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const data = response.data;
+      
+      if (!response.data.success) throw new Error(data.error || 'Failed to reset xP values');
+
+      Swal.fire({
+        title: 'Success',
+        text: `Reset xP values for ${data.shots_reset} shots in ${data.games_updated} games`,
+        icon: 'success',
+        confirmButtonColor: '#7b1fa2',
+      });
+
+      // Clear model result to reflect the reset
+      setModelResult(null);
+    } catch (error) {
+      console.error('Reset error:', error);
+      Swal.fire({
+        title: 'Error',
+        text: error.message || 'Failed to reset xP values',
+        icon: 'error',
+        confirmButtonColor: '#7b1fa2',
+      });
+    } finally {
+      setIsCalculating(false);
+    }
+  };
+
   // Run simple xP model
   const handleRunSimpleModel = async () => {
     if (!sourceDataset || !targetDataset) {
@@ -441,8 +530,12 @@ const AdminSettings = () => {
       }
 
       const token = await user.getIdToken();
+      
+      // Use CMC endpoint if CMC model is selected
+      const endpoint = selectedModel === 'cmc' ? '/run-cmc-model' : '/run-xp-model';
+      
       const response = await axios.post(
-        `${BASE_API_URL}/run-xp-model`,
+        `${BASE_API_URL}${endpoint}`,
         {
           uid: user.uid,
           source_dataset: sourceDataset,
@@ -455,12 +548,98 @@ const AdminSettings = () => {
       setModelResult(response.data);
       await fetchModelHistory();
       
+      const modelName = selectedModel === 'cmc' ? 'CMC Model' : 'Model';
       Swal.fire({
         title: 'Success',
-        text: `Model completed! Updated ${response.data.shots_updated} shots with ${(response.data.metrics.accuracy * 100).toFixed(1)}% accuracy`,
+        text: `${modelName} completed! Updated ${response.data.shots_updated} shots with ${(response.data.metrics.accuracy * 100).toFixed(1)}% accuracy`,
         icon: 'success',
         confirmButtonColor: '#7b1fa2',
       });
+    } catch (error) {
+      console.error('Model run error:', error);
+      Swal.fire({
+        title: 'Error',
+        text: error.response?.data?.error || 'Failed to run model',
+        icon: 'error',
+        confirmButtonColor: '#7b1fa2',
+      });
+    } finally {
+      setIsCalculating(false);
+    }
+  };
+
+  // Run advanced model
+  const handleRunAdvancedModel = async () => {
+    if (!sourceDataset || !targetDataset) {
+      Swal.fire({
+        title: 'Error',
+        text: 'Please select both source and target datasets',
+        icon: 'error',
+        confirmButtonColor: '#7b1fa2',
+      });
+      return;
+    }
+
+    try {
+      setIsCalculating(true);
+      setModelResult(null);
+
+      const user = auth.currentUser;
+      if (!user) throw new Error('User not authenticated');
+
+      const token = await user.getIdToken();
+      
+      // CMC model doesn't support advanced mode, run standard CMC instead
+      if (selectedModel === 'cmc') {
+        const response = await axios.post(
+          `${BASE_API_URL}/run-cmc-model`,
+          {
+            uid: user.uid,
+            source_dataset: sourceDataset,
+            target_dataset: targetDataset,
+            model_type: 'cmc',
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        setModelResult(response.data);
+        await fetchModelHistory();
+        
+        Swal.fire({
+          title: 'Success',
+          text: `CMC Model completed! Updated ${response.data.shots_updated} shots with ${(response.data.metrics.accuracy * 100).toFixed(1)}% accuracy`,
+          icon: 'success',
+          confirmButtonColor: '#7b1fa2',
+        });
+      } else {
+        const response = await axios.post(
+          `${BASE_API_URL}/run-advanced-xp-model`,
+          {
+            uid: user.uid,
+            source_dataset: sourceDataset,
+            target_dataset: targetDataset,
+            model_type: selectedModel,
+            train_size: trainSize / 100,
+            use_feature_selection: useFeatureSelection,
+            use_grid_search: useGridSearch,
+            balance_classes: balanceClasses,
+            add_interaction_features: addInteractionFeatures,
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        const data = response.data;
+        
+        setModelResult(data);
+        await fetchModelHistory();
+        
+        Swal.fire({
+          title: 'Success',
+          text: `Advanced model completed! Updated ${data.shots_updated} shots with ${(data.metrics.accuracy * 100).toFixed(1)}% accuracy`,
+          icon: 'success',
+          confirmButtonColor: '#7b1fa2',
+        });
+      }
     } catch (error) {
       console.error('Model run error:', error);
       Swal.fire({
@@ -717,7 +896,7 @@ const AdminSettings = () => {
               </>
             )}
 
-            {/* Model Tab */}
+            {/* Model Tab - Enhanced Version */}
             {activeTab === 3 && (
               <>
                 <Typography
@@ -727,7 +906,7 @@ const AdminSettings = () => {
                   gutterBottom
                   sx={{ mb: 3 }}
                 >
-                  Run simplified xP models on your datasets and compare performance
+                  Run xP models on your datasets with simple or advanced configurations
                 </Typography>
 
                 {/* Dataset Selection */}
@@ -740,7 +919,7 @@ const AdminSettings = () => {
                           value={sourceDataset}
                           onChange={(e) => setSourceDataset(e.target.value)}
                           label="Training Dataset"
-                          disabled={userDatasets.length === 0}
+                          disabled={userDatasets.length === 0 || isCalculating}
                         >
                           {userDatasets.map((dataset) => (
                             <MenuItem key={dataset} value={dataset}>
@@ -757,7 +936,7 @@ const AdminSettings = () => {
                           value={targetDataset}
                           onChange={(e) => setTargetDataset(e.target.value)}
                           label="Target Dataset"
-                          disabled={userDatasets.length === 0}
+                          disabled={userDatasets.length === 0 || isCalculating}
                         >
                           {userDatasets.map((dataset) => (
                             <MenuItem key={dataset} value={dataset}>
@@ -780,6 +959,22 @@ const AdminSettings = () => {
                     </Typography>
                   )}
                 </Box>
+
+                {/* Reset xP Button */}
+                {targetDataset && (
+                  <Box sx={{ mb: 3, textAlign: 'center' }}>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      startIcon={<ResetIcon />}
+                      onClick={handleResetXP}
+                      disabled={isCalculating}
+                      sx={{ borderRadius: '8px' }}
+                    >
+                      Reset All xP Values to 0 in Target Dataset
+                    </Button>
+                  </Box>
+                )}
 
                 {/* Model Type Selection */}
                 <Box sx={{ mb: 3 }}>
@@ -839,33 +1034,207 @@ const AdminSettings = () => {
                         </Box>
                       } 
                     />
+                    <FormControlLabel 
+                      value="cmc" 
+                      control={<Radio />} 
+                      label={
+                        <Box>
+                          <Typography variant="body2">CMC Model</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Preferred side & placed balls
+                          </Typography>
+                        </Box>
+                      } 
+                    />
                   </RadioGroup>
                 </Box>
 
-                {/* Run Button */}
-                <Button
-                  onClick={handleRunSimpleModel}
-                  variant="contained"
-                  fullWidth
-                  size="large"
-                  disabled={isCalculating || userDatasets.length === 0}
-                  sx={{ mb: 3 }}
-                >
-                  {isCalculating ? (
-                    <>
-                      <CircularProgress size={20} sx={{ mr: 1 }} />
-                      Running Model...
-                    </>
-                  ) : (
-                    'Run Simple Model'
+                {/* Mode Toggle */}
+                <Box sx={{ mb: 3, textAlign: 'center' }}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={advancedMode}
+                        onChange={(e) => setAdvancedMode(e.target.checked)}
+                        color="primary"
+                      />
+                    }
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <ScienceIcon sx={{ mr: 1 }} />
+                        Advanced Mode
+                      </Box>
+                    }
+                  />
+                </Box>
+
+                {/* Advanced Settings */}
+                {advancedMode && (
+                  <Accordion sx={{ mb: 3 }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography sx={{ display: 'flex', alignItems: 'center' }}>
+                        <TuneIcon sx={{ mr: 1 }} />
+                        Advanced Model Settings
+                      </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Grid container spacing={3}>
+                        {/* Training Size Slider */}
+                        <Grid item xs={12}>
+                          <Typography gutterBottom>
+                            Training Data Size: {trainSize}%
+                            <Tooltip title="Percentage of data used for training vs testing">
+                              <IconButton size="small">
+                                <InfoIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Typography>
+                          <Slider
+                            value={trainSize}
+                            onChange={(e, value) => setTrainSize(value)}
+                            min={50}
+                            max={90}
+                            step={5}
+                            marks={[
+                              { value: 50, label: '50%' },
+                              { value: 70, label: '70%' },
+                              { value: 80, label: '80%' },
+                              { value: 90, label: '90%' },
+                            ]}
+                            valueLabelDisplay="auto"
+                            disabled={isCalculating}
+                          />
+                        </Grid>
+
+                        {/* Feature Toggles */}
+                        <Grid item xs={12} sm={6}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={useFeatureSelection}
+                                onChange={(e) => setUseFeatureSelection(e.target.checked)}
+                                disabled={isCalculating}
+                              />
+                            }
+                            label="Automatic Feature Selection"
+                          />
+                        </Grid>
+
+                        <Grid item xs={12} sm={6}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={useGridSearch}
+                                onChange={(e) => setUseGridSearch(e.target.checked)}
+                                disabled={isCalculating || !['random_forest', 'gradient_boost'].includes(selectedModel)}
+                              />
+                            }
+                            label="Grid Search Optimization"
+                          />
+                        </Grid>
+
+                        <Grid item xs={12} sm={6}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={balanceClasses}
+                                onChange={(e) => setBalanceClasses(e.target.checked)}
+                                disabled={isCalculating || selectedModel === 'knn'}
+                              />
+                            }
+                            label="Balance Classes"
+                          />
+                        </Grid>
+
+                        <Grid item xs={12} sm={6}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={addInteractionFeatures}
+                                onChange={(e) => setAddInteractionFeatures(e.target.checked)}
+                                disabled={isCalculating}
+                              />
+                            }
+                            label="Add Interaction Features"
+                          />
+                        </Grid>
+                      </Grid>
+
+                      <Alert severity="info" sx={{ mt: 2 }}>
+                        <Typography variant="caption">
+                          <strong>Tips for better accuracy:</strong>
+                          <br />• Use 70-80% training data for optimal balance
+                          <br />• Enable Grid Search for automatic hyperparameter tuning (slower but more accurate)
+                          <br />• Balance Classes helps when you have uneven success/fail ratios
+                          <br />• Interaction Features capture relationships between variables
+                        </Typography>
+                      </Alert>
+                    </AccordionDetails>
+                  </Accordion>
+                )}
+
+                {/* Run Buttons */}
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                  <Grid item xs={12} md={advancedMode ? 6 : 12}>
+                    <Button
+                      onClick={handleRunSimpleModel}
+                      variant={advancedMode ? "outlined" : "contained"}
+                      fullWidth
+                      size="large"
+                      disabled={isCalculating || userDatasets.length === 0}
+                    >
+                      {isCalculating && !advancedMode ? (
+                        <>
+                          <CircularProgress size={20} sx={{ mr: 1 }} />
+                          Running Simple Model...
+                        </>
+                      ) : (
+                        'Run Simple Model'
+                      )}
+                    </Button>
+                  </Grid>
+                  
+                  {advancedMode && (
+                    <Grid item xs={12} md={6}>
+                      <Button
+                        onClick={handleRunAdvancedModel}
+                        variant="contained"
+                        fullWidth
+                        size="large"
+                        disabled={isCalculating || userDatasets.length === 0}
+                        sx={{
+                          background: 'linear-gradient(45deg, #7b1fa2 30%, #9c27b0 90%)',
+                        }}
+                      >
+                        {isCalculating ? (
+                          <>
+                            <CircularProgress size={20} sx={{ mr: 1, color: 'white' }} />
+                            Running Advanced Model...
+                          </>
+                        ) : (
+                          <>
+                            <ScienceIcon sx={{ mr: 1 }} />
+                            Run Advanced Model
+                          </>
+                        )}
+                      </Button>
+                    </Grid>
                   )}
-                </Button>
+                </Grid>
 
                 {/* Current Results */}
                 {modelResult && (
                   <Box sx={{ mb: 3 }}>
                     <Typography variant="h6" gutterBottom>
                       Results: {modelResult.model_type.replace('_', ' ')}
+                      {modelResult.parameters && (
+                        <Chip 
+                          label="Advanced" 
+                          size="small" 
+                          color="primary" 
+                          sx={{ ml: 1 }}
+                        />
+                      )}
                     </Typography>
                     <Grid container spacing={2}>
                       {['accuracy', 'precision', 'recall', 'f1_score', 'auc_roc'].map((metric) => (
@@ -897,9 +1266,23 @@ const AdminSettings = () => {
                         </Grid>
                       ))}
                     </Grid>
+                    
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
                       Updated {modelResult.shots_updated} shots in {modelResult.execution_time}s
                     </Typography>
+                    
+                    {/* Show advanced parameters if used */}
+                    {modelResult.parameters && (
+                      <Box sx={{ mt: 2, p: 1, bgcolor: mode === 'dark' ? '#424242' : '#f5f5f5', borderRadius: 1 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Advanced settings used: Train size {(modelResult.parameters.train_size * 100).toFixed(0)}%
+                          {modelResult.parameters.use_feature_selection && ', Feature selection'}
+                          {modelResult.parameters.use_grid_search && ', Grid search'}
+                          {modelResult.parameters.balance_classes && ', Balanced classes'}
+                          {modelResult.parameters.add_interaction_features && ', Interaction features'}
+                        </Typography>
+                      </Box>
+                    )}
                   </Box>
                 )}
 
@@ -941,6 +1324,14 @@ const AdminSettings = () => {
                                   size="small"
                                   color={run.model_type === selectedModel ? 'primary' : 'default'}
                                 />
+                                {run.is_advanced && (
+                                  <Chip
+                                    label="ADV"
+                                    size="small"
+                                    color="secondary"
+                                    sx={{ ml: 0.5 }}
+                                  />
+                                )}
                               </TableCell>
                               <TableCell>{run.target_dataset}</TableCell>
                               <TableCell align="right">
@@ -975,8 +1366,11 @@ const AdminSettings = () => {
                   }}
                 >
                   <Typography variant="body2" color="text.secondary">
-                    ℹ️ Simple xP model predicts shot success using distance, angle, player position, 
-                    pressure, and historical player performance. No complex calibrations applied.
+                    ℹ️ {advancedMode ? 
+                      'Advanced xP model uses additional features, parameter tuning, and sophisticated techniques for improved accuracy.' :
+                      selectedModel === 'cmc' ?
+                      'CMC model specializes in analyzing preferred shooting sides and placed ball situations for unique insights.' :
+                      'Simple xP model predicts shot success using distance, angle, player position, pressure, and historical player performance.'}
                   </Typography>
                 </Box>
               </>

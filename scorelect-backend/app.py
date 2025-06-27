@@ -353,6 +353,14 @@ def save_game():
         logging.error(f"Error saving game: {str(e)}")
         return jsonify(error=str(e)), 400
 
+import json
+import time
+from functools import lru_cache
+
+# Simple in-memory cache
+games_cache = {}
+CACHE_TTL = 300  # 5 minutes
+
 @app.route('/load-games', methods=['POST'])
 def load_games():
     try:
@@ -363,114 +371,85 @@ def load_games():
         if not user_id:
             return jsonify({'error': 'User ID is required'}), 400
         
+        # Check cache first
+        cache_key = f"{user_id}:{include_game_data}"
+        if cache_key in games_cache:
+            cached_data, timestamp = games_cache[cache_key]
+            if time.time() - timestamp < CACHE_TTL:
+                logging.info(f"Returning cached games for user {user_id}")
+                return jsonify(cached_data), 200
+        
         logging.info(f"Loading games for user {user_id}, includeGameData: {include_game_data}")
         
-        # OPTIMIZATION 1: Use select() to only fetch specific fields
-        # This reduces the data transferred from Firestore
         saved_games_ref = db.collection('savedGames').document(user_id).collection('games')
         
         saved_games = []
-        game_count = 0
         
-        # OPTIMIZATION 2: Use batch operations with select() for lightweight loading
-        if not include_game_data:
-            # Only fetch the fields we need for the listing
-            fields_to_fetch = [
-                'gameName', 'sport', 'matchDate', 'date', 'datasetName', 
-                'analysisType', 'createdAt', 'updatedAt', 'youtubeUrl', 'teamsData'
-            ]
-            
-            # Note: Firestore doesn't support select() in Python SDK directly,
-            # so we'll optimize differently
-            saved_games_docs = saved_games_ref.limit(100).stream()
-        else:
-            saved_games_docs = saved_games_ref.limit(100).stream()
-        
-        # OPTIMIZATION 3: Process in parallel using threading for large datasets
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        import threading
-        
-        def process_game_doc(doc):
+        # OPTIMIZATION: Stream documents one by one instead of loading all into memory
+        for doc in saved_games_ref.limit(100).stream():
             try:
+                # Only convert to dict once
                 game_data = doc.to_dict()
                 if not game_data:
-                    return None
+                    continue
                 
-                # For old structure, doc.id is the game name
-                game_data['gameName'] = doc.id
-                
-                # OPTIMIZATION 4: Minimal processing - avoid unnecessary operations
+                # Build lightweight game object efficiently
                 lightweight_game = {
                     'gameId': doc.id,
                     'gameName': doc.id,
                     'sport': game_data.get('sport', 'Unknown'),
-                    'matchDate': game_data.get('matchDate', game_data.get('date')),
+                    'matchDate': game_data.get('matchDate') or game_data.get('date'),
                     'datasetName': game_data.get('datasetName', 'Uncategorized'),
                     'analysisType': game_data.get('analysisType', 'pitch'),
                 }
                 
-                # Only add fields if they exist (avoid unnecessary checks)
-                for field in ['createdAt', 'updatedAt', 'youtubeUrl', 'teamsData']:
-                    if field in game_data:
-                        lightweight_game[field] = game_data[field]
+                # Only check fields that are likely to exist
+                if 'createdAt' in game_data:
+                    lightweight_game['createdAt'] = game_data['createdAt']
+                if 'updatedAt' in game_data:
+                    lightweight_game['updatedAt'] = game_data['updatedAt']
+                if 'youtubeUrl' in game_data:
+                    lightweight_game['youtubeUrl'] = game_data['youtubeUrl']
+                if 'teamsData' in game_data:
+                    lightweight_game['teamsData'] = game_data['teamsData']
                 
-                # OPTIMIZATION 5: Efficient counting without full data processing
+                # Fast counting without processing the data
                 if 'gameData' in game_data:
                     game_data_field = game_data['gameData']
-                    if isinstance(game_data_field, (list, dict)):
-                        lightweight_game['gameDataCount'] = len(game_data_field)
-                    else:
-                        lightweight_game['gameDataCount'] = 0
+                    lightweight_game['gameDataCount'] = len(game_data_field) if isinstance(game_data_field, (list, dict)) else 0
                 elif 'coordinates' in game_data:
                     coords_field = game_data['coordinates']
-                    if isinstance(coords_field, list):
-                        lightweight_game['gameDataCount'] = len(coords_field)
-                    else:
-                        lightweight_game['gameDataCount'] = 0
+                    lightweight_game['gameDataCount'] = len(coords_field) if isinstance(coords_field, list) else 0
                 else:
                     lightweight_game['gameDataCount'] = 0
                 
                 # Only include full data if specifically requested
-                if include_game_data and 'gameData' in game_data:
-                    lightweight_game['gameData'] = game_data['gameData']
-                elif include_game_data and 'coordinates' in game_data:
-                    lightweight_game['gameData'] = game_data['coordinates']
+                if include_game_data:
+                    if 'gameData' in game_data:
+                        lightweight_game['gameData'] = game_data['gameData']
+                    elif 'coordinates' in game_data:
+                        lightweight_game['gameData'] = game_data['coordinates']
                 
-                return lightweight_game
+                saved_games.append(lightweight_game)
                 
             except Exception as e:
                 logging.error(f"Error processing game document {doc.id}: {str(e)}")
-                return None
+                continue
         
-        # Process documents
-        doc_list = list(saved_games_docs)
-        
-        # For small datasets, process sequentially (faster for < 20 games)
-        if len(doc_list) < 20:
-            for doc in doc_list:
-                game = process_game_doc(doc)
-                if game:
-                    saved_games.append(game)
-        else:
-            # For larger datasets, use parallel processing
-            with ThreadPoolExecutor(max_workers=5) as executor:
-                future_to_game = {executor.submit(process_game_doc, doc): doc for doc in doc_list}
-                
-                for future in as_completed(future_to_game):
-                    game = future.result()
-                    if game:
-                        saved_games.append(game)
-        
-        # OPTIMIZATION 6: Cache published datasets in memory or use Redis
+        # Empty published datasets for now
         published_datasets = []
         
-        # Sort games by date for consistent ordering
-        saved_games.sort(key=lambda x: x.get('createdAt', ''), reverse=True)
+        # Sort only if we have createdAt field
+        if saved_games and 'createdAt' in saved_games[0]:
+            saved_games.sort(key=lambda x: x.get('createdAt', ''), reverse=True)
         
         response_data = {
             'savedGames': saved_games,
             'publishedDatasets': published_datasets
         }
+        
+        # Cache the response
+        games_cache[cache_key] = (response_data, time.time())
         
         logging.info(f"Loaded {len(saved_games)} games for user {user_id}")
         
@@ -483,100 +462,54 @@ def load_games():
         return jsonify({'error': str(e)}), 500
 
 
-# OPTIMIZATION 7: Add a lightweight endpoint for just game counts
-@app.route('/get-game-stats', methods=['POST'])
-def get_game_stats():
-    """Ultra-fast endpoint to just get counts and basic stats"""
+@app.route('/load-game-by-id', methods=['POST'])
+def load_game_by_id():
     try:
         data = request.json
         user_id = data.get('uid')
+        game_id = data.get('gameId')
         
-        if not user_id:
-            return jsonify({'error': 'User ID is required'}), 400
+        if not user_id or not game_id:
+            return jsonify({'error': 'User ID and Game ID are required'}), 400
         
-        games_ref = db.collection('savedGames').document(user_id).collection('games')
+        # Check cache for individual game
+        cache_key = f"game:{user_id}:{game_id}"
+        if cache_key in games_cache:
+            cached_game, timestamp = games_cache[cache_key]
+            if time.time() - timestamp < CACHE_TTL:
+                logging.info(f"Returning cached game {game_id} for user {user_id}")
+                return jsonify({'game': cached_game}), 200
         
-        # Get all documents but only fetch minimal data
-        all_games = games_ref.stream()
+        logging.info(f"Loading full game data for user {user_id}, game {game_id}")
         
-        stats = {
-            'totalGames': 0,
-            'datasets': {},
-            'sports': {}
-        }
+        # Direct document access - fastest way
+        game_ref = db.collection('savedGames').document(user_id).collection('games').document(game_id)
+        game_doc = game_ref.get()
         
-        for doc in all_games:
-            stats['totalGames'] += 1
-            game_data = doc.to_dict()
-            
-            # Count by dataset
-            dataset = game_data.get('datasetName', 'Uncategorized')
-            stats['datasets'][dataset] = stats['datasets'].get(dataset, 0) + 1
-            
-            # Count by sport
-            sport = game_data.get('sport', 'Unknown')
-            stats['sports'][sport] = stats['sports'].get(sport, 0) + 1
+        if not game_doc.exists:
+            logging.error(f"Game not found: {game_id} for user {user_id}")
+            return jsonify({'error': 'Game not found'}), 404
         
-        return jsonify(stats), 200
+        game_data = game_doc.to_dict()
+        game_data['gameId'] = game_doc.id
+        game_data['gameName'] = game_doc.id  # For backward compatibility
         
-    except Exception as e:
-        logging.error(f"Error getting game stats: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-# OPTIMIZATION 8: Paginated loading for very large datasets
-@app.route('/load-games-paginated', methods=['POST'])
-def load_games_paginated():
-    """Load games with pagination support"""
-    try:
-        data = request.json
-        user_id = data.get('uid')
-        page_size = data.get('pageSize', 20)
-        last_game_id = data.get('lastGameId', None)
+        # Cache individual game
+        games_cache[cache_key] = (game_data, time.time())
         
-        if not user_id:
-            return jsonify({'error': 'User ID is required'}), 400
+        # Log size for monitoring
+        game_data_size = len(str(game_data))
+        logging.info(f"Loaded game {game_id} successfully, size: ~{game_data_size} bytes")
         
-        games_ref = db.collection('savedGames').document(user_id).collection('games')
+        if game_data_size > 5000000:  # 5MB warning
+            logging.warning(f"Game {game_id} is very large: {game_data_size} bytes")
         
-        # Start query
-        query = games_ref.order_by('__name__').limit(page_size)
-        
-        # If we have a last game ID, start after it
-        if last_game_id:
-            query = query.start_after({'__name__': last_game_id})
-        
-        saved_games_docs = query.stream()
-        saved_games = []
-        
-        for doc in saved_games_docs:
-            game_data = doc.to_dict()
-            if not game_data:
-                continue
-                
-            game_data['gameName'] = doc.id
-            
-            lightweight_game = {
-                'gameId': doc.id,
-                'gameName': doc.id,
-                'sport': game_data.get('sport', 'Unknown'),
-                'matchDate': game_data.get('matchDate', game_data.get('date')),
-                'datasetName': game_data.get('datasetName', 'Uncategorized'),
-                'analysisType': game_data.get('analysisType', 'pitch'),
-            }
-            
-            saved_games.append(lightweight_game)
-        
-        has_more = len(saved_games) == page_size
-        
-        return jsonify({
-            'savedGames': saved_games,
-            'hasMore': has_more,
-            'lastGameId': saved_games[-1]['gameId'] if saved_games else None
-        }), 200
+        return jsonify({'game': game_data}), 200
         
     except Exception as e:
-        logging.error(f"Error loading games paginated: {str(e)}")
+        logging.error(f"Error loading game by ID: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 # Endpoint to delete an entire dataset (all games within a dataset) for a user

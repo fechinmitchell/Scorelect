@@ -71,10 +71,16 @@ export const SavedGamesProvider = ({ children }) => {
       // Transform the data into the expected format
       const transformedDatasets = {};
       
-      if (result.savedGames && Array.isArray(result.savedGames)) {
-        console.log(`SavedGamesContext: Processing ${result.savedGames.length} games`);
-        
-        result.savedGames.forEach(game => {
+      // Make sure savedGames exists and is an array
+      const savedGames = result.savedGames || [];
+      const publishedDatasets = result.publishedDatasets || [];
+      
+      console.log(`SavedGamesContext: Processing ${savedGames.length} games`);
+      console.log('SavedGamesContext: savedGames type:', typeof savedGames, Array.isArray(savedGames));
+      
+      // Only process if savedGames is actually an array
+      if (Array.isArray(savedGames)) {
+        savedGames.forEach(game => {
           const datasetName = game.datasetName || 'Uncategorized';
           
           if (!transformedDatasets[datasetName]) {
@@ -88,11 +94,13 @@ export const SavedGamesProvider = ({ children }) => {
           const { gameData, ...lightweightGame } = game;
           transformedDatasets[datasetName].games.push(lightweightGame);
         });
+      } else {
+        console.error('SavedGamesContext: savedGames is not an array:', savedGames);
       }
 
       // Check which datasets are published
-      if (result.publishedDatasets && Array.isArray(result.publishedDatasets)) {
-        result.publishedDatasets.forEach(datasetName => {
+      if (Array.isArray(publishedDatasets)) {
+        publishedDatasets.forEach(datasetName => {
           if (transformedDatasets[datasetName]) {
             transformedDatasets[datasetName].isPublished = true;
           }

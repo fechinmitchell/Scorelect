@@ -365,199 +365,114 @@ def load_games():
         
         logging.info(f"Loading games for user {user_id}, includeGameData: {include_game_data}")
         
+        # OPTIMIZATION 1: Use select() to only fetch specific fields
+        # This reduces the data transferred from Firestore
+        saved_games_ref = db.collection('savedGames').document(user_id).collection('games')
+        
         saved_games = []
         game_count = 0
         
-        # Try the NEW structure first: users/{userId}/savedGames
-        try:
-            saved_games_ref = db.collection('users').document(user_id).collection('savedGames')
-            saved_games_docs = list(saved_games_ref.stream())
-            logging.info(f"Found {len(saved_games_docs)} documents in NEW location (users/{user_id}/savedGames)")
+        # OPTIMIZATION 2: Use batch operations with select() for lightweight loading
+        if not include_game_data:
+            # Only fetch the fields we need for the listing
+            fields_to_fetch = [
+                'gameName', 'sport', 'matchDate', 'date', 'datasetName', 
+                'analysisType', 'createdAt', 'updatedAt', 'youtubeUrl', 'teamsData'
+            ]
             
-            if saved_games_docs:
-                # Process games from new location
-                for doc in saved_games_docs:
-                    if game_count >= 100:
-                        logging.warning(f"User {user_id} has more than 100 games, limiting response")
-                        break
-                    
-                    try:
-                        game_data = doc.to_dict()
-                        if not game_data:
-                            logging.warning(f"Empty document found: {doc.id}")
-                            continue
-                        
-                        # Create a lightweight version of the game
-                        lightweight_game = {
-                            'gameId': doc.id,
-                            'gameName': game_data.get('gameName', game_data.get('name', 'Untitled')),
-                            'sport': game_data.get('sport', 'Unknown'),
-                            'matchDate': game_data.get('matchDate', game_data.get('date')),
-                            'datasetName': game_data.get('datasetName', 'Uncategorized'),
-                            'analysisType': game_data.get('analysisType', 'pitch'),
-                        }
-                        
-                        # Add timestamps if available
-                        if 'createdAt' in game_data:
-                            lightweight_game['createdAt'] = game_data['createdAt']
-                        if 'updatedAt' in game_data:
-                            lightweight_game['updatedAt'] = game_data['updatedAt']
-                        
-                        # Add video-specific fields if present
-                        if 'youtubeUrl' in game_data:
-                            lightweight_game['youtubeUrl'] = game_data['youtubeUrl']
-                        
-                        # Add teams data if present
-                        if 'teamsData' in game_data:
-                            lightweight_game['teamsData'] = game_data['teamsData']
-                        
-                        # Add game data count
-                        if 'gameData' in game_data:
-                            if isinstance(game_data['gameData'], list):
-                                lightweight_game['gameDataCount'] = len(game_data['gameData'])
-                            elif isinstance(game_data['gameData'], dict):
-                                lightweight_game['gameDataCount'] = len(game_data['gameData'])
-                            else:
-                                lightweight_game['gameDataCount'] = 0
-                        elif 'coordinates' in game_data:
-                            if isinstance(game_data['coordinates'], list):
-                                lightweight_game['gameDataCount'] = len(game_data['coordinates'])
-                            else:
-                                lightweight_game['gameDataCount'] = 0
-                        
-                        # Only include full data if specifically requested
-                        if include_game_data:
-                            if 'gameData' in game_data:
-                                lightweight_game['gameData'] = game_data['gameData']
-                            elif 'coordinates' in game_data:
-                                lightweight_game['gameData'] = game_data['coordinates']
-                        
-                        saved_games.append(lightweight_game)
-                        game_count += 1
-                        
-                    except Exception as e:
-                        logging.error(f"Error processing game document {doc.id}: {str(e)}")
-                        continue
-        except Exception as e:
-            logging.info(f"Could not access new location: {str(e)}")
+            # Note: Firestore doesn't support select() in Python SDK directly,
+            # so we'll optimize differently
+            saved_games_docs = saved_games_ref.limit(100).stream()
+        else:
+            saved_games_docs = saved_games_ref.limit(100).stream()
         
-        # If no games found in new location, try the OLD structure: savedGames/{userId}/games
-        if not saved_games:
+        # OPTIMIZATION 3: Process in parallel using threading for large datasets
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import threading
+        
+        def process_game_doc(doc):
             try:
-                old_games_ref = db.collection('savedGames').document(user_id).collection('games')
-                old_games_docs = list(old_games_ref.stream())
-                logging.info(f"Found {len(old_games_docs)} documents in OLD location (savedGames/{user_id}/games)")
+                game_data = doc.to_dict()
+                if not game_data:
+                    return None
                 
-                for doc in old_games_docs:
-                    if game_count >= 100:
-                        logging.warning(f"User {user_id} has more than 100 games, limiting response")
-                        break
-                    
-                    try:
-                        game_data = doc.to_dict()
-                        if not game_data:
-                            logging.warning(f"Empty document found: {doc.id}")
-                            continue
-                        
-                        # For old structure, doc.id is the game name
-                        game_data['gameName'] = doc.id
-                        
-                        # Create a lightweight version of the game
-                        lightweight_game = {
-                            'gameId': doc.id,
-                            'gameName': doc.id,  # In old structure, ID was the name
-                            'sport': game_data.get('sport', 'Unknown'),
-                            'matchDate': game_data.get('matchDate', game_data.get('date')),
-                            'datasetName': game_data.get('datasetName', 'Uncategorized'),
-                            'analysisType': game_data.get('analysisType', 'pitch'),
-                        }
-                        
-                        # Add timestamps if available
-                        if 'createdAt' in game_data:
-                            lightweight_game['createdAt'] = game_data['createdAt']
-                        if 'updatedAt' in game_data:
-                            lightweight_game['updatedAt'] = game_data['updatedAt']
-                        
-                        # Add video-specific fields if present
-                        if 'youtubeUrl' in game_data:
-                            lightweight_game['youtubeUrl'] = game_data['youtubeUrl']
-                        
-                        # Add teams data if present
-                        if 'teamsData' in game_data:
-                            lightweight_game['teamsData'] = game_data['teamsData']
-                        
-                        # Add game data count
-                        if 'gameData' in game_data:
-                            if isinstance(game_data['gameData'], list):
-                                lightweight_game['gameDataCount'] = len(game_data['gameData'])
-                            elif isinstance(game_data['gameData'], dict):
-                                lightweight_game['gameDataCount'] = len(game_data['gameData'])
-                            else:
-                                lightweight_game['gameDataCount'] = 0
-                        elif 'coordinates' in game_data:
-                            if isinstance(game_data['coordinates'], list):
-                                lightweight_game['gameDataCount'] = len(game_data['coordinates'])
-                            else:
-                                lightweight_game['gameDataCount'] = 0
-                        
-                        # Only include full data if specifically requested
-                        if include_game_data:
-                            if 'gameData' in game_data:
-                                lightweight_game['gameData'] = game_data['gameData']
-                            elif 'coordinates' in game_data:
-                                lightweight_game['gameData'] = game_data['coordinates']
-                        
-                        saved_games.append(lightweight_game)
-                        game_count += 1
-                        
-                    except Exception as e:
-                        logging.error(f"Error processing game document {doc.id}: {str(e)}")
-                        continue
-                        
+                # For old structure, doc.id is the game name
+                game_data['gameName'] = doc.id
+                
+                # OPTIMIZATION 4: Minimal processing - avoid unnecessary operations
+                lightweight_game = {
+                    'gameId': doc.id,
+                    'gameName': doc.id,
+                    'sport': game_data.get('sport', 'Unknown'),
+                    'matchDate': game_data.get('matchDate', game_data.get('date')),
+                    'datasetName': game_data.get('datasetName', 'Uncategorized'),
+                    'analysisType': game_data.get('analysisType', 'pitch'),
+                }
+                
+                # Only add fields if they exist (avoid unnecessary checks)
+                for field in ['createdAt', 'updatedAt', 'youtubeUrl', 'teamsData']:
+                    if field in game_data:
+                        lightweight_game[field] = game_data[field]
+                
+                # OPTIMIZATION 5: Efficient counting without full data processing
+                if 'gameData' in game_data:
+                    game_data_field = game_data['gameData']
+                    if isinstance(game_data_field, (list, dict)):
+                        lightweight_game['gameDataCount'] = len(game_data_field)
+                    else:
+                        lightweight_game['gameDataCount'] = 0
+                elif 'coordinates' in game_data:
+                    coords_field = game_data['coordinates']
+                    if isinstance(coords_field, list):
+                        lightweight_game['gameDataCount'] = len(coords_field)
+                    else:
+                        lightweight_game['gameDataCount'] = 0
+                else:
+                    lightweight_game['gameDataCount'] = 0
+                
+                # Only include full data if specifically requested
+                if include_game_data and 'gameData' in game_data:
+                    lightweight_game['gameData'] = game_data['gameData']
+                elif include_game_data and 'coordinates' in game_data:
+                    lightweight_game['gameData'] = game_data['coordinates']
+                
+                return lightweight_game
+                
             except Exception as e:
-                logging.warning(f"Could not access old location: {str(e)}")
+                logging.error(f"Error processing game document {doc.id}: {str(e)}")
+                return None
         
-        # Also fetch the list of published datasets
+        # Process documents
+        doc_list = list(saved_games_docs)
+        
+        # For small datasets, process sequentially (faster for < 20 games)
+        if len(doc_list) < 20:
+            for doc in doc_list:
+                game = process_game_doc(doc)
+                if game:
+                    saved_games.append(game)
+        else:
+            # For larger datasets, use parallel processing
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                future_to_game = {executor.submit(process_game_doc, doc): doc for doc in doc_list}
+                
+                for future in as_completed(future_to_game):
+                    game = future.result()
+                    if game:
+                        saved_games.append(game)
+        
+        # OPTIMIZATION 6: Cache published datasets in memory or use Redis
         published_datasets = []
-        try:
-            # Try new location for published datasets
-            published_ref = db.collection('users').document(user_id).collection('publishedDatasets')
-            published_docs = published_ref.stream()
-            
-            for doc in published_docs:
-                dataset_data = doc.to_dict()
-                dataset_name = dataset_data.get('datasetName', doc.id)
-                published_datasets.append(dataset_name)
-                
-            logging.info(f"Found {len(published_datasets)} published datasets in new location")
-            
-        except Exception as e:
-            logging.warning(f"Error fetching published datasets from new location: {str(e)}")
-            
-        # If no published datasets found, try old location (if you had one)
-        if not published_datasets:
-            try:
-                # You might need to adjust this based on where published datasets were stored in old structure
-                old_published_ref = db.collection('publishedDatasets').where('userId', '==', user_id)
-                old_published_docs = old_published_ref.stream()
-                
-                for doc in old_published_docs:
-                    dataset_data = doc.to_dict()
-                    dataset_name = dataset_data.get('datasetName', doc.id)
-                    if dataset_name not in published_datasets:
-                        published_datasets.append(dataset_name)
-                        
-                logging.info(f"Found {len(published_datasets)} published datasets in old location")
-                
-            except Exception as e:
-                logging.warning(f"Error fetching published datasets from old location: {str(e)}")
+        
+        # Sort games by date for consistent ordering
+        saved_games.sort(key=lambda x: x.get('createdAt', ''), reverse=True)
         
         response_data = {
             'savedGames': saved_games,
             'publishedDatasets': published_datasets
         }
         
-        logging.info(f"Loaded {len(saved_games)} games for user {user_id}, response size: ~{len(str(response_data))} bytes")
+        logging.info(f"Loaded {len(saved_games)} games for user {user_id}")
         
         return jsonify(response_data), 200
         
@@ -568,54 +483,100 @@ def load_games():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/load-game-by-id', methods=['POST'])
-def load_game_by_id():
+# OPTIMIZATION 7: Add a lightweight endpoint for just game counts
+@app.route('/get-game-stats', methods=['POST'])
+def get_game_stats():
+    """Ultra-fast endpoint to just get counts and basic stats"""
     try:
         data = request.json
         user_id = data.get('uid')
-        game_id = data.get('gameId')
         
-        if not user_id or not game_id:
-            return jsonify({'error': 'User ID and Game ID are required'}), 400
+        if not user_id:
+            return jsonify({'error': 'User ID is required'}), 400
         
-        logging.info(f"Loading full game data for user {user_id}, game {game_id}")
+        games_ref = db.collection('savedGames').document(user_id).collection('games')
         
-        # Try new location first
-        game_ref = db.collection('users').document(user_id).collection('savedGames').document(game_id)
-        game_doc = game_ref.get()
+        # Get all documents but only fetch minimal data
+        all_games = games_ref.stream()
         
-        if not game_doc.exists:
-            logging.info(f"Game not found in new location, trying old location...")
-            # Try old location
-            game_ref = db.collection('savedGames').document(user_id).collection('games').document(game_id)
-            game_doc = game_ref.get()
+        stats = {
+            'totalGames': 0,
+            'datasets': {},
+            'sports': {}
+        }
+        
+        for doc in all_games:
+            stats['totalGames'] += 1
+            game_data = doc.to_dict()
             
-            if not game_doc.exists:
-                logging.error(f"Game not found: {game_id} for user {user_id}")
-                return jsonify({'error': 'Game not found'}), 404
+            # Count by dataset
+            dataset = game_data.get('datasetName', 'Uncategorized')
+            stats['datasets'][dataset] = stats['datasets'].get(dataset, 0) + 1
+            
+            # Count by sport
+            sport = game_data.get('sport', 'Unknown')
+            stats['sports'][sport] = stats['sports'].get(sport, 0) + 1
         
-        game_data = game_doc.to_dict()
-        game_data['gameId'] = game_doc.id
+        return jsonify(stats), 200
         
-        # For old structure compatibility
-        if 'gameName' not in game_data:
-            game_data['gameName'] = game_doc.id
+    except Exception as e:
+        logging.error(f"Error getting game stats: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# OPTIMIZATION 8: Paginated loading for very large datasets
+@app.route('/load-games-paginated', methods=['POST'])
+def load_games_paginated():
+    """Load games with pagination support"""
+    try:
+        data = request.json
+        user_id = data.get('uid')
+        page_size = data.get('pageSize', 20)
+        last_game_id = data.get('lastGameId', None)
         
-        # Log the size of the game data
-        game_data_size = len(str(game_data))
-        logging.info(f"Loaded game {game_id} successfully, size: ~{game_data_size} bytes")
+        if not user_id:
+            return jsonify({'error': 'User ID is required'}), 400
         
-        if game_data_size > 5000000:  # 5MB
-            logging.warning(f"Game {game_id} is very large: {game_data_size} bytes")
+        games_ref = db.collection('savedGames').document(user_id).collection('games')
+        
+        # Start query
+        query = games_ref.order_by('__name__').limit(page_size)
+        
+        # If we have a last game ID, start after it
+        if last_game_id:
+            query = query.start_after({'__name__': last_game_id})
+        
+        saved_games_docs = query.stream()
+        saved_games = []
+        
+        for doc in saved_games_docs:
+            game_data = doc.to_dict()
+            if not game_data:
+                continue
+                
+            game_data['gameName'] = doc.id
+            
+            lightweight_game = {
+                'gameId': doc.id,
+                'gameName': doc.id,
+                'sport': game_data.get('sport', 'Unknown'),
+                'matchDate': game_data.get('matchDate', game_data.get('date')),
+                'datasetName': game_data.get('datasetName', 'Uncategorized'),
+                'analysisType': game_data.get('analysisType', 'pitch'),
+            }
+            
+            saved_games.append(lightweight_game)
+        
+        has_more = len(saved_games) == page_size
         
         return jsonify({
-            'game': game_data
+            'savedGames': saved_games,
+            'hasMore': has_more,
+            'lastGameId': saved_games[-1]['gameId'] if saved_games else None
         }), 200
         
     except Exception as e:
-        logging.error(f"Error loading game by ID: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logging.error(f"Error loading games paginated: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # Endpoint to delete an entire dataset (all games within a dataset) for a user

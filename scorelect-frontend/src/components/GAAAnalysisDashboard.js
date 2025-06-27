@@ -225,6 +225,24 @@ const calculateMissingMetrics = games =>
   games.map(g => ({
     ...g,
     gameData: (g.gameData||[]).map(s => {
+      // Check if this shot already has CMC v2 model values
+      if (s.model_type === 'cmc_v2' && typeof s.xPoints === 'number') {
+        // CMC v2 model already calculated xPoints correctly
+        // Just ensure we have the translated coordinates for display
+        const t = translateShotToOneSide(s, pitchWidth/2, pitchWidth, pitchHeight/2);
+        s.distMeters = t.distMeters;
+        // Keep the CMC model's xP and xPoints values
+        s.xP_adv = s.xP; // Use the model's xP directly
+        
+        // Calculate point value for display
+        if (typeof s.pointValue !== 'number') {
+          s.pointValue = calculateTwoPointerValue(s);
+        }
+        
+        return s;
+      }
+      
+      // Only calculate if not from CMC v2 model
       if (typeof s.xPoints !== 'number') {
         const t = translateShotToOneSide(s, pitchWidth/2, pitchWidth, pitchHeight/2);
         s.distMeters = t.distMeters;
@@ -681,7 +699,7 @@ export default function GAAAnalysisDashboard() {
     [games, actionMapping]
   );
 
-  // AGGREGATED TEAM DATA
+  // AGGREGATED TEAM DATA with proper xPoints handling
   const aggregatedData = useMemo(() => {
     const agg = {}, scorerMap = {}, distAcc = {};
     flattenShots(games).forEach(sh => {
@@ -703,10 +721,15 @@ export default function GAAAnalysisDashboard() {
       const tShot = translateShotToOneSide(sh, halfLineX, goalX, goalY);
       distAcc[team] += tShot.distMeters;
       
-      // Add xP and xG to team totals
+      // IMPORTANT: Use xPoints for expected points, not xP
       if (typeof sh.xPoints === 'number') {
-        agg[team].totalXP += sh.xPoints;
+        agg[team].totalXP += sh.xPoints; // This is the expected POINTS value
+      } else if (typeof sh.xP === 'number') {
+        // Fallback for older data - calculate expected points
+        const pointValue = sh.pointValue || calculateTwoPointerValue(sh);
+        agg[team].totalXP += sh.xP * pointValue;
       }
+      
       if (typeof sh.xGoals === 'number') {
         agg[team].totalXG += sh.xGoals;
       }
@@ -715,14 +738,22 @@ export default function GAAAnalysisDashboard() {
       const name = sh.playerName||'NoName';
       const pointValue = sh.pointValue || calculateTwoPointerValue(sh);
   
+      // Initialize scorer if not exists
+      if (name && !scorerMap[team][name]) {
+        scorerMap[team][name] = {goals:0, points:0, twoPointers:0, xP:0, xG:0};
+      }
+  
       if (act==='goal'||act==='penalty goal') {
         agg[team].goals++;
         agg[team].successfulShots++;
-        // Add successful goal to scorer (worth 3 points)
         if (name) {
-          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0, xP:0, xG:0};
           scorerMap[team][name].goals++;
-          scorerMap[team][name].xP += sh.xPoints || 0;
+          // For xP calculation on goals, use xPoints if available
+          if (typeof sh.xPoints === 'number') {
+            scorerMap[team][name].xP += sh.xPoints;
+          } else if (typeof sh.xP === 'number') {
+            scorerMap[team][name].xP += sh.xP * 3; // Goal worth 3 points
+          }
           scorerMap[team][name].xG += sh.xGoals || 0;
         }
       } else if (act==='point') {
@@ -735,18 +766,20 @@ export default function GAAAnalysisDashboard() {
           agg[team].totalOnePointers++;
         }
         
-        // Add successful point to scorer
         if (name) {
-          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0, xP:0, xG:0};
           scorerMap[team][name].points += pointValue;
-          scorerMap[team][name].xP += sh.xPoints || 0;
+          // Use xPoints for expected points
+          if (typeof sh.xPoints === 'number') {
+            scorerMap[team][name].xP += sh.xPoints;
+          } else if (typeof sh.xP === 'number') {
+            scorerMap[team][name].xP += sh.xP * pointValue;
+          }
           scorerMap[team][name].xG += sh.xGoals || 0;
           if (pointValue === 2) {
             scorerMap[team][name].twoPointers = (scorerMap[team][name].twoPointers || 0) + 1;
           }
         }
       } else if (act==='free') {
-        // Handle frees - they can be worth 1 or 2 points
         agg[team].freeAttempts++;
         agg[team].freeScored++;
         agg[team].successfulShots++;
@@ -758,11 +791,14 @@ export default function GAAAnalysisDashboard() {
           agg[team].totalOnePointers++;
         }
         
-        // Add successful free to scorer
         if (name) {
-          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0, xP:0, xG:0};
           scorerMap[team][name].points += pointValue;
-          scorerMap[team][name].xP += sh.xPoints || 0;
+          // Use xPoints for expected points
+          if (typeof sh.xPoints === 'number') {
+            scorerMap[team][name].xP += sh.xPoints;
+          } else if (typeof sh.xP === 'number') {
+            scorerMap[team][name].xP += sh.xP * pointValue;
+          }
           scorerMap[team][name].xG += sh.xGoals || 0;
           if (pointValue === 2) {
             scorerMap[team][name].twoPointers = (scorerMap[team][name].twoPointers || 0) + 1;
@@ -772,27 +808,40 @@ export default function GAAAnalysisDashboard() {
         agg[team].offensiveMarkAttempts++;
         agg[team].offensiveMarkScored++;
         agg[team].successfulShots++;
-        // Add successful offensive mark as a point for the scorer
+        agg[team].points++; // Offensive marks are always 1 point
+        agg[team].totalOnePointers++;
+        
         if (name) {
-          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0, xP:0, xG:0};
           scorerMap[team][name].points++;
-          scorerMap[team][name].xP += sh.xPoints || 0;
+          if (typeof sh.xPoints === 'number') {
+            scorerMap[team][name].xP += sh.xPoints;
+          } else if (typeof sh.xP === 'number') {
+            scorerMap[team][name].xP += sh.xP;
+          }
           scorerMap[team][name].xG += sh.xGoals || 0;
         }
       } else {
         // For all other shots (including misses), still track xP and xG
         if (name) {
-          scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0, xP:0, xG:0};
-          scorerMap[team][name].xP += sh.xPoints || 0;
+          if (typeof sh.xPoints === 'number') {
+            scorerMap[team][name].xP += sh.xPoints;
+          } else if (typeof sh.xP === 'number') {
+            // For misses, still add expected value
+            const expectedPointValue = sh.pointValue || calculateTwoPointerValue(sh);
+            scorerMap[team][name].xP += sh.xP * expectedPointValue;
+          }
           scorerMap[team][name].xG += sh.xGoals || 0;
+        }
+        
+        // Count misses
+        if (/miss|wide|short|blocked|post/.test(act)) {
+          agg[team].misses++;
         }
       }
       
-      if (act.startsWith('free')) {
-        // Only count non-successful frees here (misses)
-        if (act !== 'free') {
-          agg[team].freeAttempts++;
-        }
+      // Handle special cases
+      if (act.startsWith('free') && act !== 'free') {
+        agg[team].freeAttempts++;
       }
       
       if (act.startsWith('45')||act.startsWith('forty')) {
@@ -800,26 +849,26 @@ export default function GAAAnalysisDashboard() {
         if (act==='45'||act==='fortyfive') {
           agg[team].fortyFiveScored++;
           agg[team].successfulShots++;
-          // Add successful 45/fortyfive as a point for the scorer
+          agg[team].points++; // 45s are always 1 point
+          agg[team].totalOnePointers++;
           if (name) {
-            scorerMap[team][name] = scorerMap[team][name] || {goals:0, points:0, twoPointers:0, xP:0, xG:0};
             scorerMap[team][name].points++;
-            scorerMap[team][name].xP += sh.xPoints || 0;
+            if (typeof sh.xPoints === 'number') {
+              scorerMap[team][name].xP += sh.xPoints;
+            } else if (typeof sh.xP === 'number') {
+              scorerMap[team][name].xP += sh.xP;
+            }
             scorerMap[team][name].xG += sh.xGoals || 0;
           }
         }
       }
       
-      if (/miss|wide|short|blocked|post/.test(act)) {
-        agg[team].misses++;
-      }
-      
+      // Count 2-point attempts
       const eligible = ['point','free','offensive mark','45','fortyfive'];
       if (eligible.includes(act) && tShot.distMeters >= 40) {
         agg[team].twoPointerAttempts++;
         if (/point|free|offensive mark|45|fortyfive/.test(act)) {
           agg[team].twoPointerScored++;
-          // Two-pointers are already counted above, no need to double-count
         }
       }
     });
@@ -1018,12 +1067,18 @@ export default function GAAAnalysisDashboard() {
           </div>
           <div className="gaa-stat-row">
             <span className="gaa-stat-label">xP:</span>
-            <span className="gaa-stat-value">{typeof selectedShot.xPoints === 'number' ? selectedShot.xPoints.toFixed(2) : 'N/A'}</span>
+            <span className="gaa-stat-value">{typeof selectedShot.xP === 'number' ? selectedShot.xP.toFixed(2) : (typeof selectedShot.xPoints === 'number' ? selectedShot.xPoints.toFixed(2) : 'N/A')}</span>
           </div>
           <div className="gaa-stat-row">
-            <span className="gaa-stat-label">xP_ADV:</span>
-            <span className="gaa-stat-value">{typeof selectedShot.xP_adv === 'number' ? selectedShot.xP_adv.toFixed(2) : 'N/A'}</span>
+            <span className="gaa-stat-label">xPoints:</span>
+            <span className="gaa-stat-value">{typeof selectedShot.xPoints === 'number' ? selectedShot.xPoints.toFixed(2) : 'N/A'}</span>
           </div>
+          {selectedShot.model_type && (
+            <div className="gaa-stat-row">
+              <span className="gaa-stat-label">Model:</span>
+              <span className="gaa-stat-value">{selectedShot.model_type}</span>
+            </div>
+          )}
         </div>
         
         {isScoring && (

@@ -4451,6 +4451,7 @@ def run_xp_model():
     from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
     from sklearn.preprocessing import StandardScaler
     import time
+    import gc  # Add garbage collection
     
     try:
         data = request.get_json()
@@ -4462,6 +4463,7 @@ def run_xp_model():
         if not all([uid, source_dataset, target_dataset]):
             return jsonify({'error': 'Missing required parameters'}), 400
         
+        logging.info(f"Starting xP model: {model_type} for user {uid}")
         start_time = time.time()
         
         # Load source dataset for training
@@ -4473,15 +4475,21 @@ def run_xp_model():
             game_data = game.to_dict().get('gameData', [])
             source_shots.extend(game_data)
         
+        logging.info(f"Loaded {len(source_shots)} shots for training")
+        
         if len(source_shots) < 100:
             return jsonify({'error': 'Not enough training data (minimum 100 shots)'}), 400
         
         # Create training dataframe
         df = pd.DataFrame(source_shots)
         
-        # Simple feature engineering
-        df['x'] = pd.to_numeric(df.get('x', 0), errors='coerce').fillna(0)
-        df['y'] = pd.to_numeric(df.get('y', 0), errors='coerce').fillna(0)
+        # Fix the pandas warning with explicit conversion
+        df['x'] = pd.to_numeric(df.get('x', 0), errors='coerce')
+        df['y'] = pd.to_numeric(df.get('y', 0), errors='coerce')
+        
+        # Fill NaN values explicitly
+        df['x'] = df['x'].fillna(0)
+        df['y'] = df['y'].fillna(0)
         
         # Calculate basic features
         goal_x, goal_y = 145, 44
@@ -4492,22 +4500,20 @@ def run_xp_model():
         position_map = {
             'forward': 3, 'midfielder': 2, 'back': 1, 'goalkeeper': 0
         }
-        df['position_value'] = df.get('position', 'midfielder').apply(
-            lambda x: position_map.get(str(x).lower(), 2)
-        )
+        df['position_value'] = df.get('position', 'midfielder').astype(str).str.lower().map(position_map).fillna(2)
         
         pressure_map = {
             'high': 3, 'medium': 2, 'low': 1, 'none': 0
         }
-        df['pressure_value'] = df.get('pressure', 'none').apply(
-            lambda x: pressure_map.get(str(x).lower(), 0)
-        )
+        df['pressure_value'] = df.get('pressure', 'none').astype(str).str.lower().map(pressure_map).fillna(0)
         
         # Simple outcome classification
         positive_outcomes = {'point', 'goal', 'scores', 'over'}
-        df['success'] = df.get('action', '').apply(
-            lambda x: 1 if any(outcome in str(x).lower() for outcome in positive_outcomes) else 0
+        df['success'] = df.get('action', '').astype(str).str.lower().apply(
+            lambda x: 1 if any(outcome in x for outcome in positive_outcomes) else 0
         )
+        
+        logging.info(f"Success rate in training data: {df['success'].mean():.3f}")
         
         # Player historical success rate (simple)
         player_success = df.groupby('playerName')['success'].agg(['mean', 'count'])
@@ -4515,17 +4521,29 @@ def run_xp_model():
             (player_success['mean'] * player_success['count'] + 0.3 * 10) / 
             (player_success['count'] + 10)
         )
+        
+        # Merge player success rate
         df = df.merge(
-            player_success['smoothed_rate'], 
+            player_success[['smoothed_rate']], 
             left_on='playerName', 
             right_index=True, 
             how='left'
-        ).fillna(0.3)
+        )
+        df['smoothed_rate'] = df['smoothed_rate'].fillna(0.3)
         
-        # Select features
+        # Select features and remove any infinite/NaN values
         features = ['distance', 'angle', 'position_value', 'pressure_value', 'smoothed_rate']
-        X = df[features].values
+        X = df[features].copy()
+        
+        # Clean the data
+        X = X.replace([np.inf, -np.inf], np.nan).fillna(0)
         y = df['success'].values
+        
+        logging.info(f"Training data shape: {X.shape}, Features: {features}")
+        
+        # Check if we have enough variation in target
+        if len(np.unique(y)) < 2:
+            return jsonify({'error': 'Not enough variation in outcomes for training'}), 400
         
         # Split data
         X_train, X_test, y_train, y_test = train_test_split(
@@ -4537,51 +4555,77 @@ def run_xp_model():
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
         
-        # Train selected model
+        logging.info(f"Training model: {model_type}")
+        
+        # Train selected model with more conservative parameters for memory
         models = {
             'random_forest': RandomForestClassifier(
-                n_estimators=100, 
-                max_depth=5, 
-                random_state=42
+                n_estimators=50,  # Reduced from 100
+                max_depth=4,      # Reduced from 5
+                random_state=42,
+                n_jobs=1          # Single threaded to save memory
             ),
             'logistic': LogisticRegression(
                 C=1.0, 
-                random_state=42
+                random_state=42,
+                max_iter=500,     # Explicit max iterations
+                solver='lbfgs'    # Explicit solver
             ),
             'gradient_boost': GradientBoostingClassifier(
-                n_estimators=100,
+                n_estimators=50,  # Reduced from 100
                 learning_rate=0.1,
                 max_depth=3,
                 random_state=42
             ),
             'knn': KNeighborsClassifier(
-                n_neighbors=20,
-                weights='distance'
+                n_neighbors=min(20, len(X_train) // 5),  # Adaptive neighbors
+                weights='distance',
+                n_jobs=1          # Single threaded
             )
         }
         
         model = models.get(model_type, models['random_forest'])
-        model.fit(X_train_scaled, y_train)
+        
+        try:
+            model.fit(X_train_scaled, y_train)
+            logging.info(f"Model {model_type} trained successfully")
+        except Exception as e:
+            logging.error(f"Model training failed: {str(e)}")
+            return jsonify({'error': f'Model training failed: {str(e)}'}), 500
         
         # Evaluate model
-        y_pred = model.predict(X_test_scaled)
-        y_pred_proba = model.predict_proba(X_test_scaled)[:, 1]
+        try:
+            y_pred = model.predict(X_test_scaled)
+            y_pred_proba = model.predict_proba(X_test_scaled)[:, 1]
+            
+            # Calculate metrics
+            metrics = {
+                'accuracy': float(accuracy_score(y_test, y_pred)),
+                'precision': float(precision_score(y_test, y_pred, zero_division=0)),
+                'recall': float(recall_score(y_test, y_pred, zero_division=0)),
+                'f1_score': float(f1_score(y_test, y_pred, zero_division=0)),
+                'auc_roc': float(roc_auc_score(y_test, y_pred_proba)) if len(np.unique(y_test)) > 1 else 0.5
+            }
+            
+            logging.info(f"Model metrics: {metrics}")
+            
+        except Exception as e:
+            logging.error(f"Model evaluation failed: {str(e)}")
+            return jsonify({'error': f'Model evaluation failed: {str(e)}'}), 500
         
-        # Calculate metrics
-        metrics = {
-            'accuracy': float(accuracy_score(y_test, y_pred)),
-            'precision': float(precision_score(y_test, y_pred, zero_division=0)),
-            'recall': float(recall_score(y_test, y_pred, zero_division=0)),
-            'f1_score': float(f1_score(y_test, y_pred, zero_division=0)),
-            'auc_roc': float(roc_auc_score(y_test, y_pred_proba)) if len(np.unique(y_test)) > 1 else 0.5
-        }
-        
-        # Cross-validation score
-        cv_scores = cross_val_score(model, X_train_scaled, y_train, cv=5, scoring='f1')
-        metrics['cv_f1_mean'] = float(cv_scores.mean())
-        metrics['cv_f1_std'] = float(cv_scores.std())
+        # Cross-validation score (optional, skip if memory tight)
+        try:
+            cv_scores = cross_val_score(model, X_train_scaled, y_train, cv=3, scoring='f1')  # Reduced CV folds
+            metrics['cv_f1_mean'] = float(cv_scores.mean())
+            metrics['cv_f1_std'] = float(cv_scores.std())
+        except Exception as e:
+            logging.warning(f"Cross-validation failed, skipping: {str(e)}")
+            metrics['cv_f1_mean'] = metrics['f1_score']
+            metrics['cv_f1_std'] = 0.0
         
         # Apply to target dataset
+        logging.info(f"Applying model to target dataset: {target_dataset}")
+        
         target_games = db.collection('savedGames').document(uid)\
             .collection('games').where('datasetName', '==', target_dataset).stream()
         
@@ -4593,37 +4637,47 @@ def run_xp_model():
             shots = game_data.get('gameData', [])
             
             for shot in shots:
-                # Extract features
-                x = float(shot.get('x', 0))
-                y = float(shot.get('y', 0))
-                distance = np.sqrt((x - goal_x)**2 + (y - goal_y)**2)
-                angle = np.degrees(np.arctan2(np.abs(y - goal_y), goal_x - x))
-                
-                position_value = position_map.get(
-                    str(shot.get('position', 'midfielder')).lower(), 2
-                )
-                pressure_value = pressure_map.get(
-                    str(shot.get('pressure', 'none')).lower(), 0
-                )
-                
-                # Get player success rate
-                player_name = shot.get('playerName', 'Unknown')
-                player_rate = player_success.get('smoothed_rate', {}).get(player_name, 0.3)
-                
-                # Predict
-                shot_features = np.array([[distance, angle, position_value, pressure_value, player_rate]])
-                shot_features_scaled = scaler.transform(shot_features)
-                
-                xP = float(model.predict_proba(shot_features_scaled)[0, 1])
-                
-                # Update shot with simple xP
-                shot['xP'] = xP
-                shot['model_type'] = model_type
-                total_shots += 1
+                try:
+                    # Extract features
+                    x = float(shot.get('x', 0))
+                    y = float(shot.get('y', 0))
+                    distance = np.sqrt((x - goal_x)**2 + (y - goal_y)**2)
+                    angle = np.degrees(np.arctan2(np.abs(y - goal_y), goal_x - x))
+                    
+                    position_value = position_map.get(
+                        str(shot.get('position', 'midfielder')).lower(), 2
+                    )
+                    pressure_value = pressure_map.get(
+                        str(shot.get('pressure', 'none')).lower(), 0
+                    )
+                    
+                    # Get player success rate
+                    player_name = shot.get('playerName', 'Unknown')
+                    player_rate = player_success.loc[player_name, 'smoothed_rate'] if player_name in player_success.index else 0.3
+                    
+                    # Predict
+                    shot_features = np.array([[distance, angle, position_value, pressure_value, player_rate]])
+                    shot_features = np.nan_to_num(shot_features, nan=0.0, posinf=0.0, neginf=0.0)  # Clean features
+                    shot_features_scaled = scaler.transform(shot_features)
+                    
+                    xP = float(model.predict_proba(shot_features_scaled)[0, 1])
+                    
+                    # Update shot with simple xP
+                    shot['xP'] = min(max(xP, 0.0), 1.0)  # Clamp between 0 and 1
+                    shot['model_type'] = model_type
+                    total_shots += 1
+                    
+                except Exception as e:
+                    logging.warning(f"Failed to process shot: {str(e)}")
+                    shot['xP'] = 0.3  # Default value
+                    shot['model_type'] = model_type
             
             # Update game in Firestore
-            game.reference.update({'gameData': shots})
-            updated_games.append(game.id)
+            try:
+                game.reference.update({'gameData': shots})
+                updated_games.append(game.id)
+            except Exception as e:
+                logging.error(f"Failed to update game {game.id}: {str(e)}")
         
         # Calculate summary statistics
         execution_time = time.time() - start_time
@@ -4641,7 +4695,16 @@ def run_xp_model():
             'features_used': features
         }
         
-        db.collection('modelRuns').document(uid).collection('history').add(model_run)
+        try:
+            db.collection('modelRuns').document(uid).collection('history').add(model_run)
+        except Exception as e:
+            logging.warning(f"Failed to save model run history: {str(e)}")
+        
+        # Clean up memory
+        del df, X, y, X_train, X_test, model
+        gc.collect()
+        
+        logging.info(f"Model run completed successfully in {execution_time:.2f}s")
         
         return jsonify({
             'success': True,
@@ -4654,6 +4717,8 @@ def run_xp_model():
         
     except Exception as e:
         logging.error(f"Error in run_xp_model: {str(e)}")
+        # Clean up memory on error
+        gc.collect()
         return jsonify({'error': str(e)}), 500
 
 

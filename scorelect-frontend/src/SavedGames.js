@@ -80,44 +80,15 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
         : Object.values(fullGameData.gameData || {});
 
       if (normalizedData.length > 0) {
-        // Ensure each item has the necessary properties for PitchGraphic
-        const processedData = normalizedData.map(item => {
-          // Ensure position property exists
-          if (!item.position && (typeof item.x === 'number' && typeof item.y === 'number')) {
-            item.position = { x: item.x, y: item.y };
-          } else if (!item.position) {
-            item.position = { x: 50, y: 50 }; // Default fallback position
-          }
-          
-          // Ensure x and y properties exist (even if they're already in position object)
-          if (typeof item.x !== 'number' && item.position) {
-            item.x = item.position.x;
-          }
-          if (typeof item.y !== 'number' && item.position) {
-            item.y = item.position.y;
-          }
-          
-          // Ensure other required properties have default values if missing
-          item.playerName = item.playerName || item.player || '';
-          item.playerNumber = item.playerNumber || '';
-          item.position = item.position || { x: 50, y: 50 };
-          item.pressure = item.pressure || '0';
-          item.foot = item.foot || 'Right';
-          item.outcome = item.outcome || '';
-          
-          return item;
-        });
-
         // Check if this is a video analysis
         if (getAnalysisType(fullGameData) === 'video') {
           console.log('Loading video analysis game:', fullGameData.gameName);
-          console.log('Analysis type:', getAnalysisType(fullGameData));
           
           // For video analysis, navigate to ManualTagging with the data
           navigate('/tagging/manual', {
             state: {
               youtubeUrl: fullGameData.youtubeUrl,
-              tags: processedData,
+              tags: normalizedData,
               teamsData: fullGameData.teamsData,
               datasetName: fullGameData.datasetName || fullGameData.gameName,
               sport: fullGameData.sport
@@ -130,8 +101,125 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
             background: 'var(--dark-card)',
             confirmButtonColor: 'var(--primary)',
           });
+        } else if (fullGameData.sport === 'GAA') {
+          // For GAA pitch analysis, navigate to GAAAnalysisDashboard
+          console.log('Loading GAA analysis game:', fullGameData.gameName);
+          
+          // Add normalization logic for coordinates
+          const pitchWidth = 145;  // Width of pitch in meters
+          const pitchHeight = 88;  // Height of pitch in meters
+          const halfLineX = pitchWidth / 2;
+          const goalY = pitchHeight / 2;
+          
+          // Process the game data to ensure all required fields
+          const processedGameData = normalizedData.map(tag => {
+            // Ensure position is a string value
+            let positionStr = '';
+            if (typeof tag.position === 'string') {
+              positionStr = tag.position;
+            } else if (tag.position && typeof tag.position === 'object') {
+              positionStr = tag.position.type || 'forward';
+            } else {
+              positionStr = 'forward';
+            }
+            
+            // Calculate distance to goal if not already present
+            let distMeters = tag.distMeters;
+            if (!distMeters && tag.x !== undefined && tag.y !== undefined) {
+              const x = parseFloat(tag.x);
+              const y = parseFloat(tag.y);
+              const isLeftSide = x <= halfLineX;
+              const targetGoalX = isLeftSide ? 0 : pitchWidth;
+              const dx = x - targetGoalX;
+              const dy = y - goalY;
+              distMeters = Math.sqrt(dx * dx + dy * dy);
+            }
+            
+            // Ensure all required properties exist
+            return {
+              ...tag,
+              position: positionStr,
+              x: tag.x || 50,
+              y: tag.y || 50,
+              distMeters: distMeters || 30,
+              side: tag.side || (tag.x <= halfLineX ? 'Left' : 'Right'),
+              distanceFromGoal: tag.distanceFromGoal || distMeters || 30,
+              pressure: tag.pressure || '0',
+              foot: tag.foot || 'Right',
+              playerName: tag.playerName || tag.player || '',
+              playerNumber: tag.playerNumber || '',
+              minute: tag.minute || 0,
+              team: tag.team || 'Unknown',
+              action: tag.action || '',
+              outcome: tag.outcome || ''
+            };
+          });
+          
+          // Format the data correctly for GAAAnalysisDashboard
+          const formattedData = {
+            games: [{
+              gameId: fullGameData.gameId || fullGameData.gameName,
+              gameName: fullGameData.gameName,
+              matchDate: fullGameData.matchDate,
+              sport: fullGameData.sport,
+              datasetName: fullGameData.datasetName,
+              analysisType: fullGameData.analysisType || 'pitch',
+              gameData: processedGameData
+            }],
+            datasetName: fullGameData.datasetName || fullGameData.gameName
+          };
+          
+          // Navigate to GAA dashboard with correct route
+          navigate('/gaa-analysis-dashboard', {
+            state: {
+              file: formattedData,
+              sport: 'GAA',
+              filters: {
+                match: '',
+                team: '',
+                player: '',
+                action: ''
+              }
+            }
+          });
+          
+          Swal.fire({
+            title: 'Success',
+            text: `GAA game "${fullGameData.gameName}" loaded successfully!`,
+            icon: 'success',
+            background: 'var(--dark-card)',
+            confirmButtonColor: 'var(--primary)',
+          });
         } else {
-          // For pitch analysis, use the existing onLoadGame function
+          // For other pitch analysis (soccer, etc.), use the existing onLoadGame function
+          // Ensure each item has the necessary properties for PitchGraphic
+          const processedData = normalizedData.map(item => {
+            // Ensure position property exists
+            if (!item.position && (typeof item.x === 'number' && typeof item.y === 'number')) {
+              item.position = { x: item.x, y: item.y };
+            } else if (!item.position) {
+              item.position = { x: 50, y: 50 }; // Default fallback position
+            }
+            
+            // Ensure x and y properties exist (even if they're already in position object)
+            if (typeof item.x !== 'number' && item.position) {
+              item.x = item.position.x;
+            }
+            if (typeof item.y !== 'number' && item.position) {
+              item.y = item.position.y;
+            }
+            
+            // Ensure other required properties have default values if missing
+            item.playerName = item.playerName || item.player || '';
+            item.playerNumber = item.playerNumber || '';
+            item.position = item.position || { x: 50, y: 50 };
+            item.pressure = item.pressure || '0';
+            item.foot = item.foot || 'Right';
+            item.outcome = item.outcome || '';
+            
+            return item;
+          });
+          
           onLoadGame(fullGameData.sport, processedData);
           Swal.fire({
             title: 'Success',

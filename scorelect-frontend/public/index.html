@@ -21,10 +21,12 @@
     <meta name="twitter:image" content="%PUBLIC_URL%/logo192.png" />
     <meta name="twitter:site" content="@fechinmitchell" />
 
-    <!-- Content Security Policy -->
+    <!-- Content Security Policy - SINGLE COMPREHENSIVE VERSION -->
     <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
     script-src  'self'
+                 'unsafe-inline'
+                 'unsafe-eval'
                  https://js.stripe.com
                  https://www.gstatic.com
                  https://www.googletagmanager.com
@@ -33,7 +35,10 @@
                  https://*.hcaptcha.com
                  https://va.vercel-scripts.com
                  https://www.youtube.com
-                 https://s.ytimg.com;
+                 https://s.ytimg.com
+                 https://storage.googleapis.com
+                 https://cdn.jsdelivr.net
+                 https://unpkg.com;
     style-src   'self'
                  'unsafe-inline'
                  https://fonts.googleapis.com
@@ -61,12 +66,15 @@
                  https://identitytoolkit.googleapis.com
                  https://va.vercel-scripts.com
                  https://scorelect.onrender.com
-                 https://api.openai.com;
+                 https://api.openai.com
+                 https://storage.googleapis.com
+                 https://tfhub.dev;
     img-src     'self'
                  data:
                  blob:
                  https://firebasestorage.googleapis.com
-                 https://i.ytimg.com;
+                 https://i.ytimg.com
+                 https:;
     media-src   'self'
                  data:
                  blob:;
@@ -79,7 +87,6 @@
                  https://www.youtube-nocookie.com;
     object-src  'none';
   ">
-  
 
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />

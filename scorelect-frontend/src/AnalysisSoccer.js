@@ -484,6 +484,7 @@ const DatasetAnalysis = () => {
 };
 
 // --- VideoAnalysis Component ---
+// --- VideoAnalysis Component ---
 const VideoAnalysis = () => {
   const navigate = useNavigate();
   const [file, setFile] = useState(null);
@@ -549,6 +550,33 @@ const VideoAnalysis = () => {
       });
     }
     navigate('/manual-tagging-soccer', {
+      state: { file: file || null, youtubeUrl: youtubeUrl || null, sport: 'Soccer' }
+    });
+  };
+
+  const handleAITagging = () => {
+    if (!file && !youtubeUrl) {
+      return Swal.fire({
+        title: 'No Video Selected',
+        text: 'Upload a file or enter a URL.',
+        icon: 'warning',
+        background: 'var(--dark-card)',
+        color: 'var(--light)',
+        confirmButtonColor: 'var(--primary)'
+      });
+    }
+    if (youtubeUrl && urlError) {
+      return Swal.fire({
+        title: 'Invalid URL',
+        text: 'Correct the YouTube URL.',
+        icon: 'error',
+        background: 'var(--dark-card)',
+        color: 'var(--light)',
+        confirmButtonColor: 'var(--primary)'
+      });
+    }
+    // Navigate to AI tagging page
+    navigate('/ai-tagging-soccer', {
       state: { file: file || null, youtubeUrl: youtubeUrl || null, sport: 'Soccer' }
     });
   };
@@ -630,9 +658,13 @@ const VideoAnalysis = () => {
               <FaEdit /> Manual Tagging
             </button>
             
-            <button className="action-button disabled" disabled title="Coming soon!">
+            <button 
+              className="action-button primary" 
+              onClick={handleAITagging}
+              style={{ backgroundColor: '#5e2e8f' }}
+            >
               <AutoAwesomeIcon style={{ fontSize: 16 }} /> AI-Assisted Tagging
-              <span className="premium-tag">PREMIUM</span>
+              <span className="premium-tag" style={{ backgroundColor: '#ff6b6b' }}>BETA</span>
             </button>
           </div>
         </div>

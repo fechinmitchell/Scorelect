@@ -60,6 +60,7 @@ import Players from './Players';
 import AnalysisSoccer from './AnalysisSoccer';
 import ManualTaggingSoccer from './ManualTaggingSoccer';
 import AIAssistedTaggingSoccer from './AIAssistedTaggingSoccer';
+import AITrainingModelArena from './AITrainingModelArena'; // Add this import
 
 /* AI-powered dashboard (layout + nested routes) */
 import AIGAADashboard from './AIDashboard/AIGAADashboard';
@@ -224,9 +225,8 @@ const App = () => {
                   <Route path="/analysis-soccer" element={<AnalysisSoccer />} />
                   <Route path="/soccer-pitch" element={<SoccerPitch />} />
                   <Route path="/manual-tagging-soccer" element={<ManualTaggingSoccer />} />
-                  <Route path="/ai-tagging-soccer" element={<AIAssistedTaggingSoccer />} /> {/* Add this line */}
-
-
+                  <Route path="/ai-tagging-soccer" element={<AIAssistedTaggingSoccer />} />
+                  <Route path="/ai-training-model-arena" element={<AITrainingModelArena />} /> {/* Add this route */}
 
                   {/* --------------- pitch route --------------- */}
                   <Route path="/pitch" element={renderSelectedSport()} />

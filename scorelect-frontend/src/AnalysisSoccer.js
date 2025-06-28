@@ -22,7 +22,8 @@ import {
   FaFileUpload,
   FaEdit,
   FaChartLine,
-  FaFootballBall
+  FaFootballBall,
+  FaRobot
 } from 'react-icons/fa';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -35,6 +36,7 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import EditIcon from '@mui/icons-material/Edit';
 import SportsIcon from '@mui/icons-material/Sports';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
+import SmartToyIcon from '@mui/icons-material/SmartToy';
 
 // Import our custom CSS file
 import './AnalysisSoccer.css';
@@ -484,7 +486,6 @@ const DatasetAnalysis = () => {
 };
 
 // --- VideoAnalysis Component ---
-// --- VideoAnalysis Component ---
 const VideoAnalysis = () => {
   const navigate = useNavigate();
   const [file, setFile] = useState(null);
@@ -581,6 +582,33 @@ const VideoAnalysis = () => {
     });
   };
 
+  const handleTrainingArena = () => {
+    if (!file && !youtubeUrl) {
+      return Swal.fire({
+        title: 'No Video Selected',
+        text: 'Upload a file or enter a URL.',
+        icon: 'warning',
+        background: 'var(--dark-card)',
+        color: 'var(--light)',
+        confirmButtonColor: 'var(--primary)'
+      });
+    }
+    if (youtubeUrl && urlError) {
+      return Swal.fire({
+        title: 'Invalid URL',
+        text: 'Correct the YouTube URL.',
+        icon: 'error',
+        background: 'var(--dark-card)',
+        color: 'var(--light)',
+        confirmButtonColor: 'var(--primary)'
+      });
+    }
+    // Navigate to AI Training Model Arena
+    navigate('/ai-training-model-arena', {
+      state: { file: file || null, youtubeUrl: youtubeUrl || null, sport: 'Soccer' }
+    });
+  };
+
   const handleReset = () => {
     setFile(null);
     setYoutubeUrl('');
@@ -653,7 +681,7 @@ const VideoAnalysis = () => {
         <div style={{ marginTop: 'var(--space-lg)' }}>
           <h4>Select tagging method:</h4>
           
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginTop: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginTop: '1rem' }}>
             <button className="action-button primary" onClick={handleContinue}>
               <FaEdit /> Manual Tagging
             </button>
@@ -666,6 +694,36 @@ const VideoAnalysis = () => {
               <AutoAwesomeIcon style={{ fontSize: 16 }} /> AI-Assisted Tagging
               <span className="premium-tag" style={{ backgroundColor: '#ff6b6b' }}>BETA</span>
             </button>
+
+            <button 
+              className="action-button primary" 
+              onClick={handleTrainingArena}
+              style={{ backgroundColor: '#28a745', position: 'relative' }}
+            >
+              <SmartToyIcon style={{ fontSize: 16 }} /> AI Training Model Arena
+              <span className="premium-tag" style={{ backgroundColor: '#17a2b8' }}>NEW</span>
+            </button>
+          </div>
+          
+          <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: 'var(--dark-card)', borderRadius: '8px', border: '1px solid var(--gray-light)' }}>
+            <h5 style={{ color: '#28a745', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <FaRobot /> AI Training Model Arena
+            </h5>
+            <p style={{ fontSize: '0.9rem', color: 'var(--gray-light)', margin: 0 }}>
+              Create custom training data by manually labeling objects in your videos. 
+              Build your own AI model with bounding boxes, classifications, and annotations to improve detection accuracy for your specific use case.
+            </p>
+            <div style={{ marginTop: '0.75rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.8rem', color: '#17a2b8', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                🎯 Manual Annotation Tools
+              </span>
+              <span style={{ fontSize: '0.8rem', color: '#17a2b8', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                📊 Export Training Data
+              </span>
+              <span style={{ fontSize: '0.8rem', color: '#17a2b8', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                🔄 YOLO/COCO Formats
+              </span>
+            </div>
           </div>
         </div>
       )}

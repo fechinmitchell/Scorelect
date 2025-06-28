@@ -56,7 +56,12 @@ import {
   Settings as SettingsIcon,
   Download as DownloadIcon,
   Save as SaveIcon,
-  AutoAwesome as AutoAwesomeIcon
+  AutoAwesome as AutoAwesomeIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Cancel as CancelIcon,
+  AddCircleOutline as AddCircleOutlineIcon,
+  OpenWith as OpenWithIcon
 } from '@mui/icons-material';
 import { Stage, Layer, Rect, Circle, Line, Text } from 'react-konva';
 import { renderSoccerPitchElements } from './components/SoccerPitchComponents';
@@ -66,6 +71,13 @@ import Swal from 'sweetalert2';
 // Note: Uncomment these imports after installing the packages
 import * as tf from '@tensorflow/tfjs';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
+
+// Utility function to format time
+const formatTime = (seconds) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
 
 // Styled Components
 const PageContainer = styled(Box)(({ theme }) => ({
@@ -156,10 +168,10 @@ class AIModelManager {
     try {
       console.log('Loading COCO-SSD model...');
       
-      // Try to load model with explicit configuration
+      // Load with higher accuracy settings
       this.models.player = await cocoSsd.load({
-        base: 'lite_mobilenet_v2',
-        modelUrl: undefined // Let it use default URL first
+        base: 'mobilenet_v2',  // Change from 'lite_mobilenet_v2' to full version
+        modelUrl: undefined
       });
       
       this.loaded = true;
@@ -169,8 +181,6 @@ class AIModelManager {
     } catch (error) {
       console.error('Error loading models:', error);
       console.log('Falling back to simulation mode due to CSP restrictions.');
-      console.log('To enable real AI detection, add this to your public/index.html:');
-      console.log('<meta http-equiv="Content-Security-Policy" content="... connect-src \'self\' https://storage.googleapis.com https://tfhub.dev ...">');
       return false;
     }
   }
@@ -184,22 +194,75 @@ class AIModelManager {
       
       // Filter and transform predictions to our format
       const detections = predictions
-        .filter(pred => 
-          // Keep only relevant objects
-          ['person', 'sports ball', 'ball'].includes(pred.class) &&
-          pred.score > 0.3 // Confidence threshold
-        )
+        .filter(pred => {
+          // More strict filtering for soccer
+          if (pred.class === 'person' && pred.score > 0.5) return true; // Higher threshold for players
+          if ((pred.class === 'sports ball' || pred.class === 'ball') && pred.score > 0.3) return true;
+          
+          // Also check for specific soccer-related objects
+          if (pred.class === 'soccer ball' && pred.score > 0.3) return true;
+          
+          return false;
+        })
         .map(pred => ({
-          class: pred.class === 'ball' ? 'sports ball' : pred.class,
+          class: (pred.class === 'ball' || pred.class === 'soccer ball') ? 'sports ball' : pred.class,
           score: pred.score,
           bbox: pred.bbox // [x, y, width, height]
         }));
       
-      return detections;
+      // Post-process to remove duplicate detections
+      const filtered = this.removeDuplicates(detections);
+      
+      return filtered;
     } catch (error) {
       console.error('Detection error:', error);
       return [];
     }
+  }
+  
+  removeDuplicates(detections) {
+    const filtered = [];
+    
+    for (const det of detections) {
+      let isDuplicate = false;
+      
+      for (const existing of filtered) {
+        if (existing.class === det.class) {
+          // Check if bounding boxes overlap significantly
+          const overlap = this.calculateIoU(existing.bbox, det.bbox);
+          if (overlap > 0.5) {
+            isDuplicate = true;
+            // Keep the one with higher confidence
+            if (det.score > existing.score) {
+              filtered[filtered.indexOf(existing)] = det;
+            }
+            break;
+          }
+        }
+      }
+      
+      if (!isDuplicate) {
+        filtered.push(det);
+      }
+    }
+    
+    return filtered;
+  }
+  
+  calculateIoU(box1, box2) {
+    const x1 = Math.max(box1[0], box2[0]);
+    const y1 = Math.max(box1[1], box2[1]);
+    const x2 = Math.min(box1[0] + box1[2], box2[0] + box2[2]);
+    const y2 = Math.min(box1[1] + box1[3], box2[1] + box2[3]);
+    
+    if (x2 < x1 || y2 < y1) return 0;
+    
+    const intersection = (x2 - x1) * (y2 - y1);
+    const area1 = box1[2] * box1[3];
+    const area2 = box2[2] * box2[3];
+    const union = area1 + area2 - intersection;
+    
+    return intersection / union;
   }
 
   async classifyAction(frameSequence) {
@@ -227,6 +290,8 @@ const AIAssistedTaggingSoccer = () => {
   const aiModelRef = useRef(new AIModelManager());
   const totalEventsRef = useRef(0);
   const processingRef = useRef(false);
+  const lastBallPositionRef = useRef(null);
+  const ballVelocityRef = useRef({ x: 0, y: 0 });
   
   // State
   const [processing, setProcessing] = useState(false);
@@ -253,6 +318,11 @@ const AIAssistedTaggingSoccer = () => {
   const [processingError, setProcessingError] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [processingMode, setProcessingMode] = useState('fast'); // 'fast' or 'realtime'
+  const [isEditing, setIsEditing] = useState(false);
+  const [selectedDetection, setSelectedDetection] = useState(null);
+  const [manualDetections, setManualDetections] = useState([]);
+  const [isPaused, setIsPaused] = useState(false);
+  const [editMode, setEditMode] = useState('move'); // 'move', 'resize', 'add', 'delete'
   
   // Processing steps
   const steps = [
@@ -364,7 +434,7 @@ const AIAssistedTaggingSoccer = () => {
     
     console.log(`=== Frame complete: ${events.length} events ===`);
     return events;
-  }, [showDetections]);
+  }, [showDetections, manualDetections, currentDetections]);
 
   // Generate simulated detections for demo - MORE REALISTIC
   const generateSimulatedDetections = (width, height) => {
@@ -416,7 +486,7 @@ const AIAssistedTaggingSoccer = () => {
     return detections;
   };
 
-  // Analyze detections for events with real AI logic - ENSURE events are generated
+  // Analyze detections for events with better accuracy
   const analyzeForEvents = async (detections, timestamp) => {
     const events = [];
     const ballDetection = detections.find(d => d.class === 'sports ball');
@@ -424,72 +494,112 @@ const AIAssistedTaggingSoccer = () => {
     
     console.log(`Analyzing: ${playerDetections.length} players, ${ballDetection ? 'ball found' : 'no ball'}`);
     
-    // More sophisticated event detection for real AI
-    if (ballDetection && playerDetections.length > 0) {
-      // Find closest player to ball
-      let closestPlayer = null;
-      let minDistance = Infinity;
+    // Track ball movement for better event detection
+    if (ballDetection) {
+      const currentBallPos = {
+        x: ballDetection.bbox[0] + ballDetection.bbox[2] / 2,
+        y: ballDetection.bbox[1] + ballDetection.bbox[3] / 2
+      };
       
-      playerDetections.forEach(player => {
-        const distance = calculateDistance(
-          ballDetection.bbox[0] + ballDetection.bbox[2] / 2,
-          ballDetection.bbox[1] + ballDetection.bbox[3] / 2,
-          player.bbox[0] + player.bbox[2] / 2,
-          player.bbox[1] + player.bbox[3] / 2
-        );
+      // Calculate ball velocity if we have previous position
+      if (lastBallPositionRef.current) {
+        const timeDelta = 0.5; // Assuming 0.5 second intervals
+        ballVelocityRef.current = {
+          x: (currentBallPos.x - lastBallPositionRef.current.x) / timeDelta,
+          y: (currentBallPos.y - lastBallPositionRef.current.y) / timeDelta
+        };
+      }
+      
+      lastBallPositionRef.current = currentBallPos;
+      
+      // Only detect events if ball confidence is high
+      if (ballDetection.score > 0.6 && playerDetections.length > 0) {
+        // Find players near the ball
+        const playersNearBall = [];
         
-        if (distance < minDistance) {
-          minDistance = distance;
-          closestPlayer = player;
-        }
-      });
-      
-      console.log(`Closest player to ball: ${minDistance}px`);
-      
-      // Generate events based on distance
-      if (minDistance < 150) { // Increased threshold
-        // Always generate at least a possession event
-        events.push({
-          timestamp,
-          type: 'possession',
-          confidence: closestPlayer.score * 0.9,
-          position: normalizePosition(closestPlayer.bbox, canvasRef.current),
-          player: `Player ${Math.floor(Math.random() * 11) + 1}`,
-          details: { distance: minDistance }
+        playerDetections.forEach(player => {
+          if (player.score < 0.6) return; // Skip low confidence players
+          
+          const distance = calculateDistance(
+            currentBallPos.x,
+            currentBallPos.y,
+            player.bbox[0] + player.bbox[2] / 2,
+            player.bbox[1] + player.bbox[3] / 2
+          );
+          
+          if (distance < 100) { // Within reasonable distance
+            playersNearBall.push({ player, distance });
+          }
         });
         
-        // Additional events based on probability
-        const eventRoll = Math.random();
-        if (eventRoll < 0.4) { // 40% chance of pass
-          events.push({
-            timestamp,
-            type: 'pass',
-            confidence: ballDetection.score * 0.8,
-            position: normalizePosition(ballDetection.bbox, canvasRef.current),
-            player: `Player ${Math.floor(Math.random() * 11) + 1}`
-          });
-        } else if (eventRoll < 0.6) { // 20% chance of dribble
-          events.push({
-            timestamp,
-            type: 'dribble',
-            confidence: closestPlayer.score * 0.85,
-            position: normalizePosition(closestPlayer.bbox, canvasRef.current),
-            player: `Player ${Math.floor(Math.random() * 11) + 1}`
-          });
-        } else if (eventRoll < 0.7) { // 10% chance of shot
-          events.push({
-            timestamp,
-            type: 'shot',
-            confidence: ballDetection.score * 0.75,
-            position: normalizePosition(ballDetection.bbox, canvasRef.current),
-            player: `Player ${Math.floor(Math.random() * 11) + 1}`
-          });
+        if (playersNearBall.length > 0) {
+          // Sort by distance to find closest player
+          playersNearBall.sort((a, b) => a.distance - b.distance);
+          const closestPlayer = playersNearBall[0];
+          
+          // Detect possession
+          if (closestPlayer.distance < 40) {
+            events.push({
+              timestamp,
+              type: 'possession',
+              confidence: Math.min(closestPlayer.player.score, ballDetection.score),
+              position: normalizePosition(closestPlayer.player.bbox, canvasRef.current),
+              player: `Player ${Math.floor(Math.random() * 11) + 1}`,
+              details: { 
+                distance: closestPlayer.distance,
+                ballConfidence: ballDetection.score,
+                playerConfidence: closestPlayer.player.score
+              }
+            });
+          }
+          
+          // Detect pass based on ball velocity and multiple players
+          const ballSpeed = Math.sqrt(ballVelocityRef.current.x ** 2 + ballVelocityRef.current.y ** 2);
+          if (ballSpeed > 50 && playersNearBall.length >= 2) {
+            // Ball is moving fast and there are multiple players
+            events.push({
+              timestamp,
+              type: 'pass',
+              confidence: ballDetection.score * 0.8,
+              position: normalizePosition(ballDetection.bbox, canvasRef.current),
+              player: `Player ${Math.floor(Math.random() * 11) + 1}`,
+              details: {
+                ballSpeed,
+                direction: Math.atan2(ballVelocityRef.current.y, ballVelocityRef.current.x)
+              }
+            });
+          }
+          
+          // Detect shot based on ball position and velocity
+          const fieldHeight = canvasRef.current?.height || 720;
+          if (currentBallPos.y < fieldHeight * 0.2 || currentBallPos.y > fieldHeight * 0.8) {
+            // Ball near top or bottom of frame (likely near goal)
+            if (ballSpeed > 70) {
+              events.push({
+                timestamp,
+                type: 'shot',
+                confidence: ballDetection.score * 0.85,
+                position: normalizePosition(ballDetection.bbox, canvasRef.current),
+                player: `Player ${Math.floor(Math.random() * 11) + 1}`,
+                details: {
+                  ballSpeed,
+                  targetArea: currentBallPos.y < fieldHeight * 0.5 ? 'top' : 'bottom'
+                }
+              });
+            }
+          }
         }
       }
-    } else if (playerDetections.length >= 2) {
-      // Generate tackle events when players are close
+    }
+    
+    // Detect tackles when players are very close and moving toward each other
+    if (playerDetections.length >= 2) {
       for (let i = 0; i < playerDetections.length - 1; i++) {
+        if (playerDetections[i].score < 0.7) continue;
+        
         for (let j = i + 1; j < playerDetections.length; j++) {
+          if (playerDetections[j].score < 0.7) continue;
+          
           const distance = calculateDistance(
             playerDetections[i].bbox[0] + playerDetections[i].bbox[2] / 2,
             playerDetections[i].bbox[1] + playerDetections[i].bbox[3] / 2,
@@ -497,29 +607,22 @@ const AIAssistedTaggingSoccer = () => {
             playerDetections[j].bbox[1] + playerDetections[j].bbox[3] / 2
           );
           
-          if (distance < 80 && Math.random() > 0.5) { // 50% chance when close
+          // Very close players with high confidence
+          if (distance < 30) {
             events.push({
               timestamp,
               type: 'tackle',
-              confidence: Math.min(playerDetections[i].score, playerDetections[j].score) * 0.7,
+              confidence: Math.min(playerDetections[i].score, playerDetections[j].score) * 0.9,
               position: normalizePosition(playerDetections[i].bbox, canvasRef.current),
-              player: `Player ${Math.floor(Math.random() * 11) + 1}`
+              player: `Player ${Math.floor(Math.random() * 11) + 1}`,
+              details: {
+                distance,
+                playersInvolved: 2
+              }
             });
             break;
           }
         }
-      }
-    } else if (playerDetections.length > 0) {
-      // Sometimes generate movement events
-      if (Math.random() > 0.8) {
-        const randomPlayer = playerDetections[Math.floor(Math.random() * playerDetections.length)];
-        events.push({
-          timestamp,
-          type: 'dribble',
-          confidence: 0.6,
-          position: normalizePosition(randomPlayer.bbox, canvasRef.current),
-          player: `Player ${Math.floor(Math.random() * 11) + 1}`
-        });
       }
     }
     
@@ -541,36 +644,58 @@ const AIAssistedTaggingSoccer = () => {
     };
   };
 
-  // Draw detection boxes
+  // Draw detection boxes with selection and manual detection support
   const drawDetections = (canvas, detections) => {
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    detections.forEach(detection => {
+    // Combine AI and manual detections
+    const allDetections = [...detections, ...manualDetections];
+    
+    allDetections.forEach(detection => {
+      if (detection.removed) return; // Skip removed detections
+      
       const [x, y, width, height] = detection.bbox;
       
-      // Set color based on class
-      if (detection.class === 'person') {
+      // Set color based on type and state
+      if (detection.manual) {
+        ctx.strokeStyle = '#ffff00'; // Yellow for manual detections
+        ctx.lineWidth = 3;
+      } else if (detection === selectedDetection) {
+        ctx.strokeStyle = '#ff00ff'; // Magenta for selected
+        ctx.lineWidth = 4;
+      } else if (detection.class === 'person') {
         ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 2;
       } else if (detection.class === 'sports ball') {
         ctx.strokeStyle = '#ff0000';
+        ctx.lineWidth = 2;
       } else {
         ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
       }
       
-      ctx.lineWidth = 2;
       ctx.strokeRect(x, y, width, height);
+      
+      // Draw resize handles for selected detection
+      if (detection === selectedDetection && isEditing) {
+        ctx.fillStyle = '#fff';
+        const handleSize = 6;
+        
+        // Corner handles
+        ctx.fillRect(x - handleSize/2, y - handleSize/2, handleSize, handleSize);
+        ctx.fillRect(x + width - handleSize/2, y - handleSize/2, handleSize, handleSize);
+        ctx.fillRect(x - handleSize/2, y + height - handleSize/2, handleSize, handleSize);
+        ctx.fillRect(x + width - handleSize/2, y + height - handleSize/2, handleSize, handleSize);
+      }
       
       // Draw label
       ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
       ctx.fillRect(x, y - 20, width, 20);
       ctx.fillStyle = '#ffffff';
       ctx.font = '12px Arial';
-      ctx.fillText(
-        `${detection.class} (${(detection.score * 100).toFixed(1)}%)`,
-        x + 4,
-        y - 6
-      );
+      const label = `${detection.class}${detection.manual ? ' (M)' : ''} ${detection.id ? `#${detection.id.slice(-4)}` : ''} (${(detection.score * 100).toFixed(1)}%)`;
+      ctx.fillText(label, x + 4, y - 6);
     });
   };
 
@@ -637,7 +762,6 @@ const AIAssistedTaggingSoccer = () => {
       // Process video based on mode
       if (processingMode === 'realtime') {
         console.log('Starting REAL-TIME mode processing');
-        // Real-time mode code...
         // Real-time mode - play video and process frames as they come
         const video = videoRef.current;
         video.currentTime = 0;
@@ -715,18 +839,20 @@ const AIAssistedTaggingSoccer = () => {
       } else {
         console.log('Starting FAST mode processing');
         // Fast mode - jump through video with visible frame updates
-        const processInterval = 0.5; // Process every 0.5 seconds
+        const processInterval = 0.2; // Process every 0.2 seconds for better accuracy
         let framesProcessed = 0;
-        let totalEventsFound = 0; // Define this variable
+        let totalEventsFound = 0;
         
         console.log(`Starting fast mode processing: ${maxDuration}s duration`);
         console.log(`Processing state:`, processing);
         
-        // Use a local variable to track if we should continue
-        let shouldContinue = true;
-        
         for (let time = 0; time < maxDuration && processingRef.current; time += processInterval) {
           console.log(`\n--- Processing time: ${time.toFixed(2)}s ---`);
+          
+          // Check if paused for editing
+          while (isPaused && processingRef.current) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
           
           const currentVideo = videoRef.current;
           if (!currentVideo) {
@@ -933,11 +1059,119 @@ const AIAssistedTaggingSoccer = () => {
     return mapping[type] || 'Possession';
   };
 
-  // Format time
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  // Interactive editing handlers
+  const [draggedDetection, setDraggedDetection] = useState(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+  const handleCanvasClick = (e) => {
+    if (!isEditing) return;
+    
+    const rect = overlayCanvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    if (editMode === 'add') {
+      // Add new detection at clicked position
+      const newDetection = {
+        id: `manual_${Date.now()}`,
+        class: 'person',
+        score: 1.0,
+        bbox: [x - 30, y - 40, 60, 80], // Default size
+        manual: true
+      };
+      setManualDetections([...manualDetections, newDetection]);
+      setSelectedDetection(newDetection);
+    } else if (editMode === 'delete') {
+      // Find detection at click position
+      const detection = findDetectionAtPosition(x, y);
+      if (detection) {
+        if (detection.manual) {
+          setManualDetections(manualDetections.filter(d => d.id !== detection.id));
+        } else {
+          // Mark AI detection for removal
+          detection.removed = true;
+        }
+        setSelectedDetection(null);
+      }
+    }
+  };
+
+  const handleMouseDown = (e) => {
+    if (!isEditing || editMode !== 'move') return;
+    
+    const rect = overlayCanvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const detection = findDetectionAtPosition(x, y);
+    if (detection) {
+      setDraggedDetection(detection);
+      setDragOffset({
+        x: x - detection.bbox[0],
+        y: y - detection.bbox[1]
+      });
+      setSelectedDetection(detection);
+    }
+  };
+
+  const handleMouseMove = (e) => {
+    if (!draggedDetection) return;
+    
+    const rect = overlayCanvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left - dragOffset.x;
+    const y = e.clientY - rect.top - dragOffset.y;
+    
+    // Update detection position
+    draggedDetection.bbox[0] = x;
+    draggedDetection.bbox[1] = y;
+    
+    // Redraw detections
+    drawDetections(overlayCanvasRef.current, [...currentDetections, ...manualDetections]);
+  };
+
+  const handleMouseUp = () => {
+    setDraggedDetection(null);
+  };
+
+  const findDetectionAtPosition = (x, y) => {
+    const allDetections = [...currentDetections, ...manualDetections];
+    
+    for (const detection of allDetections) {
+      const [dx, dy, dw, dh] = detection.bbox;
+      if (x >= dx && x <= dx + dw && y >= dy && y <= dy + dh) {
+        return detection;
+      }
+    }
+    return null;
+  };
+
+  const updateDetectionClass = (newClass) => {
+    if (selectedDetection) {
+      selectedDetection.class = newClass;
+      drawDetections(overlayCanvasRef.current, [...currentDetections, ...manualDetections]);
+    }
+  };
+
+  const applyManualChanges = () => {
+    // Merge manual detections with AI detections
+    const mergedDetections = [
+      ...currentDetections.filter(d => !d.removed),
+      ...manualDetections
+    ];
+    
+    setCurrentDetections(mergedDetections);
+    setManualDetections([]);
+    setIsEditing(false);
+    
+    // Generate events from corrected detections
+    analyzeForEvents(mergedDetections, currentTime).then(events => {
+      if (events && events.length > 0) {
+        setDetectedEvents(prev => [...prev, ...events]);
+        updateLiveMetrics(events);
+      }
+    });
+    
+    toast.success('Manual corrections applied!');
   };
 
   // Handle video loaded
@@ -993,7 +1227,7 @@ const AIAssistedTaggingSoccer = () => {
                   Video Processing {videoDuration > 0 && `(${Math.round(videoDuration / 60)} minutes)`}
                 </Typography>
                 
-                {/* Video Display */}
+                {/* Video Display with Interactive Overlay */}
                 <Box sx={{ position: 'relative', backgroundColor: '#000', borderRadius: 1, overflow: 'hidden', mb: 2 }}>
                   {videoFile ? (
                     <>
@@ -1011,10 +1245,17 @@ const AIAssistedTaggingSoccer = () => {
                           left: 0,
                           width: '100%',
                           height: '100%',
-                          pointerEvents: 'none',
+                          pointerEvents: isEditing ? 'auto' : 'none',
                           opacity: showDetections ? 1 : 0,
-                          transition: 'opacity 0.3s'
+                          transition: 'opacity 0.3s',
+                          cursor: editMode === 'add' ? 'crosshair' : 
+                                  editMode === 'delete' ? 'pointer' : 
+                                  editMode === 'move' ? 'move' : 'default'
                         }}
+                        onClick={handleCanvasClick}
+                        onMouseDown={handleMouseDown}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
                       />
                     </>
                   ) : youtubeUrl ? (
@@ -1024,6 +1265,119 @@ const AIAssistedTaggingSoccer = () => {
                       onReady={onYouTubeReady}
                     />
                   ) : null}
+                  
+                  {/* Editing Toolbar */}
+                  {isEditing && (
+                    <Box sx={{
+                      position: 'absolute',
+                      top: 10,
+                      right: 10,
+                      backgroundColor: 'rgba(0,0,0,0.8)',
+                      borderRadius: 1,
+                      p: 1,
+                      display: 'flex',
+                      gap: 1
+                    }}>
+                      <Tooltip title="Move Detection">
+                        <IconButton 
+                          size="small" 
+                          onClick={() => setEditMode('move')}
+                          sx={{ 
+                            color: editMode === 'move' ? '#5e2e8f' : '#fff',
+                            backgroundColor: editMode === 'move' ? 'rgba(94,46,143,0.2)' : 'transparent'
+                          }}
+                        >
+                          <OpenWithIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Add Detection">
+                        <IconButton 
+                          size="small" 
+                          onClick={() => setEditMode('add')}
+                          sx={{ 
+                            color: editMode === 'add' ? '#5e2e8f' : '#fff',
+                            backgroundColor: editMode === 'add' ? 'rgba(94,46,143,0.2)' : 'transparent'
+                          }}
+                        >
+                          <AddCircleOutlineIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete Detection">
+                        <IconButton 
+                          size="small" 
+                          onClick={() => setEditMode('delete')}
+                          sx={{ 
+                            color: editMode === 'delete' ? '#dc3545' : '#fff',
+                            backgroundColor: editMode === 'delete' ? 'rgba(220,53,69,0.2)' : 'transparent'
+                          }}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+                      <Tooltip title="Apply Changes">
+                        <IconButton 
+                          size="small" 
+                          onClick={applyManualChanges}
+                          sx={{ color: '#4caf50' }}
+                        >
+                          <CheckCircleIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Cancel Editing">
+                        <IconButton 
+                          size="small" 
+                          onClick={() => setIsEditing(false)}
+                          sx={{ color: '#f44336' }}
+                        >
+                          <CancelIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  )}
+                  
+                  {/* Detection Info Panel */}
+                  {selectedDetection && (
+                    <Box sx={{
+                      position: 'absolute',
+                      bottom: 10,
+                      left: 10,
+                      backgroundColor: 'rgba(0,0,0,0.9)',
+                      borderRadius: 1,
+                      p: 2,
+                      minWidth: 200
+                    }}>
+                      <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                        Selected Detection
+                      </Typography>
+                      <Typography variant="body2">
+                        Type: {selectedDetection.class}
+                      </Typography>
+                      <Typography variant="body2">
+                        Confidence: {(selectedDetection.score * 100).toFixed(1)}%
+                      </Typography>
+                      <Typography variant="body2">
+                        ID: {selectedDetection.id || 'N/A'}
+                      </Typography>
+                      <Box sx={{ mt: 1 }}>
+                        <Select
+                          size="small"
+                          value={selectedDetection.class}
+                          onChange={(e) => updateDetectionClass(e.target.value)}
+                          sx={{ 
+                            color: '#fff', 
+                            backgroundColor: 'rgba(255,255,255,0.1)',
+                            '& .MuiSelect-icon': { color: '#fff' }
+                          }}
+                        >
+                          <MenuItem value="person">Player</MenuItem>
+                          <MenuItem value="sports ball">Ball</MenuItem>
+                          <MenuItem value="referee">Referee</MenuItem>
+                          <MenuItem value="goalkeeper">Goalkeeper</MenuItem>
+                        </Select>
+                      </Box>
+                    </Box>
+                  )}
                   
                   {/* Processing Overlay */}
                   {processing && (
@@ -1057,6 +1411,17 @@ const AIAssistedTaggingSoccer = () => {
                         <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#888' }}>
                           {currentDetections.length} objects detected
                         </Typography>
+                        <Box sx={{ mt: 2 }}>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => setIsPaused(!isPaused)}
+                            startIcon={isPaused ? <PlayArrowIcon /> : <PauseIcon />}
+                            sx={{ color: '#fff', borderColor: '#fff' }}
+                          >
+                            {isPaused ? 'Resume' : 'Pause for Editing'}
+                          </Button>
+                        </Box>
                       </Box>
                     </Box>
                   )}
@@ -1068,16 +1433,32 @@ const AIAssistedTaggingSoccer = () => {
                 {/* Controls */}
                 <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
                   {!processing ? (
-                    <Button
-                      variant="contained"
-                      size="large"
-                      startIcon={<PlayArrowIcon />}
-                      onClick={startProcessing}
-                      disabled={!videoUrl && !youtubeUrl}
-                      sx={{ backgroundColor: '#5e2e8f', '&:hover': { backgroundColor: '#7e4cb8' } }}
-                    >
-                      Start AI Analysis
-                    </Button>
+                    <>
+                      <Button
+                        variant="contained"
+                        size="large"
+                        startIcon={<PlayArrowIcon />}
+                        onClick={startProcessing}
+                        disabled={!videoUrl && !youtubeUrl}
+                        sx={{ backgroundColor: '#5e2e8f', '&:hover': { backgroundColor: '#7e4cb8' } }}
+                      >
+                        Start AI Analysis
+                      </Button>
+                      
+                      <Button
+                        variant="outlined"
+                        size="large"
+                        startIcon={<EditIcon />}
+                        onClick={() => setIsEditing(!isEditing)}
+                        sx={{ 
+                          borderColor: isEditing ? '#5e2e8f' : '#fff',
+                          color: isEditing ? '#5e2e8f' : '#fff',
+                          backgroundColor: isEditing ? 'rgba(94,46,143,0.1)' : 'transparent'
+                        }}
+                      >
+                        {isEditing ? 'Editing Mode' : 'Enable Editing'}
+                      </Button>
+                    </>
                   ) : (
                     <Button
                       variant="contained"

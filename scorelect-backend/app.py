@@ -5185,8 +5185,7 @@ def run_advanced_xp_model():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/run-cmc-model', methods=['POST'])
-@app.route('/run-cmc-model-v3', methods=['POST'])
-def run_cmc_model_v3():
+def run_cmc_model():
     """
     CMC Model v3 - Enhanced with better feature engineering and set piece detection
     Key improvements:

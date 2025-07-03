@@ -5222,6 +5222,9 @@ def run_cmc_model():
         midline_x, midline_y = 72.5, 44
         BATCH_SIZE = 100
         
+        # Batch processing setup
+        MAX_BATCH_SIZE = 50  # Keep batches smaller for memory management
+        
         # Comprehensive set piece indicators
         set_piece_indicators = [
             'free', 'penalty', '45', 'fortyfive', 'forty five', 'forty-five',
@@ -5581,16 +5584,17 @@ def run_cmc_model():
         del X_train, X_test, y_train, y_test, X_train_scaled, X_test_scaled
         gc.collect()
         
-        # Apply to target dataset
+        # Apply to target dataset with proper batch processing
         logging.info(f"Applying model to target dataset: {target_dataset}")
         
+        # Initialize batch processing variables
+        batch = db.batch()
+        batch_count = 0
         updated_games = 0
         total_shots = 0
         
         target_games_query = db.collection('savedGames').document(uid)\
             .collection('games').where('datasetName', '==', target_dataset)
-        
-        batch_shots = []
         
         for game in target_games_query.stream():
             game_data = game.to_dict()
@@ -5715,17 +5719,38 @@ def run_cmc_model():
                     shot['xPoints'] = 0.3
                     shot['model_type'] = 'cmc_v3'
             
-            # Update the game with all processed shots
-            try:
-                game.reference.update({'gameData': shots})
-                updated_games += 1
-                
-                # Log progress
-                if updated_games % 50 == 0:
-                    logging.info(f"Updated {updated_games} games, {total_shots} total shots processed")
+            # Add game to batch
+            batch.update(game.reference, {'gameData': shots})
+            batch_count += 1
+            
+            # Commit batch when reaching limit
+            if batch_count >= MAX_BATCH_SIZE:
+                try:
+                    batch.commit()
+                    updated_games += batch_count
+                    logging.info(f"Batch committed: {updated_games} games updated, {total_shots} total shots processed")
                     
+                    # Start new batch
+                    batch = db.batch()
+                    batch_count = 0
+                    
+                except Exception as e:
+                    logging.error(f"Batch commit failed: {str(e)}")
+                    # Start fresh batch on error
+                    batch = db.batch()
+                    batch_count = 0
+                    
+                # Garbage collection after large batches
+                gc.collect()
+        
+        # Commit any remaining games in the final batch
+        if batch_count > 0:
+            try:
+                batch.commit()
+                updated_games += batch_count
+                logging.info(f"Final batch committed: {batch_count} games")
             except Exception as e:
-                logging.error(f"Failed to update game {game.id}: {str(e)}")
+                logging.error(f"Final batch commit failed: {str(e)}")
         
         execution_time = time.time() - start_time
         
@@ -5738,7 +5763,7 @@ def run_cmc_model():
             'metrics': metrics,
             'total_shots_updated': total_shots,
             'execution_time': execution_time,
-            'training_size': total_shots,
+            'training_size': len(essential_data),  # Fixed: use actual training size
             'features_used': features,
             'feature_count': len(features)
         }

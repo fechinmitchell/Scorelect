@@ -5186,6 +5186,13 @@ def run_advanced_xp_model():
 
 import threading
 import time
+import numpy as np
+import pandas as pd
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.preprocessing import StandardScaler
+import gc
 
 # Global dictionary to store job status
 processing_jobs = {}
@@ -5208,13 +5215,13 @@ def run_cmc_model():
         # Initialize job status
         processing_jobs[job_id] = {
             'status': 'starting',
+            'message': 'Initializing CMC model...',
             'progress': 0,
             'total_shots': 0,
             'games_processed': 0,
             'start_time': time.time(),
             'error': None,
-            'metrics': None,
-            'phase': 'initialization'
+            'metrics': None
         }
         
         # Start background processing
@@ -5228,7 +5235,6 @@ def run_cmc_model():
         return jsonify({
             'success': True,
             'job_id': job_id,
-            'status': 'processing_started',
             'message': 'CMC model processing started in background'
         }), 200
         
@@ -5251,9 +5257,9 @@ def check_model_status():
         
         job_status = processing_jobs[job_id].copy()
         
-        # Clean up completed jobs older than 1 hour
+        # Clean up completed jobs older than 2 hours
         if job_status['status'] in ['completed', 'failed']:
-            if time.time() - job_status['start_time'] > 3600:
+            if time.time() - job_status['start_time'] > 7200:
                 del processing_jobs[job_id]
         
         return jsonify(job_status), 200
@@ -5263,36 +5269,17 @@ def check_model_status():
         return jsonify({'error': str(e)}), 500
 
 def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
-    """
-    Background function to process the CMC model
-    CMC Model v3 - Enhanced with better feature engineering and set piece detection
-    """
-    import numpy as np
-    import pandas as pd
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.model_selection import train_test_split, cross_val_score
-    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
-    from sklearn.preprocessing import StandardScaler
-    import gc
-    
+    """Background function to process the CMC model"""
     try:
         logging.info(f"Starting CMC v3 background processing for job {job_id}")
         start_time = time.time()
         
-        # Update status
-        processing_jobs[job_id].update({
-            'status': 'loading_data',
-            'phase': 'data_loading'
-        })
-        
         # Constants
         goal_x, goal_y = 145, 44
-        pitch_width, pitch_height = 145, 88
         midline_x, midline_y = 72.5, 44
-        BATCH_SIZE = 100
-        MAX_BATCH_SIZE = 25  # Smaller batches for background processing
+        MAX_BATCH_SIZE = 20  # Small batches for reliable processing
         
-        # Comprehensive set piece indicators
+        # Set piece indicators
         set_piece_indicators = [
             'free', 'penalty', '45', 'fortyfive', 'forty five', 'forty-five',
             'sideline', 'placed', 'offensive mark', 'mark', 'penalty goal',
@@ -5301,13 +5288,11 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
         
         # Helper functions
         def standardize_coordinates(x, y, midline_x, midline_y):
-            """Mirror shots to one side of the pitch for consistency"""
             if x <= midline_x:
                 return 2 * midline_x - x, 2 * midline_y - y
             return x, y
         
         def is_preferable_side(y, foot, midline_y):
-            """Enhanced preferred side calculation"""
             if foot == 'hand':
                 return 0
             side = 'right' if y > midline_y else 'left'
@@ -5316,7 +5301,6 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
             return 0
         
         def calculate_goal_angle(x, y, goal_x, goal_y, goal_width=7.32):
-            """Calculate the angle to goal posts"""
             post1_y = goal_y - goal_width/2
             post2_y = goal_y + goal_width/2
             angle1 = np.arctan2(post1_y - y, goal_x - x)
@@ -5325,7 +5309,6 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
             return np.degrees(goal_angle)
         
         def detect_set_piece(shot, indicators):
-            """Comprehensive set piece detection"""
             if shot.get('is_setplay') is not None:
                 return 1 if shot.get('is_setplay') else 0
             if shot.get('set_play_type') and shot.get('set_play_type') != 'none':
@@ -5336,7 +5319,6 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
             return 1 if any(ind in action for ind in indicators) else 0
         
         def get_set_piece_type(shot):
-            """Get specific set piece type for categorical encoding"""
             if shot.get('set_play_type'):
                 return shot.get('set_play_type')
             action = str(shot.get('action', '')).lower()
@@ -5352,22 +5334,20 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
                 return 'sideline'
             return 'none'
         
-        # Load source dataset
-        processing_jobs[job_id]['phase'] = 'loading_training_data'
-        source_shots = []
+        # Step 1: Load training data
+        processing_jobs[job_id].update({
+            'status': 'processing',
+            'message': 'Loading training data...',
+            'progress': 5
+        })
+        
         source_games_query = db.collection('savedGames').document(uid)\
             .collection('games').where('datasetName', '==', source_dataset)
         
-        batch_count = 0
+        source_shots = []
         for game in source_games_query.stream():
             game_data = game.to_dict().get('gameData', [])
             source_shots.extend(game_data)
-            batch_count += 1
-            
-            if batch_count % BATCH_SIZE == 0:
-                processing_jobs[job_id]['progress'] = min(30, batch_count * 0.1)
-                logging.info(f"Job {job_id}: Processed {batch_count} games, {len(source_shots)} shots so far")
-                gc.collect()
         
         logging.info(f"Job {job_id}: Loaded {len(source_shots)} shots for training")
         
@@ -5379,8 +5359,12 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
             })
             return
         
-        # Create training dataframe
-        processing_jobs[job_id]['phase'] = 'preprocessing_data'
+        # Step 2: Prepare training data
+        processing_jobs[job_id].update({
+            'message': 'Preparing training data...',
+            'progress': 15
+        })
+        
         essential_data = []
         for shot in source_shots:
             try:
@@ -5395,7 +5379,6 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
                     'is_setplay': shot.get('is_setplay'),
                     'set_play_type': shot.get('set_play_type'),
                     'category': shot.get('category'),
-                    'shot_quality': shot.get('shot_quality'),
                     'minute': int(shot.get('minute', 0))
                 })
             except:
@@ -5405,8 +5388,13 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
         del source_shots
         gc.collect()
         
-        # Feature engineering
-        processing_jobs[job_id]['phase'] = 'feature_engineering'
+        # Step 3: Feature engineering
+        processing_jobs[job_id].update({
+            'message': 'Engineering features...',
+            'progress': 25
+        })
+        
+        # Standardize coordinates
         df[['stand_x', 'stand_y']] = df.apply(
             lambda row: standardize_coordinates(row['x'], row['y'], midline_x, midline_y),
             axis=1, result_type='expand'
@@ -5426,14 +5414,12 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
             axis=1
         )
         
-        # Distance bands
+        # Distance and zone features
         df['close_range'] = (df['distance'] < 20).astype(int)
         df['mid_range'] = ((df['distance'] >= 20) & (df['distance'] < 35)).astype(int)
         df['long_range'] = ((df['distance'] >= 35) & (df['distance'] < 50)).astype(int)
         df['beyond_50m'] = (df['distance'] >= 50).astype(int)
         df['beyond_40m'] = (df['distance'] >= 40).astype(int)
-        
-        # Zones
         df['central_zone'] = ((df['stand_y'] > 30) & (df['stand_y'] < 58)).astype(int)
         df['penalty_area'] = (df['stand_x'] > 125).astype(int)
         df['danger_zone'] = ((df['stand_x'] > 110) & (df['central_zone'] == 1)).astype(int)
@@ -5443,32 +5429,20 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
             lambda row: is_preferable_side(row['stand_y'], row['foot'], midline_y),
             axis=1
         )
-        
         df['placed_ball'] = df.apply(
             lambda row: detect_set_piece(row, set_piece_indicators),
             axis=1
         )
         
-        # Set piece encoding
-        set_piece_type_map = {
-            'none': 0, 'free': 1, 'penalty': 2, 'fortyfive': 3,
-            'mark': 4, 'sideline': 5, 'offensive mark': 4
-        }
+        # Categorical mappings
+        set_piece_type_map = {'none': 0, 'free': 1, 'penalty': 2, 'fortyfive': 3, 'mark': 4, 'sideline': 5}
         df['set_piece_type'] = df.apply(get_set_piece_type, axis=1)
         df['set_piece_type_value'] = df['set_piece_type'].map(set_piece_type_map).fillna(0)
         
-        # Categorical mappings
-        position_map = {
-            'forward': 3, 'midfielder': 2, 'midfield': 2, 
-            'back': 1, 'defender': 1, 'goalkeeper': 0
-        }
+        position_map = {'forward': 3, 'midfielder': 2, 'back': 1, 'goalkeeper': 0}
         df['position_value'] = df['position'].map(position_map).fillna(2)
         
-        pressure_map = {
-            'high': 3, 'medium': 2, 'low': 1, 'none': 0,
-            'y': 2, 'yes': 2, 'n': 0, 'no': 0,
-            '0': 0, '1': 1, '2': 2, '3': 3
-        }
+        pressure_map = {'high': 3, 'medium': 2, 'low': 1, 'none': 0, 'y': 2, 'yes': 2, 'n': 0, 'no': 0}
         df['pressure_value'] = df['pressure'].map(pressure_map).fillna(0)
         
         foot_map = {'right': 0, 'left': 1, 'hand': 2}
@@ -5479,40 +5453,24 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
         df['late_game'] = (df['minute'] >= 60).astype(int)
         
         # Outcome variable
-        scoring_actions = {
-            'point', 'goal', 'penalty goal', 'free', 'offensive mark',
-            'fortyfive', 'forty five', '45', 'scores', 'over'
-        }
+        scoring_actions = {'point', 'goal', 'penalty goal', 'free', 'offensive mark', 'fortyfive', 'forty five', '45', 'scores', 'over'}
         df['success'] = df['action'].apply(
             lambda x: 1 if any(outcome in x for outcome in scoring_actions) else 0
         )
         
-        # Point values
-        def calculate_points_value(row):
-            action = row['action']
-            if 'goal' in action:
-                return 3.0
-            elif any(outcome in action for outcome in ['point', 'scores', 'over', 'free', 'mark', '45']):
-                if row['beyond_40m'] and '45' not in action and 'fortyfive' not in action:
-                    return 2.0
-                else:
-                    return 1.0
-            else:
-                return 0.0
+        # Step 4: Player quality metrics
+        processing_jobs[job_id].update({
+            'message': 'Calculating player statistics...',
+            'progress': 35
+        })
         
-        df['points_value'] = df.apply(calculate_points_value, axis=1)
-        
-        # Player quality metrics
-        processing_jobs[job_id]['phase'] = 'calculating_player_stats'
         player_stats = df.groupby('playerName').agg({
             'success': ['mean', 'count', 'std'],
-            'points_value': ['sum', 'mean'],
             'placed_ball': 'mean',
             'distance': 'mean'
         }).fillna(0)
         
-        player_stats.columns = ['success_rate', 'shot_count', 'success_std', 
-                               'total_points', 'avg_points', 'set_piece_ratio', 'avg_distance']
+        player_stats.columns = ['success_rate', 'shot_count', 'success_std', 'set_piece_ratio', 'avg_distance']
         
         # Bayesian smoothing
         position_priors = {'forward': 0.35, 'midfielder': 0.30, 'back': 0.25, 'goalkeeper': 0.20}
@@ -5528,23 +5486,19 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
         )
         
         player_stats['player_consistency'] = 1 / (1 + player_stats['success_std'])
-        player_stats['player_efficiency'] = player_stats['avg_points'] * player_stats['success_rate']
+        player_stats['player_efficiency'] = player_stats['success_rate'] * 0.7  # Simplified efficiency
         
         # Merge player stats
         df = df.merge(
-            player_stats[['player_quality', 'player_consistency', 'player_efficiency', 
-                         'set_piece_ratio', 'avg_distance']], 
+            player_stats[['player_quality', 'player_consistency', 'player_efficiency']], 
             left_on='playerName', 
             right_index=True, 
             how='left'
         )
         
-        # Fill missing values
         df['player_quality'] = df['player_quality'].fillna(overall_success_rate)
         df['player_consistency'] = df['player_consistency'].fillna(1.0)
         df['player_efficiency'] = df['player_efficiency'].fillna(overall_success_rate)
-        df['set_piece_ratio'] = df['set_piece_ratio'].fillna(df['placed_ball'].mean())
-        df['avg_distance'] = df['avg_distance'].fillna(df['distance'].mean())
         
         # Interaction features
         df['distance_x_pressure'] = df['distance'] * df['pressure_value']
@@ -5552,25 +5506,24 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
         df['angle_x_distance'] = df['angle_to_center'] * df['distance']
         df['preferred_x_quality'] = df['preferred_side'] * df['player_quality']
         
-        # Feature set
+        # Step 5: Train model
+        processing_jobs[job_id].update({
+            'message': 'Training model...',
+            'progress': 45
+        })
+        
         features = [
-            'distance', 'distance_squared', 'log_distance',
-            'angle_to_center', 'goal_angle',
+            'distance', 'distance_squared', 'log_distance', 'angle_to_center', 'goal_angle',
             'close_range', 'mid_range', 'long_range', 'beyond_50m', 'beyond_40m',
-            'central_zone', 'penalty_area', 'danger_zone',
-            'preferred_side', 'pressure_value', 'position_value', 'foot_value',
-            'placed_ball', 'set_piece_type_value',
-            'player_quality', 'player_consistency', 'player_efficiency',
-            'early_game', 'late_game',
+            'central_zone', 'penalty_area', 'danger_zone', 'preferred_side', 
+            'pressure_value', 'position_value', 'foot_value', 'placed_ball', 'set_piece_type_value',
+            'player_quality', 'player_consistency', 'player_efficiency', 'early_game', 'late_game',
             'distance_x_pressure', 'quality_x_position', 'angle_x_distance', 'preferred_x_quality'
         ]
         
         X = df[features].values
         y = df['success'].values
         X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
-        
-        processing_jobs[job_id]['progress'] = 40
-        logging.info(f"Job {job_id}: Training data shape: {X.shape}, Success rate: {y.mean():.3f}")
         
         if len(np.unique(y)) < 2:
             processing_jobs[job_id].update({
@@ -5580,32 +5533,20 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
             })
             return
         
-        # Train model
-        processing_jobs[job_id]['phase'] = 'training_model'
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42, stratify=y
-        )
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
         
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
         
-        del df, X, y
-        gc.collect()
-        
         model = LogisticRegression(
-            max_iter=2000,
-            C=0.5,
-            random_state=42,
-            solver='liblinear',
-            class_weight='balanced',
-            penalty='l2'
+            max_iter=2000, C=0.5, random_state=42, solver='liblinear', 
+            class_weight='balanced', penalty='l2'
         )
         
         model.fit(X_train_scaled, y_train)
         
         # Evaluate model
-        cv_scores = cross_val_score(model, X_train_scaled, y_train, cv=5, scoring='roc_auc')
         y_pred = model.predict(X_test_scaled)
         y_pred_proba = model.predict_proba(X_test_scaled)[:, 1]
         
@@ -5614,26 +5555,22 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
             'precision': float(precision_score(y_test, y_pred, zero_division=0)),
             'recall': float(recall_score(y_test, y_pred, zero_division=0)),
             'f1_score': float(f1_score(y_test, y_pred, zero_division=0)),
-            'auc_roc': float(roc_auc_score(y_test, y_pred_proba)) if len(np.unique(y_test)) > 1 else 0.5,
-            'cv_auc_mean': float(cv_scores.mean()),
-            'cv_auc_std': float(cv_scores.std())
+            'auc_roc': float(roc_auc_score(y_test, y_pred_proba)) if len(np.unique(y_test)) > 1 else 0.5
         }
         
-        feature_importance = dict(zip(features, model.coef_[0]))
-        metrics['top_features'] = sorted(feature_importance.items(), key=lambda x: abs(x[1]), reverse=True)[:10]
-        
         processing_jobs[job_id].update({
-            'progress': 50,
+            'message': 'Model trained successfully!',
+            'progress': 55,
             'metrics': metrics
         })
         
-        del X_train, X_test, y_train, y_test, X_train_scaled, X_test_scaled
+        del df, X, y, X_train, X_test, y_train, y_test, X_train_scaled, X_test_scaled
         gc.collect()
         
-        # Apply to target dataset
+        # Step 6: Apply to target dataset
         processing_jobs[job_id].update({
-            'phase': 'applying_predictions',
-            'progress': 55
+            'message': 'Applying predictions to target dataset...',
+            'progress': 60
         })
         
         target_games_query = db.collection('savedGames').document(uid)\
@@ -5650,30 +5587,24 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
             
             for shot in shots:
                 try:
-                    # Extract coordinates
+                    # Extract and standardize coordinates
                     x = float(shot.get('x', 0))
                     y = float(shot.get('y', 0))
                     stand_x, stand_y = standardize_coordinates(x, y, midline_x, midline_y)
                     
-                    # Calculate features
+                    # Calculate all features (same as training)
                     distance = np.sqrt((stand_x - goal_x)**2 + (stand_y - goal_y)**2)
                     distance_squared = distance ** 2
                     log_distance = np.log1p(distance)
-                    
-                    angle_to_center = np.degrees(np.arctan2(
-                        np.abs(stand_y - goal_y), 
-                        goal_x - stand_x
-                    ))
+                    angle_to_center = np.degrees(np.arctan2(np.abs(stand_y - goal_y), goal_x - stand_x))
                     goal_angle = calculate_goal_angle(stand_x, stand_y, goal_x, goal_y)
                     
-                    # Distance bands
+                    # Distance bands and zones
                     close_range = int(distance < 20)
                     mid_range = int(20 <= distance < 35)
                     long_range = int(35 <= distance < 50)
                     beyond_50m = int(distance >= 50)
                     beyond_40m = int(distance >= 40)
-                    
-                    # Zones
                     central_zone = int((stand_y > 30) and (stand_y < 58))
                     penalty_area = int(stand_x > 125)
                     danger_zone = int((stand_x > 110) and (central_zone == 1))
@@ -5681,17 +5612,12 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
                     # Shot characteristics
                     foot = str(shot.get('foot', 'right')).lower()
                     preferred_side = is_preferable_side(stand_y, foot, midline_y)
-                    
                     placed_ball = detect_set_piece(shot, set_piece_indicators)
                     set_piece_type = get_set_piece_type(shot)
                     set_piece_type_value = set_piece_type_map.get(set_piece_type, 0)
                     
-                    position_value = position_map.get(
-                        str(shot.get('position', 'midfielder')).lower(), 2
-                    )
-                    pressure_value = pressure_map.get(
-                        str(shot.get('pressure', 'none')).lower(), 0
-                    )
+                    position_value = position_map.get(str(shot.get('position', 'midfielder')).lower(), 2)
+                    pressure_value = pressure_map.get(str(shot.get('pressure', 'none')).lower(), 0)
                     foot_value = foot_map.get(foot, 0)
                     
                     # Time features
@@ -5716,22 +5642,19 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
                     angle_x_distance = angle_to_center * distance
                     preferred_x_quality = preferred_side * player_quality
                     
-                    # Feature array
+                    # Create feature array
                     shot_features = np.array([[
-                        distance, distance_squared, log_distance,
-                        angle_to_center, goal_angle,
+                        distance, distance_squared, log_distance, angle_to_center, goal_angle,
                         close_range, mid_range, long_range, beyond_50m, beyond_40m,
-                        central_zone, penalty_area, danger_zone,
-                        preferred_side, pressure_value, position_value, foot_value,
-                        placed_ball, set_piece_type_value,
-                        player_quality, player_consistency, player_efficiency,
-                        early_game, late_game,
+                        central_zone, penalty_area, danger_zone, preferred_side,
+                        pressure_value, position_value, foot_value, placed_ball, set_piece_type_value,
+                        player_quality, player_consistency, player_efficiency, early_game, late_game,
                         distance_x_pressure, quality_x_position, angle_x_distance, preferred_x_quality
                     ]])
                     
                     shot_features_scaled = scaler.transform(shot_features)
                     
-                    # Predict
+                    # Predict xP
                     xP = float(model.predict_proba(shot_features_scaled)[0, 1])
                     
                     # Calculate expected points
@@ -5745,25 +5668,14 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
                     # Update shot
                     shot['xP'] = min(max(xP, 0.0), 1.0)
                     shot['xPoints'] = expected_points
-                    shot['model_type'] = 'cmc_v3'
-                    shot['cmc_features'] = {
-                        'preferred_side': preferred_side,
-                        'placed_ball': placed_ball,
-                        'set_piece_type': set_piece_type,
-                        'beyond_40m': beyond_40m,
-                        'shot_angle': round(angle_to_center, 2),
-                        'goal_angle': round(goal_angle, 2),
-                        'distance': round(distance, 2),
-                        'danger_zone': danger_zone,
-                        'player_quality': round(player_quality, 3)
-                    }
+                    shot['model_type'] = 'cmc_v3_background'
                     total_shots += 1
                     
                 except Exception as e:
                     logging.warning(f"Job {job_id}: Failed to process shot: {str(e)}")
                     shot['xP'] = 0.3
                     shot['xPoints'] = 0.3
-                    shot['model_type'] = 'cmc_v3'
+                    shot['model_type'] = 'cmc_v3_background'
             
             # Add to batch
             batch.update(game.reference, {'gameData': shots})
@@ -5771,11 +5683,12 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
             games_processed += 1
             
             # Update progress
-            progress = 55 + (games_processed * 40 / max(100, games_processed))  # Scale progress
+            progress = 60 + (games_processed * 35 / max(100, games_processed))
             processing_jobs[job_id].update({
                 'games_processed': games_processed,
                 'total_shots': total_shots,
-                'progress': min(progress, 95)
+                'progress': min(progress, 95),
+                'message': f'Processing games... ({games_processed} completed)'
             })
             
             # Commit batch
@@ -5802,20 +5715,19 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
         execution_time = time.time() - start_time
         
         # Save model run to history
-        model_run = {
-            'timestamp': firestore.SERVER_TIMESTAMP,
-            'model_type': 'cmc_v3',
-            'source_dataset': source_dataset,
-            'target_dataset': target_dataset,
-            'metrics': metrics,
-            'total_shots_updated': total_shots,
-            'execution_time': execution_time,
-            'training_size': len(essential_data),
-            'features_used': features,
-            'feature_count': len(features)
-        }
-        
         try:
+            model_run = {
+                'timestamp': firestore.SERVER_TIMESTAMP,
+                'model_type': 'cmc_v3_background',
+                'source_dataset': source_dataset,
+                'target_dataset': target_dataset,
+                'metrics': metrics,
+                'total_shots_updated': total_shots,
+                'execution_time': execution_time,
+                'training_size': len(essential_data),
+                'features_used': features,
+                'feature_count': len(features)
+            }
             db.collection('modelRuns').document(uid).collection('history').add(model_run)
         except Exception as e:
             logging.warning(f"Job {job_id}: Failed to save model run history: {str(e)}")
@@ -5823,12 +5735,12 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
         # Mark as completed
         processing_jobs[job_id].update({
             'status': 'completed',
+            'message': f'Model completed successfully! Updated {total_shots} shots across {games_processed} games.',
             'progress': 100,
             'final_shots': total_shots,
             'final_games': games_processed,
             'completion_time': time.time(),
-            'execution_time': execution_time,
-            'phase': 'completed'
+            'execution_time': execution_time
         })
         
         # Cleanup
@@ -5843,6 +5755,6 @@ def process_cmc_model_background(job_id, uid, source_dataset, target_dataset):
             'status': 'failed',
             'error': str(e),
             'completion_time': time.time(),
-            'phase': 'error'
+            'message': f'Model failed: {str(e)}'
         })
         gc.collect()

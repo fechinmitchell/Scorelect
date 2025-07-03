@@ -5714,62 +5714,20 @@ def run_cmc_model():
                     shot['xP'] = 0.3
                     shot['xPoints'] = 0.3
                     shot['model_type'] = 'cmc_v3'
-            
-            # Store game reference and shots for batch update
-            games_to_update.append((game.reference, shots))
-            total_games = len(games_to_update)
-            
-            # Log progress
-            if total_shots % 500 == 0 and total_shots > 0:
-                logging.info(f"Processed {total_shots} shots, {total_games} games ready for update...")
-            
-            # When we have enough games, commit the batch
-            if total_games >= MAX_BATCH_SIZE:
-                # Add all games to batch
-                for game_ref, game_shots in games_to_update:
-                    batch.update(game_ref, {'gameData': game_shots})
-                    batch_count += 1
                 
-                try:
-                    batch.commit()
-                    updated_games += batch_count
-                    logging.info(f"Batch committed: {batch_count} games updated")
-                    # Start new batch
-                    batch = db.batch()
-                    batch_count = 0
-                    games_to_update = []
-                except Exception as e:
-                    logging.error(f"Batch commit failed: {str(e)}")
-                    # Fallback to individual updates
-                    for game_ref, game_shots in games_to_update:
-                        try:
-                            game_ref.update({'gameData': game_shots})
-                            updated_games += 1
-                        except:
-                            pass
-                    games_to_update = []
-                gc.collect()
-        
-        # Commit any remaining games
-        if games_to_update:
-            # Add remaining games to final batch
-            for game_ref, game_shots in games_to_update:
-                batch.update(game_ref, {'gameData': game_shots})
-                batch_count += 1
+                shots_processed += 1
             
+            # Update the game with all processed shots
             try:
-                batch.commit()
-                updated_games += batch_count
-                logging.info(f"Final batch committed: {batch_count} games updated")
+                game.reference.update({'gameData': shots})
+                updated_games += 1
+                
+                # Log progress
+                if updated_games % 50 == 0:
+                    logging.info(f"Updated {updated_games} games, {total_shots} total shots processed")
+                    
             except Exception as e:
-                logging.error(f"Final batch commit failed: {str(e)}")
-                # Fallback for remaining
-                for game_ref, game_shots in games_to_update:
-                    try:
-                        game_ref.update({'gameData': game_shots})
-                        updated_games += 1
-                    except:
-                        pass
+                logging.error(f"Failed to update game {game.id}: {str(e)}")
         
         execution_time = time.time() - start_time
         

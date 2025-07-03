@@ -54,7 +54,7 @@ import Swal from 'sweetalert2';
 import axios from 'axios';
 
 // Backend root URL
-const BASE_API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+const BASE_API_URL = process.env.REACT_APP_API_URL || 'https://scorelect.onrender.com';
 
 // List the pages (or features) to control
 const features = [
@@ -310,12 +310,15 @@ const AdminSettings = () => {
       }
     } catch (error) {
       console.error('Error fetching datasets:', error);
-      Swal.fire({
-        title: 'Error',
-        text: 'Failed to load datasets. Please try again.',
-        icon: 'error',
-        confirmButtonColor: '#7b1fa2',
-      });
+      // Don't show error if it's just a network issue
+      if (!error.message?.includes('Network')) {
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to load datasets. Please try again.',
+          icon: 'error',
+          confirmButtonColor: '#7b1fa2',
+        });
+      }
     }
   };
 
@@ -508,7 +511,7 @@ const AdminSettings = () => {
     }
   };
 
-  // Run simple xP model
+  // Run simple xP model - FIXED VERSION
   const handleRunSimpleModel = async () => {
     if (!sourceDataset || !targetDataset) {
       Swal.fire({
@@ -545,26 +548,95 @@ const AdminSettings = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      setModelResult(response.data);
-      await fetchModelHistory();
-      
-      const modelName = selectedModel === 'cmc' ? 'CMC Model' : 'Model';
-      Swal.fire({
-        title: 'Success',
-        text: `${modelName} completed! Updated ${response.data.shots_updated} shots with ${(response.data.metrics.accuracy * 100).toFixed(1)}% accuracy`,
-        icon: 'success',
-        confirmButtonColor: '#7b1fa2',
-      });
+      // CMC model returns different structure - it starts a job
+      if (selectedModel === 'cmc') {
+        const jobId = response.data.job_id;
+        
+        Swal.fire({
+          title: 'CMC Model Started',
+          text: 'The CMC model is processing in the background. This may take a few moments...',
+          icon: 'info',
+          confirmButtonColor: '#7b1fa2',
+        });
+        
+        // Poll for job completion
+        const pollInterval = setInterval(async () => {
+          try {
+            const statusResponse = await axios.post(
+              `${BASE_API_URL}/check-model-status`,
+              { job_id: jobId },
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            
+            const status = statusResponse.data;
+            
+            if (status.status === 'completed') {
+              clearInterval(pollInterval);
+              
+              // Create result object for CMC
+              const cmcResult = {
+                model_type: 'cmc',
+                metrics: status.metrics || { accuracy: 0, precision: 0, recall: 0, f1_score: 0, auc_roc: 0 },
+                shots_updated: status.final_shots || status.total_shots || 0,
+                execution_time: status.execution_time || 0,
+              };
+              
+              setModelResult(cmcResult);
+              setIsCalculating(false);
+              await fetchModelHistory();
+              
+              Swal.fire({
+                title: 'Success',
+                text: `CMC Model completed! Updated ${cmcResult.shots_updated} shots with ${(cmcResult.metrics.accuracy * 100).toFixed(1)}% accuracy`,
+                icon: 'success',
+                confirmButtonColor: '#7b1fa2',
+              });
+            } else if (status.status === 'failed') {
+              clearInterval(pollInterval);
+              setIsCalculating(false);
+              throw new Error(status.error || 'CMC model failed');
+            }
+          } catch (error) {
+            clearInterval(pollInterval);
+            setIsCalculating(false);
+            console.error('Polling error:', error);
+            Swal.fire({
+              title: 'Error',
+              text: 'Failed to check model status',
+              icon: 'error',
+              confirmButtonColor: '#7b1fa2',
+            });
+          }
+        }, 3000); // Poll every 3 seconds
+        
+        // Timeout after 5 minutes
+        setTimeout(() => {
+          clearInterval(pollInterval);
+          setIsCalculating(false);
+        }, 300000);
+        
+      } else {
+        // Regular xP models
+        setModelResult(response.data);
+        await fetchModelHistory();
+        
+        Swal.fire({
+          title: 'Success',
+          text: `Model completed! Updated ${response.data.shots_updated || 0} shots with ${((response.data.metrics?.accuracy || 0) * 100).toFixed(1)}% accuracy`,
+          icon: 'success',
+          confirmButtonColor: '#7b1fa2',
+        });
+        setIsCalculating(false);
+      }
     } catch (error) {
       console.error('Model run error:', error);
+      setIsCalculating(false);
       Swal.fire({
         title: 'Error',
-        text: error.response?.data?.error || 'Failed to run model',
+        text: error.response?.data?.error || error.message || 'Failed to run model',
         icon: 'error',
         confirmButtonColor: '#7b1fa2',
       });
-    } finally {
-      setIsCalculating(false);
     }
   };
 
@@ -591,26 +663,9 @@ const AdminSettings = () => {
       
       // CMC model doesn't support advanced mode, run standard CMC instead
       if (selectedModel === 'cmc') {
-        const response = await axios.post(
-          `${BASE_API_URL}/run-cmc-model`,
-          {
-            uid: user.uid,
-            source_dataset: sourceDataset,
-            target_dataset: targetDataset,
-            model_type: 'cmc',
-          },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        
-        setModelResult(response.data);
-        await fetchModelHistory();
-        
-        Swal.fire({
-          title: 'Success',
-          text: `CMC Model completed! Updated ${response.data.shots_updated} shots with ${(response.data.metrics.accuracy * 100).toFixed(1)}% accuracy`,
-          icon: 'success',
-          confirmButtonColor: '#7b1fa2',
-        });
+        // Just call the simple model handler for CMC
+        handleRunSimpleModel();
+        return;
       } else {
         const response = await axios.post(
           `${BASE_API_URL}/run-advanced-xp-model`,
@@ -635,7 +690,7 @@ const AdminSettings = () => {
         
         Swal.fire({
           title: 'Success',
-          text: `Advanced model completed! Updated ${data.shots_updated} shots with ${(data.metrics.accuracy * 100).toFixed(1)}% accuracy`,
+          text: `Advanced model completed! Updated ${data.shots_updated || 0} shots with ${((data.metrics?.accuracy || 0) * 100).toFixed(1)}% accuracy`,
           icon: 'success',
           confirmButtonColor: '#7b1fa2',
         });
@@ -1222,12 +1277,12 @@ const AdminSettings = () => {
                   )}
                 </Grid>
 
-                {/* Current Results */}
+                {/* Current Results - FIXED VERSION */}
                 {modelResult && (
                   <Box sx={{ mb: 3 }}>
                     <Typography variant="h6" gutterBottom>
-                      Results: {modelResult.model_type.replace('_', ' ')}
-                      {modelResult.parameters && (
+                      Results: {modelResult?.model_type?.replace('_', ' ') || 'Model'}
+                      {modelResult?.parameters && (
                         <Chip 
                           label="Advanced" 
                           size="small" 
@@ -1252,12 +1307,12 @@ const AdminSettings = () => {
                               {metric.replace('_', ' ').toUpperCase()}
                             </Typography>
                             <Typography variant="h5">
-                              {(modelResult.metrics[metric] * 100).toFixed(1)}%
+                              {((modelResult?.metrics?.[metric] || 0) * 100).toFixed(1)}%
                             </Typography>
                             <Box
                               sx={{
                                 height: 4,
-                                bgcolor: getMetricColor(modelResult.metrics[metric]),
+                                bgcolor: getMetricColor(modelResult?.metrics?.[metric] || 0),
                                 borderRadius: 2,
                                 mt: 1,
                               }}
@@ -1268,11 +1323,11 @@ const AdminSettings = () => {
                     </Grid>
                     
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                      Updated {modelResult.shots_updated} shots in {modelResult.execution_time}s
+                      Updated {modelResult?.shots_updated || 0} shots in {modelResult?.execution_time || 0}s
                     </Typography>
                     
                     {/* Show advanced parameters if used */}
-                    {modelResult.parameters && (
+                    {modelResult?.parameters && (
                       <Box sx={{ mt: 2, p: 1, bgcolor: mode === 'dark' ? '#424242' : '#f5f5f5', borderRadius: 1 }}>
                         <Typography variant="caption" color="text.secondary">
                           Advanced settings used: Train size {(modelResult.parameters.train_size * 100).toFixed(0)}%
@@ -1286,7 +1341,7 @@ const AdminSettings = () => {
                   </Box>
                 )}
 
-                {/* Model History Leaderboard */}
+                {/* Model History Leaderboard - FIXED VERSION */}
                 <Box sx={{ mt: 3 }}>
                   <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
                     🏆 Model Leaderboard
@@ -1320,11 +1375,11 @@ const AdminSettings = () => {
                               </TableCell>
                               <TableCell>
                                 <Chip
-                                  label={run.model_type?.replace('_', ' ')}
+                                  label={run?.model_type?.replace('_', ' ') || 'unknown'}
                                   size="small"
-                                  color={run.model_type === selectedModel ? 'primary' : 'default'}
+                                  color={run?.model_type === selectedModel ? 'primary' : 'default'}
                                 />
-                                {run.is_advanced && (
+                                {run?.is_advanced && (
                                   <Chip
                                     label="ADV"
                                     size="small"
@@ -1333,16 +1388,16 @@ const AdminSettings = () => {
                                   />
                                 )}
                               </TableCell>
-                              <TableCell>{run.target_dataset}</TableCell>
+                              <TableCell>{run?.target_dataset || 'N/A'}</TableCell>
                               <TableCell align="right">
-                                <strong>{((run.metrics?.f1_score || 0) * 100).toFixed(1)}%</strong>
+                                <strong>{((run?.metrics?.f1_score || 0) * 100).toFixed(1)}%</strong>
                               </TableCell>
                               <TableCell align="right">
-                                {((run.metrics?.accuracy || 0) * 100).toFixed(1)}%
+                                {((run?.metrics?.accuracy || 0) * 100).toFixed(1)}%
                               </TableCell>
-                              <TableCell align="right">{run.total_shots_updated || 0}</TableCell>
+                              <TableCell align="right">{run?.total_shots_updated || 0}</TableCell>
                               <TableCell>
-                                {run.timestamp ? new Date(run.timestamp).toLocaleDateString() : 'N/A'}
+                                {run?.timestamp ? new Date(run.timestamp).toLocaleDateString() : 'N/A'}
                               </TableCell>
                             </TableRow>
                           ))}

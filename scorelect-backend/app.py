@@ -5715,17 +5715,21 @@ def run_cmc_model():
                     shot['xPoints'] = 0.3
                     shot['model_type'] = 'cmc_v3'
             
-            # Add to batch
-            batch.update(game.reference, {'gameData': shots})
-            batch_count += 1
-            games_to_update.append(game.id)
+            # Store game reference and shots for batch update
+            games_to_update.append((game.reference, shots))
+            total_games = len(games_to_update)
             
             # Log progress
             if total_shots % 500 == 0 and total_shots > 0:
-                logging.info(f"Processed {total_shots} shots, {len(games_to_update)} games...")
+                logging.info(f"Processed {total_shots} shots, {total_games} games ready for update...")
             
-            # Commit batch when reaching limit
-            if batch_count >= MAX_BATCH_SIZE:
+            # When we have enough games, commit the batch
+            if total_games >= MAX_BATCH_SIZE:
+                # Add all games to batch
+                for game_ref, game_shots in games_to_update:
+                    batch.update(game_ref, {'gameData': game_shots})
+                    batch_count += 1
+                
                 try:
                     batch.commit()
                     updated_games += batch_count
@@ -5733,20 +5737,26 @@ def run_cmc_model():
                     # Start new batch
                     batch = db.batch()
                     batch_count = 0
+                    games_to_update = []
                 except Exception as e:
                     logging.error(f"Batch commit failed: {str(e)}")
                     # Fallback to individual updates
-                    for game_ref in games_to_update:
+                    for game_ref, game_shots in games_to_update:
                         try:
-                            game_ref.update({'gameData': shots})
+                            game_ref.update({'gameData': game_shots})
                             updated_games += 1
                         except:
                             pass
-                games_to_update = []
+                    games_to_update = []
                 gc.collect()
         
-        # Commit remaining batch
-        if batch_count > 0:
+        # Commit any remaining games
+        if games_to_update:
+            # Add remaining games to final batch
+            for game_ref, game_shots in games_to_update:
+                batch.update(game_ref, {'gameData': game_shots})
+                batch_count += 1
+            
             try:
                 batch.commit()
                 updated_games += batch_count
@@ -5754,9 +5764,9 @@ def run_cmc_model():
             except Exception as e:
                 logging.error(f"Final batch commit failed: {str(e)}")
                 # Fallback for remaining
-                for game_ref in games_to_update:
+                for game_ref, game_shots in games_to_update:
                     try:
-                        game_ref.update({'gameData': shots})
+                        game_ref.update({'gameData': game_shots})
                         updated_games += 1
                     except:
                         pass

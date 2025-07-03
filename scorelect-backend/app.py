@@ -5561,27 +5561,15 @@ def run_cmc_model():
         y_pred = model.predict(X_test_scaled)
         y_pred_proba = model.predict_proba(X_test_scaled)[:, 1]
         
-        # Calibration Analysis
-        from sklearn.calibration import calibration_curve
-        from sklearn.isotonic import IsotonicRegression
-        
-        # Calculate calibration metrics
-        n_bins = 10
-        fraction_of_positives, mean_predicted_value = calibration_curve(
-            y_test, y_pred_proba, n_bins=n_bins, strategy='uniform'
-        )
-        
-        # Expected Calibration Error (ECE)
-        ece = np.mean(np.abs(fraction_of_positives - mean_predicted_value))
-        
-        # Fit isotonic regression for calibration
-        calibrator = IsotonicRegression(out_of_bounds='clip')
-        calibrator.fit(y_pred_proba, y_test)
-        
-        # Calculate league-specific calibration factors
-        league_stats = {
-            'overall_conversion_rate': float(df['success'].mean()),
-            'open_play_rate': float(df[
+        metrics = {
+            'accuracy': float(accuracy_score(y_test, y_pred)),
+            'precision': float(precision_score(y_test, y_pred, zero_division=0)),
+            'recall': float(recall_score(y_test, y_pred, zero_division=0)),
+            'f1_score': float(f1_score(y_test, y_pred, zero_division=0)),
+            'auc_roc': float(roc_auc_score(y_test, y_pred_proba)) if len(np.unique(y_test)) > 1 else 0.5,
+            'cv_auc_mean': float(cv_scores.mean()),
+            'cv_auc_std': float(cv_scores.std())
+        }
         
         # Feature importance (coefficients for logistic regression)
         feature_importance = dict(zip(features, model.coef_[0]))

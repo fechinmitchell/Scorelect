@@ -5714,8 +5714,6 @@ def run_cmc_model():
                     shot['xP'] = 0.3
                     shot['xPoints'] = 0.3
                     shot['model_type'] = 'cmc_v3'
-                
-                shots_processed += 1
             
             # Update the game with all processed shots
             try:
@@ -5767,6 +5765,6 @@ def run_cmc_model():
         }), 200
         
     except Exception as e:
-        logging.error(f"Error in run_cmc_model_v3: {str(e)}")
+        logging.error(f"Error in run_cmc_model: {str(e)}")
         gc.collect()
         return jsonify({'error': str(e)}), 500

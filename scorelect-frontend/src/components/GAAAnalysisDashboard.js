@@ -668,10 +668,14 @@ export default function GAAAnalysisDashboard() {
         agg[team].successfulShots++;
         scorerMap[team][name].goals++;
         
-        // Use backend xG values
-        if (typeof sh.xGoals === 'number') {
+        // Use backend xG values - check multiple possible fields
+        if (typeof sh.xGoals === 'number' && sh.xGoals > 0) {
           agg[team].totalXG += sh.xGoals;
           scorerMap[team][name].xG += sh.xGoals;
+        } else if (typeof sh.xP === 'number' && act.includes('goal')) {
+          // For goals, xP represents the probability of scoring
+          agg[team].totalXG += sh.xP;
+          scorerMap[team][name].xG += sh.xP;
         }
       }
       // Handle POINTS separately (everything except goals)
@@ -713,9 +717,13 @@ export default function GAAAnalysisDashboard() {
           
           // Add expected values for missed shots
           if (act.includes('goal')) {
-            if (typeof sh.xGoals === 'number') {
+            if (typeof sh.xGoals === 'number' && sh.xGoals > 0) {
               agg[team].totalXG += sh.xGoals;
               scorerMap[team][name].xG += sh.xGoals;
+            } else if (typeof sh.xP === 'number') {
+              // For missed goal attempts, xP represents the probability
+              agg[team].totalXG += sh.xP;
+              scorerMap[team][name].xG += sh.xP;
             }
           } else {
             if (typeof sh.xPoints === 'number') {
@@ -928,6 +936,18 @@ export default function GAAAnalysisDashboard() {
             <span className="gaa-stat-label">xPoints:</span>
             <span className="gaa-stat-value">{typeof selectedShot.xPoints === 'number' ? selectedShot.xPoints.toFixed(2) : 'N/A'}</span>
           </div>
+          {(selectedShot.action || '').toLowerCase().includes('goal') && (
+            <div className="gaa-stat-row">
+              <span className="gaa-stat-label">xG (Goal Probability):</span>
+              <span className="gaa-stat-value">
+                {typeof selectedShot.xGoals === 'number' && selectedShot.xGoals > 0 
+                  ? selectedShot.xGoals.toFixed(2) 
+                  : typeof selectedShot.xP === 'number' 
+                    ? selectedShot.xP.toFixed(2) 
+                    : 'N/A'}
+              </span>
+            </div>
+          )}
           {selectedShot.model_type && (
             <div className="gaa-stat-row">
               <span className="gaa-stat-label">Model:</span>

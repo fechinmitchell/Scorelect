@@ -5188,12 +5188,7 @@ def run_advanced_xp_model():
 def run_cmc_model():
     """
     CMC Model v3 - Enhanced with better feature engineering and set piece detection
-    Key improvements:
-    1. Pitch standardization (mirroring)
-    2. Comprehensive set piece detection
-    3. Better player quality metrics
-    4. Shot type-specific features
-    5. Advanced angle calculations
+    Fixed version with proper serialization and batch handling
     """
     import numpy as np
     import pandas as pd
@@ -5222,8 +5217,8 @@ def run_cmc_model():
         midline_x, midline_y = 72.5, 44
         BATCH_SIZE = 100
         
-        # Batch processing setup
-        MAX_BATCH_SIZE = 50  # Keep batches smaller for memory management
+        # Batch processing setup - REDUCED SIZE
+        MAX_BATCH_SIZE = 20  # Reduced from 50 to prevent timeouts
         
         # Comprehensive set piece indicators
         set_piece_indicators = [
@@ -5564,6 +5559,7 @@ def run_cmc_model():
         y_pred = model.predict(X_test_scaled)
         y_pred_proba = model.predict_proba(X_test_scaled)[:, 1]
         
+        # FIXED: Properly serialize metrics
         metrics = {
             'accuracy': float(accuracy_score(y_test, y_pred)),
             'precision': float(precision_score(y_test, y_pred, zero_division=0)),
@@ -5576,7 +5572,9 @@ def run_cmc_model():
         
         # Feature importance (coefficients for logistic regression)
         feature_importance = dict(zip(features, model.coef_[0]))
-        metrics['top_features'] = sorted(feature_importance.items(), key=lambda x: abs(x[1]), reverse=True)[:10]
+        # FIXED: Serialize the top features properly
+        top_features = sorted(feature_importance.items(), key=lambda x: abs(x[1]), reverse=True)[:10]
+        metrics['top_features'] = [(str(k), float(v)) for k, v in top_features]
         
         logging.info(f"CMC v3 model metrics: {metrics}")
         
@@ -5592,156 +5590,176 @@ def run_cmc_model():
         batch_count = 0
         updated_games = 0
         total_shots = 0
+        failed_updates = []
         
         target_games_query = db.collection('savedGames').document(uid)\
             .collection('games').where('datasetName', '==', target_dataset)
         
-        for game in target_games_query.stream():
-            game_data = game.to_dict()
-            shots = game_data.get('gameData', [])
-            
-            for shot in shots:
-                try:
-                    # Extract raw coordinates
-                    x = float(shot.get('x', 0))
-                    y = float(shot.get('y', 0))
+        # Get list of all target games first
+        target_games_list = list(target_games_query.stream())
+        total_games = len(target_games_list)
+        logging.info(f"Found {total_games} games to update in target dataset")
+        
+        for game_idx, game in enumerate(target_games_list):
+            try:
+                game_data = game.to_dict()
+                shots = game_data.get('gameData', [])
+                
+                for shot in shots:
+                    try:
+                        # Extract raw coordinates
+                        x = float(shot.get('x', 0))
+                        y = float(shot.get('y', 0))
+                        
+                        # Standardize coordinates
+                        stand_x, stand_y = standardize_coordinates(x, y, midline_x, midline_y)
+                        
+                        # Calculate all features
+                        distance = np.sqrt((stand_x - goal_x)**2 + (stand_y - goal_y)**2)
+                        distance_squared = distance ** 2
+                        log_distance = np.log1p(distance)
+                        
+                        angle_to_center = np.degrees(np.arctan2(
+                            np.abs(stand_y - goal_y), 
+                            goal_x - stand_x
+                        ))
+                        goal_angle = calculate_goal_angle(stand_x, stand_y, goal_x, goal_y)
+                        
+                        # Distance bands
+                        close_range = int(distance < 20)
+                        mid_range = int(20 <= distance < 35)
+                        long_range = int(35 <= distance < 50)
+                        beyond_50m = int(distance >= 50)
+                        beyond_40m = int(distance >= 40)
+                        
+                        # Zones
+                        central_zone = int((stand_y > 30) and (stand_y < 58))
+                        penalty_area = int(stand_x > 125)
+                        danger_zone = int((stand_x > 110) and (central_zone == 1))
+                        
+                        # Shot characteristics
+                        foot = str(shot.get('foot', 'right')).lower()
+                        preferred_side = is_preferable_side(stand_y, foot, midline_y)
+                        
+                        placed_ball = detect_set_piece(shot, set_piece_indicators)
+                        set_piece_type = get_set_piece_type(shot)
+                        set_piece_type_value = set_piece_type_map.get(set_piece_type, 0)
+                        
+                        position_value = position_map.get(
+                            str(shot.get('position', 'midfielder')).lower(), 2
+                        )
+                        pressure_value = pressure_map.get(
+                            str(shot.get('pressure', 'none')).lower(), 0
+                        )
+                        foot_value = foot_map.get(foot, 0)
+                        
+                        # Time features
+                        minute = int(shot.get('minute', 0))
+                        early_game = int(minute <= 20)
+                        late_game = int(minute >= 60)
+                        
+                        # Get player quality
+                        player_name = shot.get('playerName', 'Unknown')
+                        if player_name in player_stats.index:
+                            player_quality = player_stats.loc[player_name, 'player_quality']
+                            player_consistency = player_stats.loc[player_name, 'player_consistency']
+                            player_efficiency = player_stats.loc[player_name, 'player_efficiency']
+                        else:
+                            player_quality = overall_success_rate
+                            player_consistency = 1.0
+                            player_efficiency = overall_success_rate
+                        
+                        # Interaction features
+                        distance_x_pressure = distance * pressure_value
+                        quality_x_position = player_quality * position_value
+                        angle_x_distance = angle_to_center * distance
+                        preferred_x_quality = preferred_side * player_quality
+                        
+                        # Create feature array
+                        shot_features = np.array([[
+                            distance, distance_squared, log_distance,
+                            angle_to_center, goal_angle,
+                            close_range, mid_range, long_range, beyond_50m, beyond_40m,
+                            central_zone, penalty_area, danger_zone,
+                            preferred_side, pressure_value, position_value, foot_value,
+                            placed_ball, set_piece_type_value,
+                            player_quality, player_consistency, player_efficiency,
+                            early_game, late_game,
+                            distance_x_pressure, quality_x_position, angle_x_distance, preferred_x_quality
+                        ]])
+                        
+                        shot_features_scaled = scaler.transform(shot_features)
+                        
+                        # Predict
+                        xP = float(model.predict_proba(shot_features_scaled)[0, 1])
+                        
+                        # Calculate expected points based on shot type
+                        if 'goal' in str(shot.get('action', '')).lower():
+                            expected_points = xP * 3.0
+                        elif beyond_40m and not any(x in str(shot.get('action', '')).lower() for x in ['45', 'fortyfive']):
+                            expected_points = xP * 2.0
+                        else:
+                            expected_points = xP * 1.0
+                        
+                        # Update shot
+                        shot['xP'] = min(max(xP, 0.0), 1.0)
+                        shot['xPoints'] = expected_points
+                        shot['model_type'] = 'cmc_v3'
+                        shot['cmc_features'] = {
+                            'preferred_side': preferred_side,
+                            'placed_ball': placed_ball,
+                            'set_piece_type': set_piece_type,
+                            'beyond_40m': beyond_40m,
+                            'shot_angle': round(angle_to_center, 2),
+                            'goal_angle': round(goal_angle, 2),
+                            'distance': round(distance, 2),
+                            'danger_zone': danger_zone,
+                            'player_quality': round(player_quality, 3)
+                        }
+                        total_shots += 1
+                        
+                    except Exception as e:
+                        logging.warning(f"Failed to process shot: {str(e)}")
+                        shot['xP'] = 0.3
+                        shot['xPoints'] = 0.3
+                        shot['model_type'] = 'cmc_v3'
+                
+                # Add game to batch
+                batch.update(game.reference, {'gameData': shots})
+                batch_count += 1
+                
+                # Commit batch when reaching limit OR at regular intervals
+                if batch_count >= MAX_BATCH_SIZE or (game_idx + 1) % MAX_BATCH_SIZE == 0:
+                    try:
+                        batch.commit()
+                        updated_games += batch_count
+                        logging.info(f"Batch committed: {updated_games}/{total_games} games updated, {total_shots} total shots processed")
+                        
+                        # Start new batch
+                        batch = db.batch()
+                        batch_count = 0
+                        
+                        # Add small delay to avoid rate limiting
+                        time.sleep(0.1)
+                        
+                    except Exception as e:
+                        logging.error(f"Batch commit failed: {str(e)}")
+                        # Track failed games
+                        failed_start = updated_games
+                        failed_end = min(updated_games + batch_count, total_games)
+                        failed_updates.extend([target_games_list[i].id for i in range(failed_start, failed_end)])
+                        
+                        # Start fresh batch on error
+                        batch = db.batch()
+                        batch_count = 0
                     
-                    # Standardize coordinates
-                    stand_x, stand_y = standardize_coordinates(x, y, midline_x, midline_y)
+                    # Garbage collection after batches
+                    gc.collect()
                     
-                    # Calculate all features
-                    distance = np.sqrt((stand_x - goal_x)**2 + (stand_y - goal_y)**2)
-                    distance_squared = distance ** 2
-                    log_distance = np.log1p(distance)
-                    
-                    angle_to_center = np.degrees(np.arctan2(
-                        np.abs(stand_y - goal_y), 
-                        goal_x - stand_x
-                    ))
-                    goal_angle = calculate_goal_angle(stand_x, stand_y, goal_x, goal_y)
-                    
-                    # Distance bands
-                    close_range = int(distance < 20)
-                    mid_range = int(20 <= distance < 35)
-                    long_range = int(35 <= distance < 50)
-                    beyond_50m = int(distance >= 50)
-                    beyond_40m = int(distance >= 40)
-                    
-                    # Zones
-                    central_zone = int((stand_y > 30) and (stand_y < 58))
-                    penalty_area = int(stand_x > 125)
-                    danger_zone = int((stand_x > 110) and (central_zone == 1))
-                    
-                    # Shot characteristics
-                    foot = str(shot.get('foot', 'right')).lower()
-                    preferred_side = is_preferable_side(stand_y, foot, midline_y)
-                    
-                    placed_ball = detect_set_piece(shot, set_piece_indicators)
-                    set_piece_type = get_set_piece_type(shot)
-                    set_piece_type_value = set_piece_type_map.get(set_piece_type, 0)
-                    
-                    position_value = position_map.get(
-                        str(shot.get('position', 'midfielder')).lower(), 2
-                    )
-                    pressure_value = pressure_map.get(
-                        str(shot.get('pressure', 'none')).lower(), 0
-                    )
-                    foot_value = foot_map.get(foot, 0)
-                    
-                    # Time features
-                    minute = int(shot.get('minute', 0))
-                    early_game = int(minute <= 20)
-                    late_game = int(minute >= 60)
-                    
-                    # Get player quality
-                    player_name = shot.get('playerName', 'Unknown')
-                    if player_name in player_stats.index:
-                        player_quality = player_stats.loc[player_name, 'player_quality']
-                        player_consistency = player_stats.loc[player_name, 'player_consistency']
-                        player_efficiency = player_stats.loc[player_name, 'player_efficiency']
-                    else:
-                        player_quality = overall_success_rate
-                        player_consistency = 1.0
-                        player_efficiency = overall_success_rate
-                    
-                    # Interaction features
-                    distance_x_pressure = distance * pressure_value
-                    quality_x_position = player_quality * position_value
-                    angle_x_distance = angle_to_center * distance
-                    preferred_x_quality = preferred_side * player_quality
-                    
-                    # Create feature array
-                    shot_features = np.array([[
-                        distance, distance_squared, log_distance,
-                        angle_to_center, goal_angle,
-                        close_range, mid_range, long_range, beyond_50m, beyond_40m,
-                        central_zone, penalty_area, danger_zone,
-                        preferred_side, pressure_value, position_value, foot_value,
-                        placed_ball, set_piece_type_value,
-                        player_quality, player_consistency, player_efficiency,
-                        early_game, late_game,
-                        distance_x_pressure, quality_x_position, angle_x_distance, preferred_x_quality
-                    ]])
-                    
-                    shot_features_scaled = scaler.transform(shot_features)
-                    
-                    # Predict
-                    xP = float(model.predict_proba(shot_features_scaled)[0, 1])
-                    
-                    # Calculate expected points based on shot type
-                    if 'goal' in str(shot.get('action', '')).lower():
-                        expected_points = xP * 3.0
-                    elif beyond_40m and not any(x in str(shot.get('action', '')).lower() for x in ['45', 'fortyfive']):
-                        expected_points = xP * 2.0
-                    else:
-                        expected_points = xP * 1.0
-                    
-                    # Update shot
-                    shot['xP'] = min(max(xP, 0.0), 1.0)
-                    shot['xPoints'] = expected_points
-                    shot['model_type'] = 'cmc_v3'
-                    shot['cmc_features'] = {
-                        'preferred_side': preferred_side,
-                        'placed_ball': placed_ball,
-                        'set_piece_type': set_piece_type,
-                        'beyond_40m': beyond_40m,
-                        'shot_angle': round(angle_to_center, 2),
-                        'goal_angle': round(goal_angle, 2),
-                        'distance': round(distance, 2),
-                        'danger_zone': danger_zone,
-                        'player_quality': round(player_quality, 3)
-                    }
-                    total_shots += 1
-                    
-                except Exception as e:
-                    logging.warning(f"Failed to process shot: {str(e)}")
-                    shot['xP'] = 0.3
-                    shot['xPoints'] = 0.3
-                    shot['model_type'] = 'cmc_v3'
-            
-            # Add game to batch
-            batch.update(game.reference, {'gameData': shots})
-            batch_count += 1
-            
-            # Commit batch when reaching limit
-            if batch_count >= MAX_BATCH_SIZE:
-                try:
-                    batch.commit()
-                    updated_games += batch_count
-                    logging.info(f"Batch committed: {updated_games} games updated, {total_shots} total shots processed")
-                    
-                    # Start new batch
-                    batch = db.batch()
-                    batch_count = 0
-                    
-                except Exception as e:
-                    logging.error(f"Batch commit failed: {str(e)}")
-                    # Start fresh batch on error
-                    batch = db.batch()
-                    batch_count = 0
-                    
-                # Garbage collection after large batches
-                gc.collect()
+            except Exception as e:
+                logging.error(f"Error processing game {game.id}: {str(e)}")
+                failed_updates.append(game.id)
+                continue
         
         # Commit any remaining games in the final batch
         if batch_count > 0:
@@ -5751,27 +5769,63 @@ def run_cmc_model():
                 logging.info(f"Final batch committed: {batch_count} games")
             except Exception as e:
                 logging.error(f"Final batch commit failed: {str(e)}")
+                # Track failed games
+                failed_start = updated_games
+                failed_updates.extend([target_games_list[i].id for i in range(failed_start, len(target_games_list))])
+        
+        # Log completion
+        logging.info(f"CMC model update completed: {updated_games}/{total_games} games successful")
+        if failed_updates:
+            logging.warning(f"Failed to update {len(failed_updates)} games: {failed_updates[:5]}...")
         
         execution_time = time.time() - start_time
         
-        # Save model run to history
+        # Save model run to history - FIXED: Ensure all values are serializable
         model_run = {
             'timestamp': firestore.SERVER_TIMESTAMP,
             'model_type': 'cmc_v3',
             'source_dataset': source_dataset,
             'target_dataset': target_dataset,
-            'metrics': metrics,
-            'total_shots_updated': total_shots,
-            'execution_time': execution_time,
-            'training_size': len(essential_data),  # Fixed: use actual training size
-            'features_used': features,
-            'feature_count': len(features)
+            'metrics': {
+                'accuracy': float(metrics['accuracy']),
+                'precision': float(metrics['precision']),
+                'recall': float(metrics['recall']),
+                'f1_score': float(metrics['f1_score']),
+                'auc_roc': float(metrics['auc_roc']),
+                'cv_auc_mean': float(metrics['cv_auc_mean']),
+                'cv_auc_std': float(metrics['cv_auc_std']),
+                'top_features': metrics['top_features']  # Already serialized above
+            },
+            'total_shots_updated': int(total_shots),
+            'games_updated': int(updated_games),
+            'games_failed': int(len(failed_updates)),
+            'execution_time': float(execution_time),
+            'training_size': int(len(essential_data)),
+            'features_used': features,  # List of strings is fine
+            'feature_count': int(len(features))
         }
         
         try:
             db.collection('modelRuns').document(uid).collection('history').add(model_run)
+            logging.info("Model run history saved successfully")
         except Exception as e:
             logging.warning(f"Failed to save model run history: {str(e)}")
+            # Try simpler version without nested data
+            try:
+                simple_model_run = {
+                    'timestamp': firestore.SERVER_TIMESTAMP,
+                    'model_type': 'cmc_v3',
+                    'source_dataset': source_dataset,
+                    'target_dataset': target_dataset,
+                    'accuracy': float(metrics['accuracy']),
+                    'f1_score': float(metrics['f1_score']),
+                    'total_shots_updated': int(total_shots),
+                    'execution_time': float(execution_time)
+                }
+                db.collection('modelRuns').document(uid).collection('history').add(simple_model_run)
+                logging.info("Saved simplified model run history")
+            except Exception as e2:
+                logging.error(f"Failed to save even simple model run history: {str(e2)}")
         
         # Final cleanup
         del model, scaler, player_stats
@@ -5785,6 +5839,7 @@ def run_cmc_model():
             'metrics': metrics,
             'shots_updated': total_shots,
             'games_updated': updated_games,
+            'games_failed': len(failed_updates),
             'execution_time': round(execution_time, 2),
             'feature_count': len(features)
         }), 200

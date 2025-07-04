@@ -511,134 +511,67 @@ const AdminSettings = () => {
     }
   };
 
+
   // Run simple xP model - FIXED VERSION
-  const handleRunSimpleModel = async () => {
-    if (!sourceDataset || !targetDataset) {
-      Swal.fire({
-        title: 'Error',
-        text: 'Please select both source and target datasets',
-        icon: 'error',
-        confirmButtonColor: '#7b1fa2',
-      });
-      return;
+const handleRunSimpleModel = async () => {
+  if (!sourceDataset || !targetDataset) {
+    Swal.fire({
+      title: 'Error',
+      text: 'Please select both source and target datasets',
+      icon: 'error',
+      confirmButtonColor: '#7b1fa2',
+    });
+    return;
+  }
+
+  try {
+    setIsCalculating(true);
+    setModelResult(null);
+
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('User not authenticated');
     }
 
-    try {
-      setIsCalculating(true);
-      setModelResult(null);
+    const token = await user.getIdToken();
+    
+    // Use CMC endpoint if CMC model is selected
+    const endpoint = selectedModel === 'cmc' ? '/run-cmc-model' : '/run-xp-model';
+    
+    const response = await axios.post(
+      `${BASE_API_URL}${endpoint}`,
+      {
+        uid: user.uid,
+        source_dataset: sourceDataset,
+        target_dataset: targetDataset,
+        model_type: selectedModel,
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
 
-      const user = auth.currentUser;
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
+    // All models now return results synchronously
+    setModelResult(response.data);
+    await fetchModelHistory();
+    
+    Swal.fire({
+      title: 'Success',
+      text: `Model completed! Updated ${response.data.shots_updated || 0} shots with ${((response.data.metrics?.accuracy || 0) * 100).toFixed(1)}% accuracy`,
+      icon: 'success',
+      confirmButtonColor: '#7b1fa2',
+    });
+    setIsCalculating(false);
 
-      const token = await user.getIdToken();
-      
-      // Use CMC endpoint if CMC model is selected
-      const endpoint = selectedModel === 'cmc' ? '/run-cmc-model' : '/run-xp-model';
-      
-      const response = await axios.post(
-        `${BASE_API_URL}${endpoint}`,
-        {
-          uid: user.uid,
-          source_dataset: sourceDataset,
-          target_dataset: targetDataset,
-          model_type: selectedModel,
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      // CMC model returns different structure - it starts a job
-      if (selectedModel === 'cmc') {
-        const jobId = response.data.job_id;
-        
-        Swal.fire({
-          title: 'CMC Model Started',
-          text: 'The CMC model is processing in the background. This may take a few moments...',
-          icon: 'info',
-          confirmButtonColor: '#7b1fa2',
-        });
-        
-        // Poll for job completion
-        const pollInterval = setInterval(async () => {
-          try {
-            const statusResponse = await axios.post(
-              `${BASE_API_URL}/check-model-status`,
-              { job_id: jobId },
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-            
-            const status = statusResponse.data;
-            
-            if (status.status === 'completed') {
-              clearInterval(pollInterval);
-              
-              // Create result object for CMC
-              const cmcResult = {
-                model_type: 'cmc',
-                metrics: status.metrics || { accuracy: 0, precision: 0, recall: 0, f1_score: 0, auc_roc: 0 },
-                shots_updated: status.final_shots || status.total_shots || 0,
-                execution_time: status.execution_time || 0,
-              };
-              
-              setModelResult(cmcResult);
-              setIsCalculating(false);
-              await fetchModelHistory();
-              
-              Swal.fire({
-                title: 'Success',
-                text: `CMC Model completed! Updated ${cmcResult.shots_updated} shots with ${(cmcResult.metrics.accuracy * 100).toFixed(1)}% accuracy`,
-                icon: 'success',
-                confirmButtonColor: '#7b1fa2',
-              });
-            } else if (status.status === 'failed') {
-              clearInterval(pollInterval);
-              setIsCalculating(false);
-              throw new Error(status.error || 'CMC model failed');
-            }
-          } catch (error) {
-            clearInterval(pollInterval);
-            setIsCalculating(false);
-            console.error('Polling error:', error);
-            Swal.fire({
-              title: 'Error',
-              text: 'Failed to check model status',
-              icon: 'error',
-              confirmButtonColor: '#7b1fa2',
-            });
-          }
-        }, 3000); // Poll every 3 seconds
-        
-        // Timeout after 5 minutes
-        setTimeout(() => {
-          clearInterval(pollInterval);
-          setIsCalculating(false);
-        }, 300000);
-        
-      } else {
-        // Regular xP models
-        setModelResult(response.data);
-        await fetchModelHistory();
-        
-        Swal.fire({
-          title: 'Success',
-          text: `Model completed! Updated ${response.data.shots_updated || 0} shots with ${((response.data.metrics?.accuracy || 0) * 100).toFixed(1)}% accuracy`,
-          icon: 'success',
-          confirmButtonColor: '#7b1fa2',
-        });
-        setIsCalculating(false);
-      }
-    } catch (error) {
-      console.error('Model run error:', error);
-      setIsCalculating(false);
-      Swal.fire({
-        title: 'Error',
-        text: error.response?.data?.error || error.message || 'Failed to run model',
-        icon: 'error',
-        confirmButtonColor: '#7b1fa2',
-      });
-    }
-  };
+  } catch (error) {
+    console.error('Model run error:', error);
+    setIsCalculating(false);
+    Swal.fire({
+      title: 'Error',
+      text: error.response?.data?.error || error.message || 'Failed to run model',
+      icon: 'error',
+      confirmButtonColor: '#7b1fa2',
+    });
+  }
+};
 
   // Run advanced model
   const handleRunAdvancedModel = async () => {

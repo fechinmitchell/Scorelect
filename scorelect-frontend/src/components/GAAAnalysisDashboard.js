@@ -1052,59 +1052,58 @@ export default function GAAAnalysisDashboard() {
           <div className="gaa-tiles-container">
             <div className="gaa-tile">
               <h5 className="gaa-tile-title">Total Shots</h5>
-              <p className="gaa-tile-value">{summary.totalShots}</p>
+              <div className="gaa-tile-value-container">
+                <p className="gaa-tile-value">{summary.totalShots}</p>
+              </div>
             </div>
             <div className="gaa-tile">
               <h5 className="gaa-tile-title">Goals</h5>
-              <p className="gaa-tile-value">
-                {summary.totalGoals}
-                <span style={{ fontSize: '0.8em', color: 'var(--gray)' }}>
-                  ({summary.totalGoalPoints}pts)
-                </span>
-              </p>
+              <div className="gaa-tile-value-container">
+                <p className="gaa-tile-value">{summary.totalGoals}</p>
+                <p className="gaa-tile-subtitle">{summary.totalGoalPoints}pts</p>
+              </div>
             </div>
             <div className="gaa-tile">
               <h5 className="gaa-tile-title">Points</h5>
-              <p className="gaa-tile-value">
-                {summary.totalPointScores}
-                <span style={{ fontSize: '0.8em', color: 'var(--gray)' }}>
-                  ({summary.totalOnePointers + summary.totalTwoPointers} scores)
-                </span>
-              </p>
+              <div className="gaa-tile-value-container">
+                <p className="gaa-tile-value">{summary.totalPointScores}</p>
+                <p className="gaa-tile-subtitle">{summary.totalOnePointers + summary.totalTwoPointers} scores</p>
+              </div>
             </div>
             <div className="gaa-tile">
               <h5 className="gaa-tile-title">Total Score</h5>
-              <p className="gaa-tile-value" style={{ 
-                fontSize: '1.5em', 
-                color: 'var(--primary)',
-                fontWeight: 'bold' 
-              }}>
-                {summary.totalPoints}
-              </p>
+              <div className="gaa-tile-value-container">
+                <p className="gaa-tile-value" style={{ 
+                  color: 'var(--primary)',
+                  fontWeight: 'bold' 
+                }}>
+                  {summary.totalPoints}
+                </p>
+              </div>
             </div>
             <div className="gaa-tile">
               <h5 className="gaa-tile-title">Two-Pointers</h5>
-              <p className="gaa-tile-value" style={{ color: '#FFFF33' }}>
-                {summary.totalTwoPointers}
-                <span style={{ fontSize: '0.8em', color: 'var(--gray)' }}>
-                  ({summary.totalTwoPointers * 2}pts)
-                </span>
-              </p>
+              <div className="gaa-tile-value-container">
+                <p className="gaa-tile-value" style={{ color: '#FFFF33' }}>
+                  {summary.totalTwoPointers}
+                </p>
+                <p className="gaa-tile-subtitle">{summary.totalTwoPointers * 2}pts</p>
+              </div>
             </div>
             <div className="gaa-tile">
               <h5 className="gaa-tile-title">One-Pointers</h5>
-              <p className="gaa-tile-value">
-                {summary.totalOnePointers}
-                <span style={{ fontSize: '0.8em', color: 'var(--gray)' }}>
-                  ({summary.totalOnePointers}pts)
-                </span>
-              </p>
+              <div className="gaa-tile-value-container">
+                <p className="gaa-tile-value">{summary.totalOnePointers}</p>
+                <p className="gaa-tile-subtitle">{summary.totalOnePointers}pts</p>
+              </div>
             </div>
             <div className="gaa-tile">
               <h5 className="gaa-tile-title">Misses</h5>
-              <p className="gaa-tile-value" style={{ color: 'var(--danger)' }}>
-                {summary.totalMisses}
-              </p>
+              <div className="gaa-tile-value-container">
+                <p className="gaa-tile-value" style={{ color: 'var(--danger)' }}>
+                  {summary.totalMisses}
+                </p>
+              </div>
             </div>
           </div>
         </div>

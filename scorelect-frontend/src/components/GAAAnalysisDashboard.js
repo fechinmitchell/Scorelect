@@ -139,111 +139,16 @@ const calculateTwoPointerValue = (shot, pitchWidth = 145, pitchHeight = 88) => {
   return 1; // Standard point
 };
 
-// Predictive "models" for xP and xG
-const predictXP = shot => {
-  const baseRates = {
-    goal: 0.92,
-    point: 0.72,
-    free: 0.82,
-    offensive_mark: 0.78,
-    fortyfive: 0.55,
-  };
-  
-  // Safely extract action
-  let actionStr = '';
-  if (typeof shot.action === 'string') {
-    actionStr = shot.action;
-  } else if (shot.action && typeof shot.action === 'object') {
-    actionStr = shot.action.name || shot.action.type || shot.action.value || '';
-  }
-  
-  const act = actionStr.toLowerCase().trim();
-  let type = 'point';
-  if (act === 'goal' || act === 'penalty goal') type = 'goal';
-  else if (act.includes('free')) type = 'free';
-  else if (act.includes('offensive mark')) type = 'offensive_mark';
-  else if (act.includes('45') || act.includes('fortyfive')) type = 'fortyfive';
-
-  const d = shot.distMeters || 30;
-  const distFactor = d < 20 ? 1 : d < 30 ? 0.9 : d < 40 ? 0.7 : d < 50 ? 0.5 : 0.3;
-  const pres = (shot.pressure || 'none').toString().toLowerCase();
-  const presFactor = pres === 'none' ? 1 : pres === 'low' ? 0.9 : pres === 'medium' ? 0.75 : 0.6;
-  
-  // Safe position handling
-  let posStr = '';
-  if (typeof shot.position === 'string') {
-    posStr = shot.position;
-  } else if (shot.position && typeof shot.position === 'object') {
-    posStr = shot.position.type || 'forward';
-  } else {
-    posStr = 'forward';
-  }
-  
-  const pos = posStr.toLowerCase();
-  const posFactor = pos.includes('central') ? 1.1 : pos.includes('wide') ? 0.85 : 1;
-
-  let xp = (baseRates[type] || 0.5) * distFactor * presFactor * posFactor;
-  return Math.min(1, Math.max(0, xp));
-};
-
-const predictXG = shot => {
-  const baseGoalProb = 0.3;
-  const d = shot.distMeters || 15;
-  const distF = d < 10 ? 0.9 : d < 15 ? 0.7 : d < 20 ? 0.5 : d < 25 ? 0.3 : 0.2;
-  
-  const pres = (shot.pressure || 'none').toString().toLowerCase();
-  const presF = pres === 'none' ? 0.95 : pres === 'low' ? 0.8 : pres === 'medium' ? 0.6 : 0.4;
-  
-  // Safe position handling
-  let posStr = '';
-  if (typeof shot.position === 'string') {
-    posStr = shot.position;
-  } else if (shot.position && typeof shot.position === 'object') {
-    posStr = shot.position.type || 'forward';
-  } else {
-    posStr = 'forward';
-  }
-  
-  const pos = posStr.toLowerCase();
-  const posF = pos.includes('central') ? 0.9 : pos.includes('wide') ? 0.7 : 0.8;
-
-  let xg = baseGoalProb * distF * presF * posF;
-  return Math.min(1, Math.max(0, xg));
-};
-
-// Fill in any missing xP / xG on load or recalc
-const calculateMissingMetrics = games =>
+// Process games data - just calculate distance and point values, no xP/xG
+const processGamesData = games =>
   games.map(g => ({
     ...g,
     gameData: (g.gameData || []).map(s => {
-      // Check if this shot already has CMC model values
-      if ((s.model_type === 'cmc_v2' || s.model_type === 'cmc_v3') && typeof s.xPoints === 'number') {
-        // CMC model already calculated xPoints correctly
-        const t = translateShotToOneSide(s, pitchWidth/2, pitchWidth, pitchHeight/2);
-        s.distMeters = t.distMeters;
-        s.xP_adv = s.xP;
-        
-        // Calculate point value for display
-        if (typeof s.pointValue !== 'number') {
-          s.pointValue = calculateTwoPointerValue(s);
-        }
-        
-        return s;
-      }
+      // Calculate distance
+      const t = translateShotToOneSide(s, pitchWidth/2, pitchWidth, pitchHeight/2);
+      s.distMeters = t.distMeters;
       
-      // Only calculate if not from CMC model
-      if (typeof s.xPoints !== 'number') {
-        const t = translateShotToOneSide(s, pitchWidth/2, pitchWidth, pitchHeight/2);
-        s.distMeters = t.distMeters;
-        s.xPoints = predictXP(t);
-        const act = (s.action || '').toString().toLowerCase().trim();
-        if (act === 'goal' || act === 'penalty goal') {
-          s.xGoals = predictXG(t);
-        }
-        s.xP_adv = s.xPoints * 0.7 + (s.xGoals || 0) * 0.3;
-      }
-      
-      // Calculate point value for two-pointer logic
+      // Calculate point value for display
       if (typeof s.pointValue !== 'number') {
         s.pointValue = calculateTwoPointerValue(s);
       }
@@ -602,7 +507,7 @@ export default function GAAAnalysisDashboard() {
     blocked: markerColors.blocked || fallbackLegendColors.blocked
   }), [markerColors]);
 
-  // INITIAL LOAD & BACK‑FILL xP/xG
+  // INITIAL LOAD - Process games data without calculating xP/xG
   useEffect(() => {
     if (!file || sport !== 'GAA') {
       Swal.fire({
@@ -614,9 +519,9 @@ export default function GAAAnalysisDashboard() {
       }).then(() => navigate('/analysis'));
       return;
     }
-    const filled = calculateMissingMetrics(file.games || []);
-    setGames(filled);
-    updateFilterOptions(filled, {});
+    const processed = processGamesData(file.games || []);
+    setGames(processed);
+    updateFilterOptions(processed, {});
   }, [file, sport, navigate]);
 
   // Update filter options when filters change
@@ -625,7 +530,7 @@ export default function GAAAnalysisDashboard() {
     updateFilterOptions(file.games, appliedFilters);
   }, [appliedFilters.match, appliedFilters.team, file?.games]);
 
-  // APPLY FILTERS & SUMMARY - FIXED VERSION
+  // APPLY FILTERS & SUMMARY
   useEffect(() => {
     let filtered = file?.games || [];
     
@@ -702,7 +607,7 @@ export default function GAAAnalysisDashboard() {
     [games, actionMapping]
   );
 
-  // AGGREGATED TEAM DATA - SEPARATED GOALS AND POINTS
+  // AGGREGATED TEAM DATA - Use backend xP/xG values
   const aggregatedData = useMemo(() => {
     const agg = {}, scorerMap = {}, distAcc = {};
     
@@ -763,14 +668,10 @@ export default function GAAAnalysisDashboard() {
         agg[team].successfulShots++;
         scorerMap[team][name].goals++;
         
-        // Add expected goals
+        // Use backend xG values
         if (typeof sh.xGoals === 'number') {
           agg[team].totalXG += sh.xGoals;
           scorerMap[team][name].xG += sh.xGoals;
-        } else if (typeof sh.xP === 'number') {
-          // Fallback: use xP as goal probability
-          agg[team].totalXG += sh.xP;
-          scorerMap[team][name].xG += sh.xP;
         }
       }
       // Handle POINTS separately (everything except goals)
@@ -782,14 +683,10 @@ export default function GAAAnalysisDashboard() {
         agg[team].points += pointValue;  // Only points, no goals
         scorerMap[team][name].points += pointValue;
         
-        // Add expected points
+        // Use backend xP values
         if (typeof sh.xPoints === 'number') {
           agg[team].totalXP += sh.xPoints;
           scorerMap[team][name].xP += sh.xPoints;
-        } else if (typeof sh.xP === 'number') {
-          // Fallback: multiply probability by point value
-          agg[team].totalXP += sh.xP * pointValue;
-          scorerMap[team][name].xP += sh.xP * pointValue;
         }
         
         // Track point types
@@ -810,7 +707,7 @@ export default function GAAAnalysisDashboard() {
         }
       }
       else {
-        // Misses - still calculate expected values
+        // Misses - still use backend expected values
         if (isMiss) {
           agg[team].misses++;
           
@@ -819,18 +716,11 @@ export default function GAAAnalysisDashboard() {
             if (typeof sh.xGoals === 'number') {
               agg[team].totalXG += sh.xGoals;
               scorerMap[team][name].xG += sh.xGoals;
-            } else if (typeof sh.xP === 'number') {
-              agg[team].totalXG += sh.xP;
-              scorerMap[team][name].xG += sh.xP;
             }
           } else {
-            const pointValue = sh.pointValue || calculateTwoPointerValue(sh);
             if (typeof sh.xPoints === 'number') {
               agg[team].totalXP += sh.xPoints;
               scorerMap[team][name].xP += sh.xPoints;
-            } else if (typeof sh.xP === 'number') {
-              agg[team].totalXP += sh.xP * pointValue;
-              scorerMap[team][name].xP += sh.xP * pointValue;
             }
           }
         }
@@ -868,52 +758,41 @@ export default function GAAAnalysisDashboard() {
     setTeamScorers(aggregatedData.scorersMap);
   }, [aggregatedData]);
 
-  // RECALC xP/xG
+  // RECALC xP/xG - Server-side only
   const handleRecalculate = async () => {
     try {
       const uid = currentUser?.uid;
       if (!uid) throw new Error('Not logged in');
 
-      try {
-        const payload = {
-          user_id: uid,
-          training_dataset: 'GAA All Shots',
-          target_dataset: file.datasetName || 'DefaultDataset'
-        };
-        const res = await axios.post(`${BASE_API_URL}/recalculate-target-xpoints`, payload);
-        if (res.data.success) {
-          Swal.fire({
-            title: 'Recalculation Complete',
-            text: 'xP/xG updated via server.',
-            icon: 'success',
-            background: 'var(--dark-card)',
-            confirmButtonColor: 'var(--primary)',
-          });
-          const load = await axios.post(`${BASE_API_URL}/load-games`, { uid });
-          const updated = load.data.filter(g => g.datasetName === file.datasetName);
-          setGames(updated);
-          return;
-        }
-      } catch (_) {
-        console.warn('Server recalc failed; falling back to client-side');
-      }
-
-      const locally = calculateMissingMetrics(games);
-      setGames(locally);
+      const payload = {
+        user_id: uid,
+        training_dataset: 'GAA All Shots',
+        target_dataset: file.datasetName || 'DefaultDataset'
+      };
       
-      Swal.fire({
-        title: 'Recalculation Complete',
-        text: 'xP/xG updated',
-        icon: 'success',
-        background: 'var(--dark-card)',
-        confirmButtonColor: 'var(--primary)',
-      });
-
+      const res = await axios.post(`${BASE_API_URL}/recalculate-target-xpoints`, payload);
+      
+      if (res.data.success) {
+        Swal.fire({
+          title: 'Recalculation Complete',
+          text: 'xP/xG values have been updated.',
+          icon: 'success',
+          background: 'var(--dark-card)',
+          confirmButtonColor: 'var(--primary)',
+        });
+        
+        // Reload the games data
+        const load = await axios.post(`${BASE_API_URL}/load-games`, { uid });
+        const updated = load.data.filter(g => g.datasetName === file.datasetName);
+        setGames(processGamesData(updated));
+      } else {
+        throw new Error('Server recalculation failed');
+      }
     } catch (e) {
       console.error(e);
       Swal.fire({
         title: 'Error',
-        text: 'Recalculation failed.',
+        text: 'Failed to recalculate xP/xG values.',
         icon: 'error',
         background: 'var(--dark-card)',
         confirmButtonColor: 'var(--primary)',

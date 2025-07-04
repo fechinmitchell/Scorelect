@@ -41,12 +41,13 @@ const pitchHeight = 88;
 const defaultMapping = {
   'free': 'setplayscore',
   'offensive mark': 'setplayscore',
-  'offensive mark wide': 'setplaymiss',  // Added this line for offensive mark wide
-  'offensive mark miss': 'setplaymiss',  // Also adding this variant
+  'offensive mark wide': 'setplaymiss',
+  'offensive mark miss': 'setplaymiss',
   'free miss': 'setplaymiss',
   'free wide': 'setplaymiss',
   'free short': 'setplaymiss',
   'fortyfive': 'setplayscore',
+  '45': 'setplayscore',
   'fortyfive wide': 'setplaymiss',
   'fortyfive short': 'setplaymiss',
   'wide': 'miss',
@@ -98,24 +99,23 @@ const calculateDistanceFromGoalLine = (x, y, pitchWidth = 145, pitchHeight = 88)
 };
 
 const calculateTwoPointerValue = (shot, pitchWidth = 145, pitchHeight = 88) => {
-  const action = (shot.action || '').toLowerCase().trim();
+  const action = (shot.action || '').toString().toLowerCase().trim();
   
   // Goals are worth 3 points
   if (action === 'goal' || action === 'penalty goal') {
     return 3;
   }
   
-  // Must be a scoring shot (point) for 1-2 point logic
-  const isScoringShot = action === 'point' || action === 'free';
+  // Check if it's a scoring shot
+  const scoringActions = ['point', 'free', 'offensive mark', '45', 'fortyfive'];
+  const isScoringShot = scoringActions.some(act => action.includes(act));
   if (!isScoringShot) return 1; // Not a scoring shot, default to 1
   
   // Check if it's a 45 - always 1 point
-  const isFrom45 = action.includes('45') || action.includes('fortyfive') || 
-                   (shot.action || '').toLowerCase().includes('45');
+  const isFrom45 = action.includes('45') || action.includes('fortyfive');
   if (isFrom45) return 1;
   
-  // Use the already calculated distMeters if available (from translateShotToOneSide)
-  // Otherwise calculate it using the translated coordinates
+  // Use the already calculated distMeters if available
   let distanceFromGoal;
   if (shot.distMeters) {
     distanceFromGoal = shot.distMeters;
@@ -128,14 +128,11 @@ const calculateTwoPointerValue = (shot, pitchWidth = 145, pitchHeight = 88) => {
   // Must be at or outside 40m arc
   const isAtOrOutsideArc = distanceFromGoal >= 40;
   
-  // Check if touched in flight (new property we'll add)
+  // Check if touched in flight
   const touchedInFlight = shot.touchedInFlight || false;
   
-  // Check if it's from play, mark, or free (excluding 45s)
-  const isKickedFromPlayMarkOrFree = true; // Most shots qualify unless specifically excluded
-  
-  // Apply two-pointer logic for points and frees
-  if (isKickedFromPlayMarkOrFree && isAtOrOutsideArc && !touchedInFlight && !isFrom45) {
+  // Apply two-pointer logic for points and frees (excluding 45s)
+  if (isAtOrOutsideArc && !touchedInFlight && !isFrom45) {
     return 2; // Two-pointer
   }
   
@@ -152,69 +149,63 @@ const predictXP = shot => {
     fortyfive: 0.55,
   };
   
-  // Safely extract action - handle both string and object forms
+  // Safely extract action
   let actionStr = '';
   if (typeof shot.action === 'string') {
     actionStr = shot.action;
   } else if (shot.action && typeof shot.action === 'object') {
-    // Try to get action string from object properties
     actionStr = shot.action.name || shot.action.type || shot.action.value || '';
   }
   
   const act = actionStr.toLowerCase().trim();
   let type = 'point';
-  if (act==='goal' || act==='penalty goal') type = 'goal';
+  if (act === 'goal' || act === 'penalty goal') type = 'goal';
   else if (act.includes('free')) type = 'free';
   else if (act.includes('offensive mark')) type = 'offensive_mark';
   else if (act.includes('45') || act.includes('fortyfive')) type = 'fortyfive';
 
-  const d = shot.distMeters||30;
-  const distFactor = d<20?1:d<30?0.9:d<40?0.7:d<50?0.5:0.3;
-  const pres = (shot.pressure||'none').toLowerCase();
-  const presFactor = pres==='none'?1:pres==='low'?0.9:pres==='medium'?0.75:0.6;
+  const d = shot.distMeters || 30;
+  const distFactor = d < 20 ? 1 : d < 30 ? 0.9 : d < 40 ? 0.7 : d < 50 ? 0.5 : 0.3;
+  const pres = (shot.pressure || 'none').toString().toLowerCase();
+  const presFactor = pres === 'none' ? 1 : pres === 'low' ? 0.9 : pres === 'medium' ? 0.75 : 0.6;
   
-  // Safe position handling - ensure position is a string before toLowerCase
+  // Safe position handling
   let posStr = '';
   if (typeof shot.position === 'string') {
     posStr = shot.position;
   } else if (shot.position && typeof shot.position === 'object') {
-    // If position is an object with a type field, use that
     posStr = shot.position.type || 'forward';
   } else {
-    // Default fallback
     posStr = 'forward';
   }
   
   const pos = posStr.toLowerCase();
-  const posFactor = pos.includes('central')?1.1:pos.includes('wide')?0.85:1;
+  const posFactor = pos.includes('central') ? 1.1 : pos.includes('wide') ? 0.85 : 1;
 
-  let xp = (baseRates[type]||0.5) * distFactor * presFactor * posFactor;
+  let xp = (baseRates[type] || 0.5) * distFactor * presFactor * posFactor;
   return Math.min(1, Math.max(0, xp));
 };
 
 const predictXG = shot => {
   const baseGoalProb = 0.3;
-  const d = shot.distMeters||15;
-  const distF = d<10?0.9:d<15?0.7:d<20?0.5:d<25?0.3:0.2;
+  const d = shot.distMeters || 15;
+  const distF = d < 10 ? 0.9 : d < 15 ? 0.7 : d < 20 ? 0.5 : d < 25 ? 0.3 : 0.2;
   
-  // Safely extract pressure
-  const pres = (shot.pressure||'none').toLowerCase();
-  const presF = pres==='none'?0.95:pres==='low'?0.8:pres==='medium'?0.6:0.4;
+  const pres = (shot.pressure || 'none').toString().toLowerCase();
+  const presF = pres === 'none' ? 0.95 : pres === 'low' ? 0.8 : pres === 'medium' ? 0.6 : 0.4;
   
-  // Safe position handling - ensure position is a string before toLowerCase
+  // Safe position handling
   let posStr = '';
   if (typeof shot.position === 'string') {
     posStr = shot.position;
   } else if (shot.position && typeof shot.position === 'object') {
-    // If position is an object with a type field, use that
     posStr = shot.position.type || 'forward';
   } else {
-    // Default fallback
     posStr = 'forward';
   }
   
   const pos = posStr.toLowerCase();
-  const posF = pos.includes('central')?0.9:pos.includes('wide')?0.7:0.8;
+  const posF = pos.includes('central') ? 0.9 : pos.includes('wide') ? 0.7 : 0.8;
 
   let xg = baseGoalProb * distF * presF * posF;
   return Math.min(1, Math.max(0, xg));
@@ -224,15 +215,13 @@ const predictXG = shot => {
 const calculateMissingMetrics = games =>
   games.map(g => ({
     ...g,
-    gameData: (g.gameData||[]).map(s => {
-      // Check if this shot already has CMC v2 model values
-      if (s.model_type === 'cmc_v2' && typeof s.xPoints === 'number') {
-        // CMC v2 model already calculated xPoints correctly
-        // Just ensure we have the translated coordinates for display
+    gameData: (g.gameData || []).map(s => {
+      // Check if this shot already has CMC model values
+      if ((s.model_type === 'cmc_v2' || s.model_type === 'cmc_v3') && typeof s.xPoints === 'number') {
+        // CMC model already calculated xPoints correctly
         const t = translateShotToOneSide(s, pitchWidth/2, pitchWidth, pitchHeight/2);
         s.distMeters = t.distMeters;
-        // Keep the CMC model's xP and xPoints values
-        s.xP_adv = s.xP; // Use the model's xP directly
+        s.xP_adv = s.xP;
         
         // Calculate point value for display
         if (typeof s.pointValue !== 'number') {
@@ -242,16 +231,16 @@ const calculateMissingMetrics = games =>
         return s;
       }
       
-      // Only calculate if not from CMC v2 model
+      // Only calculate if not from CMC model
       if (typeof s.xPoints !== 'number') {
         const t = translateShotToOneSide(s, pitchWidth/2, pitchWidth, pitchHeight/2);
         s.distMeters = t.distMeters;
         s.xPoints = predictXP(t);
-        const act = (s.action||'').toLowerCase().trim();
-        if (act==='goal' || act==='penalty goal') {
+        const act = (s.action || '').toString().toLowerCase().trim();
+        if (act === 'goal' || act === 'penalty goal') {
           s.xGoals = predictXG(t);
         }
-        s.xP_adv = s.xPoints * 0.7 + (s.xGoals||0) * 0.3;
+        s.xP_adv = s.xPoints * 0.7 + (s.xGoals || 0) * 0.3;
       }
       
       // Calculate point value for two-pointer logic
@@ -267,6 +256,7 @@ const calculateMissingMetrics = games =>
 function flattenShots(games = []) {
   return games.flatMap(g => g.gameData || []);
 }
+
 const getRenderType = (raw, map) =>
   map[raw?.toLowerCase().trim()] || raw?.toLowerCase().trim();
 
@@ -339,14 +329,14 @@ const downloadPDFHandler = async setIsDownloading => {
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF('l','mm','a4');
     const { width: w, height: h } = pdf.internal.pageSize;
-    pdf.setFillColor(15, 10, 27); // Using --dark variable color
+    pdf.setFillColor(15, 10, 27);
     pdf.rect(0,0,w,h,'F');
     const props = pdf.getImageProperties(imgData);
     const imgW = w;
     const imgH = (props.height * imgW) / props.width;
     pdf.addImage(imgData, 'PNG', 0, (h - imgH) / 2, imgW, imgH);
     pdf.setFontSize(12);
-    pdf.setTextColor(230, 230, 250); // Using --light variable color
+    pdf.setTextColor(230, 230, 250);
     pdf.text('scorelect.com', w - 40, h - 10);
     pdf.save('dashboard.pdf');
   } catch (error) {
@@ -476,12 +466,19 @@ export default function GAAAnalysisDashboard() {
   const [filterOptions, setFilterOptions] = useState({
     matches: [], teams: [], players: [], actions: []
   });
-  const [matchesData, setMatchesData] = useState([]); // Store full match data for display
+  const [matchesData, setMatchesData] = useState([]);
 
   // data
   const [games, setGames] = useState([]);
   const [summary, setSummary] = useState({
-    totalShots:0, totalGoals:0, totalPoints:0, totalMisses:0, totalTwoPointers:0, totalOnePointers:0
+    totalShots: 0,
+    totalGoals: 0,
+    totalPoints: 0,
+    totalMisses: 0,
+    totalTwoPointers: 0,
+    totalOnePointers: 0,
+    totalGoalPoints: 0,
+    totalPointScores: 0
   });
   const [teamAggregatedData, setTeamAggregatedData] = useState({});
   const [teamScorers, setTeamScorers] = useState({});
@@ -499,7 +496,6 @@ export default function GAAAnalysisDashboard() {
       prevGames.map(game => ({
         ...game,
         gameData: game.gameData.map(shot => {
-          // More precise matching using multiple properties
           const isMatch = shot.x === selectedShot.x && 
                          shot.y === selectedShot.y && 
                          shot.minute === selectedShot.minute && 
@@ -541,16 +537,13 @@ export default function GAAAnalysisDashboard() {
     // Now collect teams, players, and actions from filtered games
     filteredGames.forEach(g => {
       (g.gameData || []).forEach(sh => {
-        // If team filter is applied, only add players from that team
         if (currentFilters.team) {
           if (sh.team === currentFilters.team) {
             sh.playerName && p.add(sh.playerName);
           }
-          // Still add all teams and actions from the filtered matches
           sh.team && t.add(sh.team);
           sh.action && a.add(sh.action);
         } else {
-          // No team filter, add all from filtered matches
           sh.team && t.add(sh.team);
           sh.playerName && p.add(sh.playerName);
           sh.action && a.add(sh.action);
@@ -623,35 +616,24 @@ export default function GAAAnalysisDashboard() {
     }
     const filled = calculateMissingMetrics(file.games || []);
     setGames(filled);
-
-    // Get initial unfiltered options
     updateFilterOptions(filled, {});
   }, [file, sport, navigate]);
 
   // Update filter options when filters change
   useEffect(() => {
     if (!file?.games) return;
-    
-    // Update filter options based on current filter selections
     updateFilterOptions(file.games, appliedFilters);
   }, [appliedFilters.match, appliedFilters.team, file?.games]);
 
-  // APPLY FILTERS & SUMMARY
+  // APPLY FILTERS & SUMMARY - FIXED VERSION
   useEffect(() => {
     let filtered = file?.games || [];
     
-    // Debug: Log initial games and match filter
-    console.log('Initial games:', filtered.length);
-    console.log('Match filter:', appliedFilters.match);
-    console.log('Available matches:', filterOptions.matches);
-    
     if (appliedFilters.match) {
       filtered = filtered.filter(g => {
-        // Use the same logic as AnalysisGAA.js
         const matchId = g.gameId || g.gameName;
         return matchId === appliedFilters.match;
       });
-      console.log('After match filter:', filtered.length);
     }
     
     ['team','player','action'].forEach(f => {
@@ -671,22 +653,43 @@ export default function GAAAnalysisDashboard() {
     setGames(filtered);
 
     const shots = flattenShots(filtered);
-    const s = { totalShots:0, totalGoals:0, totalPoints:0, totalMisses:0, totalTwoPointers:0, totalOnePointers:0 };
+    const s = { 
+      totalShots: 0, 
+      totalGoals: 0, 
+      totalPoints: 0,  // Total scoring value
+      totalMisses: 0, 
+      totalTwoPointers: 0,  // Count of 2-point shots
+      totalOnePointers: 0,  // Count of 1-point shots
+      totalGoalPoints: 0,   // Points from goals
+      totalPointScores: 0   // Just the pointed scores
+    };
+    
     shots.forEach(sh => {
       s.totalShots++;
-      const act = (sh.action||'').toLowerCase().trim();
-      if (act==='goal'||act==='penalty goal') s.totalGoals++;
-      else if (act==='point') {
+      const act = (sh.action || '').toString().toLowerCase().trim();
+      
+      if (act === 'goal' || act === 'penalty goal') {
+        s.totalGoals++;
+        s.totalGoalPoints += 3;
+        s.totalPoints += 3;
+      }
+      else if (act === 'point' || act === 'free' || act === 'offensive mark' || 
+               act === '45' || act === 'fortyfive') {
         const pointValue = sh.pointValue || calculateTwoPointerValue(sh);
+        s.totalPointScores += pointValue;
         s.totalPoints += pointValue;
+        
         if (pointValue === 2) {
           s.totalTwoPointers++;
         } else {
           s.totalOnePointers++;
         }
       }
-      else if (/miss|wide|short|blocked|post/.test(act)) s.totalMisses++;
+      else if (/miss|wide|short|blocked|post/.test(act)) {
+        s.totalMisses++;
+      }
     });
+    
     setSummary(s);
   }, [file, appliedFilters, filterOptions.matches]);
 
@@ -699,180 +702,158 @@ export default function GAAAnalysisDashboard() {
     [games, actionMapping]
   );
 
-  // AGGREGATED TEAM DATA with proper xPoints handling
+  // AGGREGATED TEAM DATA - SEPARATED GOALS AND POINTS
   const aggregatedData = useMemo(() => {
     const agg = {}, scorerMap = {}, distAcc = {};
+    
     flattenShots(games).forEach(sh => {
       const team = sh.team || 'Unknown';
+      const act = (sh.action || '').toString().toLowerCase().trim();
+      const name = sh.playerName || 'Unknown';
+      
+      // Initialize team if needed
       if (!agg[team]) {
         agg[team] = {
-          totalShots:0, successfulShots:0, points:0, goals:0, misses:0,
-          freeAttempts:0, freeScored:0,
-          offensiveMarkAttempts:0, offensiveMarkScored:0,
-          fortyFiveAttempts:0, fortyFiveScored:0,
-          twoPointerAttempts:0, twoPointerScored:0,
-          totalTwoPointers:0, totalOnePointers:0,
-          totalXP: 0, totalXG: 0  // Add xP and xG totals
+          totalShots: 0,
+          successfulShots: 0,
+          points: 0,  // Points only (no goals)
+          goals: 0,
+          misses: 0,
+          freeAttempts: 0,
+          freeScored: 0,
+          offensiveMarkAttempts: 0,
+          offensiveMarkScored: 0,
+          fortyFiveAttempts: 0,
+          fortyFiveScored: 0,
+          twoPointerAttempts: 0,
+          twoPointerScored: 0,
+          totalTwoPointers: 0,
+          totalOnePointers: 0,
+          totalXP: 0,  // Expected POINTS only
+          totalXG: 0   // Expected GOALS only
         };
         distAcc[team] = 0;
         scorerMap[team] = {};
       }
+      
+      // Initialize player if needed
+      if (!scorerMap[team][name]) {
+        scorerMap[team][name] = {
+          goals: 0,
+          points: 0,
+          twoPointers: 0,
+          xP: 0,  // Expected points only
+          xG: 0   // Expected goals only
+        };
+      }
+      
+      // Update shot count and distance
       agg[team].totalShots++;
       const tShot = translateShotToOneSide(sh, halfLineX, goalX, goalY);
-      distAcc[team] += tShot.distMeters;
+      distAcc[team] += tShot.distMeters || 0;
       
-      // IMPORTANT: Use xPoints for expected points, not xP
-      if (typeof sh.xPoints === 'number') {
-        agg[team].totalXP += sh.xPoints; // This is the expected POINTS value
-      } else if (typeof sh.xP === 'number') {
-        // Fallback for older data - calculate expected points
-        const pointValue = sh.pointValue || calculateTwoPointerValue(sh);
-        agg[team].totalXP += sh.xP * pointValue;
-      }
+      // Determine if this is a scoring shot
+      const scoringActions = ['point', 'free', 'offensive mark', '45', 'fortyfive', 'goal', 'penalty goal'];
+      const isScoring = scoringActions.some(action => act.includes(action));
+      const isMiss = /miss|wide|short|blocked|post/.test(act);
       
-      if (typeof sh.xGoals === 'number') {
-        agg[team].totalXG += sh.xGoals;
-      }
-  
-      const act = (sh.action||'').toLowerCase().trim();
-      const name = sh.playerName||'NoName';
-      const pointValue = sh.pointValue || calculateTwoPointerValue(sh);
-  
-      // Initialize scorer if not exists
-      if (name && !scorerMap[team][name]) {
-        scorerMap[team][name] = {goals:0, points:0, twoPointers:0, xP:0, xG:0};
-      }
-  
-      if (act==='goal'||act==='penalty goal') {
+      // Handle GOALS separately
+      if (act.includes('goal') && !isMiss) {
         agg[team].goals++;
         agg[team].successfulShots++;
-        if (name) {
-          scorerMap[team][name].goals++;
-          // For xP calculation on goals, use xPoints if available
-          if (typeof sh.xPoints === 'number') {
-            scorerMap[team][name].xP += sh.xPoints;
-          } else if (typeof sh.xP === 'number') {
-            scorerMap[team][name].xP += sh.xP * 3; // Goal worth 3 points
-          }
-          scorerMap[team][name].xG += sh.xGoals || 0;
-        }
-      } else if (act==='point') {
-        agg[team].points += pointValue;
-        agg[team].successfulShots++;
+        scorerMap[team][name].goals++;
         
+        // Add expected goals
+        if (typeof sh.xGoals === 'number') {
+          agg[team].totalXG += sh.xGoals;
+          scorerMap[team][name].xG += sh.xGoals;
+        } else if (typeof sh.xP === 'number') {
+          // Fallback: use xP as goal probability
+          agg[team].totalXG += sh.xP;
+          scorerMap[team][name].xG += sh.xP;
+        }
+      }
+      // Handle POINTS separately (everything except goals)
+      else if (isScoring && !isMiss && !act.includes('goal')) {
+        // Calculate point value
+        const pointValue = sh.pointValue || calculateTwoPointerValue(sh);
+        
+        agg[team].successfulShots++;
+        agg[team].points += pointValue;  // Only points, no goals
+        scorerMap[team][name].points += pointValue;
+        
+        // Add expected points
+        if (typeof sh.xPoints === 'number') {
+          agg[team].totalXP += sh.xPoints;
+          scorerMap[team][name].xP += sh.xPoints;
+        } else if (typeof sh.xP === 'number') {
+          // Fallback: multiply probability by point value
+          agg[team].totalXP += sh.xP * pointValue;
+          scorerMap[team][name].xP += sh.xP * pointValue;
+        }
+        
+        // Track point types
         if (pointValue === 2) {
           agg[team].totalTwoPointers++;
+          scorerMap[team][name].twoPointers++;
         } else {
           agg[team].totalOnePointers++;
         }
         
-        if (name) {
-          scorerMap[team][name].points += pointValue;
-          // Use xPoints for expected points
-          if (typeof sh.xPoints === 'number') {
-            scorerMap[team][name].xP += sh.xPoints;
-          } else if (typeof sh.xP === 'number') {
-            scorerMap[team][name].xP += sh.xP * pointValue;
-          }
-          scorerMap[team][name].xG += sh.xGoals || 0;
-          if (pointValue === 2) {
-            scorerMap[team][name].twoPointers = (scorerMap[team][name].twoPointers || 0) + 1;
-          }
-        }
-      } else if (act==='free') {
-        agg[team].freeAttempts++;
-        agg[team].freeScored++;
-        agg[team].successfulShots++;
-        agg[team].points += pointValue;
-        
-        if (pointValue === 2) {
-          agg[team].totalTwoPointers++;
-        } else {
-          agg[team].totalOnePointers++;
-        }
-        
-        if (name) {
-          scorerMap[team][name].points += pointValue;
-          // Use xPoints for expected points
-          if (typeof sh.xPoints === 'number') {
-            scorerMap[team][name].xP += sh.xPoints;
-          } else if (typeof sh.xP === 'number') {
-            scorerMap[team][name].xP += sh.xP * pointValue;
-          }
-          scorerMap[team][name].xG += sh.xGoals || 0;
-          if (pointValue === 2) {
-            scorerMap[team][name].twoPointers = (scorerMap[team][name].twoPointers || 0) + 1;
-          }
-        }
-      } else if (act==='offensive mark') {
-        agg[team].offensiveMarkAttempts++;
-        agg[team].offensiveMarkScored++;
-        agg[team].successfulShots++;
-        agg[team].points++; // Offensive marks are always 1 point
-        agg[team].totalOnePointers++;
-        
-        if (name) {
-          scorerMap[team][name].points++;
-          if (typeof sh.xPoints === 'number') {
-            scorerMap[team][name].xP += sh.xPoints;
-          } else if (typeof sh.xP === 'number') {
-            scorerMap[team][name].xP += sh.xP;
-          }
-          scorerMap[team][name].xG += sh.xGoals || 0;
-        }
-      } else {
-        // For all other shots (including misses), still track xP and xG
-        if (name) {
-          if (typeof sh.xPoints === 'number') {
-            scorerMap[team][name].xP += sh.xPoints;
-          } else if (typeof sh.xP === 'number') {
-            // For misses, still add expected value
-            const expectedPointValue = sh.pointValue || calculateTwoPointerValue(sh);
-            scorerMap[team][name].xP += sh.xP * expectedPointValue;
-          }
-          scorerMap[team][name].xG += sh.xGoals || 0;
-        }
-        
-        // Count misses
-        if (/miss|wide|short|blocked|post/.test(act)) {
-          agg[team].misses++;
-        }
-      }
-      
-      // Handle special cases
-      if (act.startsWith('free') && act !== 'free') {
-        agg[team].freeAttempts++;
-      }
-      
-      if (act.startsWith('45')||act.startsWith('forty')) {
-        agg[team].fortyFiveAttempts++;
-        if (act==='45'||act==='fortyfive') {
+        // Track specific shot types
+        if (act === 'free') {
+          agg[team].freeScored++;
+        } else if (act === 'offensive mark') {
+          agg[team].offensiveMarkScored++;
+        } else if (act === '45' || act === 'fortyfive') {
           agg[team].fortyFiveScored++;
-          agg[team].successfulShots++;
-          agg[team].points++; // 45s are always 1 point
-          agg[team].totalOnePointers++;
-          if (name) {
-            scorerMap[team][name].points++;
+        }
+      }
+      else {
+        // Misses - still calculate expected values
+        if (isMiss) {
+          agg[team].misses++;
+          
+          // Add expected values for missed shots
+          if (act.includes('goal')) {
+            if (typeof sh.xGoals === 'number') {
+              agg[team].totalXG += sh.xGoals;
+              scorerMap[team][name].xG += sh.xGoals;
+            } else if (typeof sh.xP === 'number') {
+              agg[team].totalXG += sh.xP;
+              scorerMap[team][name].xG += sh.xP;
+            }
+          } else {
+            const pointValue = sh.pointValue || calculateTwoPointerValue(sh);
             if (typeof sh.xPoints === 'number') {
+              agg[team].totalXP += sh.xPoints;
               scorerMap[team][name].xP += sh.xPoints;
             } else if (typeof sh.xP === 'number') {
-              scorerMap[team][name].xP += sh.xP;
+              agg[team].totalXP += sh.xP * pointValue;
+              scorerMap[team][name].xP += sh.xP * pointValue;
             }
-            scorerMap[team][name].xG += sh.xGoals || 0;
           }
         }
       }
       
-      // Count 2-point attempts
-      const eligible = ['point','free','offensive mark','45','fortyfive'];
-      if (eligible.includes(act) && tShot.distMeters >= 40) {
-        agg[team].twoPointerAttempts++;
-        if (/point|free|offensive mark|45|fortyfive/.test(act)) {
-          agg[team].twoPointerScored++;
+      // Track attempts (including misses)
+      if (act.includes('free')) agg[team].freeAttempts++;
+      if (act.includes('offensive mark')) agg[team].offensiveMarkAttempts++;
+      if (act.includes('45') || act.includes('fortyfive')) agg[team].fortyFiveAttempts++;
+      
+      // Track 2-point attempts (must be ≥40m and not a 45 and not a goal)
+      if (tShot.distMeters >= 40 && !act.includes('45') && !act.includes('fortyfive') && !act.includes('goal')) {
+        const eligibleActions = ['point', 'free', 'offensive mark'];
+        if (eligibleActions.some(a => act.includes(a))) {
+          agg[team].twoPointerAttempts++;
+          if (!isMiss) {
+            agg[team].twoPointerScored++;
+          }
         }
       }
     });
     
+    // Calculate averages
     Object.keys(agg).forEach(team => {
       agg[team].avgDistance = agg[team].totalShots > 0
         ? (distAcc[team] / agg[team].totalShots).toFixed(2)
@@ -919,13 +900,7 @@ export default function GAAAnalysisDashboard() {
 
       const locally = calculateMissingMetrics(games);
       setGames(locally);
-      const shots = flattenShots(locally);
-      setSummary({
-        totalShots: shots.length,
-        totalGoals: shots.filter(s => /goal/.test((s.action||'').toLowerCase())).length,
-        totalPoints: shots.filter(s => (s.action||'').toLowerCase()==='point').length,
-        totalMisses: shots.filter(s => /miss|wide|short|blocked|post/.test((s.action||'').toLowerCase())).length
-      });
+      
       Swal.fire({
         title: 'Recalculation Complete',
         text: 'xP/xG updated',
@@ -946,7 +921,7 @@ export default function GAAAnalysisDashboard() {
     }
   };
 
-  // SHOT CLICK HANDLER - Just show details, don't toggle
+  // SHOT CLICK HANDLER
   const handleShotClick = (shot) => {
     setSelectedShot(translateShotToOneSide(shot, halfLineX, goalX, goalY));
   };
@@ -984,7 +959,6 @@ export default function GAAAnalysisDashboard() {
   function renderSelectedShotDetails() {
     if (!selectedShot) return null;
     
-    // Use the already translated shot coordinates for distance calculation
     const pointValue = selectedShot.pointValue || calculateTwoPointerValue(selectedShot);
     const distanceFromGoal = selectedShot.distMeters || calculateDistanceFromGoalLine(
       selectedShot.x || 0, 
@@ -992,7 +966,9 @@ export default function GAAAnalysisDashboard() {
       145, 
       88
     );
-    const isScoring = ['point', 'goal', 'free'].includes((selectedShot.action || '').toLowerCase());
+    const isScoring = ['point', 'goal', 'free', 'offensive mark', '45', 'fortyfive'].some(
+      act => (selectedShot.action || '').toLowerCase().includes(act)
+    );
     
     return (
       <div>
@@ -1117,7 +1093,6 @@ export default function GAAAnalysisDashboard() {
                 setAppliedFilters(prev => ({ 
                   ...prev, 
                   match: newMatch,
-                  // Clear player filter when match changes (optional)
                   player: ''
                 }));
               }}
@@ -1125,7 +1100,7 @@ export default function GAAAnalysisDashboard() {
               <option value="">All Matches</option>
               {matchesData.map((match) => (
                 <option key={match.id} value={match.id}>
-                  {match.name}
+                  {match.name || match.id}
                   {match.date && ` (${new Date(match.date).toLocaleDateString()})`}
                 </option>
               ))}
@@ -1138,7 +1113,6 @@ export default function GAAAnalysisDashboard() {
                 setAppliedFilters(prev => ({ 
                   ...prev, 
                   team: newTeam,
-                  // Clear player filter when team changes (optional)
                   player: ''
                 }));
               }}
@@ -1194,6 +1168,7 @@ export default function GAAAnalysisDashboard() {
           </div>
         )}
 
+        {/* Updated summary section with clearer display */}
         <div className="gaa-summary-section">
           <div className="gaa-tiles-container">
             <div className="gaa-tile">
@@ -1201,24 +1176,56 @@ export default function GAAAnalysisDashboard() {
               <p className="gaa-tile-value">{summary.totalShots}</p>
             </div>
             <div className="gaa-tile">
-              <h5 className="gaa-tile-title">Total Goals</h5>
-              <p className="gaa-tile-value">{summary.totalGoals}</p>
+              <h5 className="gaa-tile-title">Goals</h5>
+              <p className="gaa-tile-value">
+                {summary.totalGoals}
+                <span style={{ fontSize: '0.8em', color: 'var(--gray)' }}>
+                  ({summary.totalGoalPoints}pts)
+                </span>
+              </p>
             </div>
             <div className="gaa-tile">
-              <h5 className="gaa-tile-title">Total Points</h5>
-              <p className="gaa-tile-value">{summary.totalPoints}</p>
+              <h5 className="gaa-tile-title">Points</h5>
+              <p className="gaa-tile-value">
+                {summary.totalPointScores}
+                <span style={{ fontSize: '0.8em', color: 'var(--gray)' }}>
+                  ({summary.totalOnePointers + summary.totalTwoPointers} scores)
+                </span>
+              </p>
+            </div>
+            <div className="gaa-tile">
+              <h5 className="gaa-tile-title">Total Score</h5>
+              <p className="gaa-tile-value" style={{ 
+                fontSize: '1.5em', 
+                color: 'var(--primary)',
+                fontWeight: 'bold' 
+              }}>
+                {summary.totalPoints}
+              </p>
             </div>
             <div className="gaa-tile">
               <h5 className="gaa-tile-title">Two-Pointers</h5>
-              <p className="gaa-tile-value" style={{ color: '#FFFF33' }}>{summary.totalTwoPointers}</p>
+              <p className="gaa-tile-value" style={{ color: '#FFFF33' }}>
+                {summary.totalTwoPointers}
+                <span style={{ fontSize: '0.8em', color: 'var(--gray)' }}>
+                  ({summary.totalTwoPointers * 2}pts)
+                </span>
+              </p>
             </div>
             <div className="gaa-tile">
               <h5 className="gaa-tile-title">One-Pointers</h5>
-              <p className="gaa-tile-value">{summary.totalOnePointers}</p>
+              <p className="gaa-tile-value">
+                {summary.totalOnePointers}
+                <span style={{ fontSize: '0.8em', color: 'var(--gray)' }}>
+                  ({summary.totalOnePointers}pts)
+                </span>
+              </p>
             </div>
             <div className="gaa-tile">
-              <h5 className="gaa-tile-title">Total Misses</h5>
-              <p className="gaa-tile-value">{summary.totalMisses}</p>
+              <h5 className="gaa-tile-title">Misses</h5>
+              <p className="gaa-tile-value" style={{ color: 'var(--danger)' }}>
+                {summary.totalMisses}
+              </p>
             </div>
           </div>
         </div>
@@ -1251,25 +1258,8 @@ export default function GAAAnalysisDashboard() {
                       <span className="gaa-stat-label">Successful Shots:</span>
                       <span className="gaa-stat-value">{stats.successfulShots}</span>
                     </div>
-                    <div className="gaa-stat-row">
-                      <span className="gaa-stat-label">Points:</span>
-                      <span className="gaa-stat-value">{stats.points}</span>
-                    </div>
-                    <div className="gaa-stat-row">
-                      <span className="gaa-stat-label">Expected Points (xP):</span>
-                      <span className="gaa-stat-value">
-                        {(stats.totalXP || 0).toFixed(2)}
-                        {stats.points > 0 && stats.totalXP > 0 && (
-                          <span style={{ 
-                            marginLeft: '0.5rem', 
-                            fontSize: '0.9em',
-                            color: stats.points > stats.totalXP ? 'var(--success)' : 'var(--danger)'
-                          }}>
-                            ({stats.points > stats.totalXP ? '+' : ''}{(stats.points - stats.totalXP).toFixed(1)})
-                          </span>
-                        )}
-                      </span>
-                    </div>
+                    
+                    {/* Separated Goals Section */}
                     <div className="gaa-stat-row">
                       <span className="gaa-stat-label">Goals:</span>
                       <span className="gaa-stat-value">{stats.goals}</span>
@@ -1278,7 +1268,7 @@ export default function GAAAnalysisDashboard() {
                       <span className="gaa-stat-label">Expected Goals (xG):</span>
                       <span className="gaa-stat-value">
                         {(stats.totalXG || 0).toFixed(2)}
-                        {stats.goals > 0 && stats.totalXG > 0 && (
+                        {stats.goals > 0 && (
                           <span style={{ 
                             marginLeft: '0.5rem', 
                             fontSize: '0.9em',
@@ -1289,6 +1279,28 @@ export default function GAAAnalysisDashboard() {
                         )}
                       </span>
                     </div>
+                    
+                    {/* Separated Points Section */}
+                    <div className="gaa-stat-row">
+                      <span className="gaa-stat-label">Points:</span>
+                      <span className="gaa-stat-value">{stats.points}</span>
+                    </div>
+                    <div className="gaa-stat-row">
+                      <span className="gaa-stat-label">Expected Points (xP):</span>
+                      <span className="gaa-stat-value">
+                        {(stats.totalXP || 0).toFixed(2)}
+                        {stats.points > 0 && (
+                          <span style={{ 
+                            marginLeft: '0.5rem', 
+                            fontSize: '0.9em',
+                            color: stats.points > stats.totalXP ? 'var(--success)' : 'var(--danger)'
+                          }}>
+                            ({stats.points > stats.totalXP ? '+' : ''}{(stats.points - stats.totalXP).toFixed(1)})
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    
                     <div className="gaa-stat-row">
                       <span className="gaa-stat-label">Misses:</span>
                       <span className="gaa-stat-value">{stats.misses}</span>
@@ -1349,13 +1361,28 @@ export default function GAAAnalysisDashboard() {
                               </div>
                               <div className="scorer-stats-line">
                                 xP: {(v.xP || 0).toFixed(2)}, xG: {(v.xG || 0).toFixed(2)}
-                                {((v.goals + v.points) > 0 || v.xP > 0) && (
-                                  <span className="scorer-performance" style={{ 
-                                    color: (v.goals + v.points) > (v.xP + v.xG) ? 'var(--success)' : 'var(--danger)'
-                                  }}>
-                                    ({(v.goals + v.points) > (v.xP + v.xG) ? '+' : ''}{((v.goals + v.points) - (v.xP + v.xG)).toFixed(1)})
-                                  </span>
-                                )}
+                                <span className="scorer-performance" style={{ 
+                                  marginLeft: '0.5rem',
+                                  fontSize: '0.9em'
+                                }}>
+                                  (
+                                  {v.points > 0 && (
+                                    <span style={{ 
+                                      color: v.points > v.xP ? 'var(--success)' : 'var(--danger)'
+                                    }}>
+                                      P: {v.points > v.xP ? '+' : ''}{(v.points - v.xP).toFixed(1)}
+                                    </span>
+                                  )}
+                                  {v.points > 0 && v.goals > 0 && ', '}
+                                  {v.goals > 0 && (
+                                    <span style={{ 
+                                      color: v.goals > v.xG ? 'var(--success)' : 'var(--danger)'
+                                    }}>
+                                      G: {v.goals > v.xG ? '+' : ''}{(v.goals - v.xG).toFixed(1)}
+                                    </span>
+                                  )}
+                                  )
+                                </span>
                               </div>
                             </div>
                           ))

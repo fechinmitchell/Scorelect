@@ -5780,13 +5780,15 @@ def run_cmc_model():
         
         execution_time = time.time() - start_time
         
-        # Save model run to history - FIXED: Ensure all values are serializable
-        model_run = {
-            'timestamp': firestore.SERVER_TIMESTAMP,
-            'model_type': 'cmc_v3',
-            'source_dataset': source_dataset,
-            'target_dataset': target_dataset,
-            'metrics': {
+        # FIXED: Save model run to history with proper structure
+        try:
+            # Create a properly flattened model run structure
+            model_run = {
+                'timestamp': firestore.SERVER_TIMESTAMP,
+                'model_type': 'cmc_v3',
+                'source_dataset': source_dataset,
+                'target_dataset': target_dataset,
+                # Store metrics at top level for compatibility
                 'accuracy': float(metrics['accuracy']),
                 'precision': float(metrics['precision']),
                 'recall': float(metrics['recall']),
@@ -5794,23 +5796,35 @@ def run_cmc_model():
                 'auc_roc': float(metrics['auc_roc']),
                 'cv_auc_mean': float(metrics['cv_auc_mean']),
                 'cv_auc_std': float(metrics['cv_auc_std']),
-                'top_features': metrics['top_features']  # Already serialized above
-            },
-            'total_shots_updated': int(total_shots),
-            'games_updated': int(updated_games),
-            'games_failed': int(len(failed_updates)),
-            'execution_time': float(execution_time),
-            'training_size': int(len(essential_data)),
-            'features_used': features,  # List of strings is fine
-            'feature_count': int(len(features))
-        }
-        
-        try:
+                # Also include metrics object for frontend compatibility
+                'metrics': {
+                    'accuracy': float(metrics['accuracy']),
+                    'precision': float(metrics['precision']),
+                    'recall': float(metrics['recall']),
+                    'f1_score': float(metrics['f1_score']),
+                    'auc_roc': float(metrics['auc_roc']),
+                    'cv_auc_mean': float(metrics['cv_auc_mean']),
+                    'cv_auc_std': float(metrics['cv_auc_std'])
+                },
+                'total_shots_updated': int(total_shots),
+                'games_updated': int(updated_games),
+                'games_failed': int(len(failed_updates)),
+                'execution_time': float(execution_time),
+                'training_size': int(len(essential_data)),
+                'feature_count': int(len(features))
+            }
+            
+            # Store top features separately as simple lists
+            if 'top_features' in metrics and metrics['top_features']:
+                model_run['top_feature_names'] = [str(k) for k, v in metrics['top_features'][:5]]
+                model_run['top_feature_values'] = [float(v) for k, v in metrics['top_features'][:5]]
+            
             db.collection('modelRuns').document(uid).collection('history').add(model_run)
             logging.info("Model run history saved successfully")
+            
         except Exception as e:
-            logging.warning(f"Failed to save model run history: {str(e)}")
-            # Try simpler version without nested data
+            logging.warning(f"Failed to save full model run history: {str(e)}")
+            # Try simplified version that's guaranteed to work
             try:
                 simple_model_run = {
                     'timestamp': firestore.SERVER_TIMESTAMP,
@@ -5818,9 +5832,20 @@ def run_cmc_model():
                     'source_dataset': source_dataset,
                     'target_dataset': target_dataset,
                     'accuracy': float(metrics['accuracy']),
+                    'precision': float(metrics['precision']),
+                    'recall': float(metrics['recall']),
                     'f1_score': float(metrics['f1_score']),
+                    'auc_roc': float(metrics['auc_roc']),
                     'total_shots_updated': int(total_shots),
-                    'execution_time': float(execution_time)
+                    'execution_time': float(execution_time),
+                    # Essential metrics object for frontend
+                    'metrics': {
+                        'accuracy': float(metrics['accuracy']),
+                        'precision': float(metrics['precision']),
+                        'recall': float(metrics['recall']),
+                        'f1_score': float(metrics['f1_score']),
+                        'auc_roc': float(metrics['auc_roc'])
+                    }
                 }
                 db.collection('modelRuns').document(uid).collection('history').add(simple_model_run)
                 logging.info("Saved simplified model run history")

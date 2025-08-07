@@ -677,7 +677,7 @@ const TeamsManager = ({ open, onClose, onSaveTeams }) => {
     <Dialog
       open={open}
       onClose={onClose}
-      maxWidth="lg"
+      maxWidth="xl"
       fullWidth
       PaperProps={{
         sx: {

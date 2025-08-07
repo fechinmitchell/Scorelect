@@ -677,7 +677,7 @@ const TeamsManager = ({ open, onClose, onSaveTeams }) => {
     <Dialog
       open={open}
       onClose={onClose}
-      maxWidth="xl"
+      maxWidth="xl"  // Change from "lg" to "xl" for extra large
       fullWidth
       PaperProps={{
         sx: {
@@ -685,6 +685,10 @@ const TeamsManager = ({ open, onClose, onSaveTeams }) => {
           color: '#fff',
           borderRadius: 2,
           minHeight: '80vh',
+          // Add these properties to make it even wider if needed
+          width: '95vw',  // Use 95% of viewport width
+          maxWidth: '1400px', // Set a maximum width in pixels
+          margin: '20px', // Add some margin from screen edges
         }
       }}
     >

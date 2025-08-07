@@ -146,30 +146,51 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
         color: 'var(--light)',
         didOpen: () => {
           Swal.showLoading();
-        }
+        },
       });
-
+  
       const fullGameData = await fetchFullGameData(game.gameId || game.gameName);
-      
       Swal.close();
-
+  
       let normalizedData = Array.isArray(fullGameData.gameData)
         ? fullGameData.gameData
         : Object.values(fullGameData.gameData || {});
-
+  
       if (normalizedData.length > 0) {
-        if (getAnalysisType(fullGameData) === 'video') {
+        const analysisType = getAnalysisType(fullGameData);
+  
+        if (analysisType === 'video') {
           console.log('Loading video analysis game:', fullGameData.gameName);
-          
+  
+          // Process tags for ManualTagging
+          const processedTags = normalizedData.map((tag) => ({
+            ...tag,
+            position: tag.position || { x: tag.x || 50, y: tag.y || 50 },
+            x: tag.x || tag.position?.x || 50,
+            y: tag.y || tag.position?.y || 50,
+            playerName: tag.playerName || tag.player || '',
+            playerNumber: tag.playerNumber || '',
+            timestamp: tag.timestamp || 0,
+            category: tag.category || '',
+            action: tag.action || '',
+            team: tag.team || 'home',
+            outcome: tag.outcome || '',
+            notes: tag.notes || '',
+            pressure: tag.pressure || '0',
+            foot: tag.foot || 'Right',
+            minute: tag.minute || '',
+          }));
+  
           navigate('/tagging/manual', {
             state: {
               youtubeUrl: fullGameData.youtubeUrl,
-              tags: normalizedData,
+              tags: processedTags,
               teamsData: fullGameData.teamsData,
               datasetName: fullGameData.datasetName || fullGameData.gameName,
-              sport: fullGameData.sport
-            }
+              sport: fullGameData.sport,
+            },
           });
+  
           Swal.fire({
             title: 'Success',
             text: `Video analysis "${fullGameData.gameName}" loaded successfully!`,
@@ -178,112 +199,156 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
             confirmButtonColor: 'var(--primary)',
           });
         } else if (fullGameData.sport === 'GAA') {
-          console.log('Loading GAA analysis game:', fullGameData.gameName);
-          
-          const pitchWidth = 145;
-          const pitchHeight = 88;
-          const halfLineX = pitchWidth / 2;
-          const goalY = pitchHeight / 2;
-          
-          const processedGameData = normalizedData.map(tag => {
-            let positionStr = '';
-            if (typeof tag.position === 'string') {
-              positionStr = tag.position;
-            } else if (tag.position && typeof tag.position === 'object') {
-              positionStr = tag.position.type || 'forward';
-            } else {
-              positionStr = 'forward';
-            }
-            
-            let distMeters = tag.distMeters;
-            if (!distMeters && tag.x !== undefined && tag.y !== undefined) {
-              const x = parseFloat(tag.x);
-              const y = parseFloat(tag.y);
-              const isLeftSide = x <= halfLineX;
-              const targetGoalX = isLeftSide ? 0 : pitchWidth;
-              const dx = x - targetGoalX;
-              const dy = y - goalY;
-              distMeters = Math.sqrt(dx * dx + dy * dy);
-            }
-            
-            return {
-              ...tag,
-              position: positionStr,
-              x: tag.x || 50,
-              y: tag.y || 50,
-              distMeters: distMeters || 30,
-              side: tag.side || (tag.x <= halfLineX ? 'Left' : 'Right'),
-              distanceFromGoal: tag.distanceFromGoal || distMeters || 30,
-              pressure: tag.pressure || '0',
-              foot: tag.foot || 'Right',
-              playerName: tag.playerName || tag.player || '',
-              playerNumber: tag.playerNumber || '',
-              minute: tag.minute || 0,
-              team: tag.team || 'Unknown',
-              action: tag.action || '',
-              outcome: tag.outcome || ''
-            };
-          });
-          
-          const formattedData = {
-            games: [{
-              gameId: fullGameData.gameId || fullGameData.gameName,
-              gameName: fullGameData.gameName,
-              matchDate: fullGameData.matchDate,
-              sport: fullGameData.sport,
-              datasetName: fullGameData.datasetName,
-              analysisType: fullGameData.analysisType || 'pitch',
-              gameData: processedGameData
-            }],
-            datasetName: fullGameData.datasetName || fullGameData.gameName
-          };
-          
-          navigate('/gaa-analysis-dashboard', {
-            state: {
-              file: formattedData,
-              sport: 'GAA',
-              filters: {
-                match: '',
-                team: '',
-                player: '',
-                action: ''
+          if (!analysisType || analysisType === 'pitch') {
+            // Load into PitchGraphic for editing/viewing pitch recordings
+            console.log('Loading GAA pitch game for editing:', fullGameData.gameName);
+  
+            // Process data for PitchGraphic
+            const processedData = normalizedData.map((item) => ({
+              action: item.action || 'point',
+              team: item.team || 'Unknown',
+              playerName: item.playerName || item.player || '',
+              player: item.player || item.playerNumber || '',
+              position: typeof item.position === 'string' ? item.position : 'forward',
+              pressure: item.pressure || '0',
+              foot: item.foot || 'Right',
+              minute: item.minute || '',
+              x: item.x || item.position?.x || 50,
+              y: item.y || item.position?.y || 50,
+              type: item.type || item.action || 'point',
+              from: item.from || null,
+              to: item.to || null,
+            }));
+  
+            // Set coords in context for PitchGraphic
+            setLoadedCoords(processedData);
+  
+            // Navigate to PitchGraphic
+            navigate('/pitch-graphic');
+  
+            Swal.fire({
+              title: 'Success',
+              text: `GAA game "${fullGameData.gameName}" loaded into pitch editor!`,
+              icon: 'success',
+              background: 'var(--dark-card)',
+              confirmButtonColor: 'var(--primary)',
+            });
+          } else {
+            // Load into GAA Analysis Dashboard
+            console.log('Loading GAA analysis game:', fullGameData.gameName);
+  
+            const pitchWidth = 145;
+            const pitchHeight = 88;
+            const halfLineX = pitchWidth / 2;
+            const goalY = pitchHeight / 2;
+  
+            const processedGameData = normalizedData.map((tag) => {
+              let positionStr = '';
+              if (typeof tag.position === 'string') {
+                positionStr = tag.position;
+              } else if (tag.position && typeof tag.position === 'object') {
+                positionStr = tag.position.type || 'forward';
+              } else {
+                positionStr = 'forward';
               }
-            }
-          });
-          
-          Swal.fire({
-            title: 'Success',
-            text: `GAA game "${fullGameData.gameName}" loaded successfully!`,
-            icon: 'success',
-            background: 'var(--dark-card)',
-            confirmButtonColor: 'var(--primary)',
-          });
+  
+              let distMeters = tag.distMeters;
+              if (!distMeters && tag.x !== undefined && tag.y !== undefined) {
+                const x = parseFloat(tag.x);
+                const y = parseFloat(tag.y);
+                const isLeftSide = x <= halfLineX;
+                const targetGoalX = isLeftSide ? 0 : pitchWidth;
+                const dx = x - targetGoalX;
+                const dy = y - goalY;
+                distMeters = Math.sqrt(dx * dx + dy * dy);
+              }
+  
+              return {
+                ...tag,
+                position: positionStr,
+                x: tag.x || 50,
+                y: tag.y || 50,
+                distMeters: distMeters || 30,
+                side: tag.side || (tag.x <= halfLineX ? 'Left' : 'Right'),
+                distanceFromGoal: tag.distanceFromGoal || distMeters || 30,
+                pressure: tag.pressure || '0',
+                foot: tag.foot || 'Right',
+                playerName: tag.playerName || tag.player || '',
+                playerNumber: tag.playerNumber || '',
+                minute: tag.minute || 0,
+                team: tag.team || 'Unknown',
+                action: tag.action || '',
+                outcome: tag.outcome || '',
+              };
+            });
+  
+            const formattedData = {
+              games: [
+                {
+                  gameId: fullGameData.gameId || fullGameData.gameName,
+                  gameName: fullGameData.gameName,
+                  matchDate: fullGameData.matchDate,
+                  sport: fullGameData.sport,
+                  datasetName: fullGameData.datasetName,
+                  analysisType: fullGameData.analysisType || 'pitch',
+                  gameData: processedGameData,
+                },
+              ],
+              datasetName: fullGameData.datasetName || fullGameData.gameName,
+            };
+  
+            navigate('/gaa-analysis-dashboard', {
+              state: {
+                file: formattedData,
+                sport: 'GAA',
+                filters: {
+                  match: '',
+                  team: '',
+                  player: '',
+                  action: '',
+                },
+              },
+            });
+  
+            Swal.fire({
+              title: 'Success',
+              text: `GAA game "${fullGameData.gameName}" loaded for analysis!`,
+              icon: 'success',
+              background: 'var(--dark-card)',
+              confirmButtonColor: 'var(--primary)',
+            });
+          }
         } else {
-          const processedData = normalizedData.map(item => {
-            if (!item.position && (typeof item.x === 'number' && typeof item.y === 'number')) {
+          // Handle other sports
+          console.log('Loading game for other sport:', fullGameData.sport, fullGameData.gameName);
+  
+          const processedData = normalizedData.map((item) => {
+            if (!item.position && typeof item.x === 'number' && typeof item.y === 'number') {
               item.position = { x: item.x, y: item.y };
             } else if (!item.position) {
               item.position = { x: 50, y: 50 };
             }
-            
+  
             if (typeof item.x !== 'number' && item.position) {
               item.x = item.position.x;
             }
             if (typeof item.y !== 'number' && item.position) {
               item.y = item.position.y;
             }
-            
-            item.playerName = item.playerName || item.player || '';
-            item.playerNumber = item.playerNumber || '';
-            item.position = item.position || { x: 50, y: 50 };
-            item.pressure = item.pressure || '0';
-            item.foot = item.foot || 'Right';
-            item.outcome = item.outcome || '';
-            
-            return item;
+  
+            return {
+              ...item,
+              playerName: item.playerName || item.player || '',
+              playerNumber: item.playerNumber || '',
+              position: item.position || { x: 50, y: 50 },
+              pressure: item.pressure || '0',
+              foot: item.foot || 'Right',
+              outcome: item.outcome || '',
+            };
           });
-          
+  
           onLoadGame(fullGameData.sport, processedData);
+  
           Swal.fire({
             title: 'Success',
             text: `Game "${fullGameData.gameName}" loaded successfully!`,

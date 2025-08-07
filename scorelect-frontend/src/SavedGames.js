@@ -45,18 +45,99 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
 
   // Helper function to determine analysis type
   const getAnalysisType = (game) => {
-    // If the game doesn't have an analysisType property, default to 'pitch'
-    // This helps with backward compatibility for games saved before this property existed
     if (!game.analysisType) {
       return 'pitch';
     }
     return game.analysisType;
   };
 
+  // Fix Coordinates function
+  const handleFixCoordinates = async (datasetName) => {
+    const user = auth.currentUser;
+    if (!user) {
+      Swal.fire({
+        title: 'Error',
+        text: 'User not authenticated.',
+        icon: 'error',
+        background: 'var(--dark-card)',
+        confirmButtonColor: 'var(--primary)',
+      });
+      return;
+    }
+
+    // Confirm action
+    const result = await Swal.fire({
+      title: 'Fix Y Coordinates?',
+      html: `This will convert all GAA games in "<b>${datasetName}</b>" from the old coordinate system (Y=0 at top) to the new system (Y=0 at bottom).<br><br><strong style="color: #ff6b6b;">⚠️ This action cannot be undone!</strong>`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, fix coordinates!',
+      cancelButtonText: 'Cancel',
+      background: 'var(--dark-card)',
+      confirmButtonColor: '#ff9800',
+      cancelButtonColor: '#6c757d',
+    });
+
+    if (!result.isConfirmed) return;
+
+    // Show progress
+    Swal.fire({
+      title: 'Fixing Coordinates...',
+      html: 'Processing dataset...<br><span style="font-size: 14px; color: #888;">This may take a few moments</span>',
+      allowOutsideClick: false,
+      background: 'var(--dark-card)',
+      color: 'var(--light)',
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      const token = await user.getIdToken();
+      
+      const response = await fetch(`${apiUrl}/fix_y_coordinates`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          uid: user.uid,
+          datasetName: datasetName
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok) {
+        await fetchSavedGames();
+        
+        Swal.fire({
+          title: 'Coordinates Fixed!',
+          html: `Successfully converted <b>${result.convertedCount}</b> out of <b>${result.totalGames}</b> GAA games in dataset "<b>${datasetName}</b>"`,
+          icon: 'success',
+          background: 'var(--dark-card)',
+          confirmButtonColor: 'var(--primary)',
+        });
+      } else {
+        throw new Error(result.error || 'Conversion failed');
+      }
+    } catch (error) {
+      console.error('Error fixing coordinates:', error);
+      Swal.fire({
+        title: 'Error',
+        text: error.message || 'Failed to fix dataset coordinates.',
+        icon: 'error',
+        background: 'var(--dark-card)',
+        confirmButtonColor: 'var(--primary)',
+      });
+    }
+  };
+
   // Updated handleLoadGame function
   const handleLoadGame = async (game) => {
     try {
-      // Show loading message
       Swal.fire({
         title: 'Loading Game...',
         text: 'Please wait while we load your game data.',
@@ -68,23 +149,18 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
         }
       });
 
-      // Fetch the full game data including gameData array
       const fullGameData = await fetchFullGameData(game.gameId || game.gameName);
       
-      // Close loading dialog
       Swal.close();
 
-      // normalize gameData into an array
       let normalizedData = Array.isArray(fullGameData.gameData)
         ? fullGameData.gameData
         : Object.values(fullGameData.gameData || {});
 
       if (normalizedData.length > 0) {
-        // Check if this is a video analysis
         if (getAnalysisType(fullGameData) === 'video') {
           console.log('Loading video analysis game:', fullGameData.gameName);
           
-          // For video analysis, navigate to ManualTagging with the data
           navigate('/tagging/manual', {
             state: {
               youtubeUrl: fullGameData.youtubeUrl,
@@ -102,18 +178,14 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
             confirmButtonColor: 'var(--primary)',
           });
         } else if (fullGameData.sport === 'GAA') {
-          // For GAA pitch analysis, navigate to GAAAnalysisDashboard
           console.log('Loading GAA analysis game:', fullGameData.gameName);
           
-          // Add normalization logic for coordinates
-          const pitchWidth = 145;  // Width of pitch in meters
-          const pitchHeight = 88;  // Height of pitch in meters
+          const pitchWidth = 145;
+          const pitchHeight = 88;
           const halfLineX = pitchWidth / 2;
           const goalY = pitchHeight / 2;
           
-          // Process the game data to ensure all required fields
           const processedGameData = normalizedData.map(tag => {
-            // Ensure position is a string value
             let positionStr = '';
             if (typeof tag.position === 'string') {
               positionStr = tag.position;
@@ -123,7 +195,6 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
               positionStr = 'forward';
             }
             
-            // Calculate distance to goal if not already present
             let distMeters = tag.distMeters;
             if (!distMeters && tag.x !== undefined && tag.y !== undefined) {
               const x = parseFloat(tag.x);
@@ -135,7 +206,6 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
               distMeters = Math.sqrt(dx * dx + dy * dy);
             }
             
-            // Ensure all required properties exist
             return {
               ...tag,
               position: positionStr,
@@ -155,7 +225,6 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
             };
           });
           
-          // Format the data correctly for GAAAnalysisDashboard
           const formattedData = {
             games: [{
               gameId: fullGameData.gameId || fullGameData.gameName,
@@ -169,7 +238,6 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
             datasetName: fullGameData.datasetName || fullGameData.gameName
           };
           
-          // Navigate to GAA dashboard with correct route
           navigate('/gaa-analysis-dashboard', {
             state: {
               file: formattedData,
@@ -191,17 +259,13 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
             confirmButtonColor: 'var(--primary)',
           });
         } else {
-          // For other pitch analysis (soccer, etc.), use the existing onLoadGame function
-          // Ensure each item has the necessary properties for PitchGraphic
           const processedData = normalizedData.map(item => {
-            // Ensure position property exists
             if (!item.position && (typeof item.x === 'number' && typeof item.y === 'number')) {
               item.position = { x: item.x, y: item.y };
             } else if (!item.position) {
-              item.position = { x: 50, y: 50 }; // Default fallback position
+              item.position = { x: 50, y: 50 };
             }
             
-            // Ensure x and y properties exist (even if they're already in position object)
             if (typeof item.x !== 'number' && item.position) {
               item.x = item.position.x;
             }
@@ -209,7 +273,6 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
               item.y = item.position.y;
             }
             
-            // Ensure other required properties have default values if missing
             item.playerName = item.playerName || item.player || '';
             item.playerNumber = item.playerNumber || '';
             item.position = item.position || { x: 50, y: 50 };
@@ -240,7 +303,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
       }
     } catch (error) {
       console.error('Error loading game data:', error);
-      Swal.close(); // Close loading dialog if still open
+      Swal.close();
       Swal.fire({
         title: 'Error',
         text: error.message || 'Failed to load game data.',
@@ -322,7 +385,6 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     });
   };
 
-  // New function to handle moving a game to another dataset
   const handleMoveGame = (game, currentDatasetName) => {
     setSelectedGameToMove(game);
     setSourceDataset(currentDatasetName);
@@ -622,7 +684,6 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
 
   const datasetKeys = Object.keys(filteredDatasets);
 
-  // Get available target datasets for moving (excluding the source dataset)
   const getAvailableTargetDatasets = () => {
     return datasetKeys.filter(datasetName => datasetName !== sourceDataset);
   };
@@ -729,16 +790,40 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
           ) : (
             datasetKeys.map((datasetName) => {
               const { games, isPublished } = filteredDatasets[datasetName];
-              // Use getAnalysisType function to fix filtering
               const filteredGames = analysisFilter === 'all' 
                 ? games 
                 : games.filter(game => getAnalysisType(game).toLowerCase() === analysisFilter.toLowerCase());
+              
+              // Check if dataset has GAA games
+              const hasGAAGames = games.some(g => g.sport === 'GAA');
               
               return (
                 <div key={datasetName} className="dataset-section">
                   <div className="dataset-header">
                     <h3>Dataset: {datasetName}</h3>
                     <div className="dataset-actions">
+                      {/* Fix Coordinates Button for GAA datasets */}
+                      {hasGAAGames && (
+                        <button
+                          className="fix-coords-button"
+                          onClick={() => handleFixCoordinates(datasetName)}
+                          title="Convert Y coordinates from old system (Y=0 at top) to new system (Y=0 at bottom)"
+                          style={{
+                            backgroundColor: '#ff9800',
+                            color: 'white',
+                            padding: '8px 16px',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            marginRight: '10px',
+                            transition: 'background-color 0.3s'
+                          }}
+                          onMouseEnter={(e) => e.target.style.backgroundColor = '#f57c00'}
+                          onMouseLeave={(e) => e.target.style.backgroundColor = '#ff9800'}
+                        >
+                          Fix Coordinates
+                        </button>
+                      )}
                       <button
                         className="download-dataset-button"
                         onClick={() => handleDownloadDataset(datasetName)}

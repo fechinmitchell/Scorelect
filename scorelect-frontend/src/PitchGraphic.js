@@ -842,8 +842,11 @@ const handleSaveToDataset = async () => {
   const handleClick = (e) => {
     const stage = e.target.getStage();
     const point = stage.getPointerPosition();
-    const newCoord = { x: point.x / xScale, y: point.y / yScale };
-
+    const newCoord = { 
+      x: point.x / xScale, 
+      y: pitchHeight - (point.y / yScale)  // Flip Y coordinate
+    };
+  
     if (actionType && actionType.type === 'line') {
       if (currentCoords.length === 0) {
         // First click for line - store the starting point
@@ -1067,9 +1070,9 @@ const handleSaveToDataset = async () => {
         const arrow = new Konva.Arrow({
           points: [
             coord.from.x * xScale,
-            coord.from.y * yScale,
+            (pitchHeight - coord.from.y) * yScale,  // Flip Y
             coord.to.x * xScale,
-            coord.to.y * yScale
+            (pitchHeight - coord.to.y) * yScale     // Flip Y
           ],
           stroke: getColor(coord.type),
           strokeWidth: 2,
@@ -1082,7 +1085,7 @@ const handleSaveToDataset = async () => {
         // Create circle for marker-type actions
         const circle = new Konva.Circle({
           x: coord.x * xScale,
-          y: coord.y * yScale,
+          y: (pitchHeight - coord.y) * yScale,  // Flip Y
           radius: 6,
           fill: getColor(coord.type)
         });
@@ -1797,60 +1800,60 @@ const handleUploadRawData = (event) => {
           {renderGAAPitch()}
           {isContextMenuOpen && renderContextMenu()}
           <Layer>
-            {coords.map((coord, index) => {
-              if (coord.from && coord.to) {
-                return (
-                  <Arrow
-                    key={index}
-                    points={[
-                      coord.from.x * xScale,
-                      coord.from.y * yScale,
-                      coord.to.x * xScale,
-                      coord.to.y * yScale
-                    ]}
-                    stroke={getColor(coord.type)}
-                    strokeWidth={2}
-                    pointerLength={10} // Length of the arrowhead
-                    pointerWidth={10}  // Width of the arrowhead
+          {coords.map((coord, index) => {
+            if (coord.from && coord.to) {
+              return (
+                <Arrow
+                  key={index}
+                  points={[
+                    coord.from.x * xScale,
+                    (pitchHeight - coord.from.y) * yScale,  // Flip Y
+                    coord.to.x * xScale,
+                    (pitchHeight - coord.to.y) * yScale     // Flip Y
+                  ]}
+                  stroke={getColor(coord.type)}
+                  strokeWidth={2}
+                  pointerLength={10}
+                  pointerWidth={10}
+                />
+              );
+            }
+            return (
+              <Group key={index}>
+                <Circle
+                  x={coord.x * xScale}
+                  y={(pitchHeight - coord.y) * yScale}  // Flip Y
+                  radius={6}
+                  fill={getColor(coord.type)}
+                />
+                {displayPlayerNumber && (
+                  <Text
+                    x={coord.x * xScale}
+                    y={(pitchHeight - coord.y) * yScale - 4}  // Flip Y
+                    text={coord.player}
+                    fontSize={8}
+                    fill="white"
+                    align="center"
+                    width={10}
+                    offsetX={coord.player.length === 1 ? 4.5 : 4.5}
                   />
-                );
-              }
-      return (
-        <Group key={index}>
-          <Circle
-            x={coord.x * xScale}
-            y={coord.y * yScale}
-            radius={6}
-            fill={getColor(coord.type)}
-          />
-          {displayPlayerNumber && (
-            <Text
-              x={coord.x * xScale}
-              y={coord.y * yScale - 4}  // Adjusted to align the text vertically better
-              text={coord.player}
-              fontSize={8}
-              fill="white"
-              align="center"
-              width={10}  // Set the width to ensure consistent alignment
-              offsetX={coord.player.length === 1 ? 4.5 : 4.5}  // Fine-tuned offset values for better centering
-              />
-          )}
-          {displayPlayerName && (
-            <Text
-              x={coord.x * xScale}
-              y={coord.y * yScale - 16}  // Position the name above the marker
-              text={coord.playerName}
-              fontSize={10}
-              fill="black"
-              align="center"
-              width={coord.playerName.length * 6}  // Adjust the width based on the name length
-              offsetX={(coord.playerName.length * 6) / 2}  // Center the text horizontally
-            />
-          )}
-        </Group>
-      );
-    })}
-  </Layer>
+                )}
+                {displayPlayerName && (
+                  <Text
+                    x={coord.x * xScale}
+                    y={(pitchHeight - coord.y) * yScale - 16}  // Flip Y
+                    text={coord.playerName}
+                    fontSize={10}
+                    fill="black"
+                    align="center"
+                    width={coord.playerName.length * 6}
+                    offsetX={(coord.playerName.length * 6) / 2}
+                  />
+                )}
+              </Group>
+            );
+          })}
+        </Layer>
 </Stage>
 <div className="aggregated-data-container">
       <AggregatedData data={aggregateData} />

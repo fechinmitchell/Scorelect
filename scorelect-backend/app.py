@@ -5873,3 +5873,124 @@ def run_cmc_model():
         logging.error(f"Error in run_cmc_model: {str(e)}")
         gc.collect()
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/fix_y_coordinates', methods=['POST'])
+def fix_y_coordinates():
+    """
+    Fix Y coordinates for all GAA games in a dataset.
+    Converts from old system (Y=0 at top) to new system (Y=0 at bottom).
+    """
+    try:
+        data = request.json
+        uid = data.get('uid')
+        dataset_name = data.get('datasetName')
+        
+        if not uid or not dataset_name:
+            logging.error("UID or datasetName not provided for coordinate conversion.")
+            return jsonify({'error': 'UID and datasetName are required.'}), 400
+        
+        logging.info(f"Starting coordinate conversion for dataset '{dataset_name}' for user {uid}")
+        
+        # Reference to the user's games collection
+        games_ref = db.collection('savedGames').document(uid).collection('games')
+        
+        # Query for games with the specified datasetName
+        query = games_ref.where('datasetName', '==', dataset_name)
+        games_snapshot = query.stream()
+        
+        # Initialize batch for bulk updates
+        batch = db.batch()
+        games_found = False
+        converted_count = 0
+        total_games = 0
+        pitch_height = 88  # meters (standard GAA pitch height)
+        
+        for game_doc in games_snapshot:
+            game_data = game_doc.to_dict()
+            
+            # Only process GAA games
+            if game_data.get('sport') != 'GAA':
+                continue
+                
+            total_games += 1
+            games_found = True
+            
+            # Get the game data (coordinates)
+            game_coords = game_data.get('gameData', [])
+            
+            # Check if coordinates are already in new system
+            # You could add a flag to track this, but for now we'll convert all
+            if game_data.get('coordinateSystem') == 'v2':
+                logging.info(f"Game {game_doc.id} already in new coordinate system, skipping")
+                continue
+            
+            # Convert each coordinate in the game
+            converted_coords = []
+            for coord in game_coords:
+                new_coord = coord.copy()  # Make a copy to avoid modifying original
+                
+                # Convert Y coordinate
+                if 'y' in coord and coord['y'] is not None:
+                    try:
+                        old_y = float(coord['y'])
+                        new_coord['y'] = pitch_height - old_y
+                    except (ValueError, TypeError):
+                        logging.warning(f"Invalid Y coordinate in game {game_doc.id}: {coord.get('y')}")
+                        new_coord['y'] = coord['y']  # Keep original if conversion fails
+                
+                # Convert line coordinates if present (for passes, etc.)
+                if 'from' in coord and coord['from'] and 'y' in coord['from']:
+                    try:
+                        old_from_y = float(coord['from']['y'])
+                        new_coord['from'] = coord['from'].copy()
+                        new_coord['from']['y'] = pitch_height - old_from_y
+                    except (ValueError, TypeError):
+                        logging.warning(f"Invalid 'from' Y coordinate in game {game_doc.id}")
+                
+                if 'to' in coord and coord['to'] and 'y' in coord['to']:
+                    try:
+                        old_to_y = float(coord['to']['y'])
+                        new_coord['to'] = coord['to'].copy()
+                        new_coord['to']['y'] = pitch_height - old_to_y
+                    except (ValueError, TypeError):
+                        logging.warning(f"Invalid 'to' Y coordinate in game {game_doc.id}")
+                
+                converted_coords.append(new_coord)
+            
+            # Update the game document with converted coordinates
+            update_data = {
+                'gameData': converted_coords,
+                'coordinateSystem': 'v2',  # Mark as new coordinate system
+                'coordinateConversionDate': firestore.SERVER_TIMESTAMP
+            }
+            
+            batch.update(game_doc.reference, update_data)
+            converted_count += 1
+            
+            # Commit batch every 100 games to avoid timeout
+            if converted_count % 100 == 0:
+                batch.commit()
+                logging.info(f"Committed batch of {converted_count} games")
+                batch = db.batch()  # Start new batch
+        
+        if not games_found:
+            logging.warning(f"No GAA games found under dataset '{dataset_name}' for user {uid}.")
+            return jsonify({'message': f'No GAA games found under dataset "{dataset_name}".'}), 404
+        
+        # Commit any remaining updates
+        if converted_count % 100 != 0:  # Only if there are uncommitted changes
+            batch.commit()
+        
+        logging.info(f"Successfully converted coordinates for {converted_count} out of {total_games} GAA games in dataset '{dataset_name}'")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully converted coordinates for dataset "{dataset_name}"',
+            'convertedCount': converted_count,
+            'totalGames': total_games
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error converting coordinates: {str(e)}")
+        return jsonify({'error': str(e)}), 500

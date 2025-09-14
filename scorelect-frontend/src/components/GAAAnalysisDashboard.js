@@ -65,23 +65,23 @@ const defaultMapping = {
 
 // Fallback colors for markers
 const fallbackColors = {
-  goal: 'var(--goal-color)',
-  point: 'var(--point-color)',
-  miss: 'var(--danger)',
-  setplayscore: { fill: 'var(--point-color)', stroke: 'white' },
-  setplaymiss: { fill: 'var(--danger)', stroke: 'white' },
-  'penalty goal': 'var(--penalty-color)',
-  blocked: 'var(--blocked-color)'
+  goal: '#FFD700', // gold
+  point: '#00FF00', // green
+  miss: '#FF0000', // red
+  setplayscore: { fill: '#00FF00', stroke: 'white' }, // green
+  setplaymiss: { fill: '#FF0000', stroke: 'white' }, // red
+  'penalty goal': '#FFD700', // gold
+  blocked: '#FFC0CB' // pink
 };
 
 const fallbackLegendColors = {
-  goal: 'var(--goal-color)',
-  point: 'var(--point-color)',
-  miss: 'var(--danger)',
-  setplayscore: { fill: 'var(--point-color)', stroke: 'white' },
-  setplaymiss: { fill: 'var(--danger)', stroke: 'white' },
-  'penalty goal': 'var(--penalty-color)',
-  blocked: 'var(--blocked-color)'
+  goal: '#FFD700', // gold
+  point: '#00FF00', // green
+  miss: '#FF0000', // red
+  setplayscore: { fill: '#00FF00', stroke: 'white' }, // green
+  setplaymiss: { fill: '#FF0000', stroke: 'white' }, // red
+  'penalty goal': '#FFD700', // gold
+  blocked: '#FFC0CB' // pink
 };
 
 // Two-pointer logic functions

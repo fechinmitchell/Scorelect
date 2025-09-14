@@ -6,8 +6,8 @@ import { GameContext } from './GameContext';
 import { useAuth } from './AuthContext';
 import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
-import './DashboardHome.css'; // Import the new CSS file
-import InsightsIcon from '@mui/icons-material/Insights';  // Without 'Icon' at the end of the path
+import './DashboardHome.css';
+import InsightsIcon from '@mui/icons-material/Insights';
 
 // Import icons from react-icons
 import { 
@@ -42,14 +42,74 @@ const FeatureCard = ({ icon: Icon, title, blurb, cta, onClick }) => {
   );
 };
 
+// Helper function to build video navigation state
+const buildVideoNavState = (game) => {
+  let pitchWidth, pitchHeight;
+  
+  if (game.sport === 'Soccer') {
+    pitchWidth = 105;
+    pitchHeight = 68;
+  } else {
+    pitchWidth = 145;
+    pitchHeight = 88;
+  }
+  
+  const halfLineX = pitchWidth / 2;
+  const goalY = pitchHeight / 2;
+
+  // Ensure gameData exists and is an array
+  const gameData = Array.isArray(game.gameData) ? game.gameData : [];
+
+  return {
+    youtubeUrl: game.youtubeUrl,
+    sport: game.sport,
+    datasetName: game.datasetName,
+    teamsData: game.teamsData,
+    tags: gameData.map((tag) => {
+      const rawX = parseFloat(tag.x) || 50;
+      const rawY = parseFloat(tag.y) || 50;
+      
+      const normalizedX = (rawX / 100) * pitchWidth;
+      const normalizedY = (rawY / 100) * pitchHeight;
+      
+      const isLeftSide = normalizedX <= halfLineX;
+      const targetGoalX = isLeftSide ? 0 : pitchWidth;
+      
+      const dx = normalizedX - targetGoalX;
+      const dy = normalizedY - goalY;
+      const distToGoal = Math.sqrt(dx * dx + dy * dy);
+      
+      return {
+        id: `tag-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        timestamp: tag.timestamp || 0,
+        category: tag.category || 'Unknown',
+        action: tag.action,
+        team: tag.team,
+        player: tag.playerName || tag.player,
+        outcome: tag.outcome,
+        position: tag.position || 'forward',
+        x: normalizedX,
+        y: normalizedY,
+        distMeters: distToGoal,
+        side: isLeftSide ? 'Left' : 'Right',
+        distanceFromGoal: distToGoal,
+        pressure: tag.pressure || '0',
+        foot: tag.foot || 'Right',
+        notes: tag.notes || '',
+      };
+    }),
+  };
+};
+
 // Enhanced Recent Game Item with better styling and animation
 const RecentGameItem = ({ game, onSelect }) => {
   const [isOverflowing, setIsOverflowing] = useState(false);
   const textRef = useRef(null);
   const navigate = useNavigate();
-  const { currentUser } = useAuth(); // Get current user from auth context
+  const { currentUser } = useAuth();
   const [permissions, setPermissions] = useState({});
-  const [userLevel, setUserLevel] = useState(0); // 0=all, 1=free, 2=premium
+  const [userLevel, setUserLevel] = useState(0);
+  const { fetchFullGameData } = useContext(SavedGamesContext);
   
   // Check if text is overflowing on mount and window resize
   useEffect(() => {
@@ -70,22 +130,18 @@ const RecentGameItem = ({ game, onSelect }) => {
   useEffect(() => {
     const fetchPermissions = async () => {
       try {
-        // Get feature permissions
         const featuresRef = doc(firestore, 'adminSettings', 'config');
         const featuresSnap = await getDoc(featuresRef);
         if (featuresSnap.exists()) {
           setPermissions(featuresSnap.data().permissions || {});
         }
         
-        // Determine user level
-        // This is where you determine if the user is free/premium based on your authentication
-        // Adjust this logic based on how your app stores premium status
         if (currentUser && currentUser.premium) {
-          setUserLevel(2); // Premium user
+          setUserLevel(2);
         } else if (currentUser) {
-          setUserLevel(1); // Free user
+          setUserLevel(1);
         } else {
-          setUserLevel(0); // Guest or anonymous user
+          setUserLevel(0);
         }
       } catch (error) {
         console.error("Error fetching permissions:", error);
@@ -100,289 +156,262 @@ const RecentGameItem = ({ game, onSelect }) => {
     ? new Date(game.matchDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
     : 'No date';
   
-  // Open in dataset analysis
-const handleDatasetAnalysis = (e) => {
-  e.stopPropagation(); // Prevent triggering the parent onClick
-  
-  Swal.fire({
-    title: 'Opening Analysis Dashboard',
-    text: `Analyzing performance data for ${game.gameName}`,
-    icon: 'info',
-    background: 'var(--dark-card)',
-    confirmButtonColor: 'var(--primary)',
-    showConfirmButton: false,
-    timer: 1500
-  });
-  
-  // Check the sport type and route to the correct dashboard
-  if (game.sport === 'Soccer') {
-    // Soccer pitch dimensions and goal positions used in the soccer analysis dashboard
-    const pitchWidth = 105;  // Width of soccer pitch in meters
-    const pitchHeight = 68;  // Height of soccer pitch in meters
-    const halfLineX = pitchWidth / 2;
-    const goalY = pitchHeight / 2;
+  // Open in dataset analysis - handles both video and pitch analysis
+  const handleDatasetAnalysis = async (e) => {
+    e.stopPropagation();
     
-    // Process the game data for soccer analysis
-    const processedGame = {
-      ...game,
-      gameData: (game.gameData || []).map(tag => {
-        // Different handling based on analysis type
-        if ((game.analysisType || 'pitch') === 'video') {
-          // Video analysis - normalize coordinates from percentages (0-100) to meters
-          const rawX = parseFloat(tag.x) || 50;
-          const rawY = parseFloat(tag.y) || 50;
-          
-          // Normalize coordinates to match the analysis dashboard's soccer pitch dimensions
-          const normalizedX = (rawX / 100) * pitchWidth;
-          const normalizedY = (rawY / 100) * pitchHeight;
-          
-          // Determine which goal the shot is targeting based on x position
-          const isLeftSide = normalizedX <= halfLineX;
-          const targetGoalX = isLeftSide ? 0 : pitchWidth;
-          
-          // Calculate distance to goal - required for proper positioning in analysis
-          const dx = normalizedX - targetGoalX;
-          const dy = normalizedY - goalY;
-          const distToGoal = Math.sqrt(dx * dx + dy * dy);
-          
-          // Process position
-          let positionStr = '';
-          if (typeof tag.position === 'string') {
-            positionStr = tag.position;
-          } else if (tag.position && typeof tag.position === 'object') {
-            positionStr = tag.position.type || 'forward';
-          } else {
-            positionStr = 'forward';
-          }
-          
-          return {
-            ...tag,
-            position: positionStr,
-            x: normalizedX,
-            y: normalizedY,
-            distMeters: distToGoal,
-            side: isLeftSide ? 'Left' : 'Right',
-            distanceFromGoal: distToGoal,
-            pressure: tag.pressure || '0',
-            foot: tag.foot || 'Right'
-          };
+    // Check if this is a video analysis game
+    const analysisType = game.analysisType || 'pitch';
+    
+    if (analysisType === 'video') {
+      // For video analysis games, open the video tagging interface
+      Swal.fire({
+        title: 'Opening Video Analysis',
+        text: `Loading video for ${game.gameName}`,
+        icon: 'info',
+        background: 'var(--dark-card)',
+        confirmButtonColor: 'var(--primary)',
+        showConfirmButton: false,
+        timer: 1500
+      });
+      
+      try {
+        // Fetch full game data if needed
+        let fullGameData;
+        if (game.gameData && Array.isArray(game.gameData) && game.gameData.length > 0) {
+          fullGameData = game;
         } else {
-          // Process position
-          let positionStr = '';
-          if (typeof tag.position === 'string') {
-            positionStr = tag.position;
-          } else if (tag.position && typeof tag.position === 'object') {
-            positionStr = tag.position.type || 'forward';
-          } else {
-            positionStr = 'forward';
-          }
-          
-          // Calculate distance to goal if not already present
-          let distMeters = tag.distMeters;
-          if (!distMeters && tag.x !== undefined && tag.y !== undefined) {
-            const x = parseFloat(tag.x);
-            const y = parseFloat(tag.y);
+          // Fetch the full game data
+          fullGameData = await fetchFullGameData(game.gameId || game.gameName);
+        }
+        
+        // Ensure gameData is an array
+        if (!Array.isArray(fullGameData.gameData)) {
+          fullGameData.gameData = Object.values(fullGameData.gameData || {});
+        }
+        
+        // Navigate to video tagging with the game data
+        navigate('/tagging/manual', { 
+          state: buildVideoNavState(fullGameData) 
+        });
+      } catch (error) {
+        console.error('Error loading video game:', error);
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to load video data. Please try again.',
+          icon: 'error',
+          background: 'var(--dark-card)',
+          confirmButtonColor: 'var(--primary)',
+        });
+      }
+      return;
+    }
+    
+    // For pitch analysis games, open the data analysis dashboard
+    Swal.fire({
+      title: 'Loading Game Data...',
+      text: 'Please wait while we prepare your analysis.',
+      allowOutsideClick: false,
+      background: 'var(--dark-card)',
+      color: 'var(--light)',
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+    
+    try {
+      // Fetch full game data
+      let fullGameData;
+      if (game.gameData && game.gameData.length > 0) {
+        fullGameData = game;
+      } else {
+        fullGameData = await fetchFullGameData(game.gameId || game.gameName);
+      }
+      
+      // Ensure gameData is an array
+      if (!Array.isArray(fullGameData.gameData)) {
+        fullGameData.gameData = Object.values(fullGameData.gameData || {});
+      }
+      
+      // Check the sport type and route to the correct dashboard
+      if (game.sport === 'Soccer') {
+        const pitchWidth = 105;
+        const pitchHeight = 68;
+        const halfLineX = pitchWidth / 2;
+        const goalY = pitchHeight / 2;
+        
+        // Process the game data for soccer analysis
+        const processedGame = {
+          ...fullGameData,
+          gameId: fullGameData.gameId || fullGameData.gameName,
+          gameName: fullGameData.gameName,
+          matchDate: fullGameData.matchDate,
+          sport: fullGameData.sport || 'Soccer',
+          datasetName: fullGameData.datasetName,
+          analysisType: fullGameData.analysisType || 'pitch',
+          gameData: (fullGameData.gameData || []).map(tag => {
+            // Process each tag
+            let positionStr = '';
+            if (typeof tag.position === 'string') {
+              positionStr = tag.position;
+            } else if (tag.position && typeof tag.position === 'object') {
+              positionStr = tag.position.type || 'forward';
+            } else {
+              positionStr = 'forward';
+            }
+            
+            // Get coordinates
+            let x = tag.x || 50;
+            let y = tag.y || 50;
+            
+            // Calculate distance to goal
             const isLeftSide = x <= halfLineX;
             const targetGoalX = isLeftSide ? 0 : pitchWidth;
             const dx = x - targetGoalX;
             const dy = y - goalY;
-            distMeters = Math.sqrt(dx * dx + dy * dy);
-          }
-          
-          // Add renderType for proper marker coloring - soccer specific actions
-          let renderType = '';
-          const action = tag.action?.toLowerCase().trim() || '';
-          
-          // Soccer-specific action types
-          if (action === 'goal') {
-            renderType = 'goal';
-          } else if (action === 'shot on target') {
-            renderType = 'shotontarget';
-          } else if (action === 'shot off target' || action.includes('miss')) {
-            renderType = 'shotofftarget';
-          } else if (action === 'penalty goal') {
-            renderType = 'penaltygoal';
-          } else if (action === 'penalty miss') {
-            renderType = 'penaltymiss';
-          } else if (action.includes('free kick') && action.includes('goal')) {
-            renderType = 'freekickgoal';
-          } else if (action.includes('free kick') && (action.includes('miss') || action.includes('saved'))) {
-            renderType = 'freekickmiss';
-          } else if (action.includes('corner')) {
-            renderType = 'corner';
-          } else if (action.includes('pass')) {
-            renderType = 'pass';
-          } else if (action.includes('cross')) {
-            renderType = 'cross';
-          } else if (action.includes('save')) {
-            renderType = 'save';
-          } else if (action.includes('tackle')) {
-            renderType = 'tackle';
-          } else if (action.includes('interception')) {
-            renderType = 'interception';
-          } else {
-            renderType = action;
-          }
-          
-          return {
-            ...tag,
-            position: positionStr,
-            distMeters: distMeters || 30,
-            side: tag.side || (tag.x <= halfLineX ? 'Left' : 'Right'),
-            distanceFromGoal: tag.distanceFromGoal || distMeters || 30,
-            pressure: tag.pressure || '0',
-            foot: tag.foot || 'Right',
-            renderType: renderType
-          };
-        }
-      })
-    };
-    
-    // Navigate to soccer analysis with this game's data
-    const dataForAnalysis = {
-      datasetName: game.datasetName,
-      games: [processedGame]
-    };
-    
-    // The key change is here - adding bypass flags to the navigation state
-    navigate('/analysis/soccer-dashboard', { 
-      state: { 
-        file: dataForAnalysis, 
-        sport: 'Soccer',
-      } 
-    });
-  } else {
-    // GAA pitch dimensions and goal positions
-    const pitchWidth = 145;  // Width of pitch in meters
-    const pitchHeight = 88;  // Height of pitch in meters
-    const halfLineX = pitchWidth / 2;
-    const goalY = pitchHeight / 2;
-    
-    const processedGame = {
-      ...game,
-      gameData: (game.gameData || []).map(tag => {
-        // Different handling based on analysis type
-        if ((game.analysisType || 'pitch') === 'video') {
-          // Video analysis - normalize coordinates from percentages (0-100) to meters
-          const rawX = parseFloat(tag.x) || 50;
-          const rawY = parseFloat(tag.y) || 50;
-          
-          // Normalize coordinates to match the analysis dashboard's GAA pitch dimensions
-          const normalizedX = (rawX / 100) * pitchWidth;
-          const normalizedY = (rawY / 100) * pitchHeight;
-          
-          // Determine which goal the shot is targeting based on x position
-          const isLeftSide = normalizedX <= halfLineX;
-          const targetGoalX = isLeftSide ? 0 : pitchWidth;
-          
-          // Calculate distance to goal - required for proper positioning in analysis
-          const dx = normalizedX - targetGoalX;
-          const dy = normalizedY - goalY;
-          const distToGoal = Math.sqrt(dx * dx + dy * dy);
-          
-          // Ensure position is a string value
-          let positionStr = '';
-          if (typeof tag.position === 'string') {
-            positionStr = tag.position;
-          } else if (tag.position && typeof tag.position === 'object') {
-            positionStr = tag.position.type || 'forward';
-          } else {
-            positionStr = 'forward';
-          }
-          
-          return {
-            ...tag,
-            position: positionStr,
-            x: normalizedX,
-            y: normalizedY,
-            distMeters: distToGoal,
-            side: isLeftSide ? 'Left' : 'Right',
-            distanceFromGoal: distToGoal,
-            pressure: tag.pressure || '0',
-            foot: tag.foot || 'Right'
-          };
-        } else {
-          // Pitch analysis - keep original coordinates but ensure all required fields
-          let positionStr = '';
-          if (typeof tag.position === 'string') {
-            positionStr = tag.position;
-          } else if (tag.position && typeof tag.position === 'object') {
-            positionStr = tag.position.type || 'forward';
-          } else {
-            positionStr = 'forward';
-          }
-          
-          // Calculate distance to goal if not already present
-          let distMeters = tag.distMeters;
-          if (!distMeters && tag.x !== undefined && tag.y !== undefined) {
-            const x = parseFloat(tag.x);
-            const y = parseFloat(tag.y);
+            const distMeters = Math.sqrt(dx * dx + dy * dy);
+            
+            return {
+              ...tag,
+              position: positionStr,
+              x: x,
+              y: y,
+              distMeters: distMeters,
+              side: isLeftSide ? 'Left' : 'Right',
+              distanceFromGoal: distMeters,
+              pressure: tag.pressure || '0',
+              foot: tag.foot || 'Right',
+              playerName: tag.playerName || tag.player || '',
+              team: tag.team || 'Unknown',
+              action: tag.action || '',
+              minute: tag.minute || 0
+            };
+          })
+        };
+        
+        // Navigate to soccer analysis with properly formatted data
+        const dataForAnalysis = {
+          datasetName: processedGame.datasetName || 'Dataset',
+          games: [processedGame]
+        };
+        
+        Swal.close();
+        console.log('Navigating to soccer dashboard with data:', dataForAnalysis);
+        
+        navigate('/analysis/soccer-dashboard', { 
+          state: { 
+            file: dataForAnalysis, 
+            sport: 'Soccer',
+            filters: {
+              match: '',
+              team: '',
+              player: '',
+              action: ''
+            }
+          } 
+        });
+      } else {
+        // GAA pitch dimensions and goal positions
+        const pitchWidth = 145;
+        const pitchHeight = 88;
+        const halfLineX = pitchWidth / 2;
+        const goalY = pitchHeight / 2;
+        
+        const processedGame = {
+          ...fullGameData,
+          gameId: fullGameData.gameId || fullGameData.gameName,
+          gameName: fullGameData.gameName,
+          matchDate: fullGameData.matchDate,
+          sport: fullGameData.sport || 'GAA',
+          datasetName: fullGameData.datasetName,
+          analysisType: fullGameData.analysisType || 'pitch',
+          gameData: (fullGameData.gameData || []).map(tag => {
+            // Process each tag
+            let positionStr = '';
+            if (typeof tag.position === 'string') {
+              positionStr = tag.position;
+            } else if (tag.position && typeof tag.position === 'object') {
+              positionStr = tag.position.type || 'forward';
+            } else {
+              positionStr = 'forward';
+            }
+            
+            // Get coordinates
+            let x = tag.x || 50;
+            let y = tag.y || 50;
+            
+            // Calculate distance to goal
             const isLeftSide = x <= halfLineX;
             const targetGoalX = isLeftSide ? 0 : pitchWidth;
             const dx = x - targetGoalX;
             const dy = y - goalY;
-            distMeters = Math.sqrt(dx * dx + dy * dy);
-          }
-          
-          // Add renderType for proper marker coloring
-          let renderType = '';
-          const action = tag.action?.toLowerCase().trim() || '';
-          
-          if (action === 'free' || action === 'fortyfive' || action === 'offensive mark') {
-            renderType = 'setplayscore';
-          } else if (action.includes('free') && (action.includes('miss') || action.includes('wide') || action.includes('short'))) {
-            renderType = 'setplaymiss';
-          } else if (action === 'goal' || action === 'penalty goal') {
-            renderType = action;
-          } else if (action === 'point') {
-            renderType = 'point';
-          } else if (action.includes('miss') || action.includes('wide') || action.includes('short')) {
-            renderType = 'miss';
-          } else if (action.includes('block')) {
-            renderType = 'blocked';
-          } else {
-            renderType = action;
-          }
-          
-          return {
-            ...tag,
-            position: positionStr,
-            distMeters: distMeters || 30,
-            side: tag.side || (tag.x <= halfLineX ? 'Left' : 'Right'),
-            distanceFromGoal: tag.distanceFromGoal || distMeters || 30,
-            pressure: tag.pressure || '0',
-            foot: tag.foot || 'Right',
-            renderType: renderType
-          };
-        }
-      })
-    };
-    
-    // Navigate to GAA analysis with this game's data
-    const dataForAnalysis = {
-      datasetName: game.datasetName,
-      games: [processedGame]
-    };
-    
-    navigate('/analysis/gaa-dashboard', { 
-      state: { 
-        file: dataForAnalysis, 
-        sport: game.sport || 'GAA'
-      } 
-    });
-  }
-};
+            const distMeters = Math.sqrt(dx * dx + dy * dy);
+            
+            return {
+              ...tag,
+              position: positionStr,
+              x: x,
+              y: y,
+              distMeters: distMeters,
+              side: isLeftSide ? 'Left' : 'Right',
+              distanceFromGoal: distMeters,
+              pressure: tag.pressure || '0',
+              foot: tag.foot || 'Right',
+              playerName: tag.playerName || tag.player || '',
+              team: tag.team || 'Unknown',
+              action: tag.action || '',
+              minute: tag.minute || 0,
+              touchedInFlight: tag.touchedInFlight || false,
+              pointValue: tag.pointValue,
+              xP: tag.xP,
+              xPoints: tag.xPoints,
+              xGoals: tag.xGoals
+            };
+          })
+        };
+        
+        // Navigate to GAA analysis with properly formatted data
+        const dataForAnalysis = {
+          datasetName: processedGame.datasetName || 'Dataset',
+          games: [processedGame]
+        };
+        
+        Swal.close();
+        console.log('Navigating to GAA dashboard with data:', dataForAnalysis);
+        
+        navigate('/analysis/gaa-dashboard', { 
+          state: { 
+            file: dataForAnalysis, 
+            sport: 'GAA',
+            filters: {
+              match: '',
+              team: '',
+              player: '',
+              action: ''
+            }
+          } 
+        });
+      }
+    } catch (error) {
+      console.error('Error loading game data:', error);
+      Swal.close();
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to load game data. Please try again.',
+        icon: 'error',
+        background: 'var(--dark-card)',
+        confirmButtonColor: 'var(--primary)',
+      });
+    }
+  };
   
   // AI analysis - NOW CHECKS PERMISSIONS
   const handleAIAnalysis = (e) => {
-    e.stopPropagation(); // Prevent triggering the parent onClick
+    e.stopPropagation();
     
-    // Check if user has access to AI analysis feature
-    // Get aiAnalysis permission level from admin settings
-    const aiAnalysisPermission = permissions['aiAnalysis'] ?? 2; // Default to premium only if not set
+    const aiAnalysisPermission = permissions['aiAnalysis'] ?? 2;
     
     if (userLevel >= aiAnalysisPermission) {
-      // User has permission, navigate to AI dashboard
       Swal.fire({
         title: 'Opening AI Analysis',
         text: `Analyzing performance data for ${game.gameName}`,
@@ -393,7 +422,6 @@ const handleDatasetAnalysis = (e) => {
         timer: 1500
       });
       
-      // Navigate to the appropriate AI dashboard based on sport
       if (game.sport === 'Soccer') {
         navigate('/ai-soccer-dashboard', { 
           state: { 
@@ -416,7 +444,6 @@ const handleDatasetAnalysis = (e) => {
         });
       }
     } else {
-      // Show premium feature popup for non-premium users
       Swal.fire({
         title: 'Premium Feature',
         html: `
@@ -464,18 +491,15 @@ const handleDatasetAnalysis = (e) => {
         </div>
       </div>
       
-      {/* Action buttons */}
       <div className="game-actions">
-        {/* Dataset Analysis Button */}
         <button
           className="action-btn analyze"
           onClick={handleDatasetAnalysis}
-          title="Open in Data Analysis"
+          title={game.analysisType === 'video' ? 'Open Video Analysis' : 'Open in Data Analysis'}
         >
           <InsightsIcon style={{ fontSize: 16 }} />
         </button>
         
-        {/* AI Analysis Button (Checks permissions) */}
         <button
           className="action-btn ai"
           onClick={handleAIAnalysis}
@@ -515,78 +539,6 @@ const RecentList = ({ games, empty, onSelect, title }) => (
   </div>
 );
 
-/**
- * Builds the same navigation-state object that SavedGames.js uses
- * so ManualTagging (or PitchGraphic) can boot up instantly.
- */
-const buildVideoNavState = (game) => {
-  // Use the appropriate pitch dimensions based on sport
-  let pitchWidth, pitchHeight;
-  
-  if (game.sport === 'Soccer') {
-    pitchWidth = 105;  // Soccer pitch width in meters
-    pitchHeight = 68;  // Soccer pitch height in meters
-  } else {
-    pitchWidth = 145;  // GAA pitch width in meters
-    pitchHeight = 88;  // GAA pitch height in meters
-  }
-  
-  const halfLineX = pitchWidth / 2;
-  const goalY = pitchHeight / 2;
-
-  return {
-    youtubeUrl: game.youtubeUrl,
-    sport:      game.sport,
-    datasetName: game.datasetName,
-    teamsData:   game.teamsData,
-    tags: game.gameData.map((tag) => {
-      // Extract and normalize coordinates
-      const rawX = parseFloat(tag.x) || 50;
-      const rawY = parseFloat(tag.y) || 50;
-      
-      // Normalize coordinates to match the pitch dimensions based on sport
-      // Convert from percentages (0-100) to meters
-      const normalizedX = (rawX / 100) * pitchWidth;
-      const normalizedY = (rawY / 100) * pitchHeight;
-      
-      // Determine which goal the shot is targeting based on x position
-      const isLeftSide = normalizedX <= halfLineX;
-      const targetGoalX = isLeftSide ? 0 : pitchWidth;
-      
-      // Calculate distance to goal - required for proper positioning in analysis
-      const dx = normalizedX - targetGoalX;
-      const dy = normalizedY - goalY;
-      const distToGoal = Math.sqrt(dx * dx + dy * dy);
-      
-      return {
-        id: `tag-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-        timestamp: tag.timestamp,
-        category:  tag.category || 'Unknown',
-        action:    tag.action,
-        team:      tag.team,
-        player:    tag.playerName,
-        outcome:   tag.outcome,
-        
-        // Store position as a string value for compatibility with analysis dashboard
-        position: tag.position || 'forward',
-        
-        // Store coordinates using the normalized values in meters
-        x: normalizedX,
-        y: normalizedY,
-        
-        // Add these properties required for proper analysis visualization
-        distMeters: distToGoal,
-        side: isLeftSide ? 'Left' : 'Right',
-        distanceFromGoal: distToGoal,
-        pressure: tag.pressure || '0',
-        foot: tag.foot || 'Right',
-        
-        notes: tag.notes || '',
-      };
-    }),
-  };
-};
-
 const DashboardHome = ({ selectedSport, onNavigate }) => {
   const { datasets } = useContext(SavedGamesContext);
   const { setLoadedCoords } = useContext(GameContext);
@@ -610,15 +562,12 @@ const DashboardHome = ({ selectedSport, onNavigate }) => {
     if (type === 'video' || type === 'combined') {
       navigate('/tagging/manual', { state: buildVideoNavState(game) });
     } else {
-      // -- normalize gameData into an array --
       const normalizedCoords = Array.isArray(game.gameData)
         ? game.gameData
         : Object.values(game.gameData || {});
       
-      // pass only the coords array into context
       setLoadedCoords(normalizedCoords);
       
-      // Route to the appropriate pitch based on sport
       if (game.sport === 'Soccer') {
         navigate('/soccer-pitch', { state: { gameLoaded: true } });
       } else {
@@ -642,7 +591,6 @@ const DashboardHome = ({ selectedSport, onNavigate }) => {
     };
   }, [datasets, selectedSport]);
 
-  // Navigate to the correct pitch based on selected sport
   const handlePitchClick = () => {
     if (selectedSport === 'Soccer') {
       navigate('/soccer-pitch');
@@ -651,7 +599,6 @@ const DashboardHome = ({ selectedSport, onNavigate }) => {
     }
   };
 
-  // Navigate to the correct video analysis tool based on selected sport
   const handleVideoClick = () => {
     switch (selectedSport) {
       case 'Soccer':
@@ -667,7 +614,6 @@ const DashboardHome = ({ selectedSport, onNavigate }) => {
         navigate('/analysis-american-football', { state: { defaultTab: 'video' } });
         break;
       default:
-        // Fallback to GAA if sport not recognized
         navigate('/analysis-gaa', { state: { defaultTab: 'video' } });
         break;
     }
@@ -683,7 +629,6 @@ const DashboardHome = ({ selectedSport, onNavigate }) => {
       </div>
 
       <div className="feature-grid">
-        {/* Pitch Analysis */}
         <FeatureCard
           icon={FaMapMarkedAlt}
           title="Pitch Analysis"
@@ -692,7 +637,6 @@ const DashboardHome = ({ selectedSport, onNavigate }) => {
           onClick={handlePitchClick}
         />
 
-        {/* Video Analysis */}
         <FeatureCard
           icon={FaVideo}
           title="Video Analysis"
@@ -701,7 +645,6 @@ const DashboardHome = ({ selectedSport, onNavigate }) => {
           onClick={handleVideoClick}
         />
 
-        {/* Data Hub */}
         <FeatureCard
           icon={FaDatabase}
           title="Data Hub"
@@ -713,7 +656,6 @@ const DashboardHome = ({ selectedSport, onNavigate }) => {
 
       <div className="dashboard-content">
         <div className="dashboard-row">
-          {/* Recent Pitch Sessions */}
           <div className="dashboard-column">
             <RecentList
               title="Recent Pitch Sessions"
@@ -723,7 +665,6 @@ const DashboardHome = ({ selectedSport, onNavigate }) => {
             />
           </div>
 
-          {/* Recent Video Sessions */}
           <div className="dashboard-column">
             <RecentList
               title="Recent Video Sessions"
@@ -733,7 +674,6 @@ const DashboardHome = ({ selectedSport, onNavigate }) => {
             />
           </div>
 
-          {/* Data Hub Statistics */}
           <div className="dashboard-column">
             <div className="recent-list-section">
               <div className="recent-list-header">

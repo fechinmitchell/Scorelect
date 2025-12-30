@@ -790,6 +790,23 @@
   color: var(--text-secondary);
 }
 
+.pdg-calibration-source {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--success);
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.pdg-calibration-source strong {
+  color: var(--text-primary);
+}
+
 .pdg-legend-items {
   display: flex;
   flex-direction: column;

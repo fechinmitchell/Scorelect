@@ -15,70 +15,228 @@ const ADMIN_USERS = ['w9ZkqaYVM3dKSqqjWHLDVyh5sVg2'];
 const PUBLIC_CONFIG_PATH = 'config/publicDataset';
 const DEFAULT_USER_ID = 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2';
 const DEFAULT_DATASET = 'AllIreland2025';
+const CALIBRATION_DATASET = 'GAA All Shots Formatted';
 const GOAL_X = 145;
 const GOAL_Y = 44;
 const MIDLINE_X = 72.5;
 
+// GAA 2025 Scoring Rules:
+// - Goal (under crossbar) = 3 points
+// - Point from INSIDE 40m arc = 1 point
+// - Point from OUTSIDE 40m arc = 2 points (cleanly kicked)
+// - 45 (free from 45m line) = 1 point
+// - Frees/Marks from outside 40m arc = 2 points
+
+// The 40m arc is 40m from goal (distance from goal line center)
+const ARC_DISTANCE_METERS = 40;
+
 /*******************************************
- * CMC-BASED xP/xG CALCULATION
+ * CALIBRATION DATA HOOK
+ * Builds probability model from historical data
  *******************************************/
-function calculateXP(shot, distanceMeters) {
-  if (!distanceMeters || distanceMeters <= 0) distanceMeters = 20;
-  
-  const actionLower = (shot.action || '').toLowerCase();
-  const positionLower = (shot.position || 'midfielder').toLowerCase();
-  const pressureLower = (shot.pressure || '').toString().toLowerCase();
-  
-  const isSetPlay = ['free', 'fortyfive', '45', 'mark', 'offensive mark', 'penalty'].includes(actionLower) ||
-                    shot.is_setplay === true || shot.placed_ball === true;
-  
-  let baseProb;
-  if (isSetPlay) {
-    if (distanceMeters <= 15) baseProb = 0.95;
-    else if (distanceMeters <= 20) baseProb = 0.90;
-    else if (distanceMeters <= 25) baseProb = 0.85;
-    else if (distanceMeters <= 30) baseProb = 0.75;
-    else if (distanceMeters <= 35) baseProb = 0.65;
-    else if (distanceMeters <= 40) baseProb = 0.55;
-    else if (distanceMeters <= 45) baseProb = 0.45;
-    else baseProb = 0.30;
-  } else {
-    if (distanceMeters <= 15) baseProb = 0.75;
-    else if (distanceMeters <= 20) baseProb = 0.65;
-    else if (distanceMeters <= 25) baseProb = 0.55;
-    else if (distanceMeters <= 30) baseProb = 0.45;
-    else if (distanceMeters <= 35) baseProb = 0.35;
-    else if (distanceMeters <= 40) baseProb = 0.25;
-    else if (distanceMeters <= 45) baseProb = 0.18;
-    else baseProb = 0.12;
-  }
-  
-  let positionMod = 1.0;
-  if (positionLower.includes('forward')) positionMod = 1.05;
-  else if (positionLower.includes('back') || positionLower.includes('defender')) positionMod = 0.92;
-  else if (positionLower.includes('goalkeeper')) positionMod = 0.85;
-  
-  let pressureMod = 1.0;
-  if (pressureLower === 'high' || pressureLower === 'y' || pressureLower === 'yes' || pressureLower === '1') {
-    pressureMod = 0.85;
-  } else if (pressureLower === 'medium') {
-    pressureMod = 0.92;
-  }
-  
-  return Math.max(0.05, Math.min(0.98, baseProb * positionMod * pressureMod));
+function useCalibrationData() {
+  const [calibrationModel, setCalibrationModel] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function buildCalibrationModel() {
+      try {
+        const gamesCollectionRef = collection(firestore, `savedGames/${DEFAULT_USER_ID}/games`);
+        const snapshot = await getDocs(gamesCollectionRef);
+        
+        let calibrationShots = [];
+        
+        snapshot.docs.forEach(docSnap => {
+          const data = docSnap.data();
+          if (data.datasetName === CALIBRATION_DATASET) {
+            const gameData = data.gameData || [];
+            const gameDataArray = Array.isArray(gameData) ? gameData : Object.values(gameData);
+            calibrationShots = calibrationShots.concat(gameDataArray);
+          }
+        });
+
+        if (calibrationShots.length === 0) {
+          console.log('No calibration data found, using defaults');
+          setCalibrationModel(null);
+          setLoading(false);
+          return;
+        }
+
+        console.log(`Building calibration model from ${calibrationShots.length} shots`);
+
+        // Build conversion rate model by distance bucket (5m intervals)
+        // Track separate rates for: set plays, play from hand, and goals
+        const buckets = {};
+        
+        calibrationShots.forEach(shot => {
+          // Calculate distance to goal
+          const x = parseFloat(shot.x) || 0;
+          const y = parseFloat(shot.y) || 0;
+          const targetGoal = x <= MIDLINE_X ? { x: 0, y: GOAL_Y } : { x: GOAL_X, y: GOAL_Y };
+          const dx = x - targetGoal.x;
+          const dy = y - targetGoal.y;
+          const distanceMeters = Math.sqrt(dx * dx + dy * dy);
+          
+          const bucket = Math.floor(distanceMeters / 5) * 5;
+          if (!buckets[bucket]) {
+            buckets[bucket] = {
+              setPlay: { attempts: 0, scores: 0 },
+              play: { attempts: 0, scores: 0 },
+              goal: { attempts: 0, scores: 0 }
+            };
+          }
+          
+          const actionLower = (shot.action || '').toLowerCase();
+          const typeLower = (shot.type || '').toLowerCase();
+          
+          const isSetPlay = ['free', 'fortyfive', '45', 'mark', 'offensive mark', 'penalty'].includes(actionLower);
+          const isGoalAttempt = actionLower === 'goal' || typeLower === 'goal' || typeLower === 'saved';
+          const isPointScored = actionLower === 'point' || (isSetPlay && typeLower === 'score');
+          const isGoalScored = actionLower === 'goal';
+          
+          if (isGoalAttempt) {
+            buckets[bucket].goal.attempts += 1;
+            if (isGoalScored) buckets[bucket].goal.scores += 1;
+          } else if (isSetPlay) {
+            buckets[bucket].setPlay.attempts += 1;
+            if (isPointScored) buckets[bucket].setPlay.scores += 1;
+          } else {
+            buckets[bucket].play.attempts += 1;
+            if (isPointScored) buckets[bucket].play.scores += 1;
+          }
+        });
+
+        // Calculate rates
+        const model = { buckets: {}, shotCount: calibrationShots.length };
+        
+        Object.keys(buckets).forEach(b => {
+          const data = buckets[b];
+          model.buckets[b] = {
+            setPlayRate: data.setPlay.attempts > 0 ? data.setPlay.scores / data.setPlay.attempts : null,
+            playRate: data.play.attempts > 0 ? data.play.scores / data.play.attempts : null,
+            goalRate: data.goal.attempts > 0 ? data.goal.scores / data.goal.attempts : null
+          };
+        });
+
+        console.log('Calibration model built:', model);
+        setCalibrationModel(model);
+      } catch (err) {
+        console.error('Error building calibration model:', err);
+        setCalibrationModel(null);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    buildCalibrationModel();
+  }, []);
+
+  return { calibrationModel, loading };
 }
 
-function calculateXG(shot, distanceMeters) {
-  if (!distanceMeters || distanceMeters <= 0) distanceMeters = 15;
+/*******************************************
+ * xP CALCULATION (Expected Points for point attempts)
+ * Returns the probability of scoring a point (0-1)
+ *******************************************/
+function calculateXP(shot, distanceMeters, calibrationModel) {
+  // First check if shot already has xPoints from backend
+  if (shot.xPoints !== undefined && shot.xPoints !== null) {
+    const existing = parseFloat(shot.xPoints);
+    if (!isNaN(existing) && existing >= 0 && existing <= 1) {
+      return existing;
+    }
+  }
+  
+  const bucket = Math.floor(distanceMeters / 5) * 5;
+  const actionLower = (shot.action || '').toLowerCase();
+  const isSetPlay = ['free', 'fortyfive', '45', 'mark', 'offensive mark', 'penalty'].includes(actionLower);
+  
+  // Try calibration model first
+  if (calibrationModel && calibrationModel.buckets) {
+    // Look for exact bucket
+    if (calibrationModel.buckets[bucket]) {
+      const rate = isSetPlay 
+        ? calibrationModel.buckets[bucket].setPlayRate 
+        : calibrationModel.buckets[bucket].playRate;
+      if (rate !== null) return rate;
+    }
+    
+    // Try nearest bucket
+    const bucketKeys = Object.keys(calibrationModel.buckets).map(Number).sort((a, b) => a - b);
+    if (bucketKeys.length > 0) {
+      const nearest = bucketKeys.reduce((prev, curr) => 
+        Math.abs(curr - bucket) < Math.abs(prev - bucket) ? curr : prev, bucketKeys[0]);
+      const rate = isSetPlay 
+        ? calibrationModel.buckets[nearest]?.setPlayRate 
+        : calibrationModel.buckets[nearest]?.playRate;
+      if (rate !== null && rate !== undefined) return rate;
+    }
+  }
+  
+  // Fallback: Conservative default rates based on GAA research
+  // These are approximate conversion rates from various GAA studies
+  if (isSetPlay) {
+    // Set plays (frees, 45s, marks) - higher success rates
+    if (distanceMeters <= 20) return 0.82;  // Close frees ~82%
+    if (distanceMeters <= 30) return 0.68;  // Medium frees ~68%
+    if (distanceMeters <= 40) return 0.52;  // Long frees ~52%
+    if (distanceMeters <= 45) return 0.42;  // 45s ~42%
+    return 0.30;  // Very long ~30%
+  } else {
+    // Play from hand - lower success rates
+    if (distanceMeters <= 15) return 0.58;  // Close range ~58%
+    if (distanceMeters <= 20) return 0.48;  // Medium close ~48%
+    if (distanceMeters <= 25) return 0.40;  // Medium ~40%
+    if (distanceMeters <= 30) return 0.32;  // Medium long ~32%
+    if (distanceMeters <= 35) return 0.25;  // Long ~25%
+    if (distanceMeters <= 40) return 0.18;  // Very long ~18%
+    return 0.12;  // Beyond 40m ~12%
+  }
+}
+
+/*******************************************
+ * xG CALCULATION (Expected Goals for goal attempts)
+ * Returns the probability of scoring a goal (0-1)
+ *******************************************/
+function calculateXG(shot, distanceMeters, calibrationModel) {
+  // First check if shot already has xGoals from backend
+  if (shot.xGoals !== undefined && shot.xGoals !== null) {
+    const existing = parseFloat(shot.xGoals);
+    if (!isNaN(existing) && existing >= 0 && existing <= 1) {
+      return existing;
+    }
+  }
+  
+  const bucket = Math.floor(distanceMeters / 5) * 5;
   const actionLower = (shot.action || '').toLowerCase();
   
-  if (actionLower === 'penalty') return 0.75;
-  if (distanceMeters <= 8) return 0.35;
-  if (distanceMeters <= 12) return 0.25;
-  if (distanceMeters <= 15) return 0.15;
-  if (distanceMeters <= 20) return 0.08;
-  if (distanceMeters <= 25) return 0.04;
-  return 0.02;
+  // Penalties have high conversion rate
+  if (actionLower === 'penalty') return 0.82;
+  
+  // Try calibration model
+  if (calibrationModel && calibrationModel.buckets) {
+    if (calibrationModel.buckets[bucket]?.goalRate !== null && 
+        calibrationModel.buckets[bucket]?.goalRate !== undefined) {
+      return calibrationModel.buckets[bucket].goalRate;
+    }
+    
+    // Try nearest bucket
+    const bucketKeys = Object.keys(calibrationModel.buckets).map(Number).sort((a, b) => a - b);
+    if (bucketKeys.length > 0) {
+      const nearest = bucketKeys.reduce((prev, curr) => 
+        Math.abs(curr - bucket) < Math.abs(prev - bucket) ? curr : prev, bucketKeys[0]);
+      const rate = calibrationModel.buckets[nearest]?.goalRate;
+      if (rate !== null && rate !== undefined) return rate;
+    }
+  }
+  
+  // Fallback: Conservative goal conversion rates
+  // Goals are much harder to score than points
+  if (distanceMeters <= 6) return 0.45;   // Very close ~45%
+  if (distanceMeters <= 10) return 0.32;  // Close ~32%
+  if (distanceMeters <= 14) return 0.22;  // Medium ~22%
+  if (distanceMeters <= 20) return 0.12;  // Long ~12%
+  return 0.05;  // Very long ~5%
 }
 
 /*******************************************
@@ -354,7 +512,7 @@ function MainLeaderboard({ data }) {
   );
 }
 
-function CalibrationModal({ isOpen, onClose, stats }) {
+function CalibrationModal({ isOpen, onClose, stats, calibrationModel }) {
   if (!isOpen) return null;
   
   return (
@@ -370,6 +528,16 @@ function CalibrationModal({ isOpen, onClose, stats }) {
           <button className="pdg-modal-close" onClick={onClose}>×</button>
         </div>
         <div className="pdg-modal-body">
+          {calibrationModel && (
+            <div className="pdg-calibration-source">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+              <span>Using calibration data from <strong>{CALIBRATION_DATASET}</strong> ({calibrationModel.shotCount} shots)</span>
+            </div>
+          )}
+          
           <p className="pdg-form-hint" style={{ marginBottom: '1.5rem' }}>
             Compare expected values (xP, xG) against actual results to assess model accuracy. 
             A calibration near 100% indicates well-calibrated predictions.
@@ -641,6 +809,7 @@ export default function PlayerDataGAA() {
   const isAdmin = currentUser && ADMIN_USERS.includes(currentUser.uid);
   
   const { config: publicConfig, loading: configLoading, setConfig: setPublicConfig } = useFetchPublicConfig();
+  const { calibrationModel, loading: calibrationLoading } = useCalibrationData();
   const [dataSource, setDataSource] = useState('public');
   const [selectedDatasetName, setSelectedDatasetName] = useState('');
   const [selectedGameIds, setSelectedGameIds] = useState([]);
@@ -726,8 +895,9 @@ export default function PlayerDataGAA() {
       else if (isGoalAction) { p.goals += 1; p.positionPerformance[pos].goals += 1; }
       else if (isSetPlayScore) p.points += 1;
 
-      p.xPoints += shot.xPoints ? Number(shot.xPoints) : calculateXP(shot, translated.distMeters);
-      p.xGoals += shot.xGoals ? Number(shot.xGoals) : calculateXG(shot, translated.distMeters);
+      // Use calibrated xP/xG calculations
+      p.xPoints += calculateXP(shot, translated.distMeters, calibrationModel);
+      p.xGoals += calculateXG(shot, translated.distMeters, calibrationModel);
       return acc;
     }, {});
 
@@ -738,7 +908,7 @@ export default function PlayerDataGAA() {
       const positionPerformance = Object.entries(p.positionPerformance).map(([pos, stats]) => ({ position: pos, ...stats, efficiency: stats.shots > 0 ? ((stats.points + stats.goals * 3) / stats.shots) * 100 : 0 }));
       return { ...p, positionPerformance, Total_Points: p.points, accuracy, pointsPerShot, goalsPerAttempt };
     });
-  }, [combinedData, selectedYear, selectedTeam]);
+  }, [combinedData, selectedYear, selectedTeam, calibrationModel]);
 
   const goalsData = useMemo(() => formattedLeaderboard.map(p => ({ player: p.player, goals: p.goals, xGoals: p.xGoals, goalAttempts: p.goalAttempts, goalsPerAttempt: p.goalsPerAttempt })), [formattedLeaderboard]);
   const pointsData = useMemo(() => formattedLeaderboard.map(p => ({ player: p.player, points: p.points, xPoints: p.xPoints, shots: p.shootingAttempts, pointsPerShot: p.pointsPerShot })), [formattedLeaderboard]);
@@ -765,7 +935,7 @@ export default function PlayerDataGAA() {
     return { players, shots, points, goals, totalXP, totalXG, avgAcc, xpDiff, xgDiff, xpCalibration, xgCalibration };
   }, [formattedLeaderboard]);
 
-  if (configLoading || structureLoading) return <div className="pdg-page"><LoadingSpinner message="Loading..." /></div>;
+  if (configLoading || structureLoading || calibrationLoading) return <div className="pdg-page"><LoadingSpinner message="Loading..." /></div>;
 
   return (
     <div className="pdg-page">
@@ -834,7 +1004,7 @@ export default function PlayerDataGAA() {
         </>
       )}
 
-      <CalibrationModal isOpen={showCalibration} onClose={() => setShowCalibration(false)} stats={stats} />
+      <CalibrationModal isOpen={showCalibration} onClose={() => setShowCalibration(false)} stats={stats} calibrationModel={calibrationModel} />
       <AdminPanel isOpen={showAdmin} onClose={() => setShowAdmin(false)} datasets={datasetStructure} currentConfig={publicConfig} onSave={setPublicConfig} userId={currentUser?.uid} activeUserId={activeUserId} />
     </div>
   );

@@ -1,283 +1,271 @@
-import React, { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { firestore } from './firebase';
+import { getAuth } from 'firebase/auth';
 
 import './PlayerDataGAA.css';
 
 /*******************************************
- * 1) HELPER: parseJSONNoNaN
+ * CONSTANTS
  *******************************************/
-function parseJSONNoNaN(response) {
-  return response.text().then((rawText) => {
-    const safeText = rawText
-      .replace(/\bNaN\b/g, 'null')
-      .replace(/\bInfinity\b/g, '999999999')
-      .replace(/\b-Infinity\b/g, '-999999999');
-    return JSON.parse(safeText);
-  });
+const ADMIN_USERS = ['w9ZkqaYVM3dKSqqjWHLDVyh5sVg2'];
+const PUBLIC_CONFIG_PATH = 'config/publicDataset';
+const DEFAULT_USER_ID = 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2';
+const DEFAULT_DATASET = 'AllIreland2025';
+const GOAL_X = 145;
+const GOAL_Y = 44;
+const MIDLINE_X = 72.5;
+
+/*******************************************
+ * CMC-BASED xP/xG CALCULATION
+ *******************************************/
+function calculateXP(shot, distanceMeters) {
+  if (!distanceMeters || distanceMeters <= 0) distanceMeters = 20;
+  
+  const actionLower = (shot.action || '').toLowerCase();
+  const positionLower = (shot.position || 'midfielder').toLowerCase();
+  const pressureLower = (shot.pressure || '').toString().toLowerCase();
+  
+  const isSetPlay = ['free', 'fortyfive', '45', 'mark', 'offensive mark', 'penalty'].includes(actionLower) ||
+                    shot.is_setplay === true || shot.placed_ball === true;
+  
+  let baseProb;
+  if (isSetPlay) {
+    if (distanceMeters <= 15) baseProb = 0.95;
+    else if (distanceMeters <= 20) baseProb = 0.90;
+    else if (distanceMeters <= 25) baseProb = 0.85;
+    else if (distanceMeters <= 30) baseProb = 0.75;
+    else if (distanceMeters <= 35) baseProb = 0.65;
+    else if (distanceMeters <= 40) baseProb = 0.55;
+    else if (distanceMeters <= 45) baseProb = 0.45;
+    else baseProb = 0.30;
+  } else {
+    if (distanceMeters <= 15) baseProb = 0.75;
+    else if (distanceMeters <= 20) baseProb = 0.65;
+    else if (distanceMeters <= 25) baseProb = 0.55;
+    else if (distanceMeters <= 30) baseProb = 0.45;
+    else if (distanceMeters <= 35) baseProb = 0.35;
+    else if (distanceMeters <= 40) baseProb = 0.25;
+    else if (distanceMeters <= 45) baseProb = 0.18;
+    else baseProb = 0.12;
+  }
+  
+  let positionMod = 1.0;
+  if (positionLower.includes('forward')) positionMod = 1.05;
+  else if (positionLower.includes('back') || positionLower.includes('defender')) positionMod = 0.92;
+  else if (positionLower.includes('goalkeeper')) positionMod = 0.85;
+  
+  let pressureMod = 1.0;
+  if (pressureLower === 'high' || pressureLower === 'y' || pressureLower === 'yes' || pressureLower === '1') {
+    pressureMod = 0.85;
+  } else if (pressureLower === 'medium') {
+    pressureMod = 0.92;
+  }
+  
+  return Math.max(0.05, Math.min(0.98, baseProb * positionMod * pressureMod));
+}
+
+function calculateXG(shot, distanceMeters) {
+  if (!distanceMeters || distanceMeters <= 0) distanceMeters = 15;
+  const actionLower = (shot.action || '').toLowerCase();
+  
+  if (actionLower === 'penalty') return 0.75;
+  if (distanceMeters <= 8) return 0.35;
+  if (distanceMeters <= 12) return 0.25;
+  if (distanceMeters <= 15) return 0.15;
+  if (distanceMeters <= 20) return 0.08;
+  if (distanceMeters <= 25) return 0.04;
+  return 0.02;
 }
 
 /*******************************************
- * 2) HELPER HOOK: useFetchDataset
+ * HOOKS
  *******************************************/
-function useFetchDataset(collectionPath, documentPath) {
-  const [data, setData] = useState(null);
+function useFetchPublicConfig() {
+  const [config, setConfig] = useState({ userId: null, datasetName: null });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
-    async function fetchDataset() {
-      setLoading(true);
+    async function fetchConfig() {
       try {
-        const docRef = doc(firestore, `${collectionPath}/${documentPath}`);
+        const docRef = doc(firestore, PUBLIC_CONFIG_PATH);
         const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setData(docSnap.data());
-        } else {
-          throw new Error('No such document exists!');
-        }
+        if (docSnap.exists()) setConfig(docSnap.data());
       } catch (err) {
-        setError(err.message);
-        Swal.fire('Error', err.message, 'error');
+        console.error('Error fetching public config:', err);
       } finally {
         setLoading(false);
       }
     }
-    fetchDataset();
-  }, [collectionPath, documentPath]);
+    fetchConfig();
+  }, []);
 
-  return { data, loading, error };
+  return { config, loading, setConfig };
+}
+
+function useFetchDatasetStructure(userId) {
+  const [datasetStructure, setDatasetStructure] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchStructure() {
+      if (!userId) { setLoading(false); return; }
+      try {
+        const gamesCollectionRef = collection(firestore, `savedGames/${userId}/games`);
+        const snapshot = await getDocs(gamesCollectionRef);
+        const structure = [];
+        
+        snapshot.docs.forEach(docSnap => {
+          const data = docSnap.data();
+          const datasetName = data.datasetName || docSnap.id;
+          const isGAA = data.sport === 'GAA' || !data.sport;
+          if (!isGAA) return;
+          
+          let dataset = structure.find(d => d.datasetName === datasetName);
+          if (!dataset) { dataset = { datasetName, games: [] }; structure.push(dataset); }
+          
+          const gameData = data.gameData || [];
+          const gameDataArray = Array.isArray(gameData) ? gameData : Object.values(gameData);
+          dataset.games.push({
+            id: docSnap.id,
+            gameName: data.gameName || docSnap.id,
+            shotCount: gameDataArray.length,
+          });
+        });
+        
+        structure.sort((a, b) => a.datasetName.localeCompare(b.datasetName));
+        setDatasetStructure(structure);
+      } catch (err) {
+        console.error('Error fetching dataset structure:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchStructure();
+  }, [userId]);
+
+  return { datasetStructure, loading };
+}
+
+function useFetchMultipleGames(userId, selectedGameIds) {
+  const [combinedData, setCombinedData] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    async function fetchGames() {
+      if (!userId || !selectedGameIds || selectedGameIds.length === 0) {
+        setCombinedData([]); setLoading(false); return;
+      }
+      setLoading(true);
+      try {
+        const allShots = [];
+        for (const gameId of selectedGameIds) {
+          const docRef = doc(firestore, `savedGames/${userId}/games`, gameId);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            const gameData = data.gameData || [];
+            const gameDataArray = Array.isArray(gameData) ? gameData : Object.values(gameData);
+            gameDataArray.forEach(shot => allShots.push({ ...shot, _gameId: gameId }));
+          }
+        }
+        setCombinedData(allShots);
+      } catch (err) {
+        console.error('Error fetching games:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchGames();
+  }, [userId, selectedGameIds]);
+
+  return { combinedData, loading };
+}
+
+function translateShotToOneSide(shot) {
+  const x = parseFloat(shot.x) || 0;
+  const y = parseFloat(shot.y) || 0;
+  const targetGoal = x <= MIDLINE_X ? { x: 0, y: GOAL_Y } : { x: GOAL_X, y: GOAL_Y };
+  const dx = x - targetGoal.x;
+  const dy = y - targetGoal.y;
+  return { ...shot, distMeters: Math.sqrt(dx * dx + dy * dy) };
 }
 
 /*******************************************
- * 3) LOADING & ERROR UI
+ * COMPONENTS
  *******************************************/
-function LoadingIndicator() {
-  return (
-    <div className="player-data-loading-container">
-      <div className="player-data-loading-text">Loading data...</div>
-      <div className="player-data-spinner"></div>
+function LoadingSpinner({ message = 'Loading...' }) {
+  return <div className="pdg-loading"><div className="pdg-spinner"></div><p>{message}</p></div>;
+}
 
+function EmptyState({ title, message }) {
+  return <div className="pdg-empty"><h3>{title}</h3><p>{message}</p></div>;
+}
+
+function StatCard({ label, value }) {
+  return (
+    <div className="pdg-stat-card">
+      <span className="pdg-stat-value">{value}</span>
+      <span className="pdg-stat-label">{label}</span>
     </div>
   );
 }
 
-function ErrorMessage({ message }) {
+function GameSelector({ games, selectedGameIds, onToggleGame, onSelectAll, onDeselectAll }) {
+  const [collapsed, setCollapsed] = useState(games.length > 12);
+  const allSelected = games.every(g => selectedGameIds.includes(g.id));
+  
   return (
-    <div className="error-container">
-      <p>{message}</p>
-    </div>
-  );
-}
-ErrorMessage.propTypes = {
-  message: PropTypes.string.isRequired,
-};
-
-/*******************************************
- * 4) HELPER: translateShotToOneSide
- *******************************************/
-function translateShotToOneSide(shot, halfLineX, goalX, goalY) {
-  const targetGoal =
-    shot.x <= halfLineX ? { x: 0, y: goalY } : { x: goalX, y: goalY };
-  const dx = (shot.x || 0) - targetGoal.x;
-  const dy = (shot.y || 0) - targetGoal.y;
-  const distMeters = Math.sqrt(dx * dx + dy * dy);
-  return { ...shot, distMeters };
-}
-
-/*******************************************
- * 5) MiniLeaderboard
- *******************************************/
-function MiniLeaderboard({
-  title,
-  data,
-  actualKey,
-  expectedKey,
-  useDifference = false,
-  differenceLabel = 'Difference (actual - expected)',
-  hideCalcColumn = false,
-  initialSortKey = null,
-  initialDirection = 'descending',
-}) {
-  const [sortConfig, setSortConfig] = useState({
-    key: initialSortKey || '_calcVal',
-    direction: initialDirection,
-  });
-
-  const sortedData = useMemo(() => {
-    let list = [...data];
-
-    if (!hideCalcColumn) {
-      list = list.map((item) => {
-        const actualVal = Number(item[actualKey] || 0);
-        const expectedVal = Number(item[expectedKey] || 0);
-        if (useDifference) {
-          item._calcVal = actualVal - expectedVal;
-        } else {
-          const safeExpected = expectedVal === 0 ? 1e-6 : expectedVal;
-          item._calcVal = (actualVal / safeExpected) * 100;
-        }
-        return item;
-      });
-    }
-
-    if (sortConfig?.key) {
-      list.sort((a, b) => {
-        const aVal = a[sortConfig.key] ?? 0;
-        const bVal = b[sortConfig.key] ?? 0;
-        if (aVal < bVal) {
-          return sortConfig.direction === 'ascending' ? -1 : 1;
-        }
-        if (aVal > bVal) {
-          return sortConfig.direction === 'ascending' ? 1 : -1;
-        }
-        return 0;
-      });
-    }
-    return list;
-  }, [data, actualKey, expectedKey, useDifference, sortConfig, hideCalcColumn]);
-
-  function requestSort(key) {
-    let direction = 'ascending';
-    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-      direction = 'descending';
-    }
-    setSortConfig({ key, direction });
-  }
-
-  function getSortIndicator(key) {
-    if (sortConfig.key !== key) return null;
-    return sortConfig.direction === 'ascending' ? ' 🔼' : ' 🔽';
-  }
-
-  return (
-    <div className="mini-leaderboard">
-      <h3 className="mini-leaderboard-title">{title}</h3>
-      <div className="mini-leaderboard-table-wrapper">
-        <table className="mini-leaderboard-table">
-          <thead>
-            <tr>
-              <th>Rank</th>
-              <th onClick={() => requestSort('player')}>
-                Player{getSortIndicator('player')}
-              </th>
-              <th onClick={() => requestSort(actualKey)}>
-                {actualKey}
-                {getSortIndicator(actualKey)}
-              </th>
-              <th onClick={() => requestSort(expectedKey)}>
-                {expectedKey}
-                {getSortIndicator(expectedKey)}
-              </th>
-              {!hideCalcColumn && (
-                <th onClick={() => requestSort('_calcVal')}>
-                  {useDifference ? differenceLabel : 'Percentage (%)'}
-                  {getSortIndicator('_calcVal')}
-                </th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {sortedData.map((item, index) => {
-              const actualVal = Number(item[actualKey] || 0);
-              const expectedVal = Number(item[expectedKey] || 0);
-              let lastColumnValue = '';
-              if (!hideCalcColumn) {
-                if (useDifference) {
-                  lastColumnValue = (actualVal - expectedVal).toFixed(2);
-                } else {
-                  const safeExpected = expectedVal === 0 ? 1e-6 : expectedVal;
-                  const pct = (actualVal / safeExpected) * 100;
-                  lastColumnValue = pct.toFixed(2) + '%';
-                }
-              }
-              return (
-                <tr key={`${item.player}-${index}`}>
-                  <td>{index + 1}</td>
-                  <td>
-                    <Link
-                      to={`/player/${encodeURIComponent(item.player)}`}
-                      style={{
-                        color: '#FFA500',
-                        textDecoration: 'underline',
-                      }}
-                    >
-                      {item.player}
-                    </Link>
-                  </td>
-                  <td>{actualVal.toFixed(2)}</td>
-                  <td>{expectedVal.toFixed(2)}</td>
-                  {!hideCalcColumn && <td>{lastColumnValue}</td>}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+    <div className="pdg-game-selector">
+      <div className="pdg-game-header">
+        <div className="pdg-game-title" onClick={() => setCollapsed(!collapsed)}>
+          <h4>Games</h4>
+          <span className="pdg-badge">{selectedGameIds.length} / {games.length}</span>
+          <span className={`pdg-chevron ${collapsed ? '' : 'open'}`}>&#9660;</span>
+        </div>
+        <button className="pdg-btn-text" onClick={allSelected ? onDeselectAll : onSelectAll}>
+          {allSelected ? 'Deselect All' : 'Select All'}
+        </button>
       </div>
+      {!collapsed && (
+        <div className="pdg-game-grid">
+          {games.map(game => (
+            <label key={game.id} className={`pdg-game-item ${selectedGameIds.includes(game.id) ? 'selected' : ''}`}>
+              <input type="checkbox" checked={selectedGameIds.includes(game.id)} onChange={() => onToggleGame(game.id)} />
+              <span className="pdg-game-name">{game.gameName}</span>
+              <span className="pdg-game-shots">{game.shotCount}</span>
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
-MiniLeaderboard.propTypes = {
-  title: PropTypes.string.isRequired,
-  data: PropTypes.array.isRequired,
-  actualKey: PropTypes.string.isRequired,
-  expectedKey: PropTypes.string.isRequired,
-  useDifference: PropTypes.bool,
-  differenceLabel: PropTypes.string,
-  hideCalcColumn: PropTypes.bool,
-  initialSortKey: PropTypes.string,
-  initialDirection: PropTypes.oneOf(['ascending', 'descending']),
-};
 
-/*******************************************
- * 6) AvgDistanceLeaderboard
- *******************************************/
-function AvgDistanceLeaderboard({ title, data }) {
-  const sortedData = useMemo(() => {
-    let list = [...data];
-    list.sort((a, b) => (b.avgScoreDistance || 0) - (a.avgScoreDistance || 0));
-    return list;
-  }, [data]);
+function MiniLeaderboard({ title, data, sortKey, columns }) {
+  const sortedData = useMemo(() => [...data].sort((a, b) => (b[sortKey] || 0) - (a[sortKey] || 0)).slice(0, 10), [data, sortKey]);
 
   return (
-    <div className="mini-leaderboard">
-      <h3 className="mini-leaderboard-title">{title}</h3>
-      <div className="mini-leaderboard-table-wrapper">
-        <table className="mini-leaderboard-table">
+    <div className="pdg-mini-board">
+      <div className="pdg-mini-header"><h4>{title}</h4></div>
+      <div className="pdg-mini-table-wrap">
+        <table className="pdg-mini-table">
           <thead>
             <tr>
               <th>Rank</th>
               <th>Player</th>
-              <th>Avg Distance (m)</th>
-              <th>Avg Score Distance (m)</th>
+              {columns.map(col => <th key={col.key}>{col.label}</th>)}
             </tr>
           </thead>
           <tbody>
-            {sortedData.map((item, index) => (
-              <tr key={`${item.player}-${index}`}>
-                <td>{index + 1}</td>
-                <td>
-                  <Link
-                    to={`/player/${encodeURIComponent(item.player)}`}
-                    state={{ playerData: item }}
-                    style={{ color: '#FFA500', textDecoration: 'underline' }}
-                  >
-                    {item.player}
-                  </Link>
-                </td>
-                <td>
-                  {!isNaN(Number(item.avgDistance))
-                    ? Number(item.avgDistance).toFixed(2)
-                    : '0.00'}
-                </td>
-                <td>
-                  {!isNaN(Number(item.avgScoreDistance))
-                    ? Number(item.avgScoreDistance).toFixed(2)
-                    : '0.00'}
-                </td>
+            {sortedData.map((item, idx) => (
+              <tr key={item.player}>
+                <td className="pdg-rank">{idx + 1}</td>
+                <td className="pdg-player-name"><Link to={`/player/${encodeURIComponent(item.player)}`}>{item.player}</Link></td>
+                {columns.map(col => <td key={col.key}>{col.format ? col.format(item[col.key], item) : item[col.key]?.toFixed(2)}</td>)}
               </tr>
             ))}
           </tbody>
@@ -286,174 +274,78 @@ function AvgDistanceLeaderboard({ title, data }) {
     </div>
   );
 }
-AvgDistanceLeaderboard.propTypes = {
-  title: PropTypes.string.isRequired,
-  data: PropTypes.array.isRequired,
-};
 
-/*******************************************
- * 7) Main Leaderboard Table
- *******************************************/
-function LeaderboardTable({ data }) {
-  const [sortConfig, setSortConfig] = useState({
-    key: 'Total_Points',
-    direction: 'descending',
-  });
-  const [searchTerm, setSearchTerm] = useState('');
-  const rowRef = useRef(null);
-  const [maxHeight, setMaxHeight] = useState(500);
+function MainLeaderboard({ data }) {
+  const [sortKey, setSortKey] = useState('Total_Points');
+  const [sortDir, setSortDir] = useState('desc');
+  const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState(new Set());
 
-  useEffect(() => {
-    if (rowRef.current) {
-      const rowHeight = rowRef.current.getBoundingClientRect().height;
-      setMaxHeight(rowHeight * 5);
-    }
-  }, [data]);
+  const sorted = useMemo(() => {
+    let filtered = data.filter(p => p.player.toLowerCase().includes(search.toLowerCase()));
+    return filtered.sort((a, b) => sortDir === 'desc' ? (b[sortKey] || 0) - (a[sortKey] || 0) : (a[sortKey] || 0) - (b[sortKey] || 0));
+  }, [data, sortKey, sortDir, search]);
 
-  const sortedData = useMemo(() => {
-    let list = [...data];
-    if (searchTerm) {
-      list = list.filter((entry) =>
-        entry.player.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-    if (sortConfig && sortConfig.key) {
-      list.sort((a, b) => {
-        const aVal = a[sortConfig.key];
-        const bVal = b[sortConfig.key];
-        if (aVal < bVal) return sortConfig.direction === 'ascending' ? -1 : 1;
-        if (aVal > bVal) return sortConfig.direction === 'ascending' ? 1 : -1;
-        return 0;
-      });
-    }
-    return list;
-  }, [data, searchTerm, sortConfig]);
+  const handleSort = (key) => {
+    if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
+    else { setSortKey(key); setSortDir('desc'); }
+  };
 
-  function requestSort(key) {
-    let direction = 'ascending';
-    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-      direction = 'descending';
-    }
-    setSortConfig({ key, direction });
-  }
-
-  function getSortIndicator(key) {
-    if (sortConfig.key !== key) return null;
-    return sortConfig.direction === 'ascending' ? ' 🔼' : ' 🔽';
-  }
-
-  if (data.length === 0) {
-    return (
-      <div className="leaderboard-container">
-        <h2>Leaderboard</h2>
-        <p>No data available to display.</p>
-      </div>
-    );
-  }
+  const SortHeader = ({ k, children }) => (
+    <th onClick={() => handleSort(k)} className="pdg-sortable">
+      {children}{sortKey === k && <span className="pdg-sort-arrow">{sortDir === 'desc' ? ' ↓' : ' ↑'}</span>}
+    </th>
+  );
 
   return (
-    <div className="leaderboard-container">
-      <h2>Leaderboard</h2> {/* Removed style={{ color: '#fff' }} */}
-      <input
-        type="text"
-        placeholder="Search Players..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        className="search-input"
-      />
-      <div className="table-wrapper" style={{ maxHeight: `${maxHeight}px` }}>
-        <table className="leaderboard">
+    <div className="pdg-main-board">
+      <div className="pdg-board-header">
+        <h3>Full Leaderboard</h3>
+        <div className="pdg-search"><input type="text" placeholder="Search players..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+      </div>
+      <div className="pdg-table-wrap">
+        <table className="pdg-table">
           <thead>
             <tr>
-              <th onClick={() => requestSort('player')}>
-                Player{getSortIndicator('player')}
-              </th>
-              <th onClick={() => requestSort('team')}>
-                Team{getSortIndicator('team')}
-              </th>
-              <th onClick={() => requestSort('Total_Points')}>
-                Total Points (Ex. Goals){getSortIndicator('Total_Points')}
-              </th>
-              <th onClick={() => requestSort('xPoints')}>
-                Expected Points (xPoints){getSortIndicator('xPoints')}
-              </th>
-              <th onClick={() => requestSort('xGoals')}>
-                Expected Goals (xGoals){getSortIndicator('xGoals')}
-              </th>
-              <th onClick={() => requestSort('xPReturn')}>
-                xP Return (%) {getSortIndicator('xPReturn')}
-              </th>
-              <th onClick={() => requestSort('positionPerformance')}>
-                Position Performance{getSortIndicator('positionPerformance')}
-              </th>
+              <th></th><th>Player</th><th>Team</th>
+              <SortHeader k="Total_Points">Pts</SortHeader>
+              <SortHeader k="goals">Goals</SortHeader>
+              <SortHeader k="xPoints">xP</SortHeader>
+              <SortHeader k="xGoals">xG</SortHeader>
+              <SortHeader k="shootingAttempts">Shots</SortHeader>
+              <SortHeader k="accuracy">Acc%</SortHeader>
             </tr>
           </thead>
           <tbody>
-            {sortedData.map((entry, index) => (
-              <tr
-                key={index}
-                className={`player-row ${index % 2 === 0 ? 'even' : 'odd'}`}
-                ref={index === 0 ? rowRef : null}
-              >
-                <td>
-                  <Link
-                    to={`/player/${encodeURIComponent(entry.player)}`}
-                    state={{ playerData: entry }}
-                    style={{
-                      color: '#FFA500',
-                      textDecoration: 'underline',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {entry.player}
-                  </Link>
-                </td>
-                <td>{entry.team}</td>
-                <td>{entry.Total_Points}</td>
-                <td>
-                  {!isNaN(Number(entry.xPoints))
-                    ? Number(entry.xPoints).toFixed(2)
-                    : '0.00'}
-                </td>
-                <td>
-                  {!isNaN(Number(entry.xGoals))
-                    ? Number(entry.xGoals).toFixed(2)
-                    : '0.00'}
-                </td>
-                <td>
-                  {!isNaN(Number(entry.xPReturn))
-                    ? Number(entry.xPReturn).toFixed(2) + '%'
-                    : '0.00%'}
-                </td>
-                <td>
-                  <table className="nested-table">
-                    <thead>
-                      <tr>
-                        <th>Position</th>
-                        <th>Shots</th>
-                        <th>Points (No SetPlays)</th>
-                        <th>Goals</th>
-                        <th>Efficiency (%)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {entry.positionPerformance.map((perf, idx) => (
-                        <tr key={idx}>
-                          <td>{perf.position}</td>
-                          <td>{perf.shots}</td>
-                          <td>{perf.points}</td>
-                          <td>{perf.goals}</td>
-                          <td>
-                            {!isNaN(Number(perf.efficiency))
-                              ? Number(perf.efficiency).toFixed(2) + '%'
-                              : '0.00%'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </td>
-              </tr>
+            {sorted.map(p => (
+              <React.Fragment key={p.player}>
+                <tr onClick={() => setExpanded(prev => { const n = new Set(prev); n.has(p.player) ? n.delete(p.player) : n.add(p.player); return n; })} className={expanded.has(p.player) ? 'pdg-row-expanded' : ''}>
+                  <td className="pdg-expand-cell"><span className={`pdg-expand-icon ${expanded.has(p.player) ? 'open' : ''}`}>&#9654;</span></td>
+                  <td><Link to={`/player/${encodeURIComponent(p.player)}`} onClick={e => e.stopPropagation()}>{p.player}</Link></td>
+                  <td className="pdg-team">{p.team}</td>
+                  <td className="pdg-highlight">{p.Total_Points}</td>
+                  <td>{p.goals}</td>
+                  <td className="pdg-dim">{p.xPoints?.toFixed(1)}</td>
+                  <td className="pdg-dim">{p.xGoals?.toFixed(2)}</td>
+                  <td>{p.shootingAttempts}</td>
+                  <td><span className={`pdg-acc-badge ${p.accuracy >= 60 ? 'high' : p.accuracy >= 40 ? 'med' : 'low'}`}>{p.accuracy?.toFixed(0)}%</span></td>
+                </tr>
+                {expanded.has(p.player) && (
+                  <tr className="pdg-detail-row">
+                    <td colSpan="9">
+                      <div className="pdg-position-grid">
+                        {p.positionPerformance.map((pos, j) => (
+                          <div key={j} className="pdg-position-card">
+                            <strong>{pos.position}</strong>
+                            <span>{pos.shots} shots | {pos.points} pts | {pos.goals} gls</span>
+                            <span className="pdg-eff">{pos.efficiency?.toFixed(0)}% eff</span>
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
@@ -461,428 +353,489 @@ function LeaderboardTable({ data }) {
     </div>
   );
 }
-LeaderboardTable.propTypes = {
-  data: PropTypes.array.isRequired,
-};
+
+function CalibrationModal({ isOpen, onClose, stats }) {
+  if (!isOpen) return null;
+  
+  return (
+    <div className="pdg-modal-overlay" onClick={onClose}>
+      <div className="pdg-modal pdg-modal-wide" onClick={e => e.stopPropagation()}>
+        <div className="pdg-modal-header">
+          <h2>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '0.5rem', verticalAlign: 'middle' }}>
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
+            Model Calibration
+          </h2>
+          <button className="pdg-modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="pdg-modal-body">
+          <p className="pdg-form-hint" style={{ marginBottom: '1.5rem' }}>
+            Compare expected values (xP, xG) against actual results to assess model accuracy. 
+            A calibration near 100% indicates well-calibrated predictions.
+          </p>
+          
+          <div className="pdg-calibration-grid">
+            <div className="pdg-calibration-card">
+              <div className="pdg-calibration-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M12 6v6l4 2"/>
+                </svg>
+              </div>
+              <div className="pdg-calibration-header">
+                <span>Expected Points (xP)</span>
+                <span className={`pdg-calibration-badge ${Math.abs(stats.xpCalibration - 100) <= 10 ? 'good' : Math.abs(stats.xpCalibration - 100) <= 20 ? 'ok' : 'poor'}`}>
+                  {stats.xpCalibration.toFixed(1)}%
+                </span>
+              </div>
+              <div className="pdg-calibration-values">
+                <div><span>Actual</span><strong>{stats.points}</strong></div>
+                <div><span>Expected</span><strong>{stats.totalXP.toFixed(1)}</strong></div>
+                <div><span>Difference</span><strong className={stats.xpDiff >= 0 ? 'positive' : 'negative'}>{stats.xpDiff >= 0 ? '+' : ''}{stats.xpDiff.toFixed(1)}</strong></div>
+              </div>
+              <div className={`pdg-calibration-status ${Math.abs(stats.xpCalibration - 100) <= 10 ? 'good' : Math.abs(stats.xpCalibration - 100) <= 20 ? 'ok' : 'poor'}`}>
+                {Math.abs(stats.xpCalibration - 100) <= 10 ? '✓ Well calibrated' : 
+                 stats.xpCalibration > 100 ? '↑ Players outperforming model' : 
+                 '↓ Players underperforming model'}
+              </div>
+            </div>
+            
+            <div className="pdg-calibration-card">
+              <div className="pdg-calibration-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  <path d="M12 8v8M8 12h8"/>
+                </svg>
+              </div>
+              <div className="pdg-calibration-header">
+                <span>Expected Goals (xG)</span>
+                <span className={`pdg-calibration-badge ${Math.abs(stats.xgCalibration - 100) <= 15 ? 'good' : Math.abs(stats.xgCalibration - 100) <= 30 ? 'ok' : 'poor'}`}>
+                  {stats.xgCalibration.toFixed(1)}%
+                </span>
+              </div>
+              <div className="pdg-calibration-values">
+                <div><span>Actual</span><strong>{stats.goals}</strong></div>
+                <div><span>Expected</span><strong>{stats.totalXG.toFixed(1)}</strong></div>
+                <div><span>Difference</span><strong className={stats.xgDiff >= 0 ? 'positive' : 'negative'}>{stats.xgDiff >= 0 ? '+' : ''}{stats.xgDiff.toFixed(1)}</strong></div>
+              </div>
+              <div className={`pdg-calibration-status ${Math.abs(stats.xgCalibration - 100) <= 15 ? 'good' : Math.abs(stats.xgCalibration - 100) <= 30 ? 'ok' : 'poor'}`}>
+                {Math.abs(stats.xgCalibration - 100) <= 15 ? '✓ Well calibrated' : 
+                 stats.xgCalibration > 100 ? '↑ Players outperforming model' : 
+                 '↓ Players underperforming model'}
+              </div>
+            </div>
+          </div>
+          
+          <div className="pdg-calibration-legend">
+            <h4>Understanding Calibration</h4>
+            <div className="pdg-legend-items">
+              <div className="pdg-legend-item">
+                <span className="pdg-calibration-badge good">90-110%</span>
+                <span>Excellent - Model predictions closely match reality</span>
+              </div>
+              <div className="pdg-legend-item">
+                <span className="pdg-calibration-badge ok">80-120%</span>
+                <span>Good - Minor deviations, acceptable for analysis</span>
+              </div>
+              <div className="pdg-legend-item">
+                <span className="pdg-calibration-badge poor">&lt;80% or &gt;120%</span>
+                <span>Needs Review - Consider retraining the model</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="pdg-modal-footer">
+          <button className="pdg-btn-primary" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminPanel({ isOpen, onClose, datasets, currentConfig, onSave, userId, activeUserId }) {
+  const ADMIN_EMAIL = 'fetzmitchell@gmail.com';
+  
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  
+  const [selectedUser, setSelectedUser] = useState(currentConfig?.userId || DEFAULT_USER_ID);
+  const [selectedDataset, setSelectedDataset] = useState(currentConfig?.datasetName || '');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { 
+    if (currentConfig) { 
+      setSelectedUser(currentConfig.userId || DEFAULT_USER_ID); 
+      setSelectedDataset(currentConfig.datasetName || ''); 
+    } 
+  }, [currentConfig]);
+
+  // Reset auth state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setIsAuthenticated(false);
+      setEmail('');
+      setPassword('');
+      setAuthError('');
+    }
+  }, [isOpen]);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    
+    // Check if email is the admin email
+    if (email !== ADMIN_EMAIL) {
+      setAuthError('Access denied. Admin privileges required.');
+      return;
+    }
+    
+    setAuthLoading(true);
+    
+    try {
+      // Use Firebase to verify the credentials
+      const { signInWithEmailAndPassword } = await import('firebase/auth');
+      const auth = getAuth();
+      await signInWithEmailAndPassword(auth, email, password);
+      setIsAuthenticated(true);
+    } catch (err) {
+      console.error('Auth error:', err);
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        setAuthError('Invalid password');
+      } else if (err.code === 'auth/user-not-found') {
+        setAuthError('User not found');
+      } else if (err.code === 'auth/too-many-requests') {
+        setAuthError('Too many attempts. Please try again later.');
+      } else {
+        setAuthError(err.message || 'Authentication failed');
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!selectedUser || !selectedDataset) { 
+      Swal.fire('Error', 'Please fill in both fields', 'error'); 
+      return; 
+    }
+    setSaving(true);
+    try {
+      await setDoc(doc(firestore, PUBLIC_CONFIG_PATH), { 
+        userId: selectedUser, 
+        datasetName: selectedDataset, 
+        updatedAt: new Date().toISOString(), 
+        updatedBy: userId 
+      });
+      onSave({ userId: selectedUser, datasetName: selectedDataset });
+      Swal.fire('Success!', 'Public dataset configuration saved.', 'success');
+      onClose();
+    } catch (err) { 
+      Swal.fire('Error', err.message, 'error'); 
+    } finally { 
+      setSaving(false); 
+    }
+  };
+
+  if (!isOpen) return null;
+  
+  return (
+    <div className="pdg-modal-overlay" onClick={onClose}>
+      <div className="pdg-modal" onClick={e => e.stopPropagation()}>
+        <div className="pdg-modal-header">
+          <h2>Admin Panel</h2>
+          <button className="pdg-modal-close" onClick={onClose}>×</button>
+        </div>
+        
+        {!isAuthenticated ? (
+          // Login Form
+          <div className="pdg-modal-body">
+            <div className="pdg-form-section">
+              <h3>Admin Login</h3>
+              <p className="pdg-form-hint">Please enter your admin credentials to continue.</p>
+              
+              <form onSubmit={handleLogin}>
+                <div className="pdg-form-group">
+                  <label>Email</label>
+                  <input 
+                    type="email" 
+                    value={email} 
+                    onChange={e => setEmail(e.target.value)} 
+                    placeholder="Enter admin email..."
+                    autoComplete="email"
+                  />
+                </div>
+                <div className="pdg-form-group">
+                  <label>Password</label>
+                  <input 
+                    type="password" 
+                    value={password} 
+                    onChange={e => setPassword(e.target.value)} 
+                    placeholder="Enter password..."
+                    autoComplete="current-password"
+                  />
+                </div>
+                
+                {authError && (
+                  <div className="pdg-auth-error">{authError}</div>
+                )}
+                
+                <div className="pdg-modal-footer" style={{ padding: '1rem 0 0', borderTop: 'none', background: 'transparent' }}>
+                  <button type="button" className="pdg-btn-secondary" onClick={onClose}>Cancel</button>
+                  <button type="submit" className="pdg-btn-primary" disabled={authLoading}>
+                    {authLoading ? 'Verifying...' : 'Login'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        ) : (
+          // Settings Form (after authentication)
+          <>
+            <div className="pdg-modal-body">
+              <div className="pdg-form-section">
+                <h3>Public Dataset Settings</h3>
+                <p className="pdg-form-hint">Choose which dataset visitors see by default on the Player Analytics page.</p>
+                
+                <div className="pdg-form-group">
+                  <label>Default Dataset</label>
+                  <select value={selectedDataset} onChange={e => setSelectedDataset(e.target.value)}>
+                    <option value="">-- Select Dataset --</option>
+                    {datasets.map(ds => (
+                      <option key={ds.datasetName} value={ds.datasetName}>
+                        {ds.datasetName} ({ds.games.length} games)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="pdg-current-config">
+                  <h4>Current Configuration</h4>
+                  <p><strong>User ID:</strong> {currentConfig?.userId || DEFAULT_USER_ID}</p>
+                  <p><strong>Dataset:</strong> {currentConfig?.datasetName || 'Not set'}</p>
+                </div>
+              </div>
+            </div>
+            <div className="pdg-modal-footer">
+              <button className="pdg-btn-secondary" onClick={onClose}>Cancel</button>
+              <button className="pdg-btn-primary" onClick={handleSave} disabled={saving}>
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /*******************************************
- * 8) PlayerDataGAA Component
+ * MAIN COMPONENT
  *******************************************/
 export default function PlayerDataGAA() {
-  const USER_ID = 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2';
-  const DATASET_NAME = 'All Shots GAA';
-
-  const { data, loading, error } = useFetchDataset(
-    `savedGames/${USER_ID}/games`,
-    DATASET_NAME
-  );
-
+  const auth = getAuth();
+  const currentUser = auth.currentUser;
+  const isAdmin = currentUser && ADMIN_USERS.includes(currentUser.uid);
+  
+  const { config: publicConfig, loading: configLoading, setConfig: setPublicConfig } = useFetchPublicConfig();
+  const [dataSource, setDataSource] = useState('public');
+  const [selectedDatasetName, setSelectedDatasetName] = useState('');
+  const [selectedGameIds, setSelectedGameIds] = useState([]);
   const [selectedYear, setSelectedYear] = useState('All');
   const [selectedTeam, setSelectedTeam] = useState('All');
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [showCalibration, setShowCalibration] = useState(false);
+  
+  // Determine active user ID based on data source
+  const activeUserId = useMemo(() => {
+    if (dataSource === 'own' && currentUser) return currentUser.uid;
+    return publicConfig?.userId || DEFAULT_USER_ID;
+  }, [dataSource, currentUser, publicConfig]);
 
-  // Collect unique years
-  const availableYears = useMemo(() => {
-    if (!data || !data.gameData) return [];
-    const yearsSet = new Set();
-    data.gameData.forEach((shot) => {
-      if (shot.matchDate) {
-        yearsSet.add(new Date(shot.matchDate).getFullYear());
+  const { datasetStructure, loading: structureLoading } = useFetchDatasetStructure(activeUserId);
+  const currentDataset = useMemo(() => datasetStructure.find(d => d.datasetName === selectedDatasetName), [datasetStructure, selectedDatasetName]);
+  const gamesInDataset = currentDataset?.games || [];
+  const { combinedData, loading: dataLoading } = useFetchMultipleGames(activeUserId, selectedGameIds);
+
+  // Auto-select default dataset: AllIreland2025 or public config or first available
+  useEffect(() => {
+    if (datasetStructure.length > 0 && !selectedDatasetName) {
+      // Priority 1: Try AllIreland2025
+      const defaultDs = datasetStructure.find(d => d.datasetName === DEFAULT_DATASET);
+      if (defaultDs) {
+        setSelectedDatasetName(DEFAULT_DATASET);
+        return;
       }
-    });
-    return Array.from(yearsSet).sort((a, b) => b - a);
-  }, [data]);
-
-  // Collect unique teams
-  const availableTeams = useMemo(() => {
-    if (!data || !data.gameData) return [];
-    const teamSet = new Set();
-    data.gameData.forEach((shot) => {
-      if (shot.team) {
-        teamSet.add(shot.team);
+      
+      // Priority 2: Try public config dataset
+      if (dataSource === 'public' && publicConfig?.datasetName) {
+        const configDs = datasetStructure.find(d => d.datasetName === publicConfig.datasetName);
+        if (configDs) {
+          setSelectedDatasetName(publicConfig.datasetName);
+          return;
+        }
       }
-    });
-    return Array.from(teamSet).sort();
-  }, [data]);
+      
+      // Priority 3: First available dataset
+      setSelectedDatasetName(datasetStructure[0].datasetName);
+    }
+  }, [datasetStructure, selectedDatasetName, dataSource, publicConfig]);
 
-  // Build formatted leaderboard
+  // Auto-select all games when dataset changes
+  useEffect(() => { 
+    currentDataset ? setSelectedGameIds(currentDataset.games.map(g => g.id)) : setSelectedGameIds([]); 
+  }, [currentDataset]);
+
+  const handleToggleGame = useCallback(id => setSelectedGameIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]), []);
+  const handleSelectAll = useCallback(() => currentDataset && setSelectedGameIds(currentDataset.games.map(g => g.id)), [currentDataset]);
+  const handleDeselectAll = useCallback(() => setSelectedGameIds([]), []);
+
   const formattedLeaderboard = useMemo(() => {
-    if (!data || !data.gameData) return [];
-
-    const shotsFiltered = data.gameData.filter((shot) => {
-      const matchesYear =
-        selectedYear === 'All'
-          ? true
-          : new Date(shot.matchDate).getFullYear().toString() === selectedYear;
-      const matchesTeam =
-        selectedTeam === 'All' ? true : shot.team === selectedTeam;
+    if (!combinedData || combinedData.length === 0) return [];
+    const shotsFiltered = combinedData.filter(shot => {
+      const matchesYear = selectedYear === 'All' || new Date(shot.matchDate).getFullYear().toString() === selectedYear;
+      const matchesTeam = selectedTeam === 'All' || shot.team === selectedTeam;
       return matchesYear && matchesTeam;
     });
     if (shotsFiltered.length === 0) return [];
 
-    const goalY = 44;
-    const goalX = 145;
-    const halfLineX = 72.5;
-
-    const aggregator = shotsFiltered.reduce((acc, shot) => {
-      const name = shot.playerName || 'Unknown Player';
-      if (!acc[name]) {
-        acc[name] = {
-          player: name,
-          team: shot.team || 'Unknown Team',
-          points: 0,
-          goals: 0,
-          xPoints: 0,
-          xGoals: 0,
-          setPlays: 0,
-          xSetPlays: 0,
-          positionPerformance: {},
-          shootingAttempts: 0,
-          shootingScored: 0,
-          twoPointerAttempts: 0,
-          twoPointerScores: 0,
-          pressuredShots: 0,
-          pressuredScores: 0,
-          totalDistance: 0,
-          totalScoreDistance: 0,
-        };
-      }
+    const agg = shotsFiltered.reduce((acc, shot) => {
+      const name = shot.playerName || 'Unknown';
+      if (!acc[name]) acc[name] = { player: name, team: shot.team || 'Unknown', points: 0, goals: 0, xPoints: 0, xGoals: 0, positionPerformance: {}, shootingAttempts: 0, shootingScored: 0, goalAttempts: 0 };
       const p = acc[name];
+      const pos = shot.position || 'Unknown';
+      if (!p.positionPerformance[pos]) p.positionPerformance[pos] = { shots: 0, points: 0, goals: 0 };
+      p.positionPerformance[pos].shots += 1;
 
-      const translated = translateShotToOneSide(shot, halfLineX, goalX, goalY);
-      p.totalDistance += translated.distMeters;
+      const translated = translateShotToOneSide(shot);
       p.shootingAttempts += 1;
 
-      const isScore =
-        (shot.action === 'point' && shot.type === 'score') ||
-        (shot.action === 'goal' && shot.type === 'score') ||
-        (shot.action === 'free' && shot.type === 'score');
-      if (isScore) {
-        p.totalScoreDistance += translated.distMeters;
-        p.shootingScored += 1;
-      }
+      const actionLower = (shot.action || '').toLowerCase();
+      const typeLower = (shot.type || '').toLowerCase();
+      const isPointAction = actionLower === 'point';
+      const isGoalAction = actionLower === 'goal';
+      const isSetPlayScore = ['free', 'fortyfive', '45', 'offensive mark', 'mark'].includes(actionLower) && typeLower === 'score';
+      const isScore = isPointAction || isGoalAction || isSetPlayScore;
 
-      if (translated.distMeters >= 40) {
-        p.twoPointerAttempts += 1;
-        if (isScore) p.twoPointerScores += 1;
-      }
+      if (isScore) p.shootingScored += 1;
+      if (isGoalAction || typeLower === 'goal' || typeLower === 'saved') p.goalAttempts += 1;
+      if (isPointAction) { p.points += 1; p.positionPerformance[pos].points += 1; }
+      else if (isGoalAction) { p.goals += 1; p.positionPerformance[pos].goals += 1; }
+      else if (isSetPlayScore) p.points += 1;
 
-      if (shot.action === 'point') {
-        p.points += 1;
-      } else if (shot.action === 'goal') {
-        p.goals += 1;
-      } else if (shot.action === 'free' && shot.type === 'score') {
-        p.points += 1;
-      }
-
-      if (shot.xPoints) p.xPoints += Number(shot.xPoints);
-      if (shot.xGoals) p.xGoals += Number(shot.xGoals);
-
-      const setPlayActions = ['free', 'fortyfive', 'offensive mark'];
-      if (setPlayActions.includes((shot.action || '').toLowerCase())) {
-        p.setPlays += 1;
-        if (shot.xPoints) p.xSetPlays += Number(shot.xPoints);
-      }
-
-      const isPressured = (shot.pressure || '').toLowerCase().startsWith('y');
-      if (isPressured) {
-        p.pressuredShots += 1;
-        if (isScore) p.pressuredScores += 1;
-      }
-
-      const pos = shot.position || 'unknown';
-      if (!p.positionPerformance[pos]) {
-        p.positionPerformance[pos] = { shots: 0, points: 0, goals: 0 };
-      }
-      p.positionPerformance[pos].shots += 1;
-      if (shot.action === 'point') {
-        p.positionPerformance[pos].points += 1;
-      }
-      if (shot.action === 'goal') {
-        p.positionPerformance[pos].goals += 1;
-      }
-
+      p.xPoints += shot.xPoints ? Number(shot.xPoints) : calculateXP(shot, translated.distMeters);
+      p.xGoals += shot.xGoals ? Number(shot.xGoals) : calculateXG(shot, translated.distMeters);
       return acc;
     }, {});
 
-    const finalArray = Object.values(aggregator).map((p) => {
-      const xPReturn = p.xPoints > 0 ? (p.points / p.xPoints) * 100 : 0;
-      const avgDistance =
-        p.shootingAttempts > 0 ? p.totalDistance / p.shootingAttempts : 0;
-      const avgScoreDistance =
-        p.shootingScored > 0 ? p.totalScoreDistance / p.shootingScored : 0;
-
-      const positionPerformance = Object.entries(p.positionPerformance).map(
-        ([pos, stats]) => {
-          const eff =
-            stats.shots > 0
-              ? ((stats.points + stats.goals * 3) / stats.shots) * 100
-              : 0;
-          return {
-            position: pos,
-            shots: stats.shots,
-            points: stats.points,
-            goals: stats.goals,
-            efficiency: eff,
-          };
-        }
-      );
-
-      return {
-        ...p,
-        positionPerformance,
-        Total_Points: p.points,
-        xPReturn,
-        avgDistance,
-        avgScoreDistance,
-      };
+    return Object.values(agg).map(p => {
+      const accuracy = p.shootingAttempts > 0 ? (p.shootingScored / p.shootingAttempts) * 100 : 0;
+      const pointsPerShot = p.shootingAttempts > 0 ? p.points / p.shootingAttempts : 0;
+      const goalsPerAttempt = p.goalAttempts > 0 ? p.goals / p.goalAttempts : 0;
+      const positionPerformance = Object.entries(p.positionPerformance).map(([pos, stats]) => ({ position: pos, ...stats, efficiency: stats.shots > 0 ? ((stats.points + stats.goals * 3) / stats.shots) * 100 : 0 }));
+      return { ...p, positionPerformance, Total_Points: p.points, accuracy, pointsPerShot, goalsPerAttempt };
     });
+  }, [combinedData, selectedYear, selectedTeam]);
 
-    return finalArray;
-  }, [data, selectedYear, selectedTeam]);
+  const goalsData = useMemo(() => formattedLeaderboard.map(p => ({ player: p.player, goals: p.goals, xGoals: p.xGoals, goalAttempts: p.goalAttempts, goalsPerAttempt: p.goalsPerAttempt })), [formattedLeaderboard]);
+  const pointsData = useMemo(() => formattedLeaderboard.map(p => ({ player: p.player, points: p.points, xPoints: p.xPoints, shots: p.shootingAttempts, pointsPerShot: p.pointsPerShot })), [formattedLeaderboard]);
+  const accuracyData = useMemo(() => formattedLeaderboard.map(p => ({ player: p.player, accuracy: p.accuracy, scored: p.shootingScored, attempts: p.shootingAttempts })), [formattedLeaderboard]);
 
-  // Sub-data for mini leaderboards
-  const goalsData = useMemo(
-    () =>
-      formattedLeaderboard.map((p) => ({
-        player: p.player,
-        goals: p.goals,
-        xGoals: p.xGoals,
-      })),
-    [formattedLeaderboard]
-  );
+  const availableYears = useMemo(() => { const years = new Set(); combinedData.forEach(s => { if (s.matchDate) years.add(new Date(s.matchDate).getFullYear()); }); return Array.from(years).sort((a, b) => b - a); }, [combinedData]);
+  const availableTeams = useMemo(() => { const teams = new Set(); combinedData.forEach(s => { if (s.team) teams.add(s.team); }); return Array.from(teams).sort(); }, [combinedData]);
 
-  const pointsData = useMemo(
-    () =>
-      formattedLeaderboard.map((p) => ({
-        player: p.player,
-        points: p.points,
-        xPoints: p.xPoints,
-      })),
-    [formattedLeaderboard]
-  );
+  const stats = useMemo(() => {
+    const players = formattedLeaderboard.length;
+    const shots = formattedLeaderboard.reduce((s, p) => s + p.shootingAttempts, 0);
+    const points = formattedLeaderboard.reduce((s, p) => s + p.points, 0);
+    const goals = formattedLeaderboard.reduce((s, p) => s + p.goals, 0);
+    const totalXP = formattedLeaderboard.reduce((s, p) => s + (p.xPoints || 0), 0);
+    const totalXG = formattedLeaderboard.reduce((s, p) => s + (p.xGoals || 0), 0);
+    const avgAcc = players ? formattedLeaderboard.reduce((s, p) => s + p.accuracy, 0) / players : 0;
+    
+    // Calibration metrics
+    const xpDiff = points - totalXP;
+    const xgDiff = goals - totalXG;
+    const xpCalibration = totalXP > 0 ? (points / totalXP * 100) : 0; // 100% = perfectly calibrated
+    const xgCalibration = totalXG > 0 ? (goals / totalXG * 100) : 0;
+    
+    return { players, shots, points, goals, totalXP, totalXG, avgAcc, xpDiff, xgDiff, xpCalibration, xgCalibration };
+  }, [formattedLeaderboard]);
 
-  const setPlaysData = useMemo(
-    () =>
-      formattedLeaderboard.map((p) => ({
-        player: p.player,
-        setPlays: p.setPlays,
-        xSetPlays: p.xSetPlays,
-      })),
-    [formattedLeaderboard]
-  );
-
-  const accuracyData = useMemo(
-    () =>
-      formattedLeaderboard.map((p) => ({
-        player: p.player,
-        shootingScored: p.shootingScored,
-        shootingAttempts: p.shootingAttempts,
-      })),
-    [formattedLeaderboard]
-  );
-
-  const twoPointerData = useMemo(
-    () =>
-      formattedLeaderboard.map((p) => ({
-        player: p.player,
-        twoPointerScores: p.twoPointerScores,
-        twoPointerAttempts: p.twoPointerAttempts,
-      })),
-    [formattedLeaderboard]
-  );
-
-  const pressureData = useMemo(
-    () =>
-      formattedLeaderboard.map((p) => ({
-        player: p.player,
-        pressuredScores: p.pressuredScores,
-        pressuredShots: p.pressuredShots,
-      })),
-    [formattedLeaderboard]
-  );
-
-  const distanceData = useMemo(
-    () =>
-      formattedLeaderboard.map((p) => ({
-        player: p.player,
-        avgDistance: !isNaN(p.avgDistance) ? p.avgDistance.toFixed(2) : '0.00',
-        avgScoreDistance: !isNaN(p.avgScoreDistance)
-          ? p.avgScoreDistance.toFixed(2)
-          : '0.00',
-      })),
-    [formattedLeaderboard]
-  );
-
-  // Loading, error, or no data
-  if (loading) {
-    return (
-      <div className="player-data-container">
-        <LoadingIndicator />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="player-data-container">
-        <ErrorMessage message={error} />
-      </div>
-    );
-  }
-
-  if (!data || !data.gameData || formattedLeaderboard.length === 0) {
-    return (
-      <div className="player-data-container">
-        <ErrorMessage message="No data available to display." />
-      </div>
-    );
-  }
-
-  async function handleRecalculateXPoints() {
-    try {
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/recalculate-xpoints`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            uid: USER_ID,
-            datasetName: DATASET_NAME,
-          }),
-        }
-      );
-      const result = await parseJSONNoNaN(response);
-      if (!response.ok) {
-        Swal.fire(
-          'Error',
-          result.error || 'Failed to recalculate xpoints.',
-          'error'
-        );
-      } else {
-        Swal.fire('Success', 'xPoints recalculated successfully!', 'success');
-        window.location.reload();
-      }
-    } catch (err) {
-      Swal.fire('Error', 'Network error while recalculating xpoints.', 'error');
-    }
-  }
+  if (configLoading || structureLoading) return <div className="pdg-page"><LoadingSpinner message="Loading..." /></div>;
 
   return (
-    <div className="player-data-container">
-      <h1 style={{ color: '#fff' }}>Player Data GAA</h1>
+    <div className="pdg-page">
+      <header className="pdg-header">
+        <div><h1>Player Analytics</h1><p>GAA Performance Dashboard</p></div>
+        <div className="pdg-header-buttons">
+          <button className="pdg-admin-btn" onClick={() => setShowCalibration(true)}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
+            Model Accuracy
+          </button>
+          <button className="pdg-admin-btn" onClick={() => setShowAdmin(true)}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            Settings
+          </button>
+        </div>
+      </header>
 
-      {/* Filter: Year, Team */}
-      <div className="year-filter">
-        <label style={{ color: '#fff' }} htmlFor="year-select">
-          Filter by Year:
-        </label>
-        <select
-          id="year-select"
-          value={selectedYear}
-          onChange={(e) => setSelectedYear(e.target.value)}
-        >
-          <option value="All">All Years</option>
-          {availableYears.map((year) => (
-            <option key={year} value={year.toString()}>
-              {year}
-            </option>
-          ))}
-        </select>
+      <section className="pdg-controls">
+        <div className="pdg-toggle-group">
+          <button className={`pdg-toggle ${dataSource === 'public' ? 'active' : ''}`} onClick={() => setDataSource('public')}>Public Data</button>
+          {currentUser && <button className={`pdg-toggle ${dataSource === 'own' ? 'active' : ''}`} onClick={() => setDataSource('own')}>My Data</button>}
+        </div>
+        <div className="pdg-select-group">
+          <label>Dataset</label>
+          <select value={selectedDatasetName} onChange={e => setSelectedDatasetName(e.target.value)}>
+            <option value="">Select a dataset...</option>
+            {datasetStructure.map(ds => <option key={ds.datasetName} value={ds.datasetName}>{ds.datasetName} ({ds.games.length} games)</option>)}
+          </select>
+        </div>
+      </section>
 
-        <label style={{ color: '#fff', marginLeft: '10px' }} htmlFor="team-select">
-          Filter by Team:
-        </label>
-        <select
-          id="team-select"
-          value={selectedTeam}
-          onChange={(e) => setSelectedTeam(e.target.value)}
-        >
-          <option value="All">All Teams</option>
-          {availableTeams.map((team) => (
-            <option key={team} value={team}>
-              {team}
-            </option>
-          ))}
-        </select>
-      </div>
+      {selectedDatasetName && gamesInDataset.length > 0 && <GameSelector games={gamesInDataset} selectedGameIds={selectedGameIds} onToggleGame={handleToggleGame} onSelectAll={handleSelectAll} onDeselectAll={handleDeselectAll} />}
 
-      {/* MINI-LEADERBOARDS */}
-      <div className="mini-leaderboards-row">
-        <MiniLeaderboard
-          title="Goals Leaderboard"
-          data={goalsData}
-          actualKey="goals"
-          expectedKey="xGoals"
-          useDifference={true}
-          differenceLabel="Diff"
-          initialSortKey="goals"
-          initialDirection="descending"
-        />
-        <MiniLeaderboard
-          title="Points Leaderboard"
-          data={pointsData}
-          actualKey="points"
-          expectedKey="xPoints"
-          useDifference={true}
-          differenceLabel="Diff"
-          initialSortKey="points"
-          initialDirection="descending"
-        />
-        <MiniLeaderboard
-          title="Set Plays Leaderboard"
-          data={setPlaysData}
-          actualKey="setPlays"
-          expectedKey="xSetPlays"
-          hideCalcColumn={true}
-          initialSortKey="setPlays"
-          initialDirection="descending"
-        />
-      </div>
+      {selectedGameIds.length > 0 && (
+        <section className="pdg-filters">
+          <div className="pdg-select-group"><label>Year</label><select value={selectedYear} onChange={e => setSelectedYear(e.target.value)}><option value="All">All Years</option>{availableYears.map(y => <option key={y} value={y}>{y}</option>)}</select></div>
+          <div className="pdg-select-group"><label>Team</label><select value={selectedTeam} onChange={e => setSelectedTeam(e.target.value)}><option value="All">All Teams</option>{availableTeams.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+        </section>
+      )}
 
-      <div className="mini-leaderboards-row">
-        <MiniLeaderboard
-          title="Shooting Accuracy"
-          data={accuracyData}
-          actualKey="shootingScored"
-          expectedKey="shootingAttempts"
-          useDifference={false}
-          initialSortKey="shootingScored"
-          initialDirection="descending"
-        />
-        <MiniLeaderboard
-          title="2-Pointer Leaderboard"
-          data={twoPointerData}
-          actualKey="twoPointerScores"
-          expectedKey="twoPointerAttempts"
-          useDifference={false}
-          initialSortKey="twoPointerScores"
-          initialDirection="descending"
-        />
-      </div>
+      {dataLoading && <LoadingSpinner message="Loading player data..." />}
+      {!dataLoading && !selectedDatasetName && <EmptyState title="No Dataset Selected" message="Choose a dataset above to begin" />}
+      {!dataLoading && selectedDatasetName && selectedGameIds.length === 0 && <EmptyState title="No Games Selected" message="Select games to view player stats" />}
 
-      <div className="mini-leaderboards-row">
-        <MiniLeaderboard
-          title="Under Pressure Shots"
-          data={pressureData}
-          actualKey="pressuredScores"
-          expectedKey="pressuredShots"
-          useDifference={false}
-          initialSortKey="pressuredScores"
-          initialDirection="descending"
-        />
-        <AvgDistanceLeaderboard
-          title="Avg Shooting Distance"
-          data={distanceData}
-        />
-      </div>
+      {!dataLoading && selectedGameIds.length > 0 && formattedLeaderboard.length > 0 && (
+        <>
+          <section className="pdg-stats-row">
+            <StatCard label="Players" value={stats.players} />
+            <StatCard label="Shots" value={stats.shots} />
+            <StatCard label="Points" value={stats.points} />
+            <StatCard label="Goals" value={stats.goals} />
+            <StatCard label="Avg Accuracy" value={`${stats.avgAcc.toFixed(1)}%`} />
+          </section>
 
-      {/* MAIN LEADERBOARD */}
-      <LeaderboardTable data={formattedLeaderboard} />
+          <section className="pdg-mini-grid">
+            <MiniLeaderboard title="Most Points" data={pointsData} sortKey="points" columns={[{ key: 'points', label: 'Pts', format: v => v?.toFixed(0) }, { key: 'xPoints', label: 'xP', format: v => v?.toFixed(1) }, { key: 'shots', label: 'Shots', format: v => v?.toFixed(0) }, { key: 'pointsPerShot', label: 'Pts/Shot', format: v => v?.toFixed(2) }]} />
+            <MiniLeaderboard title="Most Goals" data={goalsData} sortKey="goals" columns={[{ key: 'goals', label: 'Goals', format: v => v?.toFixed(0) }, { key: 'xGoals', label: 'xG', format: v => v?.toFixed(2) }, { key: 'goalAttempts', label: 'Att', format: v => v?.toFixed(0) }, { key: 'goalsPerAttempt', label: 'G/Att', format: v => v?.toFixed(2) }]} />
+            <MiniLeaderboard title="Best Accuracy" data={accuracyData} sortKey="accuracy" columns={[{ key: 'scored', label: 'Scored', format: v => v?.toFixed(0) }, { key: 'attempts', label: 'Att', format: v => v?.toFixed(0) }, { key: 'accuracy', label: '%', format: v => `${v?.toFixed(0)}%` }]} />
+          </section>
 
-      {/* Recalculate button */}
-      <button onClick={handleRecalculateXPoints} className="recalculate-button">
-        Recalculate xPoints
-      </button>
+          <MainLeaderboard data={formattedLeaderboard} />
+        </>
+      )}
+
+      <CalibrationModal isOpen={showCalibration} onClose={() => setShowCalibration(false)} stats={stats} />
+      <AdminPanel isOpen={showAdmin} onClose={() => setShowAdmin(false)} datasets={datasetStructure} currentConfig={publicConfig} onSave={setPublicConfig} userId={currentUser?.uid} activeUserId={activeUserId} />
     </div>
   );
 }

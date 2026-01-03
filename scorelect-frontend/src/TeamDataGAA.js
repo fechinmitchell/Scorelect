@@ -41,6 +41,69 @@ function translateShotToOneSide(shot, halfLineX, goalX, goalY) {
 }
 
 /*******************************************
+ * xP CALCULATION (Expected Points)
+ * Returns the probability of scoring a point (0-1)
+ *******************************************/
+function calculateXP(shot, distanceMeters) {
+  // First check if shot already has xPoints from backend
+  if (shot.xPoints !== undefined && shot.xPoints !== null) {
+    const existing = parseFloat(shot.xPoints);
+    if (!isNaN(existing) && existing >= 0 && existing <= 1) {
+      return existing;
+    }
+  }
+  
+  const actionLower = (shot.action || '').toLowerCase();
+  const isSetPlay = ['free', 'fortyfive', '45', 'mark', 'offensive mark', 'penalty'].includes(actionLower);
+  
+  // Conservative default rates based on GAA research
+  if (isSetPlay) {
+    // Set plays (frees, 45s, marks) - higher success rates
+    if (distanceMeters <= 20) return 0.82;  // Close frees ~82%
+    if (distanceMeters <= 30) return 0.68;  // Medium frees ~68%
+    if (distanceMeters <= 40) return 0.52;  // Long frees ~52%
+    if (distanceMeters <= 45) return 0.42;  // 45s ~42%
+    return 0.30;  // Very long ~30%
+  } else {
+    // Play from hand - lower success rates
+    if (distanceMeters <= 15) return 0.58;  // Close range ~58%
+    if (distanceMeters <= 20) return 0.48;  // Medium close ~48%
+    if (distanceMeters <= 25) return 0.40;  // Medium ~40%
+    if (distanceMeters <= 30) return 0.32;  // Medium long ~32%
+    if (distanceMeters <= 35) return 0.25;  // Long ~25%
+    if (distanceMeters <= 40) return 0.18;  // Very long ~18%
+    return 0.12;  // Beyond 40m ~12%
+  }
+}
+
+/*******************************************
+ * xG CALCULATION (Expected Goals)
+ * Returns the probability of scoring a goal (0-1)
+ *******************************************/
+function calculateXG(shot, distanceMeters) {
+  // First check if shot already has xGoals from backend
+  if (shot.xGoals !== undefined && shot.xGoals !== null) {
+    const existing = parseFloat(shot.xGoals);
+    if (!isNaN(existing) && existing >= 0 && existing <= 1) {
+      return existing;
+    }
+  }
+  
+  const actionLower = (shot.action || '').toLowerCase();
+  
+  // Penalties have high conversion rate
+  if (actionLower === 'penalty') return 0.82;
+  
+  // Conservative goal conversion rates
+  // Goals are much harder to score than points
+  if (distanceMeters <= 6) return 0.45;   // Very close ~45%
+  if (distanceMeters <= 10) return 0.32;  // Close ~32%
+  if (distanceMeters <= 14) return 0.22;  // Medium ~22%
+  if (distanceMeters <= 20) return 0.12;  // Long ~12%
+  return 0.05;  // Very long ~5%
+}
+
+/*******************************************
  * FETCH PUBLIC CONFIG HOOK
  *******************************************/
 function useFetchPublicConfig() {
@@ -362,6 +425,10 @@ function TeamDataGAA() {
     if (!combinedData || combinedData.length === 0) return [];
 
     const teams = {};
+    // GAA pitch dimensions for distance calculations
+    const GOAL_X = 145;
+    const GOAL_Y = 44;
+    const MIDLINE_X = 72.5;
 
     combinedData.forEach(shot => {
       const teamName = shot.team || 'Unknown';
@@ -385,13 +452,37 @@ function TeamDataGAA() {
       const actionLower = (shot.action || '').toLowerCase();
       const typeLower = (shot.type || '').toLowerCase();
 
-      if (actionLower === 'point') teams[teamName].points += 1;
-      else if (actionLower === 'goal') teams[teamName].goals += 1;
-      else if (typeLower === 'wide' || actionLower === 'wide') teams[teamName].wides += 1;
+      // Count actual scores
+      const isPointScored = actionLower === 'point';
+      const isGoalScored = actionLower === 'goal';
+      const isWide = typeLower === 'wide' || actionLower === 'wide';
+      const isSetPlay = ['free', 'fortyfive', '45', 'mark', 'offensive mark'].includes(actionLower);
+      const isSetPlayScore = isSetPlay && typeLower === 'score';
+      
+      if (isPointScored || isSetPlayScore) teams[teamName].points += 1;
+      else if (isGoalScored) teams[teamName].goals += 1;
+      else if (isWide) teams[teamName].wides += 1;
 
-      // Add expected values if available
-      if (shot.xPoints) teams[teamName].expectedPoints += parseFloat(shot.xPoints);
-      if (shot.xGoals) teams[teamName].expectedGoals += parseFloat(shot.xGoals);
+      // Calculate distance for expected values
+      const x = parseFloat(shot.x) || 0;
+      const y = parseFloat(shot.y) || 0;
+      const targetGoal = x <= MIDLINE_X ? { x: 0, y: GOAL_Y } : { x: GOAL_X, y: GOAL_Y };
+      const dx = x - targetGoal.x;
+      const dy = y - targetGoal.y;
+      const distanceMeters = Math.sqrt(dx * dx + dy * dy);
+
+      // Determine if it's a goal attempt or point attempt
+      const isGoalAttempt = actionLower === 'goal' || typeLower === 'goal' || typeLower === 'saved';
+      const isPointAttempt = !isGoalAttempt && !isWide; // All non-goal, non-wide shots are point attempts
+
+      // Calculate expected values
+      if (isGoalAttempt) {
+        const xG = calculateXG(shot, distanceMeters);
+        teams[teamName].expectedGoals += xG;
+      } else if (isPointAttempt) {
+        const xP = calculateXP(shot, distanceMeters);
+        teams[teamName].expectedPoints += xP;
+      }
     });
 
     // Calculate accuracy

@@ -886,18 +886,26 @@ export default function PlayerDataGAA() {
       const typeLower = (shot.type || '').toLowerCase();
       const isPointAction = actionLower === 'point';
       const isGoalAction = actionLower === 'goal';
-      const isSetPlayScore = ['free', 'fortyfive', '45', 'offensive mark', 'mark'].includes(actionLower) && typeLower === 'score';
+      const isSetPlay = ['free', 'fortyfive', '45', 'offensive mark', 'mark'].includes(actionLower);
+      const isSetPlayScore = isSetPlay && typeLower === 'score';
       const isScore = isPointAction || isGoalAction || isSetPlayScore;
+      const isGoalAttempt = isGoalAction || typeLower === 'goal' || typeLower === 'saved';
+      const isPointAttempt = !isGoalAttempt; // All non-goal shots are point attempts
 
       if (isScore) p.shootingScored += 1;
-      if (isGoalAction || typeLower === 'goal' || typeLower === 'saved') p.goalAttempts += 1;
+      if (isGoalAttempt) p.goalAttempts += 1;
       if (isPointAction) { p.points += 1; p.positionPerformance[pos].points += 1; }
       else if (isGoalAction) { p.goals += 1; p.positionPerformance[pos].goals += 1; }
       else if (isSetPlayScore) p.points += 1;
 
-      // Use calibrated xP/xG calculations
-      p.xPoints += calculateXP(shot, translated.distMeters, calibrationModel);
-      p.xGoals += calculateXG(shot, translated.distMeters, calibrationModel);
+      // xP: Only for point attempts (non-goal shots)
+      // xG: Only for goal attempts
+      if (isPointAttempt) {
+        p.xPoints += calculateXP(shot, translated.distMeters, calibrationModel);
+      }
+      if (isGoalAttempt) {
+        p.xGoals += calculateXG(shot, translated.distMeters, calibrationModel);
+      }
       return acc;
     }, {});
 

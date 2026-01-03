@@ -5,7 +5,7 @@ import { getAuth, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
 
-/* ──────────── page + component imports ──────────── */
+/* ────────────── page + component imports ────────────── */
 import SignIn from './SignIn';
 import SignUp from './SignUp';
 import PitchGraphic from './PitchGraphic';
@@ -68,9 +68,10 @@ import AIGAADashboard from './AIDashboard/AIGAADashboard';
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 const App = () => {
-  /* ──────────── global auth / state ──────────── */
+  /* ────────────── global auth / state ────────────── */
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState('free');
+  const [isAdmin, setIsAdmin] = useState(false); // Track admin status separately
   const navigate = useNavigate();
   const { loadedCoords, setLoadedCoords } = useContext(GameContext);
 
@@ -78,7 +79,7 @@ const App = () => {
     localStorage.getItem('selectedSport') || null
   );
 
-  /* ──────────── auth listener ──────────── */
+  /* ────────────── auth listener ────────────── */
   useEffect(() => {
     const auth = getAuth();
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
@@ -87,19 +88,24 @@ const App = () => {
         const userDocRef = doc(firestore, 'users', currentUser.uid);
         const userDoc = await getDoc(userDocRef);
         if (userDoc.exists()) {
-          setUserRole(userDoc.data().role || 'free');
+          const userData = userDoc.data();
+          setUserRole(userData.role || 'free');
+          // Check if user is admin
+          setIsAdmin(currentUser.email === 'fetzmitchell@gmail.com');
         } else {
           await setDoc(userDocRef, { role: 'free', email: currentUser.email });
           setUserRole('free');
+          setIsAdmin(currentUser.email === 'fetzmitchell@gmail.com');
         }
       } else {
         setUserRole('free');
+        setIsAdmin(false);
       }
     });
     return () => unsubscribe();
   }, []);
 
-  /* ──────────── persist sport selection ──────────── */
+  /* ────────────── persist sport selection ────────────── */
   useEffect(() => {
     if (selectedSport) {
       localStorage.setItem('selectedSport', selectedSport);
@@ -108,7 +114,7 @@ const App = () => {
     }
   }, [selectedSport]);
 
-  /* ──────────── helpers ──────────── */
+  /* ────────────── helpers ────────────── */
   const loadGame = (sport, game) => {
     setSelectedSport(sport);
     setLoadedCoords(game);
@@ -132,6 +138,7 @@ const App = () => {
       await signOut(auth);
       setUser(null);
       setUserRole('free');
+      setIsAdmin(false);
       toast.success('Successfully logged out');
       setLoadedCoords([]);
       navigate('/signin');
@@ -143,27 +150,37 @@ const App = () => {
     localStorage.removeItem('selectedSport');
   };
 
-  /* ──────────── choose correct pitch component ──────────── */
+  /* ────────────── choose correct pitch component ────────────── */
   const renderSelectedSport = () => {
     if (!selectedSport) return <Navigate replace to="/select-sport" />;
     if (loadedCoords && loadedCoords.analysisType === 'video') {
       return <ManualTagging gameData={loadedCoords} />;
     }
+    
+    // Pass 'paid' as userType to enable all features for all users
     switch (selectedSport) {
       case 'GAA':
-        return <PitchGraphic userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />;
+        return <PitchGraphic userType="paid" userId={user?.uid} apiUrl={API_BASE_URL} />;
       case 'Soccer':
-        return <SoccerPitch userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />;
+        return <SoccerPitch userType="paid" userId={user?.uid} apiUrl={API_BASE_URL} />;
       case 'Basketball':
-        return <BasketballCourt userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />;
+        return <BasketballCourt userType="paid" userId={user?.uid} apiUrl={API_BASE_URL} />;
       case 'AmericanFootball':
-        return <AmericanFootballPitch userType={userRole} userId={user?.uid} apiUrl={API_BASE_URL} />;
+        return <AmericanFootballPitch userType="paid" userId={user?.uid} apiUrl={API_BASE_URL} />;
       default:
         return <Navigate replace to="/select-sport" />;
     }
   };
 
-  /* ──────────── JSX ──────────── */
+  // Protected route component for admin-only access
+  const ProtectedAdminRoute = ({ children }) => {
+    if (!isAdmin) {
+      return <Navigate to="/" replace />;
+    }
+    return children;
+  };
+
+  /* ────────────── JSX ────────────── */
   return (
     <SavedGamesProvider>
       <SportsDataHubProvider>
@@ -174,7 +191,7 @@ const App = () => {
               onLogout={handleLogout}
               onSportChange={handleSportChange}
               onNavigate={handleNavigate}
-              userType={userRole}
+              userType="paid" // Always show as 'paid' for UI purposes
               user={user}
               selectedSport={selectedSport}
             />
@@ -186,7 +203,7 @@ const App = () => {
                   <Route path="/" element={<Navigate replace to="/dashboard" />} />
                   <Route path="/select-sport" element={<SportSelectionPage onSportSelect={handleSportChange} />} />
                   <Route path="/upgrade" element={<Upgrade setUserRole={setUserRole} />} />
-                  <Route path="/saved-games" element={<SavedGames userType={userRole} onLoadGame={loadGame} selectedSport={selectedSport} />} />
+                  <Route path="/saved-games" element={<SavedGames userType="paid" onLoadGame={loadGame} selectedSport={selectedSport} />} />
                   <Route path="/profile" element={user ? <Profile onLogout={handleLogout} apiUrl={API_BASE_URL} /> : <Navigate replace to="/signin" />} />
                   <Route path="/signin" element={<SignIn apiUrl={API_BASE_URL} />} />
                   <Route path="/signup" element={<SignUp apiUrl={API_BASE_URL} />} />
@@ -213,8 +230,15 @@ const App = () => {
                   <Route path="/blog/americanfootballCollect" element={<AmericanFootballCollect />} />
                   <Route path="/team/:teamName" element={<TeamDetails />} />
                   <Route path="/team-data-gaa" element={<TeamDataGAA />} />
+                  
+                  {/* Admin-only routes - Protected */}
                   <Route path="/admin-login" element={<AdminLogin />} />
-                  <Route path="/admin-settings" element={<AdminSettings />} />
+                  <Route path="/admin-settings" element={
+                    <ProtectedAdminRoute>
+                      <AdminSettings />
+                    </ProtectedAdminRoute>
+                  } />
+                  
                   <Route path="/sessions" element={<Sessions selectedSport={selectedSport} />} />
                   <Route path="/session-editor/:sessionId" element={<SessionEditor selectedSport={selectedSport} />} />
                   <Route path="/session-detail/:sessionId" element={<SessionDetail />} />

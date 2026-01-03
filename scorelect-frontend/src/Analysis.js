@@ -294,25 +294,15 @@ const Analysis = ({ onSportChange, selectedSport }) => {
     }
   };
 
+  // REMOVED PREMIUM CHECK - Now only check if user is logged in
   useEffect(() => {
     if (loading) return;
     if (!currentUser) {
       Swal.fire('Authentication Required', 'Please sign in to access this page.', 'warning')
         .then(() => navigate('/signin'));
-    } else if (userData && userData.role !== 'paid') {
-      Swal.fire({
-        title: 'Upgrade Required',
-        text: 'This feature is available for premium users only. Please upgrade your account.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Upgrade Now',
-        cancelButtonText: 'Cancel',
-      }).then((result) => {
-        if (result.isConfirmed) navigate('/upgrade');
-        else navigate('/');
-      });
     }
-  }, [currentUser, userData, loading, navigate]);
+    // REMOVED: Premium user check - all authenticated users can access
+  }, [currentUser, loading, navigate]);
 
   if (loading || savedLoading) {
     return <div>Loading...</div>;
@@ -379,67 +369,61 @@ const Analysis = ({ onSportChange, selectedSport }) => {
     <div className="analysis-page">
       <Container>
 
-        {userData && userData.role === 'paid' ? (
-          Object.keys(datasets).length > 0 ? (
-            <SavedDatasetsContainer>
-              <SectionTitle>Analyze from Your Saved Datasets</SectionTitle>
-              <InstructionText><p>Select one of your saved datasets, then optionally select a single game.</p></InstructionText>
-              <Select
-                value={selectedUserDataset}
-                onChange={(e) => {
-                  setSelectedUserDataset(e.target.value);
-                  setSelectedUserGameId('');
-                }}
-              >
-                <option value="">Select a Dataset</option>
-                {Object.keys(datasets).map((datasetName) => (
-                  <option key={datasetName} value={datasetName}>{datasetName}</option>
-                ))}
-              </Select>
+        {/* REMOVED PREMIUM CHECK - Show saved datasets for all authenticated users */}
+        {Object.keys(datasets).length > 0 ? (
+          <SavedDatasetsContainer>
+            <SectionTitle>Analyze from Your Saved Datasets</SectionTitle>
+            <InstructionText><p>Select one of your saved datasets, then optionally select a single game.</p></InstructionText>
+            <Select
+              value={selectedUserDataset}
+              onChange={(e) => {
+                setSelectedUserDataset(e.target.value);
+                setSelectedUserGameId('');
+              }}
+            >
+              <option value="">Select a Dataset</option>
+              {Object.keys(datasets).map((datasetName) => (
+                <option key={datasetName} value={datasetName}>{datasetName}</option>
+              ))}
+            </Select>
 
-              {selectedUserDataset && datasets[selectedUserDataset].games.length > 0 ? (
-                <>
-                  <Select
-                    value={selectedUserGameId}
-                    onChange={(e) => setSelectedUserGameId(e.target.value)}
-                  >
-                    <option value="">(Optional) Select a Single Game</option>
-                    {datasets[selectedUserDataset].games.map((game) => {
-                      const id = game.gameId || game.gameName;
-                      const displayName = `${game.gameName} (${game.sport} - ${game.matchDate ? new Date(game.matchDate).toLocaleDateString() : 'N/A'})`;
-                      return (
-                        <option key={id} value={id}>{displayName}</option>
-                      );
-                    })}
-                  </Select>
+            {selectedUserDataset && datasets[selectedUserDataset].games.length > 0 ? (
+              <>
+                <Select
+                  value={selectedUserGameId}
+                  onChange={(e) => setSelectedUserGameId(e.target.value)}
+                >
+                  <option value="">(Optional) Select a Single Game</option>
+                  {datasets[selectedUserDataset].games.map((game) => {
+                    const id = game.gameId || game.gameName;
+                    const displayName = `${game.gameName} (${game.sport} - ${game.matchDate ? new Date(game.matchDate).toLocaleDateString() : 'N/A'})`;
+                    return (
+                      <option key={id} value={id}>{displayName}</option>
+                    );
+                  })}
+                </Select>
 
-                  <AnalyzeButtonContainer>
-                    {!selectedUserGameId && (
-                      <AnalyzeButton onClick={() => handleAnalyzeSavedDataset(false)}>
-                        Analyze Entire Dataset
-                      </AnalyzeButton>
-                    )}
-                    {selectedUserGameId && (
-                      <AnalyzeButton onClick={() => handleAnalyzeSavedDataset(true)}>
-                        Analyze Selected Game
-                      </AnalyzeButton>
-                    )}
-                  </AnalyzeButtonContainer>
-                </>
-              ) : selectedUserDataset ? (
-                <p>No games available in this dataset.</p>
-              ) : null}
-            </SavedDatasetsContainer>
-          ) : (
-            <SavedDatasetsContainer>
-              <SectionTitle>Your Saved Datasets</SectionTitle>
-              <p>No saved datasets available. Please upload and save some games first.</p>
-            </SavedDatasetsContainer>
-          )
+                <AnalyzeButtonContainer>
+                  {!selectedUserGameId && (
+                    <AnalyzeButton onClick={() => handleAnalyzeSavedDataset(false)}>
+                      Analyze Entire Dataset
+                    </AnalyzeButton>
+                  )}
+                  {selectedUserGameId && (
+                    <AnalyzeButton onClick={() => handleAnalyzeSavedDataset(true)}>
+                      Analyze Selected Game
+                    </AnalyzeButton>
+                  )}
+                </AnalyzeButtonContainer>
+              </>
+            ) : selectedUserDataset ? (
+              <p>No games available in this dataset.</p>
+            ) : null}
+          </SavedDatasetsContainer>
         ) : (
           <SavedDatasetsContainer>
             <SectionTitle>Your Saved Datasets</SectionTitle>
-            <p>Please upgrade to a premium plan to access and analyze your saved datasets.</p>
+            <p>No saved datasets available. Please upload and save some games first.</p>
           </SavedDatasetsContainer>
         )}
 
@@ -486,4 +470,4 @@ Analysis.propTypes = {
   selectedSport: PropTypes.string,
 };
 
-export default Analysis; 
+export default Analysis;

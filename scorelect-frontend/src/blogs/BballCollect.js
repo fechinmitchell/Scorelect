@@ -62,7 +62,7 @@ const BballCollect = () => {
     {
       label: '2. Create Training Sessions',
       description:
-        'Design and organize effective training sessions tailored to your team\'s needs.',
+        'Design and organise effective training sessions tailored to your team\'s needs.',
     },
     {
       label: '3. Find Team Stats',

@@ -57,7 +57,7 @@ const BballCollect = () => {
     {
       label: '1. Collect Team Stats',
       description:
-        'Seamlessly collect and manage your team\'s sports data to maximize performance.',
+        'Seamlessly collect and manage your team\'s sports data to maximise performance.',
     },
     {
       label: '2. Create Training Sessions',

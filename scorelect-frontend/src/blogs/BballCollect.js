@@ -72,7 +72,7 @@ const BballCollect = () => {
     {
       label: '4. Scout and Analyze Players',
       description:
-        'Evaluate and analyze player performance to make informed scouting decisions.',
+        'Evaluate and analyse player performance to make informed scouting decisions.',
     },
     {
       label: '5. Export Raw Data',

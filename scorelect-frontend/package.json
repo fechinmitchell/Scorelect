@@ -89,6 +89,7 @@
     ]
   },
   "devDependencies": {
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "sitemap": "^8.0.0"
   }
 }

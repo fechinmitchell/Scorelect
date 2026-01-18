@@ -58,8 +58,14 @@ logger = logging.getLogger(__name__)
 
 def engineer_features(df):
     """Generate engineered features from raw shot data."""
-    df['x'] = pd.to_numeric(df.get('x', 0), errors='coerce').fillna(0)
-    df['y'] = pd.to_numeric(df.get('y', 0), errors='coerce').fillna(0)
+    # Helper function to safely get column as Series
+    def safe_get_column(df, col, default_value):
+        if col in df.columns:
+            return df[col]
+        return pd.Series([default_value] * len(df), index=df.index)
+    
+    df['x'] = pd.to_numeric(safe_get_column(df, 'x', 0), errors='coerce').fillna(0)
+    df['y'] = pd.to_numeric(safe_get_column(df, 'y', 0), errors='coerce').fillna(0)
     
     GOAL_X, GOAL_Y = 145, 44
     df['dist'] = np.sqrt((GOAL_X - df['x'])**2 + (GOAL_Y - df['y'])**2)
@@ -71,15 +77,15 @@ def engineer_features(df):
     df['dist_to_sideline'] = np.minimum(df['y'], 88 - df['y'])
     
     pressure_map = {'none': 0, 'low': 0.33, 'medium': 0.67, 'high': 1.0, 'n': 0, 'y': 1, '': 0}
-    df['pressure_value'] = df.get('pressure', '').astype(str).str.lower().map(pressure_map).fillna(0)
+    df['pressure_value'] = safe_get_column(df, 'pressure', '').astype(str).str.lower().map(pressure_map).fillna(0)
     
     position_map = {'goalkeeper': 0, 'back': 1, 'defender': 1, 'midfielder': 2, 'forward': 3, 'attacker': 3}
-    df['position_value'] = df.get('position', '').astype(str).str.lower().map(lambda p: position_map.get(p.strip(), 2))
+    df['position_value'] = safe_get_column(df, 'position', '').astype(str).str.lower().map(lambda p: position_map.get(p.strip(), 2))
     
-    df['is_right_foot'] = df.get('foot', '').astype(str).str.lower().str.contains('right', na=False).astype(int)
-    df['is_left_foot'] = df.get('foot', '').astype(str).str.lower().str.contains('left', na=False).astype(int)
+    df['is_right_foot'] = safe_get_column(df, 'foot', '').astype(str).str.lower().str.contains('right', na=False).astype(int)
+    df['is_left_foot'] = safe_get_column(df, 'foot', '').astype(str).str.lower().str.contains('left', na=False).astype(int)
     
-    action_col = df.get('action', pd.Series([''] * len(df))).astype(str).str.lower()
+    action_col = safe_get_column(df, 'action', '').astype(str).str.lower()
     df['is_setplay'] = action_col.str.contains(r'\b(free|penalty|45|sideline|mark)\b', case=False, regex=True, na=False).astype(int)
     df['is_penalty'] = action_col.str.contains(r'\bpenalty\b', case=False, regex=True, na=False).astype(int)
     df['is_free'] = action_col.str.contains(r'\bfree\b', case=False, regex=True, na=False).astype(int)
@@ -97,8 +103,8 @@ def engineer_features(df):
     df['scored'] = ((df['is_goal'] == 1) | (df['is_point'] == 1)).astype(int)
     
     # Preserve existing model values
-    df['existing_xP'] = pd.to_numeric(df.get('xP', 0), errors='coerce').fillna(0)
-    df['existing_xG'] = pd.to_numeric(df.get('xG', 0), errors='coerce').fillna(0)
+    df['existing_xP'] = pd.to_numeric(safe_get_column(df, 'xP', 0), errors='coerce').fillna(0)
+    df['existing_xG'] = pd.to_numeric(safe_get_column(df, 'xG', 0), errors='coerce').fillna(0)
     
     return df
 

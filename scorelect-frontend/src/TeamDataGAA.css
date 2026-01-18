@@ -1,4 +1,4 @@
-/* TeamDataGAA.css - Complete Modern UI with Collapsible Game Selector */
+/* TeamDataGAA.css - Complete Modern UI with Model Selector */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
@@ -68,7 +68,152 @@
   margin: 0.25rem 0 0;
 }
 
-/* ===== DATA SOURCE CONTROLS (Matching PlayerDataGAA) ===== */
+/* ===== MODEL SELECTOR ===== */
+.model-selector-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: linear-gradient(145deg, rgba(139, 92, 246, 0.1), rgba(139, 92, 246, 0.05));
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.model-selector-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary-light);
+  white-space: nowrap;
+}
+
+.model-selector-select {
+  flex: 1;
+  min-width: 250px;
+  padding: 10px 14px;
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.model-selector-select:hover {
+  border-color: var(--primary);
+}
+
+.model-selector-select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+}
+
+.model-selector-select option {
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  padding: 8px;
+}
+
+.model-selector-select optgroup {
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.model-selector-loading {
+  color: var(--text-muted);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.model-selector-applying {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--primary-light);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.model-selector-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(139, 92, 246, 0.3);
+  border-top: 2px solid var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.model-selector-active {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: var(--radius-md);
+  color: var(--success);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ===== ACTIVE MODEL BANNER ===== */
+.active-model-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  background: linear-gradient(145deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  margin-bottom: 1.5rem;
+  font-size: 13px;
+  color: var(--text-primary);
+  flex-wrap: wrap;
+}
+
+.active-model-icon {
+  color: var(--success);
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.active-model-banner strong {
+  color: var(--success);
+}
+
+.active-model-accuracy {
+  color: var(--text-muted);
+}
+
+.active-model-reset {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.active-model-reset:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* ===== DATA SOURCE CONTROLS ===== */
 .pdg-controls {
   display: flex;
   gap: 1.5rem;
@@ -141,7 +286,7 @@
   box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
 }
 
-/* ===== COLLAPSIBLE GAME SELECTOR (PlayerDataGAA Style) ===== */
+/* ===== COLLAPSIBLE GAME SELECTOR ===== */
 .pdg-game-selector {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -447,7 +592,6 @@
   color: var(--secondary);
 }
 
-/* Mini leaderboard scrollbar */
 .mini-leaderboard-table-wrapper::-webkit-scrollbar {
   width: 6px;
 }
@@ -488,7 +632,6 @@
   color: var(--text-primary);
 }
 
-/* Search Input */
 .search-container {
   position: relative;
   width: 100%;
@@ -516,7 +659,6 @@
   color: var(--text-muted);
 }
 
-/* Table Wrapper */
 .table-wrapper {
   overflow-x: auto;
   max-height: 500px;
@@ -564,7 +706,6 @@
   color: var(--text-primary);
 }
 
-/* Team row styles */
 .team-row {
   transition: var(--transition);
 }
@@ -584,7 +725,6 @@
   color: var(--secondary);
 }
 
-/* Table scrollbar */
 .table-wrapper::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -706,6 +846,26 @@
     width: 100%;
   }
   
+  .model-selector-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .model-selector-select {
+    min-width: 100%;
+  }
+  
+  .active-model-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .active-model-reset {
+    margin-left: 0;
+    width: 100%;
+  }
+  
   .pdg-game-grid {
     grid-template-columns: 1fr;
     max-height: 200px;
@@ -768,7 +928,7 @@
   }
 }
 
-/* ===== ANIMATIONS & TRANSITIONS ===== */
+/* ===== ANIMATIONS ===== */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -783,7 +943,9 @@
 .mini-leaderboard,
 .leaderboard-container,
 .team-stat-card,
-.pdg-game-selector {
+.pdg-game-selector,
+.model-selector-container,
+.active-model-banner {
   animation: fadeIn 0.3s ease-out;
 }
 
@@ -806,7 +968,9 @@ a:focus-visible {
   .year-filter,
   .search-container,
   .pdg-game-selector,
-  .pdg-controls {
+  .pdg-controls,
+  .model-selector-container,
+  .active-model-banner {
     display: none;
   }
   

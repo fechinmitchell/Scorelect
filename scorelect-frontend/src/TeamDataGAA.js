@@ -5,6 +5,7 @@ import Swal from 'sweetalert2';
 import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { getAuth } from 'firebase/auth';
+import axios from 'axios';
 
 import './TeamDataGAA.css';
 
@@ -15,6 +16,12 @@ const ADMIN_USERS = ['w9ZkqaYVM3dKSqqjWHLDVyh5sVg2'];
 const PUBLIC_CONFIG_PATH = 'config/publicDataset';
 const DEFAULT_USER_ID = 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2';
 const DEFAULT_DATASET = 'AllIreland2025';
+const BASE_API_URL = process.env.REACT_APP_API_URL || 'https://scorelect.onrender.com';
+
+// GAA pitch dimensions
+const GOAL_X = 145;
+const GOAL_Y = 44;
+const MIDLINE_X = 72.5;
 
 /*******************************************
  * HELPER: parseJSONNoNaN
@@ -58,21 +65,19 @@ function calculateXP(shot, distanceMeters) {
   
   // Conservative default rates based on GAA research
   if (isSetPlay) {
-    // Set plays (frees, 45s, marks) - higher success rates
-    if (distanceMeters <= 20) return 0.82;  // Close frees ~82%
-    if (distanceMeters <= 30) return 0.68;  // Medium frees ~68%
-    if (distanceMeters <= 40) return 0.52;  // Long frees ~52%
-    if (distanceMeters <= 45) return 0.42;  // 45s ~42%
-    return 0.30;  // Very long ~30%
+    if (distanceMeters <= 20) return 0.82;
+    if (distanceMeters <= 30) return 0.68;
+    if (distanceMeters <= 40) return 0.52;
+    if (distanceMeters <= 45) return 0.42;
+    return 0.30;
   } else {
-    // Play from hand - lower success rates
-    if (distanceMeters <= 15) return 0.58;  // Close range ~58%
-    if (distanceMeters <= 20) return 0.48;  // Medium close ~48%
-    if (distanceMeters <= 25) return 0.40;  // Medium ~40%
-    if (distanceMeters <= 30) return 0.32;  // Medium long ~32%
-    if (distanceMeters <= 35) return 0.25;  // Long ~25%
-    if (distanceMeters <= 40) return 0.18;  // Very long ~18%
-    return 0.12;  // Beyond 40m ~12%
+    if (distanceMeters <= 15) return 0.58;
+    if (distanceMeters <= 20) return 0.48;
+    if (distanceMeters <= 25) return 0.40;
+    if (distanceMeters <= 30) return 0.32;
+    if (distanceMeters <= 35) return 0.25;
+    if (distanceMeters <= 40) return 0.18;
+    return 0.12;
   }
 }
 
@@ -91,16 +96,170 @@ function calculateXG(shot, distanceMeters) {
   
   const actionLower = (shot.action || '').toLowerCase();
   
-  // Penalties have high conversion rate
   if (actionLower === 'penalty') return 0.82;
   
-  // Conservative goal conversion rates
-  // Goals are much harder to score than points
-  if (distanceMeters <= 6) return 0.45;   // Very close ~45%
-  if (distanceMeters <= 10) return 0.32;  // Close ~32%
-  if (distanceMeters <= 14) return 0.22;  // Medium ~22%
-  if (distanceMeters <= 20) return 0.12;  // Long ~12%
-  return 0.05;  // Very long ~5%
+  if (distanceMeters <= 6) return 0.45;
+  if (distanceMeters <= 10) return 0.32;
+  if (distanceMeters <= 14) return 0.22;
+  if (distanceMeters <= 20) return 0.12;
+  return 0.05;
+}
+
+/*******************************************
+ * MODEL SELECTOR COMPONENT
+ *******************************************/
+function ModelSelector({ 
+  onModelApplied, 
+  datasetName = '', 
+  shotData = [], 
+  disabled = false,
+  activeModel = null,
+}) {
+  const auth = getAuth();
+  const [models, setModels] = useState([]);
+  const [selectedModelId, setSelectedModelId] = useState('default');
+  const [loading, setLoading] = useState(true);
+  const [applying, setApplying] = useState(false);
+
+  // Fetch available models
+  const fetchModels = useCallback(async () => {
+    try {
+      setLoading(true);
+      const user = auth.currentUser;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      const token = await user.getIdToken();
+      const response = await axios.post(
+        `${BASE_API_URL}/get-model-history`,
+        { uid: user.uid },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const history = response.data.history || [];
+      const validModels = history
+        .filter(m => m.metrics && (m.config || m.algorithm))
+        .sort((a, b) => (b.metrics?.accuracy || 0) - (a.metrics?.accuracy || 0));
+      
+      setModels(validModels);
+    } catch (err) {
+      console.error('Error fetching models:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [auth]);
+
+  useEffect(() => {
+    fetchModels();
+  }, [fetchModels]);
+
+  const handleModelChange = async (e) => {
+    const modelId = e.target.value;
+    setSelectedModelId(modelId);
+    
+    if (modelId === 'default') {
+      onModelApplied?.(null, null);
+      return;
+    }
+    
+    const model = models.find(m => m.id === modelId);
+    if (!model || shotData.length === 0) return;
+
+    try {
+      setApplying(true);
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const token = await user.getIdToken();
+      
+      const response = await axios.post(
+        `${BASE_API_URL}/api/model-lab/predict`,
+        {
+          uid: user.uid,
+          model_config: model.config || {
+            algorithm: model.algorithm,
+            features: model.features_used || ['dist', 'angle_abs', 'pressure_value', 'is_setplay'],
+          },
+          shots: shotData,
+          training_dataset: model.dataset_name || model.source_dataset,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (response.data.success) {
+        onModelApplied?.(response.data.predictions, model);
+        Swal.fire({
+          title: 'Model Applied!',
+          text: `${model.run_name || model.algorithm} applied to ${shotData.length} shots`,
+          icon: 'success',
+          timer: 2000,
+          showConfirmButton: false,
+        });
+      }
+    } catch (err) {
+      console.error('Error applying model:', err);
+      Swal.fire('Error', 'Failed to apply model', 'error');
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const formatModelName = (model) => {
+    if (model.run_name) return model.run_name;
+    if (model.algorithm) return model.algorithm.replace(/_/g, ' ');
+    return 'Unnamed Model';
+  };
+
+  if (loading) {
+    return (
+      <div className="model-selector-container">
+        <span className="model-selector-loading">Loading models...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="model-selector-container">
+      <label className="model-selector-label">
+        <span>🧪</span>
+        xP/xG Model:
+      </label>
+      
+      <select
+        className="model-selector-select"
+        value={selectedModelId}
+        onChange={handleModelChange}
+        disabled={disabled || applying}
+      >
+        <option value="default">Default Model (Distance-based)</option>
+        {models.length > 0 && (
+          <optgroup label="Your Trained Models">
+            {models.slice(0, 20).map((model, index) => (
+              <option key={model.id} value={model.id}>
+                {index < 3 ? ['🥇', '🥈', '🥉'][index] : `#${index + 1}`} {formatModelName(model)} 
+                ({((model.metrics?.accuracy || 0) * 100).toFixed(1)}%)
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </select>
+
+      {applying && (
+        <span className="model-selector-applying">
+          <span className="model-selector-spinner"></span>
+          Applying...
+        </span>
+      )}
+
+      {activeModel && !applying && (
+        <span className="model-selector-active">
+          ✓ {formatModelName(activeModel)}
+        </span>
+      )}
+    </div>
+  );
 }
 
 /*******************************************
@@ -167,7 +326,7 @@ function useFetchDatasetStructure(userId) {
           datasets[datasetName].games.push({ 
             id: gameId, 
             name: gameName,
-            gameName, // Keep original for compatibility
+            gameName,
             matchDate, 
             sport,
             shotCount
@@ -345,6 +504,16 @@ function TeamDataGAA() {
   const [gamesCollapsed, setGamesCollapsed] = useState(true);
   const tableRef = useRef(null);
 
+  // Model selector state
+  const [modelPredictions, setModelPredictions] = useState(null);
+  const [activeModel, setActiveModel] = useState(null);
+
+  // Handle model applied
+  const handleModelApplied = useCallback((predictions, model) => {
+    setModelPredictions(predictions);
+    setActiveModel(model || null);
+  }, []);
+
   // Determine active user ID based on data source
   const activeUserId = useMemo(() => {
     if (dataSource === 'own' && currentUser) return currentUser.uid;
@@ -358,6 +527,12 @@ function TeamDataGAA() {
   );
   const gamesInDataset = currentDataset?.games || [];
   const { combinedData, loading: dataLoading } = useFetchMultipleGames(activeUserId, selectedGameIds);
+
+  // Reset model when data changes
+  useEffect(() => {
+    setModelPredictions(null);
+    setActiveModel(null);
+  }, [selectedDatasetName, selectedGameIds]);
 
   // Auto-select default dataset
   useEffect(() => {
@@ -376,7 +551,7 @@ function TeamDataGAA() {
     }
   }, [datasetStructure, selectedDatasetName, dataSource, publicConfig]);
 
-  // Auto-select all games when dataset changes and collapse if >12 games
+  // Auto-select all games when dataset changes
   useEffect(() => { 
     if (currentDataset) {
       setSelectedGameIds(currentDataset.games.map(g => g.id));
@@ -425,14 +600,9 @@ function TeamDataGAA() {
     if (!combinedData || combinedData.length === 0) return [];
 
     const teams = {};
-    // GAA pitch dimensions for distance calculations
-    const GOAL_X = 145;
-    const GOAL_Y = 44;
-    const MIDLINE_X = 72.5;
 
-    combinedData.forEach(shot => {
+    combinedData.forEach((shot, shotIndex) => {
       const teamName = shot.team || 'Unknown';
-      const year = shot.matchDate ? new Date(shot.matchDate).getFullYear() : 'Unknown';
       
       if (!teams[teamName]) {
         teams[teamName] = {
@@ -473,15 +643,19 @@ function TeamDataGAA() {
 
       // Determine if it's a goal attempt or point attempt
       const isGoalAttempt = actionLower === 'goal' || typeLower === 'goal' || typeLower === 'saved';
-      const isPointAttempt = !isGoalAttempt && !isWide; // All non-goal, non-wide shots are point attempts
+      const isPointAttempt = !isGoalAttempt && !isWide;
 
-      // Calculate expected values
+      // Calculate expected values - USE MODEL PREDICTIONS IF AVAILABLE
       if (isGoalAttempt) {
         const xG = calculateXG(shot, distanceMeters);
         teams[teamName].expectedGoals += xG;
       } else if (isPointAttempt) {
-        const xP = calculateXP(shot, distanceMeters);
-        teams[teamName].expectedPoints += xP;
+        // Check if we have model predictions for xP
+        if (modelPredictions && modelPredictions[shotIndex] !== undefined) {
+          teams[teamName].expectedPoints += modelPredictions[shotIndex];
+        } else {
+          teams[teamName].expectedPoints += calculateXP(shot, distanceMeters);
+        }
       }
     });
 
@@ -492,7 +666,7 @@ function TeamDataGAA() {
     });
 
     return Object.values(teams);
-  }, [combinedData]);
+  }, [combinedData, modelPredictions]);
 
   // Filter teams by search
   const filteredTeams = useMemo(() => {
@@ -518,6 +692,8 @@ function TeamDataGAA() {
     const totalShots = filteredTeams.reduce((sum, t) => sum + t.attempts, 0);
     const totalPoints = filteredTeams.reduce((sum, t) => sum + t.points, 0);
     const totalGoals = filteredTeams.reduce((sum, t) => sum + t.goals, 0);
+    const totalXP = filteredTeams.reduce((sum, t) => sum + t.expectedPoints, 0);
+    const totalXG = filteredTeams.reduce((sum, t) => sum + t.expectedGoals, 0);
     const avgAccuracy = totalTeams > 0 
       ? filteredTeams.reduce((sum, t) => sum + t.accuracy, 0) / totalTeams 
       : 0;
@@ -527,6 +703,8 @@ function TeamDataGAA() {
       shots: totalShots,
       points: totalPoints,
       goals: totalGoals,
+      totalXP,
+      totalXG,
       avgAccuracy
     };
   }, [filteredTeams]);
@@ -576,7 +754,35 @@ function TeamDataGAA() {
         </div>
       </section>
 
-      {/* Collapsible Game Selector (PlayerDataGAA Style) */}
+      {/* MODEL SELECTOR - NEW */}
+      {currentUser && combinedData.length > 0 && (
+        <ModelSelector
+          onModelApplied={handleModelApplied}
+          datasetName={selectedDatasetName}
+          shotData={combinedData}
+          disabled={combinedData.length === 0}
+          activeModel={activeModel}
+        />
+      )}
+
+      {/* Active Model Indicator */}
+      {activeModel && (
+        <div className="active-model-banner">
+          <span className="active-model-icon">✓</span>
+          <span>Using model: <strong>{activeModel.run_name || activeModel.algorithm}</strong></span>
+          <span className="active-model-accuracy">
+            ({((activeModel.metrics?.accuracy || 0) * 100).toFixed(1)}% accuracy)
+          </span>
+          <button 
+            className="active-model-reset"
+            onClick={() => handleModelApplied(null, null)}
+          >
+            Reset to Default
+          </button>
+        </div>
+      )}
+
+      {/* Collapsible Game Selector */}
       {selectedDatasetName && gamesInDataset.length > 0 && (
         <div className="pdg-game-selector">
           <div className="pdg-game-header">

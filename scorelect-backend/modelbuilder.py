@@ -887,3 +887,170 @@ def api_delete_preset(preset_id):
     except Exception as e:
         logging.error(f"Error in api_delete_preset: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@model_lab_bp.route('/predict', methods=['POST'])
+def api_predict():
+    """
+    Apply a trained model configuration to predict xP/xG for a set of shots.
+    This allows users to use their trained models on Team/Player data pages.
+    
+    Request body:
+    {
+        "uid": "user_id",
+        "model_config": {
+            "algorithm": "random_forest",
+            "features": ["dist", "angle_abs", ...],
+            "algorithm_params": {...}
+        },
+        "shots": [...],  // Array of shot objects
+        "training_dataset": "dataset_name"  // Optional: dataset to train on
+    }
+    
+    Returns:
+    {
+        "success": true,
+        "predictions": [0.45, 0.32, ...],  // xP/xG probability for each shot
+        "model_info": {...}
+    }
+    """
+    try:
+        data = request.json
+        uid = data.get('uid')
+        model_config = data.get('model_config', {})
+        shots = data.get('shots', [])
+        training_dataset = data.get('training_dataset')
+        target_field = data.get('target_field', 'xP')  # 'xP' or 'xG'
+        
+        if not uid:
+            return jsonify({'error': 'uid required'}), 400
+        if not shots:
+            return jsonify({'error': 'shots array required'}), 400
+        if not model_config:
+            return jsonify({'error': 'model_config required'}), 400
+        
+        start_time = time.time()
+        
+        # Convert shots to DataFrame and engineer features
+        df_shots = pd.DataFrame(shots)
+        df_shots = engineer_features(df_shots)
+        
+        # Get model configuration
+        algorithm = model_config.get('algorithm', 'random_forest')
+        features = model_config.get('features', ['dist', 'angle_abs', 'pressure_value', 'is_setplay'])
+        params = model_config.get('algorithm_params', {})
+        
+        # Check which features are available
+        available_features = [f for f in features if f in df_shots.columns]
+        if not available_features:
+            return jsonify({'error': 'No valid features found in shot data'}), 400
+        
+        X_predict = df_shots[available_features].fillna(0)
+        
+        # If we have a training dataset, train the model fresh
+        # Otherwise, use a simpler approach based on the algorithm
+        if training_dataset:
+            try:
+                df_train, _ = load_dataset(uid, training_dataset)
+                
+                y_train = df_train['is_goal'] if target_field == 'xG' else df_train['scored']
+                X_train = df_train[available_features].fillna(0)
+                
+                # Scale features
+                scaler = StandardScaler()
+                X_train_scaled = scaler.fit_transform(X_train)
+                X_predict_scaled = scaler.transform(X_predict)
+                
+                # Train model
+                model = create_model(algorithm, params)
+                model.fit(X_train_scaled, y_train)
+                
+                # Get predictions
+                predictions = model.predict_proba(X_predict_scaled)[:, 1].tolist()
+                
+                execution_time = round(time.time() - start_time, 2)
+                
+                return jsonify({
+                    'success': True,
+                    'predictions': predictions,
+                    'model_info': {
+                        'algorithm': algorithm,
+                        'features_used': available_features,
+                        'training_samples': len(df_train),
+                        'prediction_samples': len(df_shots),
+                        'execution_time': execution_time
+                    }
+                })
+                
+            except Exception as train_err:
+                logging.warning(f"Could not train from dataset, using fallback: {train_err}")
+                # Fall through to distance-based prediction
+        
+        # Fallback: Use distance-based heuristic predictions
+        # This is similar to the default calculateXP/calculateXG functions
+        predictions = []
+        
+        for _, shot in df_shots.iterrows():
+            dist = shot.get('dist', 30)
+            is_setplay = shot.get('is_setplay', 0)
+            
+            if target_field == 'xG':
+                # Goal probability based on distance
+                if dist <= 6:
+                    prob = 0.45
+                elif dist <= 10:
+                    prob = 0.32
+                elif dist <= 14:
+                    prob = 0.22
+                elif dist <= 20:
+                    prob = 0.12
+                else:
+                    prob = 0.05
+            else:
+                # Point probability based on distance and set play
+                if is_setplay:
+                    if dist <= 20:
+                        prob = 0.82
+                    elif dist <= 30:
+                        prob = 0.68
+                    elif dist <= 40:
+                        prob = 0.52
+                    elif dist <= 45:
+                        prob = 0.42
+                    else:
+                        prob = 0.30
+                else:
+                    if dist <= 15:
+                        prob = 0.58
+                    elif dist <= 20:
+                        prob = 0.48
+                    elif dist <= 25:
+                        prob = 0.40
+                    elif dist <= 30:
+                        prob = 0.32
+                    elif dist <= 35:
+                        prob = 0.25
+                    elif dist <= 40:
+                        prob = 0.18
+                    else:
+                        prob = 0.12
+            
+            predictions.append(round(prob, 4))
+        
+        execution_time = round(time.time() - start_time, 2)
+        
+        return jsonify({
+            'success': True,
+            'predictions': predictions,
+            'model_info': {
+                'algorithm': 'distance_heuristic',
+                'features_used': ['dist', 'is_setplay'],
+                'prediction_samples': len(df_shots),
+                'execution_time': execution_time,
+                'note': 'Using fallback distance-based model'
+            }
+        })
+        
+    except Exception as e:
+        logging.error(f"Error in api_predict: {e}")
+        return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500

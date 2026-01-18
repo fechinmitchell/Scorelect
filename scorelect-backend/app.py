@@ -4846,6 +4846,7 @@ def get_model_history():
         logging.error(f"Error getting model history: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/get-user-datasets', methods=['POST'])
 def get_user_datasets():
     """Get list of datasets for a user - OPTIMIZED to only fetch dataset names"""

@@ -54,7 +54,35 @@ CORS(app, resources={r"/*": {"origins": [
     "https://scorelect.vercel.app",  # Production site for Scorelect
     "https://scorelect.com",  # Custom domain for Scorelect
     "https://www.scorelect.com"  # Another variant of the custom domain
-]}})
+]}}, supports_credentials=True)
+
+# Handle CORS preflight requests explicitly
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", request.headers.get("Origin", "*"))
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        response.headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        response.headers.add("Access-Control-Allow-Credentials", "true")
+        return response
+
+@app.after_request
+def after_request(response):
+    origin = request.headers.get("Origin")
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://localhost:3001", 
+        "https://scorelect.vercel.app",
+        "https://scorelect.com",
+        "https://www.scorelect.com"
+    ]
+    if origin in allowed_origins:
+        response.headers.add("Access-Control-Allow-Origin", origin)
+        response.headers.add("Access-Control-Allow-Credentials", "true")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        response.headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+    return response
 
 # Initialize Talisman for security, specifically setting up a Content Security Policy (CSP)
 csp = {

@@ -73,7 +73,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import (
     accuracy_score, f1_score, precision_score, recall_score, 
-    roc_auc_score, confusion_matrix, log_loss, brier_score_loss
+    roc_auc_score, confusion_matrix, log_loss, brier_score_loss,
+    mean_squared_error
 )
 import logging
 
@@ -624,13 +625,66 @@ class BaseCustomModel:
         y_pred = self.model.predict(X_test_scaled)
         y_proba = self.model.predict_proba(X_test_scaled)[:, 1]
         
-        # Calculate default metrics
+        # =================================================================
+        # PRIMARY METRICS: Brier Score & Calibration
+        # =================================================================
+        # For probability models like xP/xG, we use BRIER SCORE as the 
+        # primary metric. Unlike accuracy (which treats 0.51 vs 0.49 as
+        # completely different), Brier Score measures how close your
+        # predicted probabilities are to actual outcomes.
+        #
+        # Brier Score = mean((predicted_prob - actual_outcome)^2)
+        #   - Range: 0 to 1
+        #   - Lower is better (0 = perfect predictions)
+        #   - A model predicting 0.5 for everything scores ~0.25
+        #
+        # We also calculate calibration metrics to check if predictions
+        # match reality (e.g., do 70% predictions actually score 70%?)
+        # =================================================================
+        
+        # Primary metric: Brier Score (lower is better)
+        brier = float(brier_score_loss(y_test, y_proba))
+        
+        # Calibration metrics
+        avg_predicted = float(np.mean(y_proba))
+        avg_actual = float(np.mean(y_test))
+        calibration_error = abs(avg_predicted - avg_actual)
+        
+        # Expected vs Actual totals (useful for xP analysis)
+        expected_total = float(np.sum(y_proba))
+        actual_total = float(np.sum(y_test))
+        expected_vs_actual_ratio = expected_total / actual_total if actual_total > 0 else 1.0
+        
+        # Log loss (another probability metric - penalises confident wrong predictions)
+        try:
+            logloss = float(log_loss(y_test, y_proba))
+        except:
+            logloss = None
+        
         self.metrics = {
-            'accuracy': float(accuracy_score(y_test, y_pred)),
+            # PRIMARY METRICS (for ranking/comparison)
+            'brier_score': brier,
+            'calibration_error': calibration_error,
+            'log_loss': logloss,
+            
+            # Calibration details
+            'avg_predicted_prob': avg_predicted,
+            'avg_actual_outcome': avg_actual,
+            'expected_total': expected_total,
+            'actual_total': actual_total,
+            'expected_vs_actual_ratio': expected_vs_actual_ratio,
+            
+            # Secondary metrics (still useful but not for ranking probability models)
+            'auc_roc': float(roc_auc_score(y_test, y_proba)) if len(set(y_test)) > 1 else 0.5,
             'f1_score': float(f1_score(y_test, y_pred, zero_division=0)),
             'precision': float(precision_score(y_test, y_pred, zero_division=0)),
             'recall': float(recall_score(y_test, y_pred, zero_division=0)),
-            'auc_roc': float(roc_auc_score(y_test, y_proba)) if len(set(y_test)) > 1 else 0.5,
+            
+            # Legacy accuracy (kept for reference but NOT for ranking)
+            'accuracy': float(accuracy_score(y_test, y_pred)),
+            'accuracy_note': 'Not recommended for probability models - use Brier Score instead',
+            
+            # Dataset info
             'train_samples': len(X_train),
             'test_samples': len(X_test),
             'features_used': self.feature_names,
@@ -648,12 +702,6 @@ class BaseCustomModel:
             self.metrics['true_positives'] = int(tp)
         except:
             pass
-        
-        # Add calibration metrics
-        self.metrics['brier_score'] = float(brier_score_loss(y_test, y_proba))
-        self.metrics['avg_predicted_prob'] = float(np.mean(y_proba))
-        self.metrics['avg_actual_outcome'] = float(np.mean(y_test))
-        self.metrics['calibration_error'] = abs(self.metrics['avg_predicted_prob'] - self.metrics['avg_actual_outcome'])
         
         # Add custom metrics if defined
         custom_metrics = self.custom_evaluation(y_test, y_pred, y_proba)

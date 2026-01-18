@@ -237,13 +237,54 @@ def create_model(algorithm, params=None):
 
 
 def calculate_metrics(y_true, y_pred, y_proba):
-    """Calculate model evaluation metrics."""
+    """
+    Calculate model evaluation metrics.
+    
+    PRIMARY METRIC: Brier Score (lower is better)
+    For probability models like xP/xG, Brier Score is more appropriate than
+    accuracy because it measures how close predicted probabilities are to
+    actual outcomes, rather than treating 0.51 and 0.49 as completely different.
+    """
+    from sklearn.metrics import brier_score_loss, log_loss
+    
+    # Primary metrics for probability models
+    brier = float(brier_score_loss(y_true, y_proba))
+    avg_predicted = float(np.mean(y_proba))
+    avg_actual = float(np.mean(y_true))
+    calibration_error = abs(avg_predicted - avg_actual)
+    
+    # Expected vs Actual
+    expected_total = float(np.sum(y_proba))
+    actual_total = float(np.sum(y_true))
+    expected_vs_actual_ratio = expected_total / actual_total if actual_total > 0 else 1.0
+    
+    # Log loss (penalises confident wrong predictions)
+    try:
+        logloss = float(log_loss(y_true, y_proba))
+    except:
+        logloss = None
+    
     return {
-        'accuracy': float(accuracy_score(y_true, y_pred)),
+        # PRIMARY METRICS (for ranking)
+        'brier_score': brier,
+        'calibration_error': calibration_error,
+        'log_loss': logloss,
+        
+        # Calibration details
+        'avg_predicted_prob': avg_predicted,
+        'avg_actual_outcome': avg_actual,
+        'expected_total': expected_total,
+        'actual_total': actual_total,
+        'expected_vs_actual_ratio': expected_vs_actual_ratio,
+        
+        # Secondary metrics
+        'auc_roc': float(roc_auc_score(y_true, y_proba)) if len(set(y_true)) > 1 else 0.5,
         'f1_score': float(f1_score(y_true, y_pred, zero_division=0)),
         'precision': float(precision_score(y_true, y_pred, zero_division=0)),
         'recall': float(recall_score(y_true, y_pred, zero_division=0)),
-        'auc_roc': float(roc_auc_score(y_true, y_proba)) if len(set(y_true)) > 1 else 0.5,
+        
+        # Legacy accuracy (kept for reference, not for ranking)
+        'accuracy': float(accuracy_score(y_true, y_pred)),
     }
 
 

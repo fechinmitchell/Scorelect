@@ -87,16 +87,18 @@ const FEATURE_GROUPS = {
     { id: 'existing_xP', name: 'Existing xP' }, { id: 'existing_xG', name: 'Existing xG' }] },
 };
 
-const MetricCard = ({ label, value, icon, color, mode }) => (
+const MetricCard = ({ label, value, icon, color, mode, isLowerBetter = false, isRawNumber = false }) => (
   <Box sx={statCard(mode, color)}>
     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-      <Typography variant="caption" sx={{ color: mode === 'dark' ? '#888' : '#666', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</Typography>
+      <Typography variant="caption" sx={{ color: mode === 'dark' ? '#888' : '#666', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        {label} {isLowerBetter && <span style={{ fontSize: '0.7em', opacity: 0.7 }}>(lower=better)</span>}
+      </Typography>
       {icon}
     </Box>
     <Typography variant="h4" sx={{ fontWeight: 700, color: color, fontFamily: 'monospace' }}>
-      {typeof value === 'number' ? `${(value * 100).toFixed(1)}%` : value}
+      {typeof value === 'number' ? (isRawNumber ? value.toFixed(4) : `${(value * 100).toFixed(1)}%`) : value}
     </Typography>
-    <LinearProgress variant="determinate" value={typeof value === 'number' ? value * 100 : 0}
+    <LinearProgress variant="determinate" value={typeof value === 'number' ? (isLowerBetter ? (1 - value) * 100 : value * 100) : 0}
       sx={{ mt: 1.5, height: 6, borderRadius: 3, backgroundColor: `${color}20`, '& .MuiLinearProgress-bar': { borderRadius: 3, background: `linear-gradient(90deg, ${color}, ${color}cc)` } }} />
   </Box>
 );
@@ -240,7 +242,7 @@ const ModelLab = ({ mode = 'dark' }) => {
   const [runName, setRunName] = useState('');
 
   // Leaderboard sorting and filtering states
-  const [sortField, setSortField] = useState('accuracy');
+  const [sortField, setSortField] = useState('brier_score');
   const [sortDirection, setSortDirection] = useState('desc');
   const [filterType, setFilterType] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -1482,35 +1484,38 @@ df = custom_scoring(df)
                   <Grid container spacing={2}>
                     <Grid item xs={6}>
                       <MetricCard 
-                        label="F1 Score" 
-                        value={trainingResult.metrics?.f1_score} 
-                        icon={<TrendingUpIcon sx={{ color: '#7c3aed', fontSize: 20 }} />} 
-                        color="#7c3aed" 
-                        mode={mode} 
+                        label="Brier Score ⭐" 
+                        value={trainingResult.metrics?.brier_score} 
+                        icon={<TrendingUpIcon sx={{ color: '#22c55e', fontSize: 20 }} />} 
+                        color="#22c55e" 
+                        mode={mode}
+                        isLowerBetter={true}
+                        isRawNumber={true}
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <MetricCard 
+                        label="Calibration Error" 
+                        value={trainingResult.metrics?.calibration_error} 
+                        icon={<AnalyticsIcon sx={{ color: '#f59e0b', fontSize: 20 }} />} 
+                        color="#f59e0b" 
+                        mode={mode}
+                        isLowerBetter={true}
                       />
                     </Grid>
                     <Grid item xs={6}>
                       <MetricCard 
                         label="AUC-ROC" 
                         value={trainingResult.metrics?.auc_roc} 
-                        icon={<AnalyticsIcon sx={{ color: '#f59e0b', fontSize: 20 }} />} 
-                        color="#f59e0b" 
+                        icon={<CheckIcon sx={{ color: '#7c3aed', fontSize: 20 }} />} 
+                        color="#7c3aed" 
                         mode={mode} 
                       />
                     </Grid>
                     <Grid item xs={6}>
                       <MetricCard 
-                        label="Accuracy" 
-                        value={trainingResult.metrics?.accuracy} 
-                        icon={<CheckIcon sx={{ color: '#22c55e', fontSize: 20 }} />} 
-                        color="#22c55e" 
-                        mode={mode} 
-                      />
-                    </Grid>
-                    <Grid item xs={6}>
-                      <MetricCard 
-                        label="Precision" 
-                        value={trainingResult.metrics?.precision} 
+                        label="F1 Score" 
+                        value={trainingResult.metrics?.f1_score} 
                         icon={<SpeedIcon sx={{ color: '#06b6d4', fontSize: 20 }} />} 
                         color="#06b6d4" 
                         mode={mode} 
@@ -1827,9 +1832,11 @@ df = custom_scoring(df)
                 onChange={(e) => setSortField(e.target.value)}
                 sx={{ borderRadius: '10px' }}
               >
-                <MenuItem value="accuracy">Accuracy</MenuItem>
-                <MenuItem value="f1_score">F1 Score</MenuItem>
+                <MenuItem value="brier_score">Brier Score ⭐</MenuItem>
+                <MenuItem value="calibration_error">Calibration Error</MenuItem>
                 <MenuItem value="auc_roc">AUC-ROC</MenuItem>
+                <MenuItem value="f1_score">F1 Score</MenuItem>
+                <MenuItem value="accuracy">Accuracy (legacy)</MenuItem>
                 <MenuItem value="timestamp">Date/Time</MenuItem>
                 <MenuItem value="run_name">Name</MenuItem>
                 <MenuItem value="dataset_name">Dataset</MenuItem>
@@ -1957,11 +1964,13 @@ df = custom_scoring(df)
                       '&:hover': { backgroundColor: mode === 'dark' ? '#353545' : '#e8e8e8' },
                     }}
                     onClick={() => {
-                      if (sortField === 'accuracy') setSortDirection(prev => prev === 'desc' ? 'asc' : 'desc');
-                      else { setSortField('accuracy'); setSortDirection('desc'); }
+                      if (sortField === 'brier_score') setSortDirection(prev => prev === 'desc' ? 'asc' : 'desc');
+                      else { setSortField('brier_score'); setSortDirection('desc'); }
                     }}
                   >
-                    Accuracy {sortField === 'accuracy' && (sortDirection === 'desc' ? '↓' : '↑')}
+                    <Tooltip title="Brier Score measures probability accuracy (lower is better). A perfect model scores 0, random guessing scores ~0.25.">
+                      <span>Brier ⭐ {sortField === 'brier_score' && (sortDirection === 'desc' ? '↓' : '↑')}</span>
+                    </Tooltip>
                   </TableCell>
                   <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }} align="center">View</TableCell>
                 </TableRow>
@@ -1981,22 +1990,35 @@ df = custom_scoring(df)
                   })
                   .sort((a, b) => {
                     let aVal, bVal;
+                    // For Brier Score and Calibration Error, lower is better
+                    const lowerIsBetter = ['brier_score', 'calibration_error'].includes(sortField);
+                    
                     switch (sortField) {
+                      case 'brier_score': aVal = a.metrics?.brier_score ?? 1; bVal = b.metrics?.brier_score ?? 1; break;
+                      case 'calibration_error': aVal = a.metrics?.calibration_error ?? 1; bVal = b.metrics?.calibration_error ?? 1; break;
                       case 'accuracy': aVal = a.metrics?.accuracy || 0; bVal = b.metrics?.accuracy || 0; break;
                       case 'f1_score': aVal = a.metrics?.f1_score || 0; bVal = b.metrics?.f1_score || 0; break;
                       case 'auc_roc': aVal = a.metrics?.auc_roc || 0; bVal = b.metrics?.auc_roc || 0; break;
                       case 'timestamp': aVal = a.timestamp || ''; bVal = b.timestamp || ''; break;
                       case 'run_name': aVal = (a.run_name || a.model_type || '').toLowerCase(); bVal = (b.run_name || b.model_type || '').toLowerCase(); break;
                       case 'dataset_name': aVal = (a.target_dataset || a.dataset_name || '').toLowerCase(); bVal = (b.target_dataset || b.dataset_name || '').toLowerCase(); break;
-                      default: aVal = a.metrics?.accuracy || 0; bVal = b.metrics?.accuracy || 0;
+                      default: aVal = a.metrics?.brier_score ?? 1; bVal = b.metrics?.brier_score ?? 1;
                     }
+                    
+                    // For "lower is better" metrics, flip the sort direction logic
+                    if (lowerIsBetter) {
+                      if (sortDirection === 'desc') return aVal < bVal ? -1 : aVal > bVal ? 1 : 0; // Best (lowest) first
+                      return aVal > bVal ? -1 : aVal < bVal ? 1 : 0; // Worst (highest) first
+                    }
+                    
                     if (sortDirection === 'desc') return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
                     return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
                   })
                   .slice(0, 50)
                   .map((run, index) => {
-                    const sortedByAccuracy = [...modelHistory].sort((a, b) => (b.metrics?.accuracy || 0) - (a.metrics?.accuracy || 0));
-                    const accuracyRank = sortedByAccuracy.findIndex(r => r.id === run.id);
+                    // Rank by Brier Score (lower is better)
+                    const sortedByBrier = [...modelHistory].sort((a, b) => (a.metrics?.brier_score ?? 1) - (b.metrics?.brier_score ?? 1));
+                    const brierRank = sortedByBrier.findIndex(r => r.id === run.id);
                     return (
                       <TableRow 
                         key={run.id} 
@@ -2004,12 +2026,12 @@ df = custom_scoring(df)
                         sx={{ 
                           cursor: 'pointer', 
                           '&:hover': { backgroundColor: mode === 'dark' ? 'rgba(124, 58, 237, 0.1)' : 'rgba(124, 58, 237, 0.05)' },
-                          ...(accuracyRank < 3 && { backgroundColor: mode === 'dark' ? 'rgba(245, 158, 11, 0.05)' : 'rgba(245, 158, 11, 0.03)' })
+                          ...(brierRank < 3 && { backgroundColor: mode === 'dark' ? 'rgba(245, 158, 11, 0.05)' : 'rgba(245, 158, 11, 0.03)' })
                         }}
                         onClick={() => handleViewRunConfig(run)}
                       >
                         <TableCell>
-                          {accuracyRank === 0 ? '🥇' : accuracyRank === 1 ? '🥈' : accuracyRank === 2 ? '🥉' : index + 1}
+                          {brierRank === 0 ? '🥇' : brierRank === 1 ? '🥈' : brierRank === 2 ? '🥉' : index + 1}
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2" sx={{ fontWeight: 500, color: mode === 'dark' ? '#fff' : '#333', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -2047,7 +2069,9 @@ df = custom_scoring(df)
                           {((run.metrics?.auc_roc || 0) * 100).toFixed(1)}%
                         </TableCell>
                         <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 600, color: '#22c55e' }}>
-                          {((run.metrics?.accuracy || 0) * 100).toFixed(1)}%
+                          <Tooltip title={`Lower is better. Calibration error: ${((run.metrics?.calibration_error || 0) * 100).toFixed(2)}%`}>
+                            <span>{(run.metrics?.brier_score ?? 'N/A') !== 'N/A' ? (run.metrics.brier_score).toFixed(4) : 'N/A'}</span>
+                          </Tooltip>
                         </TableCell>
                         <TableCell align="center">
                           <Tooltip title="View Config/Code">
@@ -2394,10 +2418,31 @@ df = custom_scoring(df)
                   <Grid container spacing={2}>
                     <Grid item xs={6}>
                       <MetricCard
-                        label="Accuracy"
-                        value={customModelResult.metrics?.accuracy}
+                        label="Brier Score ⭐"
+                        value={customModelResult.metrics?.brier_score}
                         icon={<CheckIcon sx={{ color: '#22c55e', fontSize: 20 }} />}
                         color="#22c55e"
+                        mode={mode}
+                        isLowerBetter={true}
+                        isRawNumber={true}
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <MetricCard
+                        label="Calibration Error"
+                        value={customModelResult.metrics?.calibration_error}
+                        icon={<TrendingUpIcon sx={{ color: '#f59e0b', fontSize: 20 }} />}
+                        color="#f59e0b"
+                        mode={mode}
+                        isLowerBetter={true}
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <MetricCard
+                        label="AUC-ROC"
+                        value={customModelResult.metrics?.auc_roc}
+                        icon={<AnalyticsIcon sx={{ color: '#7c3aed', fontSize: 20 }} />}
+                        color="#7c3aed"
                         mode={mode}
                       />
                     </Grid>
@@ -2405,24 +2450,6 @@ df = custom_scoring(df)
                       <MetricCard
                         label="F1 Score"
                         value={customModelResult.metrics?.f1_score}
-                        icon={<TrendingUpIcon sx={{ color: '#7c3aed', fontSize: 20 }} />}
-                        color="#7c3aed"
-                        mode={mode}
-                      />
-                    </Grid>
-                    <Grid item xs={6}>
-                      <MetricCard
-                        label="AUC-ROC"
-                        value={customModelResult.metrics?.auc_roc}
-                        icon={<AnalyticsIcon sx={{ color: '#f59e0b', fontSize: 20 }} />}
-                        color="#f59e0b"
-                        mode={mode}
-                      />
-                    </Grid>
-                    <Grid item xs={6}>
-                      <MetricCard
-                        label="Precision"
-                        value={customModelResult.metrics?.precision}
                         icon={<SpeedIcon sx={{ color: '#06b6d4', fontSize: 20 }} />}
                         color="#06b6d4"
                         mode={mode}
@@ -3014,22 +3041,36 @@ df.loc[~action_lower.str.contains('free|45|penalty', regex=True, na=False), 'sco
               <Box sx={{ mb: 3, p: 2, backgroundColor: mode === 'dark' ? 'rgba(124, 58, 237, 0.1)' : 'rgba(124, 58, 237, 0.05)', borderRadius: '12px' }}>
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>📊 Performance Metrics</Typography>
                 <Grid container spacing={2}>
-                  <Grid item xs={4}>
-                    <Typography variant="caption" color="textSecondary">F1 Score</Typography>
-                    <Typography variant="h6" sx={{ fontFamily: 'monospace', color: '#22c55e' }}>
-                      {((selectedRunConfig.metrics?.f1_score || 0) * 100).toFixed(1)}%
-                    </Typography>
+                  <Grid item xs={3}>
+                    <Tooltip title="Primary metric for probability models (lower is better)">
+                      <Box>
+                        <Typography variant="caption" color="textSecondary">Brier Score ⭐</Typography>
+                        <Typography variant="h6" sx={{ fontFamily: 'monospace', color: '#22c55e' }}>
+                          {(selectedRunConfig.metrics?.brier_score ?? 'N/A') !== 'N/A' ? selectedRunConfig.metrics.brier_score.toFixed(4) : 'N/A'}
+                        </Typography>
+                      </Box>
+                    </Tooltip>
                   </Grid>
-                  <Grid item xs={4}>
+                  <Grid item xs={3}>
+                    <Tooltip title="Difference between predicted and actual scoring rates (lower is better)">
+                      <Box>
+                        <Typography variant="caption" color="textSecondary">Calibration</Typography>
+                        <Typography variant="h6" sx={{ fontFamily: 'monospace', color: '#f59e0b' }}>
+                          {((selectedRunConfig.metrics?.calibration_error || 0) * 100).toFixed(2)}%
+                        </Typography>
+                      </Box>
+                    </Tooltip>
+                  </Grid>
+                  <Grid item xs={3}>
                     <Typography variant="caption" color="textSecondary">AUC-ROC</Typography>
                     <Typography variant="h6" sx={{ fontFamily: 'monospace', color: '#3b82f6' }}>
                       {((selectedRunConfig.metrics?.auc_roc || 0) * 100).toFixed(1)}%
                     </Typography>
                   </Grid>
-                  <Grid item xs={4}>
-                    <Typography variant="caption" color="textSecondary">Accuracy</Typography>
-                    <Typography variant="h6" sx={{ fontFamily: 'monospace', color: '#f59e0b' }}>
-                      {((selectedRunConfig.metrics?.accuracy || 0) * 100).toFixed(1)}%
+                  <Grid item xs={3}>
+                    <Typography variant="caption" color="textSecondary">F1 Score</Typography>
+                    <Typography variant="h6" sx={{ fontFamily: 'monospace', color: '#7c3aed' }}>
+                      {((selectedRunConfig.metrics?.f1_score || 0) * 100).toFixed(1)}%
                     </Typography>
                   </Grid>
                 </Grid>

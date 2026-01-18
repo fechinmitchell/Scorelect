@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Card, Typography, Slider, Button, IconButton, CssBaseline, Tabs, Tab, CircularProgress, Grid, FormControl, InputLabel, Select, MenuItem, Radio, RadioGroup, FormControlLabel, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip, Switch, Accordion, AccordionSummary, AccordionDetails, Alert } from '@mui/material';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
@@ -70,7 +70,7 @@ const AdminSettings = () => {
 
   useEffect(() => { document.body.style.backgroundColor = mode === 'dark' ? '#0f0f14' : '#f8f9fc'; }, [mode]);
 
-  const checkAdminStatus = async () => {
+  const checkAdminStatus = useCallback(async () => {
     const user = auth.currentUser;
     if (!user) { Swal.fire({ title: 'Authentication Required', text: 'Please sign in.', icon: 'warning', confirmButtonColor: '#7c3aed' }).then(() => navigate('/signin')); return false; }
     setCurrentUserEmail(user.email);
@@ -84,9 +84,9 @@ const AdminSettings = () => {
       if (!isUserAdmin) { Swal.fire({ title: 'Access Denied', text: 'No admin privileges.', icon: 'error', confirmButtonColor: '#7c3aed' }).then(() => navigate('/')); return false; }
     } else { setIsAdmin(true); setAdminUsers([user.email]); }
     return true;
-  };
+  }, [auth, navigate]);
 
-  const fetchUserDatasets = async () => {
+  const fetchUserDatasets = useCallback(async () => {
     try {
       const user = auth.currentUser; if (!user) return;
       const token = await user.getIdToken();
@@ -95,16 +95,16 @@ const AdminSettings = () => {
       setUserDatasets(datasets);
       if (datasets.length > 0) { setSourceDataset(datasets[0]); setTargetDataset(datasets[0]); }
     } catch (error) { console.error('Error fetching datasets:', error); }
-  };
+  }, [auth]);
 
-  const fetchModelHistory = async () => {
+  const fetchModelHistory = useCallback(async () => {
     try {
       const user = auth.currentUser; if (!user) return;
       const token = await user.getIdToken();
       const response = await axios.post(`${BASE_API_URL}/get-model-history`, { uid: user.uid }, { headers: { Authorization: `Bearer ${token}` } });
       setModelHistory(response.data.history || []);
     } catch (error) { console.error('Error fetching model history:', error); }
-  };
+  }, [auth]);
 
   useEffect(() => {
     const initializeAdmin = async () => {
@@ -120,7 +120,7 @@ const AdminSettings = () => {
       fetchUserDatasets(); fetchModelHistory();
     };
     initializeAdmin();
-  }, []);
+  }, [auth, checkAdminStatus, fetchUserDatasets, fetchModelHistory]);
 
   const handleSaveSettings = async () => {
     try {

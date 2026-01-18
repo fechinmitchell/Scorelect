@@ -89,7 +89,7 @@ const AdminLogin = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [isFirstLogin, setIsFirstLogin] = useState(false);
+  const [isFirstLogin] = useState(false); // Removed unused setIsFirstLogin
   const [mode, setMode] = useState(() => localStorage.getItem('theme') || 'dark'); // Default to dark
   const navigate = useNavigate();
   const auth = getAuth();
@@ -114,7 +114,7 @@ const AdminLogin = () => {
       return;
     }
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, email, password); // Removed unused userCredential
       navigate('/admin-settings');
     } catch (error) {
       Swal.fire('Login Failed', error.message, 'error');

@@ -3,7 +3,7 @@ import {
   Box, Card, Typography, Button, IconButton, Grid, FormControl, InputLabel, Select, MenuItem,
   FormControlLabel, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Chip, Switch, Alert, Tooltip, CircularProgress, LinearProgress, Slider, ToggleButton, ToggleButtonGroup, 
-  Grow, Tabs, Tab, Skeleton, TextField, Accordion, AccordionSummary, AccordionDetails, Dialog,
+  Grow, Tabs, Tab, Skeleton, TextField, Dialog,
   DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemIcon, ListItemText, Divider,
 } from '@mui/material';
 import {
@@ -11,9 +11,9 @@ import {
   EmojiEvents as TrophyIcon, CloudUpload as ApplyIcon, RestartAlt as ResetIcon,
   Speed as SpeedIcon, Analytics as AnalyticsIcon, Memory as MemoryIcon, AutoGraph as AutoGraphIcon,
   CheckCircle as CheckIcon, TrendingUp as TrendingUpIcon, DataObject as DataIcon, Hub as HubIcon,
-  Code as CodeIcon, Terminal as TerminalIcon, ExpandMore as ExpandMoreIcon, Functions as FunctionsIcon,
+  Code as CodeIcon, Terminal as TerminalIcon, Functions as FunctionsIcon,
   Storage as StorageIcon, ModelTraining as TrainIcon, DoubleArrow as TransferIcon,
-  Visibility as ViewIcon, ContentCopy as CopyIcon, Info as InfoIcon,
+  ContentCopy as CopyIcon, Info as InfoIcon,
 } from '@mui/icons-material';
 import { getAuth } from 'firebase/auth';
 import Swal from 'sweetalert2';
@@ -59,25 +59,6 @@ const gradientButton = {
   '&:disabled': { background: 'linear-gradient(135deg, #555 0%, #444 100%)', boxShadow: 'none' },
 };
 
-const codeEditorStyle = (mode) => ({
-  fontFamily: '"Fira Code", "Monaco", "Consolas", monospace',
-  fontSize: '13px',
-  lineHeight: 1.6,
-  padding: '16px',
-  borderRadius: '12px',
-  border: `1px solid ${mode === 'dark' ? '#333' : '#ddd'}`,
-  backgroundColor: mode === 'dark' ? '#1a1a24' : '#f8f9fc',
-  color: mode === 'dark' ? '#e0e0e0' : '#333',
-  resize: 'vertical',
-  minHeight: '300px',
-  width: '100%',
-  outline: 'none',
-  '&:focus': {
-    borderColor: '#7c3aed',
-    boxShadow: '0 0 0 3px rgba(124, 58, 237, 0.2)',
-  },
-});
-
 const ALGORITHMS = [
   { id: 'random_forest', name: 'Random Forest', icon: '🌲', description: 'Ensemble of decision trees. Great balance.', color: '#22c55e',
     params: [{ id: 'n_estimators', name: 'Trees', type: 'int', default: 100, min: 10, max: 500, step: 10 }, { id: 'max_depth', name: 'Max Depth', type: 'int', default: 10, min: 2, max: 50, step: 1 }] },
@@ -121,6 +102,12 @@ const MetricCard = ({ label, value, icon, color, mode }) => (
 // Loading skeleton for datasets
 const DatasetSkeleton = ({ mode }) => (
   <Box sx={{ p: 2 }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+      <CircularProgress size={20} sx={{ color: '#7c3aed' }} />
+      <Typography variant="body2" sx={{ color: mode === 'dark' ? '#888' : '#666' }}>
+        Loading datasets... This may take a moment for large collections.
+      </Typography>
+    </Box>
     <Skeleton variant="text" width="60%" height={30} sx={{ bgcolor: mode === 'dark' ? '#333' : '#e0e0e0' }} />
     <Skeleton variant="rectangular" height={56} sx={{ mt: 2, borderRadius: '12px', bgcolor: mode === 'dark' ? '#333' : '#e0e0e0' }} />
     <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
@@ -207,7 +194,6 @@ const ModelLab = ({ mode = 'dark' }) => {
   const [targetDataset, setTargetDataset] = useState('');
   const [datasetInfo, setDatasetInfo] = useState({});
   const [loadingDatasets, setLoadingDatasets] = useState(true);
-  const [loadingDatasetInfo, setLoadingDatasetInfo] = useState(false);
   const [useSameDataset, setUseSameDataset] = useState(true);
   
   // Algorithm states
@@ -236,58 +222,110 @@ const ModelLab = ({ mode = 'dark' }) => {
   const [loadingFunctions, setLoadingFunctions] = useState(false);
   const [functionDialogOpen, setFunctionDialogOpen] = useState(false);
 
-  // Fetch datasets with detailed info
-  const fetchDatasets = useCallback(async () => {
+  // Fetch datasets - uses quick endpoint first, then falls back to main endpoint
+  const fetchDatasets = useCallback(async (showErrorOnFail = false) => {
     try {
       setLoadingDatasets(true);
       const user = auth.currentUser;
-      if (!user) return;
+      if (!user) {
+        setLoadingDatasets(false);
+        return;
+      }
       const token = await user.getIdToken();
       
-      // Fetch dataset list
-      const response = await axios.post(
-        `${BASE_API_URL}/get-user-datasets`, 
-        { uid: user.uid }, 
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const datasetList = response.data.datasets || [];
-      setDatasets(datasetList);
-      
-      if (datasetList.length > 0) {
-        if (!trainingDataset) setTrainingDataset(datasetList[0]);
-        if (!targetDataset) setTargetDataset(datasetList[0]);
+      // First, try the quick endpoint (just names, much faster)
+      try {
+        const quickResponse = await axios.get(
+          `${BASE_API_URL}/api/model-lab/datasets-quick`, 
+          { 
+            params: { uid: user.uid },
+            timeout: 10000
+          }
+        );
+        const datasetNames = quickResponse.data.datasets || [];
+        setDatasets(datasetNames);
+        
+        if (datasetNames.length > 0) {
+          if (!trainingDataset) setTrainingDataset(datasetNames[0]);
+          if (!targetDataset) setTargetDataset(datasetNames[0]);
+        }
+        setLoadingDatasets(false);
+        
+        // Fetch detailed info in background
+        fetchDatasetDetails(user.uid);
+        return;
+      } catch (quickError) {
+        // Quick endpoint not available - this is expected if backend isn't updated
+        console.log('Quick endpoint not available, using fallback');
       }
+      
+      // Fallback to the original endpoint with retry
+      let lastError = null;
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const response = await axios.post(
+            `${BASE_API_URL}/get-user-datasets`, 
+            { uid: user.uid }, 
+            { 
+              headers: { Authorization: `Bearer ${token}` },
+              timeout: attempt === 1 ? 15000 : 45000 // Longer timeout on retry
+            }
+          );
+          const datasetList = response.data.datasets || [];
+          setDatasets(datasetList);
+          
+          if (datasetList.length > 0) {
+            if (!trainingDataset) setTrainingDataset(datasetList[0]);
+            if (!targetDataset) setTargetDataset(datasetList[0]);
+          }
+          return; // Success - exit the function
+        } catch (err) {
+          lastError = err;
+          if (attempt === 1) {
+            console.log('First attempt failed, retrying...');
+            await new Promise(r => setTimeout(r, 2000)); // Wait 2 seconds before retry
+          }
+        }
+      }
+      
+      // Both attempts failed
+      throw lastError;
+      
     } catch (error) { 
       console.error('Error fetching datasets:', error);
-      Swal.fire('Error', 'Failed to load datasets. Please refresh the page.', 'error');
+      // Only show error popup if user explicitly clicked refresh
+      if (showErrorOnFail) {
+        Swal.fire({
+          title: 'Connection Issue',
+          text: 'Failed to load datasets. The server may be starting up (this can take 30+ seconds on free tier). Please wait and try again.',
+          icon: 'warning',
+          confirmButtonColor: '#7c3aed'
+        });
+      }
     } finally { 
       setLoadingDatasets(false); 
     }
   }, [auth, trainingDataset, targetDataset]);
 
-  // Fetch detailed dataset info
-  const fetchDatasetInfo = useCallback(async (datasetName) => {
-    if (!datasetName || datasetInfo[datasetName]) return;
-    
+  // Fetch detailed dataset info (shot counts) in the background
+  const fetchDatasetDetails = useCallback(async (uid) => {
     try {
-      setLoadingDatasetInfo(true);
-      const user = auth.currentUser;
-      if (!user) return;
-      
       const response = await axios.get(`${BASE_API_URL}/api/model-lab/datasets`, { 
-        params: { uid: user.uid } 
+        params: { uid },
+        timeout: 60000 // 60 seconds for detailed fetch
       });
       
-      const info = response.data.datasets?.find(d => d.name === datasetName);
-      if (info) {
-        setDatasetInfo(prev => ({ ...prev, [datasetName]: info }));
-      }
+      const detailedDatasets = response.data.datasets || [];
+      // Update datasetInfo with the detailed data
+      const infoMap = {};
+      detailedDatasets.forEach(ds => {
+        infoMap[ds.name] = ds;
+      });
+      setDatasetInfo(infoMap);
     } catch (error) { 
-      console.error('Error fetching dataset info:', error); 
-    } finally {
-      setLoadingDatasetInfo(false);
+      console.error('Error fetching dataset details:', error); 
     }
-  }, [auth, datasetInfo]);
+  }, []);
 
   // Fetch model history
   const fetchModelHistory = useCallback(async () => {
@@ -335,12 +373,8 @@ const ModelLab = ({ mode = 'dark' }) => {
   useEffect(() => { 
     fetchDatasets(); 
     fetchModelHistory(); 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => { 
-    if (trainingDataset) fetchDatasetInfo(trainingDataset);
-    if (targetDataset && targetDataset !== trainingDataset) fetchDatasetInfo(targetDataset);
-  }, [trainingDataset, targetDataset, fetchDatasetInfo]);
 
   // Simulate training progress
   useEffect(() => {
@@ -614,8 +648,8 @@ const ModelLab = ({ mode = 'dark' }) => {
                 <Typography variant="h6" sx={{ fontWeight: 700, color: mode === 'dark' ? '#fff' : '#333' }}>
                   Dataset Configuration
                 </Typography>
-                <IconButton size="small" onClick={fetchDatasets} sx={{ ml: 'auto' }} disabled={loadingDatasets}>
-                  <RefreshIcon className={loadingDatasets ? 'spin' : ''} />
+                <IconButton size="small" onClick={() => fetchDatasets(true)} sx={{ ml: 'auto' }} disabled={loadingDatasets}>
+                  {loadingDatasets ? <CircularProgress size={20} /> : <RefreshIcon />}
                 </IconButton>
               </Box>
 
@@ -653,9 +687,6 @@ const ModelLab = ({ mode = 'dark' }) => {
                           ))}
                         </Select>
                       </FormControl>
-                      {loadingDatasetInfo && trainingDataset && (
-                        <LinearProgress sx={{ mt: 1, borderRadius: 1 }} />
-                      )}
                       {datasetInfo[trainingDataset] && (
                         <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
                           <Chip 

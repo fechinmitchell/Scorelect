@@ -209,7 +209,11 @@ def calculate_metrics(y_true, y_pred, y_proba):
 
 @model_lab_bp.route('/datasets', methods=['GET'])
 def api_get_datasets():
-    """Get list of datasets with shot counts for a user - OPTIMIZED."""
+    """Get list of datasets with game counts for a user - MEMORY OPTIMIZED.
+    
+    NOTE: This no longer returns shot counts to avoid loading all gameData.
+    Shot counts are calculated on-demand when a dataset is selected.
+    """
     try:
         uid = request.args.get('uid')
         if not uid:
@@ -218,26 +222,59 @@ def api_get_datasets():
         db = get_db()
         datasets = {}
         
-        # OPTIMIZATION: Only fetch the fields we need
+        # OPTIMIZATION: Only fetch datasetName - NOT gameData
+        # This reduces memory from potentially MBs to just a few KB
         docs = db.collection('savedGames').document(uid).collection('games')\
-            .select(['datasetName', 'gameData']).stream()
+            .select(['datasetName']).stream()
         
         for doc in docs:
             game_data = doc.to_dict()
-            ds_name = game_data.get('datasetName', 'Uncategorized')
-            
-            # Count shots - gameData might be a list
-            game_data_field = game_data.get('gameData', [])
-            shots = len(game_data_field) if isinstance(game_data_field, list) else 0
+            ds_name = game_data.get('datasetName', 'Uncategorized') if game_data else 'Uncategorized'
             
             if ds_name not in datasets:
-                datasets[ds_name] = {'name': ds_name, 'games': 0, 'shots': 0}
+                datasets[ds_name] = {'name': ds_name, 'games': 0}
             datasets[ds_name]['games'] += 1
-            datasets[ds_name]['shots'] += shots
         
-        return jsonify({'datasets': sorted(datasets.values(), key=lambda x: x['shots'], reverse=True)})
+        return jsonify({'datasets': sorted(datasets.values(), key=lambda x: x['games'], reverse=True)})
     except Exception as e:
         logging.error(f"Error in api_get_datasets: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@model_lab_bp.route('/dataset-stats', methods=['GET'])
+def api_get_dataset_stats():
+    """Get detailed stats for a SINGLE dataset - call this when user selects one."""
+    try:
+        uid = request.args.get('uid')
+        dataset_name = request.args.get('dataset_name')
+        
+        if not uid or not dataset_name:
+            return jsonify({'error': 'uid and dataset_name required'}), 400
+        
+        db = get_db()
+        
+        # Only load games for this specific dataset
+        docs = db.collection('savedGames').document(uid).collection('games')\
+            .where('datasetName', '==', dataset_name)\
+            .select(['gameData']).stream()
+        
+        total_shots = 0
+        total_games = 0
+        
+        for doc in docs:
+            game_data = doc.to_dict()
+            game_data_field = game_data.get('gameData', []) if game_data else []
+            total_shots += len(game_data_field) if isinstance(game_data_field, list) else 0
+            total_games += 1
+        
+        return jsonify({
+            'success': True,
+            'dataset_name': dataset_name,
+            'games': total_games,
+            'shots': total_shots
+        })
+    except Exception as e:
+        logging.error(f"Error in api_get_dataset_stats: {e}")
         return jsonify({'error': str(e)}), 500
 
 

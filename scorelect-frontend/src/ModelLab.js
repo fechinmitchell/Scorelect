@@ -305,6 +305,7 @@ const ModelLab = ({ mode = 'dark' }) => {
     } finally { 
       setLoadingDatasets(false); 
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth, trainingDataset, targetDataset]);
 
   // Fetch detailed dataset info (shot counts) in the background

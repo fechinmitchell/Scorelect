@@ -1,5 +1,4 @@
-# https://www.robotstxt.org/robotstxt.html
 User-agent: *
-Allow: /
+Disallow:
 
-Sitemap: https://www.scorelect.com/sitemap.xml
+Sitemap: https://scorelect.com/sitemap.xml

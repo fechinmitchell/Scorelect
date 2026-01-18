@@ -1,24 +1,39 @@
 {
   "files": {
-    "main.css": "/static/css/main.6eece118.css",
-    "main.js": "/static/js/main.57ef3ac3.js",
-    "static/js/453.93f25938.chunk.js": "/static/js/453.93f25938.chunk.js",
+    "main.css": "/static/css/main.40a83602.css",
+    "main.js": "/static/js/main.8a269125.js",
+    "static/js/213.e901a819.chunk.js": "/static/js/213.e901a819.chunk.js",
+    "static/js/455.48c400fb.chunk.js": "/static/js/455.48c400fb.chunk.js",
+    "static/js/453.0b721d35.chunk.js": "/static/js/453.0b721d35.chunk.js",
+    "static/media/scorlect-bg-2.jpg": "/static/media/scorlect-bg-2.bdb961ab79bebe3d39e9.jpg",
     "static/media/galwaybg.jpeg": "/static/media/galwaybg.b676ae3833de27839fbf.jpeg",
     "static/media/step3_soccer_collect.png": "/static/media/step3_soccer_collect.4b7c11bd0a2412795037.png",
     "static/media/step1_soccer_collect.png": "/static/media/step1_soccer_collect.407918ea53055a6ce7fa.png",
+    "static/media/amfootball_collect_main.png": "/static/media/amfootball_collect_main.e240d857b6967506f1ba.png",
+    "static/media/gaa_collect_main.png": "/static/media/gaa_collect_main.9f9c4538faf32641947c.png",
     "static/media/step4_soccer_collect.png": "/static/media/step4_soccer_collect.1d10c07127a4d03acb78.png",
     "static/media/soccer_collect_main.png": "/static/media/soccer_collect_main.32677ac9c6f69ded68c5.png",
     "static/media/step2_soccer_collect.png": "/static/media/step2_soccer_collect.452e0a97395f0e947c9b.png",
+    "static/media/gaa-pitch.png": "/static/media/gaa-pitch.a1694dd931ee662ef566.png",
+    "static/media/basketball_collect_main.png": "/static/media/basketball_collect_main.29ae1edfda707688c934.png",
     "static/media/step5_soccer_collect.png": "/static/media/step5_soccer_collect.99048318971978a072af.png",
+    "static/media/cone.png": "/static/media/cone.d0f8600cb38572d10cc9.png",
+    "static/media/gaa-logo.png": "/static/media/gaa-logo.35d8e8a8a7b7d45812fc.png",
     "static/media/scorelectlogo.jpeg": "/static/media/scorelectlogo.d500f3d76a8b783757f3.jpeg",
+    "static/media/scorelectlogo-2.png": "/static/media/scorelectlogo-2.e44b4b2ed8b0522f2a22.png",
     "static/media/scorelectlogo-grey.jpeg": "/static/media/scorelectlogo-grey.e1d6f8f6ab17beb8c111.jpeg",
+    "static/media/ball.png": "/static/media/ball.6f1cdf31fafd2ca5441c.png",
+    "static/media/player.png": "/static/media/player.1a00c883714c711ba8e6.png",
+    "static/media/delete-icon.png": "/static/media/delete-icon.9d6dbc15c119bf8d9da0.png",
     "index.html": "/index.html",
-    "main.6eece118.css.map": "/static/css/main.6eece118.css.map",
-    "main.57ef3ac3.js.map": "/static/js/main.57ef3ac3.js.map",
-    "453.93f25938.chunk.js.map": "/static/js/453.93f25938.chunk.js.map"
+    "main.40a83602.css.map": "/static/css/main.40a83602.css.map",
+    "main.8a269125.js.map": "/static/js/main.8a269125.js.map",
+    "213.e901a819.chunk.js.map": "/static/js/213.e901a819.chunk.js.map",
+    "455.48c400fb.chunk.js.map": "/static/js/455.48c400fb.chunk.js.map",
+    "453.0b721d35.chunk.js.map": "/static/js/453.0b721d35.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.6eece118.css",
-    "static/js/main.57ef3ac3.js"
+    "static/css/main.40a83602.css",
+    "static/js/main.8a269125.js"
   ]
 }

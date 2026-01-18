@@ -129,7 +129,7 @@ def load_dataset(uid, dataset_name):
     """Load dataset from Firestore and return engineered DataFrame."""
     db = get_db()
     games_ref = db.collection("savedGames").document(uid).collection("games")\
-        .where(filter=("datasetName", "==", dataset_name))
+        .where("datasetName", "==", dataset_name)
     
     all_shots = []
     game_docs = []
@@ -512,7 +512,7 @@ def api_get_history():
             from firebase_admin import firestore as fs
             # Attempt ordered query (requires composite index)
             lab_runs = db.collection('modelLabRuns')\
-                .where(filter=('uid', '==', uid))\
+                .where('uid', '==', uid)\
                 .order_by('timestamp', direction=fs.Query.DESCENDING)\
                 .limit(50).stream()
             
@@ -530,7 +530,7 @@ def api_get_history():
             logging.warning(f"Indexed query failed, using fallback: {e}")
             try:
                 lab_runs_fallback = db.collection('modelLabRuns')\
-                    .where(filter=('uid', '==', uid))\
+                    .where('uid', '==', uid)\
                     .limit(100).stream()
                 
                 for doc in lab_runs_fallback:
@@ -571,7 +571,7 @@ def api_reset_values():
         
         db = get_db()
         games_ref = db.collection("savedGames").document(uid).collection("games")\
-            .where(filter=("datasetName", "==", dataset_name))
+            .where("datasetName", "==", dataset_name)
         
         shots_reset, games_updated = 0, 0
         
@@ -765,7 +765,7 @@ def api_get_presets():
             return jsonify({'error': 'uid required'}), 400
         
         db = get_db()
-        presets_ref = db.collection('modelLabPresets').where(filter=('uid', '==', uid)).stream()
+        presets_ref = db.collection('modelLabPresets').where('uid', '==', uid).stream()
         
         presets = []
         for doc in presets_ref:
@@ -797,8 +797,8 @@ def api_save_preset():
         
         # Check if preset with same name exists
         existing = db.collection('modelLabPresets')\
-            .where(filter=('uid', '==', uid))\
-            .where(filter=('name', '==', name))\
+            .where('uid', '==', uid)\
+            .where('name', '==', name)\
             .limit(1).stream()
         
         preset_data = {

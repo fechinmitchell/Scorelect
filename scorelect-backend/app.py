@@ -4752,7 +4752,7 @@ def run_xp_model():
 
 @app.route('/get-model-history', methods=['POST'])
 def get_model_history():
-    """Get history of model runs for the leaderboard"""
+    """Get history of model runs for the leaderboard - WITH FALLBACK FOR MISSING INDEX"""
     try:
         data = request.get_json()
         uid = data.get('uid')
@@ -4762,7 +4762,7 @@ def get_model_history():
         
         runs = []
         
-        # Get from old modelRuns collection
+        # Get from old modelRuns collection (legacy)
         try:
             history = db.collection('modelRuns').document(uid)\
                 .collection('history').order_by('timestamp', direction=firestore.Query.DESCENDING)\
@@ -4771,15 +4771,18 @@ def get_model_history():
             for doc in history:
                 run_data = doc.to_dict()
                 run_data['id'] = doc.id
-                run_data['source'] = 'visual'
+                run_data['source'] = 'legacy'
                 if run_data.get('timestamp'):
                     run_data['timestamp'] = run_data['timestamp'].isoformat() if hasattr(run_data['timestamp'], 'isoformat') else str(run_data['timestamp'])
                 runs.append(run_data)
         except Exception as e:
             logging.warning(f"Could not fetch from modelRuns: {e}")
         
-        # Also get from new modelLabRuns collection (includes code editor runs)
+        # Get from modelLabRuns collection (visual builder + code editor)
+        # Try indexed query first, fallback if no composite index exists
+        modellab_runs = []
         try:
+            # This query requires a composite index on (uid, timestamp)
             lab_runs = db.collection('modelLabRuns')\
                 .where('uid', '==', uid)\
                 .order_by('timestamp', direction=firestore.Query.DESCENDING)\
@@ -4788,28 +4791,64 @@ def get_model_history():
             for doc in lab_runs:
                 run_data = doc.to_dict()
                 run_data['id'] = doc.id
-                # Ensure consistent field names
                 if 'algorithm' in run_data and 'model_type' not in run_data:
                     run_data['model_type'] = run_data['algorithm']
                 if run_data.get('timestamp'):
                     run_data['timestamp'] = run_data['timestamp'].isoformat() if hasattr(run_data['timestamp'], 'isoformat') else str(run_data['timestamp'])
-                runs.append(run_data)
+                modellab_runs.append(run_data)
+            
+            logging.info(f"Indexed query returned {len(modellab_runs)} runs for user {uid}")
+                
         except Exception as e:
-            logging.warning(f"Could not fetch from modelLabRuns: {e}")
+            # FALLBACK: Query without order_by (doesn't need composite index)
+            logging.warning(f"Indexed query failed, using fallback: {e}")
+            try:
+                lab_runs_fallback = db.collection('modelLabRuns')\
+                    .where('uid', '==', uid)\
+                    .limit(50).stream()
+                
+                for doc in lab_runs_fallback:
+                    run_data = doc.to_dict()
+                    run_data['id'] = doc.id
+                    if 'algorithm' in run_data and 'model_type' not in run_data:
+                        run_data['model_type'] = run_data['algorithm']
+                    if run_data.get('timestamp'):
+                        run_data['timestamp'] = run_data['timestamp'].isoformat() if hasattr(run_data['timestamp'], 'isoformat') else str(run_data['timestamp'])
+                    modellab_runs.append(run_data)
+                
+                # Sort in Python since Firestore couldn't
+                modellab_runs.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+                modellab_runs = modellab_runs[:30]
+                logging.info(f"Fallback query returned {len(modellab_runs)} runs for user {uid}")
+                
+            except Exception as fallback_err:
+                logging.error(f"Fallback query also failed: {fallback_err}")
         
-        # Sort by timestamp descending and deduplicate
+        # Combine all runs
+        runs.extend(modellab_runs)
+        
+        # Sort all by timestamp
         runs.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
         
-        return jsonify({'history': runs[:50]}), 200
+        # Remove duplicates by id
+        seen_ids = set()
+        unique_runs = []
+        for run in runs:
+            run_id = run.get('id')
+            if run_id and run_id not in seen_ids:
+                seen_ids.add(run_id)
+                unique_runs.append(run)
+        
+        logging.info(f"Returning {len(unique_runs)} total model runs for user {uid}")
+        return jsonify({'history': unique_runs[:50]}), 200
         
     except Exception as e:
         logging.error(f"Error getting model history: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-
 @app.route('/get-user-datasets', methods=['POST'])
 def get_user_datasets():
-    """Get list of datasets for a user"""
+    """Get list of datasets for a user - OPTIMIZED to only fetch dataset names"""
     try:
         data = request.get_json()
         uid = data.get('uid')
@@ -4817,12 +4856,15 @@ def get_user_datasets():
         if not uid:
             return jsonify({'error': 'UID required'}), 400
         
-        # Get unique dataset names
-        games = db.collection('savedGames').document(uid).collection('games').stream()
+        # OPTIMIZATION: Only fetch datasetName field, not entire game documents
+        # This reduces memory usage significantly
+        games_ref = db.collection('savedGames').document(uid).collection('games')
+        games = games_ref.select(['datasetName']).stream()
         
         datasets = set()
         for game in games:
-            dataset_name = game.to_dict().get('datasetName', 'Default')
+            game_dict = game.to_dict()
+            dataset_name = game_dict.get('datasetName', 'Default') if game_dict else 'Default'
             datasets.add(dataset_name)
         
         return jsonify({'datasets': sorted(list(datasets))}), 200

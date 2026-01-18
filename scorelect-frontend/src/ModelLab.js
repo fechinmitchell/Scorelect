@@ -238,6 +238,12 @@ const ModelLab = ({ mode = 'dark' }) => {
   // Run name for history
   const [runName, setRunName] = useState('');
 
+  // Leaderboard sorting and filtering states
+  const [sortField, setSortField] = useState('accuracy');
+  const [sortDirection, setSortDirection] = useState('desc');
+  const [filterType, setFilterType] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
   // Fetch datasets - uses quick endpoint first, then falls back to main endpoint
   const fetchDatasets = useCallback(async (showErrorOnFail = false) => {
     try {
@@ -1492,82 +1498,286 @@ const ModelLab = ({ mode = 'dark' }) => {
             </Box>
           )}
 
+          {/* Filter and Search Controls */}
+          <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* Search */}
+            <TextField
+              size="small"
+              placeholder="Search by name..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              sx={{ 
+                minWidth: 200,
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '10px',
+                  backgroundColor: mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)',
+                }
+              }}
+              InputProps={{
+                startAdornment: <span style={{ marginRight: 8, opacity: 0.5 }}>🔍</span>
+              }}
+            />
+            
+            {/* Type Filter */}
+            <FormControl size="small" sx={{ minWidth: 120 }}>
+              <InputLabel>Type</InputLabel>
+              <Select
+                value={filterType}
+                label="Type"
+                onChange={(e) => setFilterType(e.target.value)}
+                sx={{ borderRadius: '10px' }}
+              >
+                <MenuItem value="all">All Types</MenuItem>
+                <MenuItem value="visual">Visual Builder</MenuItem>
+                <MenuItem value="code">Code Editor</MenuItem>
+              </Select>
+            </FormControl>
+
+            {/* Sort Field */}
+            <FormControl size="small" sx={{ minWidth: 140 }}>
+              <InputLabel>Sort By</InputLabel>
+              <Select
+                value={sortField}
+                label="Sort By"
+                onChange={(e) => setSortField(e.target.value)}
+                sx={{ borderRadius: '10px' }}
+              >
+                <MenuItem value="accuracy">Accuracy</MenuItem>
+                <MenuItem value="f1_score">F1 Score</MenuItem>
+                <MenuItem value="auc_roc">AUC-ROC</MenuItem>
+                <MenuItem value="timestamp">Date/Time</MenuItem>
+                <MenuItem value="run_name">Name</MenuItem>
+                <MenuItem value="dataset_name">Dataset</MenuItem>
+              </Select>
+            </FormControl>
+
+            {/* Sort Direction Toggle */}
+            <Tooltip title={sortDirection === 'desc' ? 'Best/Newest First' : 'Worst/Oldest First'}>
+              <IconButton 
+                size="small"
+                onClick={() => setSortDirection(prev => prev === 'desc' ? 'asc' : 'desc')}
+                sx={{ 
+                  backgroundColor: mode === 'dark' ? 'rgba(124, 58, 237, 0.2)' : 'rgba(124, 58, 237, 0.1)',
+                  '&:hover': { backgroundColor: mode === 'dark' ? 'rgba(124, 58, 237, 0.3)' : 'rgba(124, 58, 237, 0.2)' },
+                }}
+              >
+                {sortDirection === 'desc' ? '↓' : '↑'}
+              </IconButton>
+            </Tooltip>
+
+            {/* Results count */}
+            <Typography variant="body2" sx={{ color: mode === 'dark' ? '#888' : '#666', ml: 'auto' }}>
+              {(() => {
+                const filtered = modelHistory
+                  .filter(run => {
+                    if (filterType === 'visual') return run.source !== 'code_editor' && run.type !== 'custom_code';
+                    if (filterType === 'code') return run.source === 'code_editor' || run.type === 'custom_code';
+                    return true;
+                  })
+                  .filter(run => {
+                    if (!searchQuery) return true;
+                    const name = (run.run_name || run.model_type || '').toLowerCase();
+                    const dataset = (run.target_dataset || run.dataset_name || '').toLowerCase();
+                    return name.includes(searchQuery.toLowerCase()) || dataset.includes(searchQuery.toLowerCase());
+                  });
+                return `${filtered.length} model${filtered.length !== 1 ? 's' : ''}`;
+              })()}
+            </Typography>
+          </Box>
+
           <TableContainer sx={{ maxHeight: 600 }}>
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }}>#</TableCell>
-                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }}>Name</TableCell>
+                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5', width: 50 }}>#</TableCell>
+                  <TableCell 
+                    sx={{ 
+                      fontWeight: 700, 
+                      backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5',
+                      cursor: 'pointer',
+                      '&:hover': { backgroundColor: mode === 'dark' ? '#353545' : '#e8e8e8' },
+                    }}
+                    onClick={() => {
+                      if (sortField === 'run_name') setSortDirection(prev => prev === 'desc' ? 'asc' : 'desc');
+                      else { setSortField('run_name'); setSortDirection('asc'); }
+                    }}
+                  >
+                    Name {sortField === 'run_name' && (sortDirection === 'desc' ? '↓' : '↑')}
+                  </TableCell>
+                  <TableCell 
+                    sx={{ 
+                      fontWeight: 700, 
+                      backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5',
+                      cursor: 'pointer',
+                      '&:hover': { backgroundColor: mode === 'dark' ? '#353545' : '#e8e8e8' },
+                    }}
+                    onClick={() => {
+                      if (sortField === 'timestamp') setSortDirection(prev => prev === 'desc' ? 'asc' : 'desc');
+                      else { setSortField('timestamp'); setSortDirection('desc'); }
+                    }}
+                  >
+                    Date/Time {sortField === 'timestamp' && (sortDirection === 'desc' ? '↓' : '↑')}
+                  </TableCell>
                   <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }}>Type</TableCell>
-                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }}>Dataset</TableCell>
-                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }} align="right">F1</TableCell>
-                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }} align="right">AUC</TableCell>
-                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }} align="right">Accuracy</TableCell>
+                  <TableCell 
+                    sx={{ 
+                      fontWeight: 700, 
+                      backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5',
+                      cursor: 'pointer',
+                      '&:hover': { backgroundColor: mode === 'dark' ? '#353545' : '#e8e8e8' },
+                    }}
+                    onClick={() => {
+                      if (sortField === 'dataset_name') setSortDirection(prev => prev === 'desc' ? 'asc' : 'desc');
+                      else { setSortField('dataset_name'); setSortDirection('asc'); }
+                    }}
+                  >
+                    Dataset {sortField === 'dataset_name' && (sortDirection === 'desc' ? '↓' : '↑')}
+                  </TableCell>
+                  <TableCell 
+                    align="right"
+                    sx={{ 
+                      fontWeight: 700, 
+                      backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5',
+                      cursor: 'pointer',
+                      '&:hover': { backgroundColor: mode === 'dark' ? '#353545' : '#e8e8e8' },
+                    }}
+                    onClick={() => {
+                      if (sortField === 'f1_score') setSortDirection(prev => prev === 'desc' ? 'asc' : 'desc');
+                      else { setSortField('f1_score'); setSortDirection('desc'); }
+                    }}
+                  >
+                    F1 {sortField === 'f1_score' && (sortDirection === 'desc' ? '↓' : '↑')}
+                  </TableCell>
+                  <TableCell 
+                    align="right"
+                    sx={{ 
+                      fontWeight: 700, 
+                      backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5',
+                      cursor: 'pointer',
+                      '&:hover': { backgroundColor: mode === 'dark' ? '#353545' : '#e8e8e8' },
+                    }}
+                    onClick={() => {
+                      if (sortField === 'auc_roc') setSortDirection(prev => prev === 'desc' ? 'asc' : 'desc');
+                      else { setSortField('auc_roc'); setSortDirection('desc'); }
+                    }}
+                  >
+                    AUC {sortField === 'auc_roc' && (sortDirection === 'desc' ? '↓' : '↑')}
+                  </TableCell>
+                  <TableCell 
+                    align="right"
+                    sx={{ 
+                      fontWeight: 700, 
+                      backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5',
+                      cursor: 'pointer',
+                      '&:hover': { backgroundColor: mode === 'dark' ? '#353545' : '#e8e8e8' },
+                    }}
+                    onClick={() => {
+                      if (sortField === 'accuracy') setSortDirection(prev => prev === 'desc' ? 'asc' : 'desc');
+                      else { setSortField('accuracy'); setSortDirection('desc'); }
+                    }}
+                  >
+                    Accuracy {sortField === 'accuracy' && (sortDirection === 'desc' ? '↓' : '↑')}
+                  </TableCell>
                   <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }} align="center">View</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {modelHistory
-                  .sort((a, b) => (b.metrics?.f1_score || 0) - (a.metrics?.f1_score || 0))
-                  .slice(0, 30)
-                  .map((run, index) => (
-                    <TableRow 
-                      key={run.id} 
-                      hover
-                      sx={{ cursor: 'pointer', '&:hover': { backgroundColor: mode === 'dark' ? 'rgba(124, 58, 237, 0.1)' : 'rgba(124, 58, 237, 0.05)' } }}
-                      onClick={() => handleViewRunConfig(run)}
-                    >
-                      <TableCell>
-                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 500, color: mode === 'dark' ? '#fff' : '#333', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {run.run_name || run.model_type?.replace('_', ' ') || 'Unnamed Run'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Tooltip title={run.source === 'code_editor' || run.type === 'custom_code' ? 'Code Editor' : 'Visual Builder'}>
-                          <Chip
-                            size="small"
-                            icon={run.source === 'code_editor' || run.type === 'custom_code' ? <CodeIcon sx={{ fontSize: 14 }} /> : <TuneIcon sx={{ fontSize: 14 }} />}
-                            label={run.source === 'code_editor' || run.type === 'custom_code' ? 'Code' : 'Visual'}
-                            sx={{ 
-                              backgroundColor: run.source === 'code_editor' || run.type === 'custom_code' ? '#ec489920' : '#7c3aed20',
-                              color: run.source === 'code_editor' || run.type === 'custom_code' ? '#ec4899' : '#7c3aed',
-                              fontSize: '0.7rem',
-                            }}
-                          />
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ color: mode === 'dark' ? '#aaa' : '#666' }}>
-                          {run.target_dataset || run.dataset_name || 'N/A'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                        {((run.metrics?.f1_score || 0) * 100).toFixed(1)}%
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontFamily: 'monospace' }}>
-                        {((run.metrics?.auc_roc || 0) * 100).toFixed(1)}%
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontFamily: 'monospace' }}>
-                        {((run.metrics?.accuracy || 0) * 100).toFixed(1)}%
-                      </TableCell>
-                      <TableCell align="center">
-                        <Tooltip title="View Config/Code">
-                          <IconButton 
-                            size="small" 
-                            onClick={(e) => { e.stopPropagation(); handleViewRunConfig(run); }}
-                          >
-                            <ViewIcon sx={{ fontSize: 18 }} />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  .filter(run => {
+                    if (filterType === 'visual') return run.source !== 'code_editor' && run.type !== 'custom_code';
+                    if (filterType === 'code') return run.source === 'code_editor' || run.type === 'custom_code';
+                    return true;
+                  })
+                  .filter(run => {
+                    if (!searchQuery) return true;
+                    const name = (run.run_name || run.model_type || '').toLowerCase();
+                    const dataset = (run.target_dataset || run.dataset_name || '').toLowerCase();
+                    return name.includes(searchQuery.toLowerCase()) || dataset.includes(searchQuery.toLowerCase());
+                  })
+                  .sort((a, b) => {
+                    let aVal, bVal;
+                    switch (sortField) {
+                      case 'accuracy': aVal = a.metrics?.accuracy || 0; bVal = b.metrics?.accuracy || 0; break;
+                      case 'f1_score': aVal = a.metrics?.f1_score || 0; bVal = b.metrics?.f1_score || 0; break;
+                      case 'auc_roc': aVal = a.metrics?.auc_roc || 0; bVal = b.metrics?.auc_roc || 0; break;
+                      case 'timestamp': aVal = a.timestamp || ''; bVal = b.timestamp || ''; break;
+                      case 'run_name': aVal = (a.run_name || a.model_type || '').toLowerCase(); bVal = (b.run_name || b.model_type || '').toLowerCase(); break;
+                      case 'dataset_name': aVal = (a.target_dataset || a.dataset_name || '').toLowerCase(); bVal = (b.target_dataset || b.dataset_name || '').toLowerCase(); break;
+                      default: aVal = a.metrics?.accuracy || 0; bVal = b.metrics?.accuracy || 0;
+                    }
+                    if (sortDirection === 'desc') return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+                    return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+                  })
+                  .slice(0, 50)
+                  .map((run, index) => {
+                    const sortedByAccuracy = [...modelHistory].sort((a, b) => (b.metrics?.accuracy || 0) - (a.metrics?.accuracy || 0));
+                    const accuracyRank = sortedByAccuracy.findIndex(r => r.id === run.id);
+                    return (
+                      <TableRow 
+                        key={run.id} 
+                        hover
+                        sx={{ 
+                          cursor: 'pointer', 
+                          '&:hover': { backgroundColor: mode === 'dark' ? 'rgba(124, 58, 237, 0.1)' : 'rgba(124, 58, 237, 0.05)' },
+                          ...(accuracyRank < 3 && { backgroundColor: mode === 'dark' ? 'rgba(245, 158, 11, 0.05)' : 'rgba(245, 158, 11, 0.03)' })
+                        }}
+                        onClick={() => handleViewRunConfig(run)}
+                      >
+                        <TableCell>
+                          {accuracyRank === 0 ? '🥇' : accuracyRank === 1 ? '🥈' : accuracyRank === 2 ? '🥉' : index + 1}
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 500, color: mode === 'dark' ? '#fff' : '#333', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {run.run_name || run.model_type?.replace('_', ' ') || 'Unnamed Run'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ color: mode === 'dark' ? '#aaa' : '#666', fontSize: '0.8rem' }}>
+                            {run.timestamp ? new Date(run.timestamp).toLocaleDateString('en-IE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Tooltip title={run.source === 'code_editor' || run.type === 'custom_code' ? 'Code Editor' : 'Visual Builder'}>
+                            <Chip
+                              size="small"
+                              icon={run.source === 'code_editor' || run.type === 'custom_code' ? <CodeIcon sx={{ fontSize: 14 }} /> : <TuneIcon sx={{ fontSize: 14 }} />}
+                              label={run.source === 'code_editor' || run.type === 'custom_code' ? 'Code' : 'Visual'}
+                              sx={{ 
+                                backgroundColor: run.source === 'code_editor' || run.type === 'custom_code' ? '#ec489920' : '#7c3aed20',
+                                color: run.source === 'code_editor' || run.type === 'custom_code' ? '#ec4899' : '#7c3aed',
+                                fontSize: '0.7rem',
+                              }}
+                            />
+                          </Tooltip>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ color: mode === 'dark' ? '#aaa' : '#666', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {run.target_dataset || run.dataset_name || 'N/A'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                          {((run.metrics?.f1_score || 0) * 100).toFixed(1)}%
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontFamily: 'monospace' }}>
+                          {((run.metrics?.auc_roc || 0) * 100).toFixed(1)}%
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 600, color: '#22c55e' }}>
+                          {((run.metrics?.accuracy || 0) * 100).toFixed(1)}%
+                        </TableCell>
+                        <TableCell align="center">
+                          <Tooltip title="View Config/Code">
+                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleViewRunConfig(run); }}>
+                              <ViewIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
               </TableBody>
             </Table>
           </TableContainer>
+          
           {modelHistory.length === 0 && (
             <Box sx={{ textAlign: 'center', py: 6 }}>
               <MemoryIcon sx={{ fontSize: 64, color: mode === 'dark' ? '#444' : '#ccc', mb: 2 }} />
@@ -1577,6 +1787,28 @@ const ModelLab = ({ mode = 'dark' }) => {
               <Typography variant="body2" sx={{ color: mode === 'dark' ? '#555' : '#aaa' }}>
                 Train your first model to see it on the leaderboard!
               </Typography>
+            </Box>
+          )}
+          
+          {modelHistory.length > 0 && modelHistory
+            .filter(run => {
+              if (filterType === 'visual') return run.source !== 'code_editor' && run.type !== 'custom_code';
+              if (filterType === 'code') return run.source === 'code_editor' || run.type === 'custom_code';
+              return true;
+            })
+            .filter(run => {
+              if (!searchQuery) return true;
+              const name = (run.run_name || run.model_type || '').toLowerCase();
+              const dataset = (run.target_dataset || run.dataset_name || '').toLowerCase();
+              return name.includes(searchQuery.toLowerCase()) || dataset.includes(searchQuery.toLowerCase());
+            }).length === 0 && (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography variant="body1" sx={{ color: mode === 'dark' ? '#888' : '#666' }}>
+                No models match your filters
+              </Typography>
+              <Button variant="text" size="small" onClick={() => { setFilterType('all'); setSearchQuery(''); }} sx={{ mt: 1 }}>
+                Clear Filters
+              </Button>
             </Box>
           )}
         </Card>

@@ -257,6 +257,66 @@ const ModelLab = ({ mode = 'dark' }) => {
   const [isRunningCustomModel, setIsRunningCustomModel] = useState(false);
   const [customModelResult, setCustomModelResult] = useState(null);
   const [customModelRunName, setCustomModelRunName] = useState('');
+  
+  // Custom Scoring Mechanism States
+  const [showScoringEditor, setShowScoringEditor] = useState(false);
+  const [customScoringCode, setCustomScoringCode] = useState(`# Custom Scoring Mechanism
+# Modify how shots are classified as "scored" or "missed"
+# 
+# Available columns in df:
+#   - action: The action string (e.g., "Point", "Goal", "Wide", "Short")
+#   - x, y: Shot coordinates
+#   - Any other columns from your game data
+#
+# You must set df['scored'] = 0 or 1 for each shot
+# You can also set df['is_goal'] = 0 or 1 for xG models
+
+def custom_scoring(df):
+    """
+    Define your own scoring logic here.
+    
+    Default GAA scoring:
+    - Point = 1 score (scored=1, is_goal=0)
+    - Goal = 1 score (scored=1, is_goal=1)  
+    - Wide/Short/Saved = miss (scored=0)
+    """
+    import re
+    
+    # Initialize columns
+    df['scored'] = 0
+    df['is_goal'] = 0
+    
+    # Convert action to lowercase for matching
+    action_lower = df['action'].astype(str).str.lower()
+    
+    # === MODIFY THESE RULES ===
+    
+    # What counts as a SCORE (point or goal)?
+    score_patterns = r'point|goal|over|scores'
+    df.loc[action_lower.str.contains(score_patterns, regex=True, na=False), 'scored'] = 1
+    
+    # What counts as a GOAL specifically?
+    goal_patterns = r'goal'
+    df.loc[action_lower.str.contains(goal_patterns, regex=True, na=False), 'is_goal'] = 1
+    
+    # === EXAMPLE CUSTOM RULES ===
+    
+    # Example: Count "45" as automatic score
+    # df.loc[action_lower.str.contains('45', na=False), 'scored'] = 1
+    
+    # Example: Don't count penalties as goals for xG
+    # df.loc[action_lower.str.contains('penalty', na=False), 'is_goal'] = 0
+    
+    # Example: Distance-based rule (shots > 40m that score are "lucky")
+    # df.loc[(df['dist'] > 40) & (df['scored'] == 1), 'lucky_score'] = 1
+    
+    return df
+
+# Apply the scoring
+df = custom_scoring(df)
+`);
+  const [isSavingScoringCode, setIsSavingScoringCode] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
 
   // Fetch datasets - uses quick endpoint first, then falls back to main endpoint
   const fetchDatasets = useCallback(async (showErrorOnFail = false) => {
@@ -536,6 +596,102 @@ const ModelLab = ({ mode = 'dark' }) => {
       Swal.fire('Error', error.response?.data?.error || error.message, 'error');
     } finally {
       setIsRunningCustomModel(false);
+    }
+  };
+
+  // Save custom scoring code to backend
+  const handleSaveCustomScoring = async () => {
+    setIsSavingScoringCode(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Not authenticated');
+
+      const response = await axios.post(
+        `${BASE_API_URL}/api/model-lab/save-custom-scoring`,
+        {
+          uid: user.uid,
+          scoring_code: customScoringCode,
+        },
+        { timeout: 30000 }
+      );
+
+      if (response.data.success) {
+        Swal.fire({
+          title: '✅ Scoring Code Saved!',
+          text: 'Your custom scoring mechanism has been saved. It will be used for future model training.',
+          icon: 'success',
+          confirmButtonColor: '#7c3aed'
+        });
+      } else {
+        throw new Error(response.data.error || 'Failed to save');
+      }
+    } catch (error) {
+      console.error('Save scoring error:', error);
+      Swal.fire({
+        title: 'Save Failed',
+        text: error.response?.data?.error || error.message || 'Could not save scoring code. The endpoint may not be implemented yet.',
+        icon: 'warning',
+        confirmButtonColor: '#7c3aed'
+      });
+    } finally {
+      setIsSavingScoringCode(false);
+    }
+  };
+
+  // Test custom scoring code (dry run)
+  const handleTestCustomScoring = async () => {
+    if (!customModelTrainingDataset) {
+      Swal.fire('No Dataset', 'Please select a dataset to test the scoring on.', 'warning');
+      return;
+    }
+
+    setIsSavingScoringCode(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Not authenticated');
+
+      const response = await axios.post(
+        `${BASE_API_URL}/api/model-lab/test-custom-scoring`,
+        {
+          uid: user.uid,
+          scoring_code: customScoringCode,
+          dataset_name: customModelTrainingDataset,
+        },
+        { timeout: 60000 }
+      );
+
+      if (response.data.success) {
+        const stats = response.data.stats || {};
+        Swal.fire({
+          title: '🧪 Scoring Test Results',
+          html: `
+            <div style="text-align: left; font-family: monospace; font-size: 14px;">
+              <p><strong>Total Shots:</strong> ${stats.total_shots || 0}</p>
+              <p><strong>Scored (1):</strong> ${stats.scored_count || 0} (${((stats.scored_count / stats.total_shots) * 100).toFixed(1)}%)</p>
+              <p><strong>Missed (0):</strong> ${stats.missed_count || 0} (${((stats.missed_count / stats.total_shots) * 100).toFixed(1)}%)</p>
+              <p><strong>Goals:</strong> ${stats.goal_count || 0}</p>
+              <hr style="margin: 10px 0;">
+              <p style="color: ${stats.errors ? '#ef4444' : '#22c55e'};">
+                ${stats.errors ? '❌ Errors: ' + stats.errors : '✅ No errors in scoring code'}
+              </p>
+            </div>
+          `,
+          icon: stats.errors ? 'warning' : 'success',
+          confirmButtonColor: '#7c3aed'
+        });
+      } else {
+        throw new Error(response.data.error || 'Test failed');
+      }
+    } catch (error) {
+      console.error('Test scoring error:', error);
+      Swal.fire({
+        title: 'Test Failed',
+        text: error.response?.data?.error || error.message || 'Could not test scoring code. Check your Python syntax.',
+        icon: 'error',
+        confirmButtonColor: '#7c3aed'
+      });
+    } finally {
+      setIsSavingScoringCode(false);
     }
   };
 
@@ -2335,45 +2491,400 @@ const ModelLab = ({ mode = 'dark' }) => {
               </Card>
             )}
 
-            {/* How to Add Custom Models */}
+            {/* Instructions Toggle Button */}
+            <Button
+              fullWidth
+              variant="outlined"
+              onClick={() => setShowInstructions(!showInstructions)}
+              startIcon={showInstructions ? <InfoIcon /> : <InfoIcon />}
+              sx={{ 
+                mb: 2, 
+                borderRadius: '12px', 
+                borderColor: '#7c3aed', 
+                color: '#7c3aed',
+                '&:hover': { backgroundColor: '#7c3aed15', borderColor: '#7c3aed' }
+              }}
+            >
+              {showInstructions ? 'Hide Instructions' : '📖 How to Create Custom Models'}
+            </Button>
+
+            {/* Comprehensive Instructions Panel */}
+            {showInstructions && (
+              <Card sx={{ ...glassCard(mode), mb: 3, p: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 3, color: mode === 'dark' ? '#fff' : '#333', display: 'flex', alignItems: 'center', gap: 1 }}>
+                  📚 Complete Guide to Custom Models
+                </Typography>
+
+                {/* Step 1: File Location */}
+                <Box sx={{ mb: 3, p: 2, backgroundColor: mode === 'dark' ? 'rgba(124, 58, 237, 0.1)' : 'rgba(124, 58, 237, 0.05)', borderRadius: '12px', borderLeft: '4px solid #7c3aed' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#7c3aed', mb: 1 }}>
+                    Step 1: Locate the File
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: mode === 'dark' ? '#ccc' : '#555', mb: 1 }}>
+                    Find <code style={{ backgroundColor: mode === 'dark' ? '#333' : '#e0e0e0', padding: '2px 6px', borderRadius: '4px' }}>custom_models.py</code> in your backend folder:
+                  </Typography>
+                  <Box component="pre" sx={{ fontFamily: 'monospace', fontSize: '12px', color: mode === 'dark' ? '#22c55e' : '#166534', m: 0 }}>
+{`your-backend/
+├── app.py
+├── modelbuilder.py
+└── custom_models.py  ← Edit this file`}
+                  </Box>
+                </Box>
+
+                {/* Step 2: Create Model Class */}
+                <Box sx={{ mb: 3, p: 2, backgroundColor: mode === 'dark' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.05)', borderRadius: '12px', borderLeft: '4px solid #f59e0b' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#f59e0b', mb: 1 }}>
+                    Step 2: Create Your Model Class
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: mode === 'dark' ? '#ccc' : '#555', mb: 2 }}>
+                    Copy this template and customize it:
+                  </Typography>
+                  <Box component="pre" sx={{ 
+                    fontFamily: '"Fira Code", monospace', 
+                    fontSize: '11px', 
+                    backgroundColor: mode === 'dark' ? '#0d0d12' : '#f5f5f5', 
+                    color: mode === 'dark' ? '#e0e0e0' : '#333',
+                    p: 2, 
+                    borderRadius: '8px', 
+                    overflow: 'auto',
+                    maxHeight: 300,
+                  }}>
+{`class MyCustomModel(BaseCustomModel):
+    """Your custom xP/xG model."""
+    
+    # === REQUIRED: Model Info ===
+    name = "My Custom Model"
+    description = "A brief description of what makes this model special"
+    version = "1.0"
+    
+    # === OPTIONAL: Custom Features ===
+    def engineer_features(self, df):
+        """Add your own features to the dataframe."""
+        # Example: Create interaction features
+        df['dist_angle'] = df['dist'] * df['angle_abs']
+        df['pressure_dist'] = df['pressure_value'] * df['dist']
+        
+        # Example: Zone-based features
+        df['in_scoring_zone'] = ((df['x'] > 120) & (df['y'] > 30) & (df['y'] < 58)).astype(int)
+        
+        return df
+    
+    # === REQUIRED: Feature List ===
+    def get_feature_list(self):
+        """Return the features your model uses."""
+        return [
+            'dist',           # Distance to goal
+            'angle_abs',      # Absolute angle
+            'pressure_value', # Defensive pressure (0-3)
+            'is_setplay',     # Set piece flag
+            'dist_angle',     # Custom feature
+            'in_scoring_zone' # Custom feature
+        ]
+    
+    # === OPTIONAL: Target Column ===
+    def get_target_column(self):
+        """What to predict. Options: 'scored' (xP) or 'is_goal' (xG)"""
+        return 'scored'  # or 'is_goal' for xG models
+    
+    # === REQUIRED: Training Logic ===
+    def train(self, X, y):
+        """Train and return your model."""
+        from sklearn.ensemble import GradientBoostingClassifier
+        
+        model = GradientBoostingClassifier(
+            n_estimators=150,
+            max_depth=5,
+            learning_rate=0.1,
+            random_state=42
+        )
+        model.fit(X, y)
+        return model`}
+                  </Box>
+                </Box>
+
+                {/* Step 3: Register Model */}
+                <Box sx={{ mb: 3, p: 2, backgroundColor: mode === 'dark' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(34, 197, 94, 0.05)', borderRadius: '12px', borderLeft: '4px solid #22c55e' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#22c55e', mb: 1 }}>
+                    Step 3: Register Your Model
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: mode === 'dark' ? '#ccc' : '#555', mb: 2 }}>
+                    Add your model to the <code>AVAILABLE_MODELS</code> dictionary at the bottom of the file:
+                  </Typography>
+                  <Box component="pre" sx={{ 
+                    fontFamily: '"Fira Code", monospace', 
+                    fontSize: '11px', 
+                    backgroundColor: mode === 'dark' ? '#0d0d12' : '#f5f5f5', 
+                    color: mode === 'dark' ? '#e0e0e0' : '#333',
+                    p: 2, 
+                    borderRadius: '8px', 
+                  }}>
+{`AVAILABLE_MODELS = {
+    'cmc_v3': CMCv3Model,
+    'random_forest': RandomForestModel,
+    'my_custom': MyCustomModel,  # ← Add your model here!
+}`}
+                  </Box>
+                </Box>
+
+                {/* Available Features Reference */}
+                <Box sx={{ mb: 3, p: 2, backgroundColor: mode === 'dark' ? 'rgba(6, 182, 212, 0.1)' : 'rgba(6, 182, 212, 0.05)', borderRadius: '12px', borderLeft: '4px solid #06b6d4' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#06b6d4', mb: 2 }}>
+                    📋 Available Features (Auto-Generated)
+                  </Typography>
+                  <Grid container spacing={1}>
+                    {[
+                      { name: 'dist', desc: 'Distance to goal (meters)' },
+                      { name: 'angle_abs', desc: 'Absolute angle to goal' },
+                      { name: 'dist_squared', desc: 'Distance squared' },
+                      { name: 'dist_log', desc: 'Log of distance' },
+                      { name: 'pressure_value', desc: 'Defensive pressure (0-3)' },
+                      { name: 'position_value', desc: 'Player position encoded' },
+                      { name: 'is_setplay', desc: 'Set piece flag (0/1)' },
+                      { name: 'close_range', desc: 'Shot < 20m' },
+                      { name: 'mid_range', desc: 'Shot 20-35m' },
+                      { name: 'long_range', desc: 'Shot 35-50m' },
+                      { name: 'central_zone', desc: 'Central corridor' },
+                      { name: 'danger_zone', desc: 'High-value area' },
+                    ].map((f, i) => (
+                      <Grid item xs={6} key={i}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#06b6d4', fontWeight: 600 }}>
+                            {f.name}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: mode === 'dark' ? '#888' : '#666' }}>
+                            - {f.desc}
+                          </Typography>
+                        </Box>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Box>
+
+                {/* Algorithm Examples */}
+                <Box sx={{ p: 2, backgroundColor: mode === 'dark' ? 'rgba(236, 72, 153, 0.1)' : 'rgba(236, 72, 153, 0.05)', borderRadius: '12px', borderLeft: '4px solid #ec4899' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#ec4899', mb: 2 }}>
+                    🧠 Algorithm Examples
+                  </Typography>
+                  <Box component="pre" sx={{ 
+                    fontFamily: '"Fira Code", monospace', 
+                    fontSize: '10px', 
+                    backgroundColor: mode === 'dark' ? '#0d0d12' : '#f5f5f5', 
+                    color: mode === 'dark' ? '#e0e0e0' : '#333',
+                    p: 2, 
+                    borderRadius: '8px',
+                    overflow: 'auto', 
+                  }}>
+{`# Logistic Regression (fast, interpretable)
+from sklearn.linear_model import LogisticRegression
+model = LogisticRegression(C=1.0, max_iter=1000)
+
+# Random Forest (robust, handles non-linear)
+from sklearn.ensemble import RandomForestClassifier
+model = RandomForestClassifier(n_estimators=100, max_depth=10)
+
+# Gradient Boosting (highest accuracy)
+from sklearn.ensemble import GradientBoostingClassifier
+model = GradientBoostingClassifier(n_estimators=150, learning_rate=0.1)
+
+# Neural Network (complex patterns)
+from sklearn.neural_network import MLPClassifier
+model = MLPClassifier(hidden_layer_sizes=(64, 32), max_iter=500)
+
+# XGBoost (if installed)
+from xgboost import XGBClassifier
+model = XGBClassifier(n_estimators=100, max_depth=5)`}
+                  </Box>
+                </Box>
+              </Card>
+            )}
+
+            {/* Custom Scoring Editor Toggle */}
+            <Button
+              fullWidth
+              variant="outlined"
+              onClick={() => setShowScoringEditor(!showScoringEditor)}
+              startIcon={<CodeIcon />}
+              sx={{ 
+                mb: 2, 
+                borderRadius: '12px', 
+                borderColor: '#f59e0b', 
+                color: '#f59e0b',
+                '&:hover': { backgroundColor: '#f59e0b15', borderColor: '#f59e0b' }
+              }}
+            >
+              {showScoringEditor ? 'Hide Scoring Editor' : '⚙️ Custom Scoring Mechanism'}
+            </Button>
+
+            {/* Custom Scoring Code Editor */}
+            {showScoringEditor && (
+              <Card sx={{ ...glassCard(mode), mb: 3, p: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                  <TerminalIcon sx={{ color: '#f59e0b', fontSize: 28 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: mode === 'dark' ? '#fff' : '#333' }}>
+                    Custom Scoring Mechanism
+                  </Typography>
+                  <Tooltip title="Reset to Default">
+                    <IconButton 
+                      size="small" 
+                      sx={{ ml: 'auto' }}
+                      onClick={() => {
+                        Swal.fire({
+                          title: 'Reset Scoring Code?',
+                          text: 'This will reset to the default scoring logic.',
+                          icon: 'question',
+                          showCancelButton: true,
+                          confirmButtonColor: '#7c3aed',
+                        }).then((result) => {
+                          if (result.isConfirmed) {
+                            setCustomScoringCode(`# Custom Scoring Mechanism
+# Modify how shots are classified as "scored" or "missed"
+
+def custom_scoring(df):
+    import re
+    df['scored'] = 0
+    df['is_goal'] = 0
+    action_lower = df['action'].astype(str).str.lower()
+    
+    # Score patterns
+    df.loc[action_lower.str.contains(r'point|goal|over|scores', regex=True, na=False), 'scored'] = 1
+    df.loc[action_lower.str.contains(r'goal', regex=True, na=False), 'is_goal'] = 1
+    
+    return df
+
+df = custom_scoring(df)
+`);
+                          }
+                        });
+                      }}
+                    >
+                      <ResetIcon />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+
+                <Alert severity="info" sx={{ mb: 2, borderRadius: '12px' }}>
+                  <Typography variant="body2">
+                    <strong>What is this?</strong> Define how shots are classified as "scored" or "missed". 
+                    This affects what the model learns to predict. Useful for:
+                  </Typography>
+                  <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px' }}>
+                    <li>Excluding penalties from xG calculations</li>
+                    <li>Treating different score types differently</li>
+                    <li>Custom rules for your specific analysis</li>
+                  </ul>
+                </Alert>
+
+                <TextField
+                  multiline
+                  fullWidth
+                  value={customScoringCode}
+                  onChange={(e) => setCustomScoringCode(e.target.value)}
+                  sx={{
+                    mb: 2,
+                    '& .MuiInputBase-root': {
+                      fontFamily: '"Fira Code", "Monaco", "Consolas", monospace',
+                      fontSize: '12px',
+                      backgroundColor: mode === 'dark' ? '#0d0d12' : '#f8f9fc',
+                    },
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderColor: mode === 'dark' ? '#333' : '#ddd',
+                      borderRadius: '12px',
+                    }
+                  }}
+                  minRows={15}
+                  maxRows={25}
+                />
+
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                  <Button
+                    variant="contained"
+                    onClick={handleTestCustomScoring}
+                    disabled={isSavingScoringCode || !customModelTrainingDataset}
+                    startIcon={isSavingScoringCode ? <CircularProgress size={16} color="inherit" /> : <PlayIcon />}
+                    sx={{ 
+                      backgroundColor: '#06b6d4', 
+                      borderRadius: '12px',
+                      '&:hover': { backgroundColor: '#0891b2' }
+                    }}
+                  >
+                    Test on Dataset
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={handleSaveCustomScoring}
+                    disabled={isSavingScoringCode}
+                    startIcon={isSavingScoringCode ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
+                    sx={{ 
+                      backgroundColor: '#22c55e', 
+                      borderRadius: '12px',
+                      '&:hover': { backgroundColor: '#16a34a' }
+                    }}
+                  >
+                    Save Scoring Logic
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={() => navigator.clipboard.writeText(customScoringCode)}
+                    startIcon={<CopyIcon />}
+                    sx={{ borderRadius: '12px' }}
+                  >
+                    Copy Code
+                  </Button>
+                </Box>
+
+                {/* Quick Templates */}
+                <Box sx={{ mt: 3, pt: 2, borderTop: `1px solid ${mode === 'dark' ? '#333' : '#e0e0e0'}` }}>
+                  <Typography variant="subtitle2" sx={{ mb: 2, color: mode === 'dark' ? '#888' : '#666' }}>
+                    Quick Templates:
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    {[
+                      { name: 'Exclude Penalties', code: `# Exclude penalties from scoring
+df.loc[action_lower.str.contains('penalty', na=False), 'scored'] = 0
+df.loc[action_lower.str.contains('penalty', na=False), 'is_goal'] = 0` },
+                      { name: 'Goals Only (xG)', code: `# Only count goals as scores (pure xG)
+df['scored'] = df['is_goal']` },
+                      { name: 'Distance Weighted', code: `# Mark long-range scores specially
+df['long_range_score'] = ((df['dist'] > 40) & (df['scored'] == 1)).astype(int)` },
+                      { name: 'Set Pieces Only', code: `# Only analyze set pieces
+df.loc[~action_lower.str.contains('free|45|penalty', regex=True, na=False), 'scored'] = -1  # Exclude` },
+                    ].map((template, i) => (
+                      <Chip
+                        key={i}
+                        label={template.name}
+                        size="small"
+                        onClick={() => {
+                          setCustomScoringCode(prev => prev + '\n\n' + template.code);
+                          Swal.fire('Added!', `"${template.name}" template added to your code.`, 'success');
+                        }}
+                        sx={{
+                          cursor: 'pointer',
+                          backgroundColor: mode === 'dark' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(245, 158, 11, 0.1)',
+                          color: '#f59e0b',
+                          '&:hover': { backgroundColor: mode === 'dark' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(245, 158, 11, 0.2)' }
+                        }}
+                      />
+                    ))}
+                  </Box>
+                </Box>
+              </Card>
+            )}
+
+            {/* Simple Quick Reference (always visible) */}
             <Card sx={{ ...glassCard(mode), p: 3 }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: mode === 'dark' ? '#fff' : '#333' }}>
-                📝 Adding Your Own Models
+                🚀 Quick Start
               </Typography>
               <Typography variant="body2" sx={{ color: mode === 'dark' ? '#888' : '#666', mb: 2 }}>
-                Edit <code>custom_models.py</code> on your backend to add new models:
+                1. Select a pre-built model above<br/>
+                2. Choose your training dataset<br/>
+                3. Click "Run Custom Model"<br/>
+                4. View results and check the leaderboard!
               </Typography>
-              <Box
-                component="pre"
-                sx={{
-                  fontFamily: '"Fira Code", monospace',
-                  fontSize: '11px',
-                  backgroundColor: mode === 'dark' ? '#0d0d12' : '#f5f5f5',
-                  color: mode === 'dark' ? '#22c55e' : '#333',
-                  p: 2,
-                  borderRadius: '12px',
-                  overflow: 'auto',
-                  maxHeight: 200,
-                }}
-              >
-{`class MyModel(BaseCustomModel):
-    name = "My Custom Model"
-    description = "My amazing model"
-    
-    def get_feature_list(self):
-        return ['dist', 'angle_abs']
-    
-    def train(self, X, y):
-        model = LogisticRegression()
-        model.fit(X, y)
-        return model
-
-# Add to registry
-AVAILABLE_MODELS = {
-    'my_model': MyModel,
-    ...
-}`}
-              </Box>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="caption" sx={{ color: mode === 'dark' ? '#666' : '#888' }}>
+                💡 Tip: Use the "📖 How to Create Custom Models" button above to learn how to build your own models in Python.
+              </Typography>
             </Card>
           </Grid>
         </Grid>

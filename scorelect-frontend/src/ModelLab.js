@@ -235,6 +235,9 @@ const ModelLab = ({ mode = 'dark' }) => {
   const [configViewerOpen, setConfigViewerOpen] = useState(false);
   const [selectedRunConfig, setSelectedRunConfig] = useState(null);
 
+  // Run name for history
+  const [runName, setRunName] = useState('');
+
   // Fetch datasets - uses quick endpoint first, then falls back to main endpoint
   const fetchDatasets = useCallback(async (showErrorOnFail = false) => {
     try {
@@ -548,13 +551,15 @@ const ModelLab = ({ mode = 'dark' }) => {
       
       const response = await axios.post(
         `${BASE_API_URL}/api/model-lab/run-visual`, 
-        { uid: user.uid, config, dataset_name: dataset }
+        { uid: user.uid, config, dataset_name: dataset, run_name: runName }
       );
       
       setTrainingProgress(100);
       
       if (response.data.success) {
         setTrainingResult(response.data);
+        setRunName(''); // Clear run name after successful run
+        fetchModelHistory(); // Refresh the leaderboard
         Swal.fire({ 
           title: '✨ Training Complete!', 
           html: `
@@ -703,6 +708,7 @@ const ModelLab = ({ mode = 'dark' }) => {
           code: customCode, 
           dataset_name: trainingDataset,
           target_field: targetField,
+          run_name: runName,
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -711,6 +717,8 @@ const ModelLab = ({ mode = 'dark' }) => {
         setCodeOutput(prev => prev + `\n✅ Success!\n\nMetrics:\n${JSON.stringify(response.data.metrics, null, 2)}\n\nShots updated: ${response.data.shots_updated || 0}`);
         if (response.data.metrics) {
           setTrainingResult({ metrics: response.data.metrics, execution_time: response.data.execution_time });
+          setRunName(''); // Clear run name after successful run
+          fetchModelHistory(); // Refresh the leaderboard
         }
       } else {
         setCodeOutput(prev => prev + `\n❌ Error: ${response.data.error}\n\n${response.data.traceback || ''}`);
@@ -1101,6 +1109,25 @@ const ModelLab = ({ mode = 'dark' }) => {
               </Card>
             )}
 
+            {/* Run Name Input */}
+            <Box sx={{ mb: 2 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Run Name (optional)"
+                placeholder="e.g., High Accuracy RF Test"
+                value={runName}
+                onChange={(e) => setRunName(e.target.value)}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '12px',
+                    backgroundColor: mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)',
+                  }
+                }}
+                helperText="Give your run a name to identify it in the leaderboard. Leave blank for auto-generated name."
+              />
+            </Box>
+
             {/* Action Buttons */}
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <Button 
@@ -1275,7 +1302,7 @@ const ModelLab = ({ mode = 'dark' }) => {
                 maxRows={40}
               />
 
-              <Box sx={{ mt: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
+              <Box sx={{ mt: 3, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
                 <FormControl size="small" sx={{ minWidth: 200 }}>
                   <InputLabel>Dataset</InputLabel>
                   <Select 
@@ -1287,6 +1314,18 @@ const ModelLab = ({ mode = 'dark' }) => {
                     {datasets.map((ds) => <MenuItem key={ds} value={ds}>{ds}</MenuItem>)}
                   </Select>
                 </FormControl>
+
+                <TextField
+                  size="small"
+                  label="Run Name"
+                  placeholder="Optional name"
+                  value={runName}
+                  onChange={(e) => setRunName(e.target.value)}
+                  sx={{ 
+                    minWidth: 200,
+                    '& .MuiOutlinedInput-root': { borderRadius: '12px' }
+                  }}
+                />
 
                 <Button
                   variant="contained"
@@ -1458,13 +1497,13 @@ const ModelLab = ({ mode = 'dark' }) => {
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }}>#</TableCell>
+                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }}>Name</TableCell>
                   <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }}>Type</TableCell>
-                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }}>Model</TableCell>
                   <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }}>Dataset</TableCell>
                   <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }} align="right">F1</TableCell>
                   <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }} align="right">AUC</TableCell>
                   <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }} align="right">Accuracy</TableCell>
-                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }} align="center">Config</TableCell>
+                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }} align="center">View</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1482,24 +1521,23 @@ const ModelLab = ({ mode = 'dark' }) => {
                         {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                       </TableCell>
                       <TableCell>
-                        <Tooltip title={run.source === 'code_editor' || run.type === 'custom_code' ? 'Code Editor' : 'Visual Builder'}>
-                          {run.source === 'code_editor' || run.type === 'custom_code' ? (
-                            <CodeIcon sx={{ fontSize: 18, color: '#ec4899' }} />
-                          ) : (
-                            <TuneIcon sx={{ fontSize: 18, color: '#7c3aed' }} />
-                          )}
-                        </Tooltip>
+                        <Typography variant="body2" sx={{ fontWeight: 500, color: mode === 'dark' ? '#fff' : '#333', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {run.run_name || run.model_type?.replace('_', ' ') || 'Unnamed Run'}
+                        </Typography>
                       </TableCell>
                       <TableCell>
-                        <Chip 
-                          label={run.model_type?.replace('_', ' ') || run.algorithm?.replace('_', ' ') || 'Unknown'} 
-                          size="small" 
-                          sx={{ 
-                            backgroundColor: `${ALGORITHMS.find(a => a.id === run.model_type || a.id === run.algorithm)?.color || '#666'}20`, 
-                            color: ALGORITHMS.find(a => a.id === run.model_type || a.id === run.algorithm)?.color || '#666', 
-                            fontWeight: 500 
-                          }} 
-                        />
+                        <Tooltip title={run.source === 'code_editor' || run.type === 'custom_code' ? 'Code Editor' : 'Visual Builder'}>
+                          <Chip
+                            size="small"
+                            icon={run.source === 'code_editor' || run.type === 'custom_code' ? <CodeIcon sx={{ fontSize: 14 }} /> : <TuneIcon sx={{ fontSize: 14 }} />}
+                            label={run.source === 'code_editor' || run.type === 'custom_code' ? 'Code' : 'Visual'}
+                            sx={{ 
+                              backgroundColor: run.source === 'code_editor' || run.type === 'custom_code' ? '#ec489920' : '#7c3aed20',
+                              color: run.source === 'code_editor' || run.type === 'custom_code' ? '#ec4899' : '#7c3aed',
+                              fontSize: '0.7rem',
+                            }}
+                          />
+                        </Tooltip>
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" sx={{ color: mode === 'dark' ? '#aaa' : '#666' }}>

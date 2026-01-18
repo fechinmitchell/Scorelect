@@ -198,6 +198,7 @@ def api_run_visual_model():
     try:
         data = request.json
         uid, config, dataset_name = data.get('uid'), data.get('config'), data.get('dataset_name')
+        run_name = data.get('run_name', '').strip()
         
         if not all([uid, config, dataset_name]):
             return jsonify({'error': 'uid, config, and dataset_name required'}), 400
@@ -234,6 +235,30 @@ def api_run_visual_model():
         y_proba = model.predict_proba(X_test)[:, 1]
         
         metrics = calculate_metrics(y_test, y_pred, y_proba)
+        
+        # Save to history
+        try:
+            from firebase_admin import firestore as fs
+            if not run_name:
+                algo_display = algorithm.replace('_', ' ').title()
+                run_name = f"{algo_display} - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
+            
+            db = get_db()
+            db.collection('modelLabRuns').add({
+                'uid': uid,
+                'type': 'visual_training',
+                'source': 'visual_builder',
+                'algorithm': algorithm,
+                'model_type': algorithm,
+                'run_name': run_name,
+                'config': config,
+                'dataset_name': dataset_name,
+                'metrics': metrics,
+                'execution_time': round(time.time() - start_time, 2),
+                'timestamp': fs.SERVER_TIMESTAMP
+            })
+        except Exception as save_err:
+            logging.warning(f"Could not save visual run to history: {save_err}")
         
         return jsonify({
             'success': True,
@@ -463,16 +488,21 @@ def api_run_custom_code():
                     })
                     games_updated += 1
         
-        # Save code run to history if there are metrics
+        # Save code run to history if there are metrics (always save, not just when applying)
         if metrics:
             try:
                 from firebase_admin import firestore as fs
+                run_name = data.get('run_name', '').strip()
+                if not run_name:
+                    run_name = f"Code Run {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
+                
                 db.collection('modelLabRuns').add({
                     'uid': uid, 
                     'type': 'custom_code',
                     'source': 'code_editor',
                     'algorithm': 'custom_code',
                     'model_type': 'custom_code',
+                    'run_name': run_name,
                     'code': code[:5000],  # Limit code size stored
                     'dataset_name': dataset_name,
                     'target_field': target_field,

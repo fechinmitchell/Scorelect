@@ -4760,21 +4760,47 @@ def get_model_history():
         if not uid:
             return jsonify({'error': 'UID required'}), 400
         
-        # Get last 20 model runs
-        history = db.collection('modelRuns').document(uid)\
-            .collection('history').order_by('timestamp', direction=firestore.Query.DESCENDING)\
-            .limit(20).stream()
-        
         runs = []
-        for doc in history:
-            run_data = doc.to_dict()
-            run_data['id'] = doc.id
-            # Convert timestamp to ISO format if it exists
-            if run_data.get('timestamp'):
-                run_data['timestamp'] = run_data['timestamp'].isoformat() if hasattr(run_data['timestamp'], 'isoformat') else str(run_data['timestamp'])
-            runs.append(run_data)
         
-        return jsonify({'history': runs}), 200
+        # Get from old modelRuns collection
+        try:
+            history = db.collection('modelRuns').document(uid)\
+                .collection('history').order_by('timestamp', direction=firestore.Query.DESCENDING)\
+                .limit(20).stream()
+            
+            for doc in history:
+                run_data = doc.to_dict()
+                run_data['id'] = doc.id
+                run_data['source'] = 'visual'
+                if run_data.get('timestamp'):
+                    run_data['timestamp'] = run_data['timestamp'].isoformat() if hasattr(run_data['timestamp'], 'isoformat') else str(run_data['timestamp'])
+                runs.append(run_data)
+        except Exception as e:
+            logging.warning(f"Could not fetch from modelRuns: {e}")
+        
+        # Also get from new modelLabRuns collection (includes code editor runs)
+        try:
+            lab_runs = db.collection('modelLabRuns')\
+                .where('uid', '==', uid)\
+                .order_by('timestamp', direction=firestore.Query.DESCENDING)\
+                .limit(30).stream()
+            
+            for doc in lab_runs:
+                run_data = doc.to_dict()
+                run_data['id'] = doc.id
+                # Ensure consistent field names
+                if 'algorithm' in run_data and 'model_type' not in run_data:
+                    run_data['model_type'] = run_data['algorithm']
+                if run_data.get('timestamp'):
+                    run_data['timestamp'] = run_data['timestamp'].isoformat() if hasattr(run_data['timestamp'], 'isoformat') else str(run_data['timestamp'])
+                runs.append(run_data)
+        except Exception as e:
+            logging.warning(f"Could not fetch from modelLabRuns: {e}")
+        
+        # Sort by timestamp descending and deduplicate
+        runs.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+        
+        return jsonify({'history': runs[:50]}), 200
         
     except Exception as e:
         logging.error(f"Error getting model history: {str(e)}")

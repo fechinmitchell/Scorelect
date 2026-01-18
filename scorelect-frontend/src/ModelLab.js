@@ -13,7 +13,8 @@ import {
   CheckCircle as CheckIcon, TrendingUp as TrendingUpIcon, DataObject as DataIcon, Hub as HubIcon,
   Code as CodeIcon, Terminal as TerminalIcon, Functions as FunctionsIcon,
   Storage as StorageIcon, ModelTraining as TrainIcon, DoubleArrow as TransferIcon,
-  ContentCopy as CopyIcon, Info as InfoIcon,
+  ContentCopy as CopyIcon, Info as InfoIcon, Save as SaveIcon, Delete as DeleteIcon,
+  Visibility as ViewIcon, BookmarkBorder as PresetIcon, Bookmark as BookmarkFilledIcon,
 } from '@mui/icons-material';
 import { getAuth } from 'firebase/auth';
 import Swal from 'sweetalert2';
@@ -120,13 +121,16 @@ const DatasetSkeleton = ({ mode }) => (
 // Default Python code template
 const DEFAULT_PYTHON_CODE = `# Custom Model Lab Code
 # This code runs on the server with access to your dataset
-# Available variables: df (pandas DataFrame with shot data)
-# Required: return a dictionary with 'predictions' array
-
-import numpy as np
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+#
+# PRE-LOADED VARIABLES (no imports needed):
+#   - df: pandas DataFrame with your shot data
+#   - np: numpy
+#   - pd: pandas
+#   - StandardScaler, train_test_split
+#   - RandomForestClassifier, GradientBoostingClassifier, LogisticRegression, MLPClassifier, KNeighborsClassifier
+#   - accuracy_score, f1_score, roc_auc_score, precision_score, recall_score
+#
+# REQUIRED: Set 'result' variable with 'predictions' array and 'metrics' dict
 
 def custom_model(df):
     """
@@ -163,7 +167,6 @@ def custom_model(df):
     predictions = model.predict_proba(X_all_scaled)[:, 1]
     
     # Calculate metrics on test set
-    from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
     y_pred = model.predict(X_test_scaled)
     y_proba = model.predict_proba(X_test_scaled)[:, 1]
     
@@ -178,7 +181,7 @@ def custom_model(df):
         'metrics': metrics
     }
 
-# Run the model
+# Run the model and store result
 result = custom_model(df)
 `;
 
@@ -221,6 +224,16 @@ const ModelLab = ({ mode = 'dark' }) => {
   const [availableFunctions, setAvailableFunctions] = useState([]);
   const [loadingFunctions, setLoadingFunctions] = useState(false);
   const [functionDialogOpen, setFunctionDialogOpen] = useState(false);
+
+  // Preset states
+  const [presets, setPresets] = useState([]);
+  const [presetName, setPresetName] = useState('');
+  const [savePresetDialogOpen, setSavePresetDialogOpen] = useState(false);
+  const [loadingPresets, setLoadingPresets] = useState(false);
+
+  // Config viewer dialog states
+  const [configViewerOpen, setConfigViewerOpen] = useState(false);
+  const [selectedRunConfig, setSelectedRunConfig] = useState(null);
 
   // Fetch datasets - uses quick endpoint first, then falls back to main endpoint
   const fetchDatasets = useCallback(async (showErrorOnFail = false) => {
@@ -371,9 +384,127 @@ const ModelLab = ({ mode = 'dark' }) => {
     }
   }, [auth]);
 
+  // Fetch presets
+  const fetchPresets = useCallback(async () => {
+    try {
+      setLoadingPresets(true);
+      const user = auth.currentUser;
+      if (!user) return;
+      
+      const response = await axios.get(
+        `${BASE_API_URL}/api/model-lab/presets`,
+        { params: { uid: user.uid } }
+      );
+      setPresets(response.data.presets || []);
+    } catch (error) {
+      console.error('Error fetching presets:', error);
+    } finally {
+      setLoadingPresets(false);
+    }
+  }, [auth]);
+
+  // Save current config as preset
+  const handleSavePreset = async () => {
+    if (!presetName.trim()) {
+      Swal.fire('Error', 'Please enter a preset name', 'warning');
+      return;
+    }
+    
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      
+      const config = {
+        algorithm: selectedAlgorithm,
+        features: selectedFeatures,
+        trainSize,
+        balanceClasses,
+        useCrossValidation,
+        targetField,
+        algorithmParams,
+        useSameDataset,
+      };
+      
+      const isCodePreset = activeTab === 1;
+      
+      await axios.post(`${BASE_API_URL}/api/model-lab/presets`, {
+        uid: user.uid,
+        name: presetName.trim(),
+        config,
+        type: isCodePreset ? 'code' : 'visual',
+        code: isCodePreset ? customCode : '',
+      });
+      
+      Swal.fire('Saved!', `Preset "${presetName}" saved successfully`, 'success');
+      setSavePresetDialogOpen(false);
+      setPresetName('');
+      fetchPresets();
+    } catch (error) {
+      Swal.fire('Error', 'Failed to save preset', 'error');
+    }
+  };
+
+  // Load a preset
+  const handleLoadPreset = (preset) => {
+    const config = preset.config || {};
+    
+    if (config.algorithm) setSelectedAlgorithm(config.algorithm);
+    if (config.features) setSelectedFeatures(config.features);
+    if (config.trainSize) setTrainSize(config.trainSize);
+    if (config.balanceClasses !== undefined) setBalanceClasses(config.balanceClasses);
+    if (config.useCrossValidation !== undefined) setUseCrossValidation(config.useCrossValidation);
+    if (config.targetField) setTargetField(config.targetField);
+    if (config.algorithmParams) setAlgorithmParams(config.algorithmParams);
+    if (config.useSameDataset !== undefined) setUseSameDataset(config.useSameDataset);
+    
+    if (preset.type === 'code' && preset.code) {
+      setCustomCode(preset.code);
+      setActiveTab(1); // Switch to code editor tab
+    } else {
+      setActiveTab(0); // Switch to visual builder tab
+    }
+    
+    Swal.fire('Loaded!', `Preset "${preset.name}" loaded`, 'success');
+  };
+
+  // Delete a preset
+  const handleDeletePreset = async (presetId, presetName) => {
+    const result = await Swal.fire({
+      title: 'Delete Preset?',
+      text: `Are you sure you want to delete "${presetName}"?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      confirmButtonText: 'Delete',
+    });
+    
+    if (!result.isConfirmed) return;
+    
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      
+      await axios.delete(`${BASE_API_URL}/api/model-lab/presets/${presetId}`, {
+        params: { uid: user.uid }
+      });
+      
+      Swal.fire('Deleted!', 'Preset deleted', 'success');
+      fetchPresets();
+    } catch (error) {
+      Swal.fire('Error', 'Failed to delete preset', 'error');
+    }
+  };
+
+  // View config/code for a history run
+  const handleViewRunConfig = (run) => {
+    setSelectedRunConfig(run);
+    setConfigViewerOpen(true);
+  };
+
   useEffect(() => { 
     fetchDatasets(); 
-    fetchModelHistory(); 
+    fetchModelHistory();
+    fetchPresets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1286,40 +1417,86 @@ const ModelLab = ({ mode = 'dark' }) => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
             <TrophyIcon sx={{ color: '#f59e0b', fontSize: 28 }} />
             <Typography variant="h6" sx={{ fontWeight: 700, color: mode === 'dark' ? '#fff' : '#333' }}>
-              Model Leaderboard
+              Model Leaderboard & History
             </Typography>
-            <IconButton size="small" onClick={fetchModelHistory} sx={{ ml: 'auto' }}>
+            <Tooltip title="Save Current Config as Preset">
+              <IconButton size="small" onClick={() => setSavePresetDialogOpen(true)} sx={{ ml: 'auto' }}>
+                <SaveIcon />
+              </IconButton>
+            </Tooltip>
+            <IconButton size="small" onClick={() => { fetchModelHistory(); fetchPresets(); }}>
               <RefreshIcon />
             </IconButton>
           </Box>
+
+          {/* Saved Presets Section */}
+          {presets.length > 0 && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle2" sx={{ color: mode === 'dark' ? '#888' : '#666', mb: 1 }}>
+                📁 Saved Presets
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {presets.map((preset) => (
+                  <Chip
+                    key={preset.id}
+                    label={preset.name}
+                    icon={preset.type === 'code' ? <CodeIcon /> : <TuneIcon />}
+                    onClick={() => handleLoadPreset(preset)}
+                    onDelete={() => handleDeletePreset(preset.id, preset.name)}
+                    sx={{
+                      backgroundColor: mode === 'dark' ? 'rgba(124, 58, 237, 0.2)' : 'rgba(124, 58, 237, 0.1)',
+                      '&:hover': { backgroundColor: mode === 'dark' ? 'rgba(124, 58, 237, 0.3)' : 'rgba(124, 58, 237, 0.2)' },
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
+          )}
+
           <TableContainer sx={{ maxHeight: 600 }}>
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }}>#</TableCell>
+                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }}>Type</TableCell>
                   <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }}>Model</TableCell>
                   <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }}>Dataset</TableCell>
                   <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }} align="right">F1</TableCell>
                   <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }} align="right">AUC</TableCell>
                   <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }} align="right">Accuracy</TableCell>
+                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a35' : '#f5f5f5' }} align="center">Config</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {modelHistory
                   .sort((a, b) => (b.metrics?.f1_score || 0) - (a.metrics?.f1_score || 0))
-                  .slice(0, 20)
+                  .slice(0, 30)
                   .map((run, index) => (
-                    <TableRow key={run.id} hover>
+                    <TableRow 
+                      key={run.id} 
+                      hover
+                      sx={{ cursor: 'pointer', '&:hover': { backgroundColor: mode === 'dark' ? 'rgba(124, 58, 237, 0.1)' : 'rgba(124, 58, 237, 0.05)' } }}
+                      onClick={() => handleViewRunConfig(run)}
+                    >
                       <TableCell>
                         {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                       </TableCell>
                       <TableCell>
+                        <Tooltip title={run.source === 'code_editor' || run.type === 'custom_code' ? 'Code Editor' : 'Visual Builder'}>
+                          {run.source === 'code_editor' || run.type === 'custom_code' ? (
+                            <CodeIcon sx={{ fontSize: 18, color: '#ec4899' }} />
+                          ) : (
+                            <TuneIcon sx={{ fontSize: 18, color: '#7c3aed' }} />
+                          )}
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>
                         <Chip 
-                          label={run.model_type?.replace('_', ' ') || 'Unknown'} 
+                          label={run.model_type?.replace('_', ' ') || run.algorithm?.replace('_', ' ') || 'Unknown'} 
                           size="small" 
                           sx={{ 
-                            backgroundColor: `${ALGORITHMS.find(a => a.id === run.model_type)?.color || '#666'}20`, 
-                            color: ALGORITHMS.find(a => a.id === run.model_type)?.color || '#666', 
+                            backgroundColor: `${ALGORITHMS.find(a => a.id === run.model_type || a.id === run.algorithm)?.color || '#666'}20`, 
+                            color: ALGORITHMS.find(a => a.id === run.model_type || a.id === run.algorithm)?.color || '#666', 
                             fontWeight: 500 
                           }} 
                         />
@@ -1337,6 +1514,16 @@ const ModelLab = ({ mode = 'dark' }) => {
                       </TableCell>
                       <TableCell align="right" sx={{ fontFamily: 'monospace' }}>
                         {((run.metrics?.accuracy || 0) * 100).toFixed(1)}%
+                      </TableCell>
+                      <TableCell align="center">
+                        <Tooltip title="View Config/Code">
+                          <IconButton 
+                            size="small" 
+                            onClick={(e) => { e.stopPropagation(); handleViewRunConfig(run); }}
+                          >
+                            <ViewIcon sx={{ fontSize: 18 }} />
+                          </IconButton>
+                        </Tooltip>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1410,6 +1597,226 @@ const ModelLab = ({ mode = 'dark' }) => {
         <DialogActions>
           <Button onClick={() => fetchAvailableFunctions()}>Refresh</Button>
           <Button onClick={() => setFunctionDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Save Preset Dialog */}
+      <Dialog 
+        open={savePresetDialogOpen} 
+        onClose={() => setSavePresetDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <SaveIcon sx={{ color: '#7c3aed' }} />
+          Save Model Preset
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2, color: mode === 'dark' ? '#aaa' : '#666' }}>
+            Save your current configuration as a preset for easy reuse later.
+          </Typography>
+          <TextField
+            fullWidth
+            label="Preset Name"
+            value={presetName}
+            onChange={(e) => setPresetName(e.target.value)}
+            placeholder="e.g., High Accuracy RF Model"
+            sx={{ mb: 2 }}
+          />
+          <Alert severity="info" sx={{ mb: 2 }}>
+            {activeTab === 1 
+              ? 'This will save the current code from the Code Editor.' 
+              : 'This will save your Visual Builder settings (algorithm, features, parameters).'}
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSavePresetDialogOpen(false)}>Cancel</Button>
+          <Button 
+            variant="contained" 
+            onClick={handleSavePreset}
+            sx={{ background: 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)' }}
+          >
+            Save Preset
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Config/Code Viewer Dialog */}
+      <Dialog 
+        open={configViewerOpen} 
+        onClose={() => setConfigViewerOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {selectedRunConfig?.source === 'code_editor' || selectedRunConfig?.type === 'custom_code' ? (
+            <>
+              <CodeIcon sx={{ color: '#ec4899' }} />
+              Custom Code Run
+            </>
+          ) : (
+            <>
+              <TuneIcon sx={{ color: '#7c3aed' }} />
+              Visual Builder Configuration
+            </>
+          )}
+        </DialogTitle>
+        <DialogContent>
+          {selectedRunConfig && (
+            <Box>
+              {/* Metrics Summary */}
+              <Box sx={{ mb: 3, p: 2, backgroundColor: mode === 'dark' ? 'rgba(124, 58, 237, 0.1)' : 'rgba(124, 58, 237, 0.05)', borderRadius: '12px' }}>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>📊 Performance Metrics</Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={4}>
+                    <Typography variant="caption" color="textSecondary">F1 Score</Typography>
+                    <Typography variant="h6" sx={{ fontFamily: 'monospace', color: '#22c55e' }}>
+                      {((selectedRunConfig.metrics?.f1_score || 0) * 100).toFixed(1)}%
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={4}>
+                    <Typography variant="caption" color="textSecondary">AUC-ROC</Typography>
+                    <Typography variant="h6" sx={{ fontFamily: 'monospace', color: '#3b82f6' }}>
+                      {((selectedRunConfig.metrics?.auc_roc || 0) * 100).toFixed(1)}%
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={4}>
+                    <Typography variant="caption" color="textSecondary">Accuracy</Typography>
+                    <Typography variant="h6" sx={{ fontFamily: 'monospace', color: '#f59e0b' }}>
+                      {((selectedRunConfig.metrics?.accuracy || 0) * 100).toFixed(1)}%
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Box>
+
+              {/* Run Info */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>ℹ️ Run Information</Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="textSecondary">Dataset</Typography>
+                    <Typography variant="body2">{selectedRunConfig.dataset_name || selectedRunConfig.target_dataset || 'N/A'}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="textSecondary">Target Field</Typography>
+                    <Typography variant="body2">{selectedRunConfig.target_field || 'xP'}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="textSecondary">Execution Time</Typography>
+                    <Typography variant="body2">{selectedRunConfig.execution_time || 'N/A'}s</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="textSecondary">Timestamp</Typography>
+                    <Typography variant="body2">
+                      {selectedRunConfig.timestamp ? new Date(selectedRunConfig.timestamp).toLocaleString() : 'N/A'}
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Box>
+
+              {/* Code or Config Display */}
+              {selectedRunConfig.code ? (
+                <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>💻 Custom Code</Typography>
+                    <Button
+                      size="small"
+                      startIcon={<CopyIcon />}
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedRunConfig.code);
+                        Swal.fire('Copied!', 'Code copied to clipboard', 'success');
+                      }}
+                    >
+                      Copy Code
+                    </Button>
+                  </Box>
+                  <Box 
+                    sx={{ 
+                      backgroundColor: mode === 'dark' ? '#1a1a2e' : '#f5f5f5', 
+                      p: 2, 
+                      borderRadius: '8px',
+                      maxHeight: '300px',
+                      overflow: 'auto',
+                      fontFamily: 'monospace',
+                      fontSize: '0.85rem',
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    {selectedRunConfig.code}
+                  </Box>
+                </Box>
+              ) : selectedRunConfig.config ? (
+                <Box>
+                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>⚙️ Configuration</Typography>
+                  <Box sx={{ backgroundColor: mode === 'dark' ? '#1a1a2e' : '#f5f5f5', p: 2, borderRadius: '8px' }}>
+                    <Grid container spacing={2}>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="textSecondary">Algorithm</Typography>
+                        <Typography variant="body2">{selectedRunConfig.config.algorithm || selectedRunConfig.algorithm || 'N/A'}</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="textSecondary">Train/Test Split</Typography>
+                        <Typography variant="body2">{selectedRunConfig.config.train_size ? `${selectedRunConfig.config.train_size * 100}%` : 'N/A'}</Typography>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Typography variant="caption" color="textSecondary">Features Used</Typography>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                          {(selectedRunConfig.config.features || []).map((feature, i) => (
+                            <Chip key={i} label={feature} size="small" />
+                          ))}
+                        </Box>
+                      </Grid>
+                      {selectedRunConfig.config.algorithm_params && Object.keys(selectedRunConfig.config.algorithm_params).length > 0 && (
+                        <Grid item xs={12}>
+                          <Typography variant="caption" color="textSecondary">Algorithm Parameters</Typography>
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                            {JSON.stringify(selectedRunConfig.config.algorithm_params, null, 2)}
+                          </Typography>
+                        </Grid>
+                      )}
+                    </Grid>
+                  </Box>
+                </Box>
+              ) : (
+                <Alert severity="info">No detailed configuration data available for this run.</Alert>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          {selectedRunConfig?.config && (
+            <Button
+              startIcon={<ApplyIcon />}
+              onClick={() => {
+                // Load config into visual builder
+                const config = selectedRunConfig.config;
+                if (config.algorithm) setSelectedAlgorithm(config.algorithm);
+                if (config.features) setSelectedFeatures(config.features);
+                if (config.train_size) setTrainSize(config.train_size * 100);
+                if (config.balance_classes !== undefined) setBalanceClasses(config.balance_classes);
+                if (config.algorithm_params) setAlgorithmParams(config.algorithm_params);
+                setActiveTab(0);
+                setConfigViewerOpen(false);
+                Swal.fire('Loaded!', 'Configuration loaded into Visual Builder', 'success');
+              }}
+            >
+              Load Config
+            </Button>
+          )}
+          {selectedRunConfig?.code && (
+            <Button
+              startIcon={<CodeIcon />}
+              onClick={() => {
+                setCustomCode(selectedRunConfig.code);
+                setActiveTab(1);
+                setConfigViewerOpen(false);
+                Swal.fire('Loaded!', 'Code loaded into Code Editor', 'success');
+              }}
+            >
+              Load Code
+            </Button>
+          )}
+          <Button onClick={() => setConfigViewerOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
 

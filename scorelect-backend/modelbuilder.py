@@ -413,17 +413,19 @@ def api_run_custom_code():
         start_time = time.time()
         df, game_docs = load_dataset(uid, dataset_name)
         
-        # Restricted execution environment
+        # Restricted execution environment - all imports pre-loaded
         exec_globals = {
             '__builtins__': {'print': print, 'len': len, 'range': range, 'list': list, 'dict': dict,
                             'str': str, 'int': int, 'float': float, 'bool': bool, 'tuple': tuple,
                             'set': set, 'sum': sum, 'min': min, 'max': max, 'abs': abs, 'round': round,
-                            'sorted': sorted, 'enumerate': enumerate, 'zip': zip, 'any': any, 'all': all},
+                            'sorted': sorted, 'enumerate': enumerate, 'zip': zip, 'any': any, 'all': all,
+                            'isinstance': isinstance, 'hasattr': hasattr, 'getattr': getattr, 'setattr': setattr},
             'pd': pd, 'np': np, 'df': df.copy(),
             'StandardScaler': StandardScaler, 'train_test_split': train_test_split,
             'RandomForestClassifier': RandomForestClassifier, 'GradientBoostingClassifier': GradientBoostingClassifier,
             'LogisticRegression': LogisticRegression, 'MLPClassifier': MLPClassifier, 'KNeighborsClassifier': KNeighborsClassifier,
             'accuracy_score': accuracy_score, 'f1_score': f1_score, 'roc_auc_score': roc_auc_score,
+            'precision_score': precision_score, 'recall_score': recall_score,
             'engineer_features': engineer_features, 'create_model': create_model, 'calculate_metrics': calculate_metrics,
         }
         if SMOTE_AVAILABLE:
@@ -461,6 +463,28 @@ def api_run_custom_code():
                     })
                     games_updated += 1
         
+        # Save code run to history if there are metrics
+        if metrics:
+            try:
+                from firebase_admin import firestore as fs
+                db.collection('modelLabRuns').add({
+                    'uid': uid, 
+                    'type': 'custom_code',
+                    'source': 'code_editor',
+                    'algorithm': 'custom_code',
+                    'model_type': 'custom_code',
+                    'code': code[:5000],  # Limit code size stored
+                    'dataset_name': dataset_name,
+                    'target_field': target_field,
+                    'metrics': metrics,
+                    'shots_updated': shots_updated,
+                    'games_updated': games_updated,
+                    'execution_time': round(time.time() - start_time, 2),
+                    'timestamp': fs.SERVER_TIMESTAMP
+                })
+            except Exception as save_err:
+                logging.warning(f"Could not save code run to history: {save_err}")
+        
         return jsonify({
             'success': True, 'output': output, 'metrics': metrics,
             'predictions_count': len(predictions), 'shots_updated': shots_updated,
@@ -476,3 +500,98 @@ def api_run_custom_code():
 def health_check():
     """Health check endpoint."""
     return jsonify({'status': 'healthy', 'module': 'model_lab', 'smote_available': SMOTE_AVAILABLE, 'version': '2.0.0'})
+
+
+@model_lab_bp.route('/presets', methods=['GET'])
+def api_get_presets():
+    """Get saved model presets for a user."""
+    try:
+        uid = request.args.get('uid')
+        if not uid:
+            return jsonify({'error': 'uid required'}), 400
+        
+        db = get_db()
+        presets_ref = db.collection('modelLabPresets').where('uid', '==', uid).stream()
+        
+        presets = []
+        for doc in presets_ref:
+            preset = doc.to_dict()
+            preset['id'] = doc.id
+            presets.append(preset)
+        
+        return jsonify({'success': True, 'presets': presets})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@model_lab_bp.route('/presets', methods=['POST'])
+def api_save_preset():
+    """Save a model preset."""
+    try:
+        data = request.json
+        uid = data.get('uid')
+        name = data.get('name')
+        config = data.get('config')
+        preset_type = data.get('type', 'visual')  # 'visual' or 'code'
+        code = data.get('code', '')
+        
+        if not all([uid, name, config]):
+            return jsonify({'error': 'uid, name, and config required'}), 400
+        
+        db = get_db()
+        
+        # Check if preset with same name exists
+        existing = db.collection('modelLabPresets')\
+            .where('uid', '==', uid)\
+            .where('name', '==', name)\
+            .limit(1).stream()
+        
+        preset_data = {
+            'uid': uid,
+            'name': name,
+            'config': config,
+            'type': preset_type,
+            'code': code[:10000] if code else '',
+            'updated_at': datetime.utcnow().isoformat()
+        }
+        
+        existing_doc = None
+        for doc in existing:
+            existing_doc = doc
+            break
+        
+        if existing_doc:
+            # Update existing
+            db.collection('modelLabPresets').document(existing_doc.id).update(preset_data)
+            return jsonify({'success': True, 'message': 'Preset updated', 'id': existing_doc.id})
+        else:
+            # Create new
+            preset_data['created_at'] = datetime.utcnow().isoformat()
+            doc_ref = db.collection('modelLabPresets').add(preset_data)
+            return jsonify({'success': True, 'message': 'Preset saved', 'id': doc_ref[1].id})
+    except Exception as e:
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
+@model_lab_bp.route('/presets/<preset_id>', methods=['DELETE'])
+def api_delete_preset(preset_id):
+    """Delete a model preset."""
+    try:
+        uid = request.args.get('uid')
+        if not uid:
+            return jsonify({'error': 'uid required'}), 400
+        
+        db = get_db()
+        doc_ref = db.collection('modelLabPresets').document(preset_id)
+        doc = doc_ref.get()
+        
+        if not doc.exists:
+            return jsonify({'error': 'Preset not found'}), 404
+        
+        if doc.to_dict().get('uid') != uid:
+            return jsonify({'error': 'Unauthorized'}), 403
+        
+        doc_ref.delete()
+        return jsonify({'success': True, 'message': 'Preset deleted'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

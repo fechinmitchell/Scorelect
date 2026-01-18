@@ -29,6 +29,7 @@ from sklearn.calibration import CalibratedClassifierCV
 from imblearn.over_sampling import SMOTE  # SMOTE for handling class imbalance
 from sklearn.calibration import calibration_curve
 
+from modelbuilder import model_lab_bp, init_firebase
 
 
 # Optional: Stripe (if used elsewhere in your application)
@@ -129,6 +130,8 @@ firebase_admin.initialize_app(cred)
 
 # Initialize Firestore database client
 db = firestore.client()
+init_firebase(db)
+app.register_blueprint(model_lab_bp)
 
 # Initialize OpenAI client with the API key loaded from environment variables
 client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))

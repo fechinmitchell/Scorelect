@@ -72,6 +72,7 @@ const App = () => {
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState('free');
   const [isAdmin, setIsAdmin] = useState(false); // Track admin status separately
+  const [authLoading, setAuthLoading] = useState(true); // Track if auth is still loading
   const navigate = useNavigate();
   const { loadedCoords, setLoadedCoords } = useContext(GameContext);
 
@@ -101,6 +102,7 @@ const App = () => {
         setUserRole('free');
         setIsAdmin(false);
       }
+      setAuthLoading(false); // Auth check complete
     });
     return () => unsubscribe();
   }, []);
@@ -174,6 +176,25 @@ const App = () => {
 
   // Protected route component for admin-only access
   const ProtectedAdminRoute = ({ children }) => {
+    // Wait for auth to finish loading before redirecting
+    if (authLoading) {
+      return (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div className="spinner" style={{ 
+              width: '40px', 
+              height: '40px', 
+              border: '4px solid #f3f3f3',
+              borderTop: '4px solid #7c3aed',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              margin: '0 auto 16px'
+            }} />
+            <p>Loading...</p>
+          </div>
+        </div>
+      );
+    }
     if (!isAdmin) {
       return <Navigate to="/" replace />;
     }
@@ -204,7 +225,7 @@ const App = () => {
                   <Route path="/select-sport" element={<SportSelectionPage onSportSelect={handleSportChange} />} />
                   <Route path="/upgrade" element={<Upgrade setUserRole={setUserRole} />} />
                   <Route path="/saved-games" element={<SavedGames userType="paid" onLoadGame={loadGame} selectedSport={selectedSport} />} />
-                  <Route path="/profile" element={user ? <Profile onLogout={handleLogout} apiUrl={API_BASE_URL} /> : <Navigate replace to="/signin" />} />
+                  <Route path="/profile" element={authLoading ? <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}><p>Loading...</p></div> : (user ? <Profile onLogout={handleLogout} apiUrl={API_BASE_URL} /> : <Navigate replace to="/signin" />)} />
                   <Route path="/signin" element={<SignIn apiUrl={API_BASE_URL} />} />
                   <Route path="/signup" element={<SignUp apiUrl={API_BASE_URL} />} />
                   <Route path="/success" element={<Success setUserRole={setUserRole} />} />

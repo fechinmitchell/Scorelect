@@ -1,5 +1,5 @@
 """
-Model Builder / Python Lab for Scorelect v2.1
+Model Builder / Python Lab for Scorelect v2.2
 =============================================
 Enhanced version with:
 - Training dataset vs Target dataset support
@@ -8,6 +8,7 @@ Enhanced version with:
 - Use existing xP/xG values as features
 - FIXED: Firestore queries now work without composite indexes (with fallback)
 - OPTIMIZED: Reduced memory usage and faster queries
+- NEW: Custom model plugin system support
 
 Add to app.py:
     from modelbuilder import model_lab_bp, init_firebase
@@ -32,6 +33,20 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
+
+# Import custom models
+try:
+    from custom_models import (
+        get_available_models, 
+        get_model, 
+        run_custom_model,
+        AVAILABLE_MODELS
+    )
+    CUSTOM_MODELS_AVAILABLE = True
+except ImportError as e:
+    logging.warning(f"Custom models not available: {e}")
+    CUSTOM_MODELS_AVAILABLE = False
+    AVAILABLE_MODELS = {}
 
 try:
     from imblearn.over_sampling import SMOTE
@@ -155,6 +170,35 @@ def load_dataset(uid, dataset_name):
     return df, game_docs
 
 
+def load_dataset_raw(uid, dataset_name):
+    """Load dataset from Firestore WITHOUT engineering features (for custom models)."""
+    db = get_db()
+    games_ref = db.collection("savedGames").document(uid).collection("games")\
+        .where("datasetName", "==", dataset_name)
+    
+    all_shots = []
+    game_docs = []
+    
+    for game_doc in games_ref.stream():
+        game_data = game_doc.to_dict()
+        game_shots = game_data.get('gameData', [])
+        game_docs.append({
+            'id': game_doc.id,
+            'data': game_data,
+            'shot_indices': list(range(len(all_shots), len(all_shots) + len(game_shots)))
+        })
+        for idx, shot in enumerate(game_shots):
+            shot['_game_id'] = game_doc.id
+            shot['_shot_idx'] = idx
+            all_shots.append(shot)
+    
+    if not all_shots:
+        raise ValueError(f"No shots found in dataset '{dataset_name}'")
+    
+    df = pd.DataFrame(all_shots)
+    return df, game_docs
+
+
 def create_model(algorithm, params=None):
     """Create a model instance based on algorithm name."""
     params = params or {}
@@ -204,16 +248,217 @@ def calculate_metrics(y_true, y_pred, y_proba):
 
 
 # =============================================================================
-# API ENDPOINTS
+# CUSTOM MODEL ENDPOINTS
+# =============================================================================
+
+@model_lab_bp.route('/custom-models', methods=['GET'])
+def api_get_custom_models():
+    """Get list of available custom models."""
+    try:
+        if not CUSTOM_MODELS_AVAILABLE:
+            return jsonify({
+                'success': False, 
+                'error': 'Custom models module not available',
+                'models': []
+            }), 200
+        
+        models = get_available_models()
+        return jsonify({
+            'success': True,
+            'models': models,
+            'count': len(models)
+        })
+    except Exception as e:
+        logging.error(f"Error getting custom models: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@model_lab_bp.route('/run-custom-model', methods=['POST'])
+def api_run_custom_model():
+    """
+    Run a custom model from the registry.
+    
+    Request body:
+    {
+        "uid": "user_id",
+        "model_key": "cmc_v3",
+        "training_dataset": "dataset_name",
+        "target_dataset": "dataset_name" (optional, defaults to training_dataset),
+        "apply_to_target": true/false,
+        "target_field": "xP" or "xG",
+        "run_name": "optional name for this run"
+    }
+    """
+    try:
+        if not CUSTOM_MODELS_AVAILABLE:
+            return jsonify({'error': 'Custom models module not available'}), 400
+        
+        data = request.json
+        uid = data.get('uid')
+        model_key = data.get('model_key')
+        training_dataset = data.get('training_dataset')
+        target_dataset = data.get('target_dataset', training_dataset)
+        apply_to_target = data.get('apply_to_target', False)
+        target_field = data.get('target_field', 'xP')
+        run_name = data.get('run_name', '').strip()
+        
+        if not all([uid, model_key, training_dataset]):
+            return jsonify({'error': 'uid, model_key, and training_dataset required'}), 400
+        
+        if model_key not in AVAILABLE_MODELS:
+            return jsonify({
+                'error': f'Unknown model: {model_key}',
+                'available': list(AVAILABLE_MODELS.keys())
+            }), 400
+        
+        start_time = time.time()
+        db = get_db()
+        
+        # Load training data (raw - the custom model will engineer its own features)
+        logging.info(f"Loading training dataset: {training_dataset}")
+        train_df, train_game_docs = load_dataset_raw(uid, training_dataset)
+        logging.info(f"Loaded {len(train_df)} shots for training")
+        
+        # Load target data if different
+        if target_dataset != training_dataset:
+            logging.info(f"Loading target dataset: {target_dataset}")
+            target_df, target_game_docs = load_dataset_raw(uid, target_dataset)
+            logging.info(f"Loaded {len(target_df)} shots for prediction")
+        else:
+            target_df, target_game_docs = train_df, train_game_docs
+        
+        # Run the custom model
+        logging.info(f"Running custom model: {model_key}")
+        result = run_custom_model(
+            model_key=model_key,
+            train_df=train_df,
+            target_df=target_df if apply_to_target else None,
+            apply_to_target=apply_to_target,
+            target_field=target_field
+        )
+        
+        metrics = result['metrics']
+        predictions = result.get('predictions', [])
+        
+        # Update target dataset if predictions were generated
+        shots_updated, games_updated = 0, 0
+        
+        if apply_to_target and predictions:
+            logging.info(f"Applying {len(predictions)} predictions to target dataset")
+            
+            for game_info in target_game_docs:
+                game_data = game_info['data']
+                game_shots = game_data.get('gameData', [])
+                updated = False
+                
+                for local_idx, global_idx in enumerate(game_info['shot_indices']):
+                    if local_idx < len(game_shots) and global_idx < len(predictions):
+                        game_shots[local_idx][target_field] = round(float(predictions[global_idx]), 4)
+                        shots_updated += 1
+                        updated = True
+                
+                if updated:
+                    db.collection("savedGames").document(uid).collection("games").document(game_info['id']).update({
+                        'gameData': game_shots,
+                        'lastModelUpdate': datetime.utcnow().isoformat(),
+                        'modelConfig': {
+                            'model_key': model_key,
+                            'model_name': result['model_name'],
+                            'target': target_field,
+                            'metrics': metrics
+                        }
+                    })
+                    games_updated += 1
+        
+        execution_time = round(time.time() - start_time, 2)
+        
+        # Save to history
+        try:
+            from firebase_admin import firestore as fs
+            
+            if not run_name:
+                run_name = f"{result['model_name']} - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
+            
+            db.collection('modelLabRuns').add({
+                'uid': uid,
+                'type': 'custom_model',
+                'source': 'custom_model_registry',
+                'model_key': model_key,
+                'model_type': model_key,
+                'algorithm': model_key,
+                'model_name': result['model_name'],
+                'run_name': run_name,
+                'training_dataset': training_dataset,
+                'target_dataset': target_dataset,
+                'target_field': target_field,
+                'metrics': metrics,
+                'features_used': metrics.get('features_used', []),
+                'train_samples': metrics.get('train_samples', 0),
+                'test_samples': metrics.get('test_samples', 0),
+                'shots_updated': shots_updated,
+                'games_updated': games_updated,
+                'execution_time': execution_time,
+                'timestamp': fs.SERVER_TIMESTAMP
+            })
+            logging.info(f"Saved custom model run to history")
+        except Exception as save_err:
+            logging.warning(f"Could not save to history: {save_err}")
+        
+        return jsonify({
+            'success': True,
+            'model_key': model_key,
+            'model_name': result['model_name'],
+            'metrics': metrics,
+            'shots_updated': shots_updated,
+            'games_updated': games_updated,
+            'execution_time': execution_time,
+            'dataset_info': {
+                'training_dataset': training_dataset,
+                'target_dataset': target_dataset,
+                'training_shots': len(train_df),
+                'target_shots': len(target_df) if apply_to_target else 0
+            }
+        })
+        
+    except Exception as e:
+        logging.error(f"Error running custom model: {e}")
+        return jsonify({
+            'success': False, 
+            'error': str(e), 
+            'traceback': traceback.format_exc()
+        }), 500
+
+
+@model_lab_bp.route('/custom-model-info/<model_key>', methods=['GET'])
+def api_get_custom_model_info(model_key):
+    """Get detailed info about a specific custom model."""
+    try:
+        if not CUSTOM_MODELS_AVAILABLE:
+            return jsonify({'error': 'Custom models module not available'}), 400
+        
+        if model_key not in AVAILABLE_MODELS:
+            return jsonify({
+                'error': f'Unknown model: {model_key}',
+                'available': list(AVAILABLE_MODELS.keys())
+            }), 404
+        
+        model = get_model(model_key)
+        return jsonify({
+            'success': True,
+            'model': model.get_info()
+        })
+    except Exception as e:
+        logging.error(f"Error getting model info: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# ORIGINAL API ENDPOINTS (unchanged)
 # =============================================================================
 
 @model_lab_bp.route('/datasets', methods=['GET'])
 def api_get_datasets():
-    """Get list of datasets with game counts for a user - MEMORY OPTIMIZED.
-    
-    NOTE: This no longer returns shot counts to avoid loading all gameData.
-    Shot counts are calculated on-demand when a dataset is selected.
-    """
+    """Get list of datasets with game counts for a user - MEMORY OPTIMIZED."""
     try:
         uid = request.args.get('uid')
         if not uid:
@@ -222,8 +467,6 @@ def api_get_datasets():
         db = get_db()
         datasets = {}
         
-        # OPTIMIZATION: Only fetch datasetName - NOT gameData
-        # This reduces memory from potentially MBs to just a few KB
         docs = db.collection('savedGames').document(uid).collection('games')\
             .select(['datasetName']).stream()
         
@@ -243,7 +486,7 @@ def api_get_datasets():
 
 @model_lab_bp.route('/dataset-stats', methods=['GET'])
 def api_get_dataset_stats():
-    """Get detailed stats for a SINGLE dataset - call this when user selects one."""
+    """Get detailed stats for a SINGLE dataset."""
     try:
         uid = request.args.get('uid')
         dataset_name = request.args.get('dataset_name')
@@ -253,7 +496,6 @@ def api_get_dataset_stats():
         
         db = get_db()
         
-        # Only load games for this specific dataset
         docs = db.collection('savedGames').document(uid).collection('games')\
             .where('datasetName', '==', dataset_name)\
             .select(['gameData']).stream()
@@ -288,7 +530,6 @@ def api_get_datasets_quick():
         
         db = get_db()
         
-        # OPTIMIZATION: Only fetch datasetName field
         docs = db.collection('savedGames').document(uid).collection('games')\
             .select(['datasetName']).stream()
         
@@ -544,10 +785,8 @@ def api_get_history():
         db = get_db()
         runs = []
         
-        # Try indexed query first, fallback to unordered if index doesn't exist
         try:
             from firebase_admin import firestore as fs
-            # Attempt ordered query (requires composite index)
             lab_runs = db.collection('modelLabRuns')\
                 .where('uid', '==', uid)\
                 .order_by('timestamp', direction=fs.Query.DESCENDING)\
@@ -563,7 +802,6 @@ def api_get_history():
                 runs.append(run_data)
                 
         except Exception as e:
-            # FALLBACK: Query without ordering, sort in Python
             logging.warning(f"Indexed query failed, using fallback: {e}")
             try:
                 lab_runs_fallback = db.collection('modelLabRuns')\
@@ -579,7 +817,6 @@ def api_get_history():
                         run_data['timestamp'] = run_data['timestamp'].isoformat() if hasattr(run_data['timestamp'], 'isoformat') else str(run_data['timestamp'])
                     runs.append(run_data)
                 
-                # Sort in Python
                 runs.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
                 runs = runs[:50]
                 
@@ -649,7 +886,21 @@ def api_get_functions():
         {'name': 'LogisticRegression', 'description': 'Logistic regression classifier', 'params': ['C', 'max_iter']},
         {'name': 'MLPClassifier', 'description': 'Multi-layer perceptron neural network', 'params': ['hidden_layer_sizes', 'learning_rate_init']},
     ]
-    return jsonify({'success': True, 'functions': functions, 'smote_available': SMOTE_AVAILABLE})
+    
+    # Add custom models info
+    if CUSTOM_MODELS_AVAILABLE:
+        functions.append({
+            'name': 'Custom Models',
+            'description': f'Available custom models: {", ".join(AVAILABLE_MODELS.keys())}',
+            'params': ['model_key']
+        })
+    
+    return jsonify({
+        'success': True, 
+        'functions': functions, 
+        'smote_available': SMOTE_AVAILABLE,
+        'custom_models_available': CUSTOM_MODELS_AVAILABLE
+    })
 
 
 @model_lab_bp.route('/run-custom-code', methods=['POST'])
@@ -684,6 +935,7 @@ def api_run_custom_code():
             'df': df.copy(),
             'StandardScaler': StandardScaler,
             'train_test_split': train_test_split,
+            'cross_val_score': cross_val_score,
             'RandomForestClassifier': RandomForestClassifier,
             'GradientBoostingClassifier': GradientBoostingClassifier,
             'LogisticRegression': LogisticRegression,
@@ -789,7 +1041,9 @@ def health_check():
         'status': 'healthy',
         'module': 'model_lab',
         'smote_available': SMOTE_AVAILABLE,
-        'version': '2.1.0'
+        'custom_models_available': CUSTOM_MODELS_AVAILABLE,
+        'available_custom_models': list(AVAILABLE_MODELS.keys()) if CUSTOM_MODELS_AVAILABLE else [],
+        'version': '2.2.0'
     })
 
 
@@ -832,7 +1086,6 @@ def api_save_preset():
         
         db = get_db()
         
-        # Check if preset with same name exists
         existing = db.collection('modelLabPresets')\
             .where('uid', '==', uid)\
             .where('name', '==', name)\
@@ -891,36 +1144,14 @@ def api_delete_preset(preset_id):
 
 @model_lab_bp.route('/predict', methods=['POST'])
 def api_predict():
-    """
-    Apply a trained model configuration to predict xP/xG for a set of shots.
-    This allows users to use their trained models on Team/Player data pages.
-    
-    Request body:
-    {
-        "uid": "user_id",
-        "model_config": {
-            "algorithm": "random_forest",
-            "features": ["dist", "angle_abs", ...],
-            "algorithm_params": {...}
-        },
-        "shots": [...],  // Array of shot objects
-        "training_dataset": "dataset_name"  // Optional: dataset to train on
-    }
-    
-    Returns:
-    {
-        "success": true,
-        "predictions": [0.45, 0.32, ...],  // xP/xG probability for each shot
-        "model_info": {...}
-    }
-    """
+    """Apply a trained model configuration to predict xP/xG for a set of shots."""
     try:
         data = request.json
         uid = data.get('uid')
         model_config = data.get('model_config', {})
         shots = data.get('shots', [])
         training_dataset = data.get('training_dataset')
-        target_field = data.get('target_field', 'xP')  # 'xP' or 'xG'
+        target_field = data.get('target_field', 'xP')
         
         if not uid:
             return jsonify({'error': 'uid required'}), 400
@@ -931,24 +1162,19 @@ def api_predict():
         
         start_time = time.time()
         
-        # Convert shots to DataFrame and engineer features
         df_shots = pd.DataFrame(shots)
         df_shots = engineer_features(df_shots)
         
-        # Get model configuration
         algorithm = model_config.get('algorithm', 'random_forest')
         features = model_config.get('features', ['dist', 'angle_abs', 'pressure_value', 'is_setplay'])
         params = model_config.get('algorithm_params', {})
         
-        # Check which features are available
         available_features = [f for f in features if f in df_shots.columns]
         if not available_features:
             return jsonify({'error': 'No valid features found in shot data'}), 400
         
         X_predict = df_shots[available_features].fillna(0)
         
-        # If we have a training dataset, train the model fresh
-        # Otherwise, use a simpler approach based on the algorithm
         if training_dataset:
             try:
                 df_train, _ = load_dataset(uid, training_dataset)
@@ -956,16 +1182,13 @@ def api_predict():
                 y_train = df_train['is_goal'] if target_field == 'xG' else df_train['scored']
                 X_train = df_train[available_features].fillna(0)
                 
-                # Scale features
                 scaler = StandardScaler()
                 X_train_scaled = scaler.fit_transform(X_train)
                 X_predict_scaled = scaler.transform(X_predict)
                 
-                # Train model
                 model = create_model(algorithm, params)
                 model.fit(X_train_scaled, y_train)
                 
-                # Get predictions
                 predictions = model.predict_proba(X_predict_scaled)[:, 1].tolist()
                 
                 execution_time = round(time.time() - start_time, 2)
@@ -984,10 +1207,8 @@ def api_predict():
                 
             except Exception as train_err:
                 logging.warning(f"Could not train from dataset, using fallback: {train_err}")
-                # Fall through to distance-based prediction
         
         # Fallback: Use distance-based heuristic predictions
-        # This is similar to the default calculateXP/calculateXG functions
         predictions = []
         
         for _, shot in df_shots.iterrows():
@@ -995,7 +1216,6 @@ def api_predict():
             is_setplay = shot.get('is_setplay', 0)
             
             if target_field == 'xG':
-                # Goal probability based on distance
                 if dist <= 6:
                     prob = 0.45
                 elif dist <= 10:
@@ -1007,7 +1227,6 @@ def api_predict():
                 else:
                     prob = 0.05
             else:
-                # Point probability based on distance and set play
                 if is_setplay:
                     if dist <= 20:
                         prob = 0.82

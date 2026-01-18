@@ -15,6 +15,7 @@ import {
   Storage as StorageIcon, ModelTraining as TrainIcon, DoubleArrow as TransferIcon,
   ContentCopy as CopyIcon, Info as InfoIcon, Save as SaveIcon, Delete as DeleteIcon,
   Visibility as ViewIcon, BookmarkBorder as PresetIcon, Bookmark as BookmarkFilledIcon,
+  Extension as PluginIcon,
 } from '@mui/icons-material';
 import { getAuth } from 'firebase/auth';
 import Swal from 'sweetalert2';
@@ -244,6 +245,19 @@ const ModelLab = ({ mode = 'dark' }) => {
   const [filterType, setFilterType] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Custom Models Tab (Tab 3) States
+  const [customModels, setCustomModels] = useState([]);
+  const [loadingCustomModels, setLoadingCustomModels] = useState(false);
+  const [selectedCustomModel, setSelectedCustomModel] = useState(null);
+  const [customModelTrainingDataset, setCustomModelTrainingDataset] = useState('');
+  const [customModelTargetDataset, setCustomModelTargetDataset] = useState('');
+  const [customModelUseSameDataset, setCustomModelUseSameDataset] = useState(true);
+  const [customModelTargetField, setCustomModelTargetField] = useState('xP');
+  const [customModelApplyToTarget, setCustomModelApplyToTarget] = useState(true);
+  const [isRunningCustomModel, setIsRunningCustomModel] = useState(false);
+  const [customModelResult, setCustomModelResult] = useState(null);
+  const [customModelRunName, setCustomModelRunName] = useState('');
+
   // Fetch datasets - uses quick endpoint first, then falls back to main endpoint
   const fetchDatasets = useCallback(async (showErrorOnFail = false) => {
     try {
@@ -270,6 +284,8 @@ const ModelLab = ({ mode = 'dark' }) => {
         if (datasetNames.length > 0) {
           if (!trainingDataset) setTrainingDataset(datasetNames[0]);
           if (!targetDataset) setTargetDataset(datasetNames[0]);
+          if (!customModelTrainingDataset) setCustomModelTrainingDataset(datasetNames[0]);
+          if (!customModelTargetDataset) setCustomModelTargetDataset(datasetNames[0]);
         }
         setLoadingDatasets(false);
         
@@ -299,6 +315,8 @@ const ModelLab = ({ mode = 'dark' }) => {
           if (datasetList.length > 0) {
             if (!trainingDataset) setTrainingDataset(datasetList[0]);
             if (!targetDataset) setTargetDataset(datasetList[0]);
+            if (!customModelTrainingDataset) setCustomModelTrainingDataset(datasetList[0]);
+            if (!customModelTargetDataset) setCustomModelTargetDataset(datasetList[0]);
           }
           return; // Success - exit the function
         } catch (err) {
@@ -412,6 +430,115 @@ const ModelLab = ({ mode = 'dark' }) => {
     }
   }, [auth]);
 
+  // Fetch custom models from backend
+  const fetchCustomModels = useCallback(async () => {
+    try {
+      setLoadingCustomModels(true);
+      const user = auth.currentUser;
+      if (!user) return;
+      
+      const response = await axios.get(
+        `${BASE_API_URL}/api/model-lab/custom-models`,
+        { timeout: 15000 }
+      );
+      
+      const models = response.data.models || [];
+      setCustomModels(models);
+      
+      // Auto-select first model if none selected
+      if (models.length > 0 && !selectedCustomModel) {
+        setSelectedCustomModel(models[0].key);
+      }
+    } catch (error) {
+      console.error('Error fetching custom models:', error);
+      // Set some defaults if endpoint doesn't exist yet
+      setCustomModels([
+        {
+          key: 'cmc_v3',
+          name: 'CMC v3',
+          description: 'Logistic Regression with 20+ engineered features. The gold standard for GAA xP.',
+          features: ['dist', 'angle_abs', 'pressure_value', 'is_setplay', 'close_range', 'mid_range', 'long_range'],
+          target: 'scored',
+          version: '3.0'
+        },
+        {
+          key: 'random_forest',
+          name: 'Random Forest',
+          description: 'Ensemble of decision trees. Great for capturing non-linear relationships.',
+          features: ['dist', 'angle_abs', 'pressure_value', 'is_setplay'],
+          target: 'scored',
+          version: '1.0'
+        },
+      ]);
+      if (!selectedCustomModel) {
+        setSelectedCustomModel('cmc_v3');
+      }
+    } finally {
+      setLoadingCustomModels(false);
+    }
+  }, [auth, selectedCustomModel]);
+
+  // Run a custom model
+  const handleRunCustomModel = async () => {
+    if (!selectedCustomModel) {
+      Swal.fire('No Model Selected', 'Please select a model to run.', 'warning');
+      return;
+    }
+    if (!customModelTrainingDataset) {
+      Swal.fire('No Dataset', 'Please select a training dataset.', 'warning');
+      return;
+    }
+
+    setIsRunningCustomModel(true);
+    setCustomModelResult(null);
+
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Not authenticated');
+
+      const targetDs = customModelUseSameDataset ? customModelTrainingDataset : customModelTargetDataset;
+
+      const response = await axios.post(
+        `${BASE_API_URL}/api/model-lab/run-custom-model`,
+        {
+          uid: user.uid,
+          model_key: selectedCustomModel,
+          training_dataset: customModelTrainingDataset,
+          target_dataset: targetDs,
+          apply_to_target: customModelApplyToTarget,
+          target_field: customModelTargetField,
+          run_name: customModelRunName || undefined,
+        },
+        { timeout: 120000 } // 2 minutes timeout
+      );
+
+      if (response.data.success) {
+        setCustomModelResult(response.data);
+        setCustomModelRunName(''); // Clear run name
+        fetchModelHistory(); // Refresh leaderboard
+
+        Swal.fire({
+          title: '✨ Model Complete!',
+          html: `
+            <p><strong>Model:</strong> ${response.data.model_name}</p>
+            <p><strong>Accuracy:</strong> ${((response.data.metrics?.accuracy || 0) * 100).toFixed(1)}%</p>
+            <p><strong>F1 Score:</strong> ${((response.data.metrics?.f1_score || 0) * 100).toFixed(1)}%</p>
+            ${customModelApplyToTarget ? `<p><strong>Shots Updated:</strong> ${response.data.shots_updated || 0}</p>` : ''}
+          `,
+          icon: 'success',
+          confirmButtonColor: '#7c3aed'
+        });
+      } else {
+        throw new Error(response.data.error || 'Model run failed');
+      }
+    } catch (error) {
+      console.error('Custom model error:', error);
+      Swal.fire('Error', error.response?.data?.error || error.message, 'error');
+    } finally {
+      setIsRunningCustomModel(false);
+    }
+  };
+
   // Save current config as preset
   const handleSavePreset = async () => {
     if (!presetName.trim()) {
@@ -514,6 +641,7 @@ const ModelLab = ({ mode = 'dark' }) => {
     fetchDatasets(); 
     fetchModelHistory();
     fetchPresets();
+    fetchCustomModels();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -780,6 +908,7 @@ const ModelLab = ({ mode = 'dark' }) => {
           <Tab icon={<ScienceIcon />} label="Visual Builder" iconPosition="start" />
           <Tab icon={<CodeIcon />} label="Code Editor" iconPosition="start" />
           <Tab icon={<TrophyIcon />} label="Leaderboard" iconPosition="start" />
+          <Tab icon={<PluginIcon />} label="Custom Models" iconPosition="start" />
         </Tabs>
       </Card>
 
@@ -1812,6 +1941,442 @@ const ModelLab = ({ mode = 'dark' }) => {
             </Box>
           )}
         </Card>
+      )}
+
+      {/* ============================================ */}
+      {/* TAB 3: CUSTOM MODELS */}
+      {/* ============================================ */}
+      {activeTab === 3 && (
+        <Grid container spacing={3}>
+          {/* Left Column: Model Selection & Configuration */}
+          <Grid item xs={12} lg={7}>
+            {/* Model Selection */}
+            <Card sx={{ ...glassCard(mode), mb: 3, p: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+                <PluginIcon sx={{ color: '#7c3aed', fontSize: 28 }} />
+                <Typography variant="h6" sx={{ fontWeight: 700, color: mode === 'dark' ? '#fff' : '#333' }}>
+                  Custom Models
+                </Typography>
+                <IconButton 
+                  size="small" 
+                  onClick={fetchCustomModels} 
+                  sx={{ ml: 'auto' }} 
+                  disabled={loadingCustomModels}
+                >
+                  {loadingCustomModels ? <CircularProgress size={20} /> : <RefreshIcon />}
+                </IconButton>
+              </Box>
+
+              <Alert severity="info" sx={{ mb: 3, borderRadius: '12px' }}>
+                Pre-built models from <code>custom_models.py</code>. Select a model, configure datasets, and run!
+              </Alert>
+
+              {loadingCustomModels ? (
+                <Box sx={{ p: 3 }}>
+                  <Skeleton variant="rectangular" height={120} sx={{ borderRadius: '16px', mb: 2 }} />
+                  <Skeleton variant="rectangular" height={120} sx={{ borderRadius: '16px', mb: 2 }} />
+                  <Skeleton variant="rectangular" height={120} sx={{ borderRadius: '16px' }} />
+                </Box>
+              ) : (
+                <Grid container spacing={2}>
+                  {customModels.map((model) => {
+                    const getModelStyle = (key) => {
+                      const styles = {
+                        'cmc_v3': { icon: '🏆', color: '#f59e0b' },
+                        'cmc_v3_goals': { icon: '⚽', color: '#22c55e' },
+                        'random_forest': { icon: '🌲', color: '#22c55e' },
+                        'gradient_boost': { icon: '🚀', color: '#f59e0b' },
+                        'neural_net': { icon: '🧠', color: '#ec4899' },
+                        'distance_baseline': { icon: '📏', color: '#3b82f6' },
+                      };
+                      return styles[key] || { icon: '🔧', color: '#7c3aed' };
+                    };
+                    const style = getModelStyle(model.key);
+                    const isSelected = selectedCustomModel === model.key;
+
+                    return (
+                      <Grid item xs={12} key={model.key}>
+                        <Paper
+                          onClick={() => setSelectedCustomModel(model.key)}
+                          sx={{
+                            p: 3,
+                            cursor: 'pointer',
+                            borderRadius: '16px',
+                            border: isSelected ? `2px solid ${style.color}` : `1px solid ${mode === 'dark' ? '#333' : '#e0e0e0'}`,
+                            background: isSelected 
+                              ? `linear-gradient(135deg, ${style.color}15 0%, ${style.color}08 100%)`
+                              : mode === 'dark' ? 'rgba(40, 40, 50, 0.5)' : 'rgba(255, 255, 255, 0.8)',
+                            transition: 'all 0.3s ease',
+                            position: 'relative',
+                            overflow: 'hidden',
+                            '&:hover': {
+                              transform: 'translateY(-2px)',
+                              boxShadow: `0 6px 20px ${style.color}25`,
+                            },
+                            '&::before': isSelected ? {
+                              content: '""',
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              height: '3px',
+                              background: `linear-gradient(90deg, ${style.color}, ${style.color}80)`,
+                            } : {},
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                            <Typography variant="h3" sx={{ lineHeight: 1 }}>{style.icon}</Typography>
+                            <Box sx={{ flex: 1 }}>
+                              <Typography variant="h6" sx={{ fontWeight: 700, color: mode === 'dark' ? '#fff' : '#333', mb: 0.5 }}>
+                                {model.name}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: mode === 'dark' ? '#888' : '#666', mb: 1.5, lineHeight: 1.4 }}>
+                                {model.description}
+                              </Typography>
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                <Chip
+                                  size="small"
+                                  label={`${model.features?.length || 0} features`}
+                                  sx={{ backgroundColor: `${style.color}20`, color: style.color, fontWeight: 500 }}
+                                />
+                                <Chip
+                                  size="small"
+                                  label={model.target === 'is_goal' ? 'xG Model' : 'xP Model'}
+                                  variant="outlined"
+                                  sx={{ borderColor: style.color, color: style.color }}
+                                />
+                                {model.version && (
+                                  <Chip
+                                    size="small"
+                                    label={`v${model.version}`}
+                                    sx={{ backgroundColor: mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', color: mode === 'dark' ? '#aaa' : '#666' }}
+                                  />
+                                )}
+                              </Box>
+                            </Box>
+                            {isSelected && (
+                              <CheckIcon sx={{ color: style.color, fontSize: 28 }} />
+                            )}
+                          </Box>
+                        </Paper>
+                      </Grid>
+                    );
+                  })}
+                </Grid>
+              )}
+
+              {customModels.length === 0 && !loadingCustomModels && (
+                <Alert severity="warning" sx={{ borderRadius: '12px' }}>
+                  No custom models found. Make sure your backend has the <code>/api/model-lab/custom-models</code> endpoint.
+                </Alert>
+              )}
+            </Card>
+
+            {/* Dataset Configuration for Custom Models */}
+            <Card sx={{ ...glassCard(mode), mb: 3, p: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+                <DataIcon sx={{ color: '#22c55e', fontSize: 28 }} />
+                <Typography variant="h6" sx={{ fontWeight: 700, color: mode === 'dark' ? '#fff' : '#333' }}>
+                  Dataset Configuration
+                </Typography>
+              </Box>
+
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} md={customModelUseSameDataset ? 6 : 5}>
+                  <FormControl fullWidth>
+                    <InputLabel>
+                      <TrainIcon sx={{ mr: 1, fontSize: 18, verticalAlign: 'middle' }} />
+                      Training Dataset
+                    </InputLabel>
+                    <Select
+                      value={customModelTrainingDataset}
+                      onChange={(e) => {
+                        setCustomModelTrainingDataset(e.target.value);
+                        if (customModelUseSameDataset) setCustomModelTargetDataset(e.target.value);
+                      }}
+                      label="Training Dataset"
+                      disabled={loadingDatasets}
+                    >
+                      {datasets.map((ds) => (
+                        <MenuItem key={ds} value={ds}>
+                          {ds}
+                          {datasetInfo[ds] && (
+                            <Chip size="small" label={`${datasetInfo[ds].shots} shots`} sx={{ ml: 1, height: 20 }} />
+                          )}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid item xs={12} md={customModelUseSameDataset ? 3 : 2}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={!customModelUseSameDataset}
+                        onChange={(e) => setCustomModelUseSameDataset(!e.target.checked)}
+                        sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#f59e0b' } }}
+                      />
+                    }
+                    label={
+                      <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <TransferIcon sx={{ fontSize: 16 }} />
+                        Transfer
+                      </Typography>
+                    }
+                  />
+                </Grid>
+
+                {!customModelUseSameDataset && (
+                  <Grid item xs={12} md={5}>
+                    <FormControl fullWidth>
+                      <InputLabel>
+                        <ApplyIcon sx={{ mr: 1, fontSize: 18, verticalAlign: 'middle' }} />
+                        Target Dataset
+                      </InputLabel>
+                      <Select
+                        value={customModelTargetDataset}
+                        onChange={(e) => setCustomModelTargetDataset(e.target.value)}
+                        label="Target Dataset"
+                        disabled={loadingDatasets}
+                      >
+                        {datasets.map((ds) => (
+                          <MenuItem key={ds} value={ds}>
+                            {ds}
+                            {datasetInfo[ds] && (
+                              <Chip size="small" label={`${datasetInfo[ds].shots} shots`} sx={{ ml: 1, height: 20 }} />
+                            )}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                )}
+
+                <Grid item xs={12} md={customModelUseSameDataset ? 3 : 12}>
+                  <ToggleButtonGroup
+                    value={customModelTargetField}
+                    exclusive
+                    onChange={(e, v) => v && setCustomModelTargetField(v)}
+                    fullWidth
+                    size="small"
+                  >
+                    <ToggleButton value="xP" sx={{ fontWeight: 600 }}>xP (Score)</ToggleButton>
+                    <ToggleButton value="xG" sx={{ fontWeight: 600 }}>xG (Goal)</ToggleButton>
+                  </ToggleButtonGroup>
+                </Grid>
+              </Grid>
+
+              <Box sx={{ mt: 3 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={customModelApplyToTarget}
+                      onChange={(e) => setCustomModelApplyToTarget(e.target.checked)}
+                      sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#22c55e' } }}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2">
+                      Apply predictions to dataset (update {customModelTargetField} values)
+                    </Typography>
+                  }
+                />
+              </Box>
+            </Card>
+
+            {/* Run Name & Action Buttons */}
+            <Box sx={{ mb: 2 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Run Name (optional)"
+                placeholder="e.g., CMC v3 on All-Ireland 2024"
+                value={customModelRunName}
+                onChange={(e) => setCustomModelRunName(e.target.value)}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '12px',
+                    backgroundColor: mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)',
+                  }
+                }}
+              />
+            </Box>
+
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Button
+                variant="contained"
+                size="large"
+                onClick={handleRunCustomModel}
+                disabled={isRunningCustomModel || !selectedCustomModel || !customModelTrainingDataset}
+                startIcon={isRunningCustomModel ? <CircularProgress size={20} color="inherit" /> : <PlayIcon />}
+                sx={gradientButton}
+              >
+                {isRunningCustomModel ? 'Running...' : 'Run Custom Model'}
+              </Button>
+            </Box>
+          </Grid>
+
+          {/* Right Column: Results & Info */}
+          <Grid item xs={12} lg={5}>
+            {/* Results Card */}
+            {customModelResult && (
+              <Grow in={true}>
+                <Card sx={{ ...glassCard(mode), mb: 3, p: 3 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+                    <AutoGraphIcon sx={{ color: '#22c55e', fontSize: 28 }} />
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: mode === 'dark' ? '#fff' : '#333' }}>
+                      Results: {customModelResult.model_name}
+                    </Typography>
+                    <Chip
+                      icon={<CheckIcon />}
+                      label={`${customModelResult.execution_time}s`}
+                      size="small"
+                      sx={{ ml: 'auto', backgroundColor: '#22c55e20', color: '#22c55e' }}
+                    />
+                  </Box>
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <MetricCard
+                        label="Accuracy"
+                        value={customModelResult.metrics?.accuracy}
+                        icon={<CheckIcon sx={{ color: '#22c55e', fontSize: 20 }} />}
+                        color="#22c55e"
+                        mode={mode}
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <MetricCard
+                        label="F1 Score"
+                        value={customModelResult.metrics?.f1_score}
+                        icon={<TrendingUpIcon sx={{ color: '#7c3aed', fontSize: 20 }} />}
+                        color="#7c3aed"
+                        mode={mode}
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <MetricCard
+                        label="AUC-ROC"
+                        value={customModelResult.metrics?.auc_roc}
+                        icon={<AnalyticsIcon sx={{ color: '#f59e0b', fontSize: 20 }} />}
+                        color="#f59e0b"
+                        mode={mode}
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <MetricCard
+                        label="Precision"
+                        value={customModelResult.metrics?.precision}
+                        icon={<SpeedIcon sx={{ color: '#06b6d4', fontSize: 20 }} />}
+                        color="#06b6d4"
+                        mode={mode}
+                      />
+                    </Grid>
+                  </Grid>
+                  {customModelResult.shots_updated && (
+                    <Box sx={{ mt: 2, p: 2, backgroundColor: mode === 'dark' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(34, 197, 94, 0.05)', borderRadius: '12px' }}>
+                      <Typography variant="body2" sx={{ color: '#22c55e', fontWeight: 600 }}>
+                        ✓ Updated {customModelResult.shots_updated} shots in {customModelResult.games_updated || 'N/A'} games
+                      </Typography>
+                    </Box>
+                  )}
+                </Card>
+              </Grow>
+            )}
+
+            {/* Selected Model Info */}
+            {selectedCustomModel && (
+              <Card sx={{ ...glassCard(mode), mb: 3, p: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                  <InfoIcon sx={{ color: '#06b6d4', fontSize: 24 }} />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: mode === 'dark' ? '#fff' : '#333' }}>
+                    Selected Model Details
+                  </Typography>
+                </Box>
+                {(() => {
+                  const model = customModels.find(m => m.key === selectedCustomModel);
+                  if (!model) return null;
+                  return (
+                    <>
+                      <Typography variant="h6" sx={{ mb: 1, color: mode === 'dark' ? '#fff' : '#333' }}>
+                        {model.name}
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: mode === 'dark' ? '#888' : '#666', mb: 2 }}>
+                        {model.description}
+                      </Typography>
+                      <Typography variant="caption" sx={{ display: 'block', mb: 1, color: mode === 'dark' ? '#aaa' : '#555', fontWeight: 600 }}>
+                        Features Used ({model.features?.length || 0}):
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {model.features?.slice(0, 10).map((feature, i) => (
+                          <Chip
+                            key={i}
+                            label={feature}
+                            size="small"
+                            sx={{
+                              backgroundColor: mode === 'dark' ? 'rgba(124, 58, 237, 0.2)' : 'rgba(124, 58, 237, 0.1)',
+                              color: '#7c3aed',
+                              fontFamily: 'monospace',
+                              fontSize: '0.7rem',
+                            }}
+                          />
+                        ))}
+                        {model.features?.length > 10 && (
+                          <Chip
+                            label={`+${model.features.length - 10} more`}
+                            size="small"
+                            sx={{ backgroundColor: mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
+                          />
+                        )}
+                      </Box>
+                    </>
+                  );
+                })()}
+              </Card>
+            )}
+
+            {/* How to Add Custom Models */}
+            <Card sx={{ ...glassCard(mode), p: 3 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: mode === 'dark' ? '#fff' : '#333' }}>
+                📝 Adding Your Own Models
+              </Typography>
+              <Typography variant="body2" sx={{ color: mode === 'dark' ? '#888' : '#666', mb: 2 }}>
+                Edit <code>custom_models.py</code> on your backend to add new models:
+              </Typography>
+              <Box
+                component="pre"
+                sx={{
+                  fontFamily: '"Fira Code", monospace',
+                  fontSize: '11px',
+                  backgroundColor: mode === 'dark' ? '#0d0d12' : '#f5f5f5',
+                  color: mode === 'dark' ? '#22c55e' : '#333',
+                  p: 2,
+                  borderRadius: '12px',
+                  overflow: 'auto',
+                  maxHeight: 200,
+                }}
+              >
+{`class MyModel(BaseCustomModel):
+    name = "My Custom Model"
+    description = "My amazing model"
+    
+    def get_feature_list(self):
+        return ['dist', 'angle_abs']
+    
+    def train(self, X, y):
+        model = LogisticRegression()
+        model.fit(X, y)
+        return model
+
+# Add to registry
+AVAILABLE_MODELS = {
+    'my_model': MyModel,
+    ...
+}`}
+              </Box>
+            </Card>
+          </Grid>
+        </Grid>
       )}
 
       {/* Functions Dialog */}

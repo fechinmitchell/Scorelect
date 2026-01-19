@@ -110,8 +110,14 @@ class BaseCustomModel:
     
     def base_features(self, df):
         """Generate standard features from raw data."""
-        df['x'] = pd.to_numeric(df.get('x', 0), errors='coerce').fillna(0)
-        df['y'] = pd.to_numeric(df.get('y', 0), errors='coerce').fillna(0)
+        # Ensure x and y columns exist
+        if 'x' not in df.columns:
+            df['x'] = 0
+        if 'y' not in df.columns:
+            df['y'] = 0
+        
+        df['x'] = pd.to_numeric(df['x'], errors='coerce').fillna(0)
+        df['y'] = pd.to_numeric(df['y'], errors='coerce').fillna(0)
         
         # Distance features
         df['dist'] = np.sqrt((self.GOAL_X - df['x'])**2 + (self.GOAL_Y - df['y'])**2)
@@ -151,13 +157,22 @@ class BaseCustomModel:
         
         # Context encoding
         pressure_map = {'high': 3, 'medium': 2, 'low': 1, 'none': 0, 'y': 2, 'n': 0, '': 0}
-        df['pressure_value'] = df.get('pressure', pd.Series([''] * len(df))).astype(str).str.lower().map(pressure_map).fillna(0)
+        if 'pressure' in df.columns:
+            df['pressure_value'] = df['pressure'].astype(str).str.lower().map(pressure_map).fillna(0)
+        else:
+            df['pressure_value'] = 0
         
         position_map = {'forward': 3, 'midfielder': 2, 'midfield': 2, 'back': 1, 'defender': 1, 'goalkeeper': 0}
-        df['position_value'] = df.get('position', pd.Series([''] * len(df))).astype(str).str.lower().map(position_map).fillna(2)
+        if 'position' in df.columns:
+            df['position_value'] = df['position'].astype(str).str.lower().map(position_map).fillna(2)
+        else:
+            df['position_value'] = 2
         
         foot_map = {'right': 0, 'left': 1, 'hand': 2}
-        df['foot_value'] = df.get('foot', pd.Series([''] * len(df))).astype(str).str.lower().map(foot_map).fillna(0)
+        if 'foot' in df.columns:
+            df['foot_value'] = df['foot'].astype(str).str.lower().map(foot_map).fillna(0)
+        else:
+            df['foot_value'] = 0
         
         # Scoring outcomes
         custom_result = self.custom_scoring(df)
@@ -171,8 +186,15 @@ class BaseCustomModel:
             df['scored'] = df['is_goal'] = 0
         
         # Existing model values
-        df['existing_xP'] = pd.to_numeric(df.get('xP', 0), errors='coerce').fillna(0)
-        df['existing_xG'] = pd.to_numeric(df.get('xG', 0), errors='coerce').fillna(0)
+        if 'xP' in df.columns:
+            df['existing_xP'] = pd.to_numeric(df['xP'], errors='coerce').fillna(0)
+        else:
+            df['existing_xP'] = 0
+        
+        if 'xG' in df.columns:
+            df['existing_xG'] = pd.to_numeric(df['xG'], errors='coerce').fillna(0)
+        else:
+            df['existing_xG'] = 0
         
         return df
     

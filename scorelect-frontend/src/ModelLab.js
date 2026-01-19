@@ -3,7 +3,7 @@ import {
   Box, Card, Typography, Button, IconButton, Grid, FormControl, InputLabel, Select, MenuItem,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Chip, Alert, Tooltip, CircularProgress, LinearProgress, TextField,
-  Switch, FormControlLabel, Divider,
+  Switch, FormControlLabel, Divider, Dialog, DialogTitle, DialogContent, DialogActions,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon, PlayArrow as PlayIcon, Science as ScienceIcon,
@@ -12,6 +12,7 @@ import {
   CheckCircle as CheckIcon, TrendingUp as TrendingUpIcon,
   Delete as DeleteIcon, Info as InfoIcon, Warning as WarningIcon,
   CloudOff as CloudOffIcon, HourglassEmpty as HourglassIcon,
+  Visibility as ViewIcon,
 } from '@mui/icons-material';
 import { getAuth } from 'firebase/auth';
 import Swal from 'sweetalert2';
@@ -102,6 +103,10 @@ const ModelLab = ({ mode = 'dark' }) => {
   const [runError, setRunError] = useState(null);
   const [result, setResult] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
+  
+  // Dialog for viewing model config
+  const [configDialogOpen, setConfigDialogOpen] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState(null);
 
   const fetchDatasets = useCallback(async () => {
     try {
@@ -180,7 +185,7 @@ const ModelLab = ({ mode = 'dark' }) => {
       return;
     }
     setIsRunning(true); setResult(null); setRunError(null);
-    Swal.fire({ title: 'Running Model...', html: '<p>Training on <strong>' + trainingDataset + '</strong></p><p style="color:#888">This may take 30-60 seconds</p>', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+    Swal.fire({ title: 'Running Test...', html: '<p>Training on <strong>' + trainingDataset + '</strong></p><p style="color:#888">This may take 30-60 seconds</p>', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
     try {
       const response = await axios.post(`${BASE_API_URL}/api/model-lab/test-model`, {
         uid: user.uid, model_key: selectedModel, training_dataset: trainingDataset,
@@ -188,7 +193,8 @@ const ModelLab = ({ mode = 'dark' }) => {
       }, { timeout: 120000 });
       if (response.data.success) {
         setResult(response.data);
-        Swal.fire({ title: 'Test Complete! ✅', html: `<p><strong>Brier Score:</strong> ${response.data.metrics.brier_score?.toFixed(4) || 'N/A'}</p><p><strong>AUC-ROC:</strong> ${((response.data.metrics.auc_roc || 0) * 100).toFixed(1)}%</p>`, icon: 'success' });
+        fetchLeaderboard(); // Refresh leaderboard after test
+        Swal.fire({ title: 'Test Complete! ✅', html: `<p><strong>Brier Score:</strong> ${response.data.metrics.brier_score?.toFixed(4) || 'N/A'}</p><p><strong>AUC-ROC:</strong> ${((response.data.metrics.auc_roc || 0) * 100).toFixed(1)}%</p><p style="color:#888;font-size:0.9em">Added to leaderboard as "Test"</p>`, icon: 'success' });
       } else throw new Error(response.data.error);
     } catch (error) {
       let msg = error.response?.data?.error || error.message;
@@ -233,6 +239,11 @@ const ModelLab = ({ mode = 'dark' }) => {
       await axios.delete(`${BASE_API_URL}/api/model-lab/leaderboard/${entryId}`, { params: { uid: user.uid } });
       fetchLeaderboard();
     } catch (e) { Swal.fire('Error', 'Could not delete', 'error'); }
+  };
+  
+  const handleViewConfig = (entry) => {
+    setSelectedEntry(entry);
+    setConfigDialogOpen(true);
   };
 
   const selectedModelInfo = customModels.find(m => m.key === selectedModel);
@@ -318,7 +329,7 @@ const ModelLab = ({ mode = 'dark' }) => {
               <Button variant="outlined" onClick={handleTestRun} disabled={isRunning || !selectedModel || !trainingDataset || loadingModels || loadingDatasets} startIcon={isRunning ? <CircularProgress size={20} /> : <PlayIcon />} sx={{ borderRadius: '12px', borderColor: '#7c3aed', color: '#7c3aed', px: 3 }}>{isRunning ? 'Running...' : 'Test Run'}</Button>
               <Button variant="contained" onClick={handleRunAndApply} disabled={isRunning || !selectedModel || !trainingDataset || loadingModels || loadingDatasets} startIcon={isRunning ? <CircularProgress size={20} color="inherit" /> : <ApplyIcon />} sx={gradientButton(isRunning || !selectedModel || !trainingDataset)}>{isRunning ? 'Running...' : 'Run & Apply'}</Button>
             </Box>
-            <Typography variant="caption" sx={{ display: 'block', mt: 2, color: '#666' }}>💡 <strong>Test Run</strong> = evaluate only. <strong>Run & Apply</strong> = update dataset + save to leaderboard.</Typography>
+            <Typography variant="caption" sx={{ display: 'block', mt: 2, color: '#666' }}>💡 Both <strong>Test Run</strong> and <strong>Run & Apply</strong> save to leaderboard. Run & Apply also updates your dataset.</Typography>
             {(loadingModels || loadingDatasets) && !modelsError && !datasetsError && <Alert severity="info" sx={{ mt: 2, borderRadius: '12px' }} icon={<HourglassIcon />}>⏳ Waiting for server... Click refresh if this takes &gt;60s</Alert>}
           </Card>
 
@@ -327,7 +338,7 @@ const ModelLab = ({ mode = 'dark' }) => {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
                 <AutoGraphIcon sx={{ color: '#22c55e', fontSize: 28 }} />
                 <Typography variant="h6" sx={{ fontWeight: 700, color: mode === 'dark' ? '#fff' : '#333' }}>Results: {result.model_name}</Typography>
-                <Chip icon={result.test_run ? <PlayIcon /> : <CheckIcon />} label={result.test_run ? 'Test Run' : `Applied - ${result.execution_time}s`} size="small" sx={{ ml: 'auto', backgroundColor: result.test_run ? '#f59e0b20' : '#22c55e20', color: result.test_run ? '#f59e0b' : '#22c55e' }} />
+                <Chip icon={result.test_run ? <PlayIcon /> : <CheckIcon />} label={result.test_run ? 'Test' : `Applied`} size="small" sx={{ ml: 'auto', backgroundColor: result.test_run ? '#f59e0b20' : '#22c55e20', color: result.test_run ? '#f59e0b' : '#22c55e' }} />
               </Box>
               <Grid container spacing={2}>
                 <Grid item xs={6} sm={3}><MetricCard label="Brier Score ⭐" value={result.metrics?.brier_score} icon={<CheckIcon sx={{ color: '#22c55e', fontSize: 18 }} />} color="#22c55e" mode={mode} isLowerBetter isRawNumber /></Grid>
@@ -347,20 +358,45 @@ const ModelLab = ({ mode = 'dark' }) => {
               <FormControl size="small" sx={{ minWidth: 100 }}><Select value={leaderboardYear} onChange={(e) => setLeaderboardYear(e.target.value)} sx={{ borderRadius: '8px' }}><MenuItem value="2026">2026</MenuItem><MenuItem value="2025">2025</MenuItem></Select></FormControl>
             </Box>
             {loadingLeaderboard ? <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 4 }}><CircularProgress sx={{ color: '#7c3aed', mb: 2 }} /><Typography variant="body2" sx={{ color: '#888' }}>Loading...</Typography></Box>
-              : !leaderboard.length ? <Box sx={{ textAlign: 'center', py: 6 }}><TrophyIcon sx={{ fontSize: 60, color: '#444', mb: 2 }} /><Typography variant="h6" sx={{ color: '#666' }}>No entries for {leaderboardYear}</Typography><Typography variant="body2" sx={{ color: '#555' }}>Use "Run & Apply" to add entries!</Typography></Box>
-              : <TableContainer sx={{ maxHeight: 400 }}><Table size="small" stickyHeader>
+              : !leaderboard.length ? <Box sx={{ textAlign: 'center', py: 6 }}><TrophyIcon sx={{ fontSize: 60, color: '#444', mb: 2 }} /><Typography variant="h6" sx={{ color: '#666' }}>No entries for {leaderboardYear}</Typography><Typography variant="body2" sx={{ color: '#555' }}>Run a model to add entries!</Typography></Box>
+              : <TableContainer sx={{ maxHeight: 450 }}><Table size="small" stickyHeader>
                   <TableHead><TableRow>
                     <TableCell sx={{ backgroundColor: mode === 'dark' ? '#2a2a3a' : '#f5f5f5', fontWeight: 700 }}>#</TableCell>
                     <TableCell sx={{ backgroundColor: mode === 'dark' ? '#2a2a3a' : '#f5f5f5', fontWeight: 700 }}>Model</TableCell>
+                    <TableCell sx={{ backgroundColor: mode === 'dark' ? '#2a2a3a' : '#f5f5f5', fontWeight: 700 }}>Type</TableCell>
                     <TableCell sx={{ backgroundColor: mode === 'dark' ? '#2a2a3a' : '#f5f5f5', fontWeight: 700 }} align="right">Brier</TableCell>
                     <TableCell sx={{ backgroundColor: mode === 'dark' ? '#2a2a3a' : '#f5f5f5' }}></TableCell>
                   </TableRow></TableHead>
                   <TableBody>{leaderboard.sort((a, b) => (a.metrics?.brier_score || 1) - (b.metrics?.brier_score || 1)).map((entry, i) => (
                     <TableRow key={entry.id} hover>
                       <TableCell>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}</TableCell>
-                      <TableCell><Tooltip title={`${entry.training_dataset} • ${entry.target_field}`}><Box><Typography variant="body2" sx={{ fontWeight: 600, color: mode === 'dark' ? '#fff' : '#333' }}>{entry.run_name || entry.model_name}</Typography><Typography variant="caption" sx={{ color: '#666' }}>{entry.model_name}</Typography></Box></Tooltip></TableCell>
+                      <TableCell>
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: mode === 'dark' ? '#fff' : '#333' }}>{entry.run_name || entry.model_name}</Typography>
+                          <Typography variant="caption" sx={{ color: '#666' }}>{entry.training_dataset}</Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={entry.run_type === 'test' ? 'Test' : 'Applied'} 
+                          size="small" 
+                          sx={{ 
+                            fontSize: '0.7rem', 
+                            height: 20,
+                            backgroundColor: entry.run_type === 'test' ? '#f59e0b20' : '#22c55e20', 
+                            color: entry.run_type === 'test' ? '#f59e0b' : '#22c55e' 
+                          }} 
+                        />
+                      </TableCell>
                       <TableCell align="right"><Typography variant="body2" sx={{ fontFamily: 'monospace', color: '#22c55e', fontWeight: 600 }}>{entry.metrics?.brier_score?.toFixed(4) || 'N/A'}</Typography></TableCell>
-                      <TableCell><IconButton size="small" onClick={() => handleDeleteEntry(entry.id)} sx={{ color: '#ef4444', opacity: 0.6, '&:hover': { opacity: 1 } }}><DeleteIcon fontSize="small" /></IconButton></TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          <Tooltip title="View Config">
+                            <IconButton size="small" onClick={() => handleViewConfig(entry)} sx={{ color: '#7c3aed', opacity: 0.7, '&:hover': { opacity: 1 } }}><ViewIcon fontSize="small" /></IconButton>
+                          </Tooltip>
+                          <IconButton size="small" onClick={() => handleDeleteEntry(entry.id)} sx={{ color: '#ef4444', opacity: 0.6, '&:hover': { opacity: 1 } }}><DeleteIcon fontSize="small" /></IconButton>
+                        </Box>
+                      </TableCell>
                     </TableRow>
                   ))}</TableBody>
                 </Table></TableContainer>}
@@ -390,6 +426,64 @@ const ModelLab = ({ mode = 'dark' }) => {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Model Config Dialog */}
+      <Dialog open={configDialogOpen} onClose={() => setConfigDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <ScienceIcon sx={{ color: '#7c3aed' }} />
+          Model Configuration
+        </DialogTitle>
+        <DialogContent>
+          {selectedEntry && (
+            <Box>
+              <Typography variant="h6" sx={{ mb: 2 }}>{selectedEntry.run_name || selectedEntry.model_name}</Typography>
+              
+              <Box sx={{ mb: 2, p: 2, backgroundColor: mode === 'dark' ? '#1a1a2e' : '#f5f5f5', borderRadius: '12px' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>📊 Metrics</Typography>
+                <Grid container spacing={1}>
+                  <Grid item xs={6}><Typography variant="caption" color="textSecondary">Brier Score</Typography><Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{selectedEntry.metrics?.brier_score?.toFixed(4) || 'N/A'}</Typography></Grid>
+                  <Grid item xs={6}><Typography variant="caption" color="textSecondary">AUC-ROC</Typography><Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{selectedEntry.metrics?.auc_roc ? `${(selectedEntry.metrics.auc_roc * 100).toFixed(1)}%` : 'N/A'}</Typography></Grid>
+                  <Grid item xs={6}><Typography variant="caption" color="textSecondary">F1 Score</Typography><Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{selectedEntry.metrics?.f1_score ? `${(selectedEntry.metrics.f1_score * 100).toFixed(1)}%` : 'N/A'}</Typography></Grid>
+                  <Grid item xs={6}><Typography variant="caption" color="textSecondary">Calibration</Typography><Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{selectedEntry.metrics?.calibration_error ? `${(selectedEntry.metrics.calibration_error * 100).toFixed(2)}%` : 'N/A'}</Typography></Grid>
+                </Grid>
+              </Box>
+
+              <Box sx={{ mb: 2, p: 2, backgroundColor: mode === 'dark' ? '#1a1a2e' : '#f5f5f5', borderRadius: '12px' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>ℹ️ Run Info</Typography>
+                <Grid container spacing={1}>
+                  <Grid item xs={6}><Typography variant="caption" color="textSecondary">Type</Typography><Typography variant="body2">{selectedEntry.run_type === 'test' ? '🧪 Test Run' : '✅ Applied'}</Typography></Grid>
+                  <Grid item xs={6}><Typography variant="caption" color="textSecondary">Model</Typography><Typography variant="body2">{selectedEntry.model_name}</Typography></Grid>
+                  <Grid item xs={6}><Typography variant="caption" color="textSecondary">Dataset</Typography><Typography variant="body2">{selectedEntry.training_dataset}</Typography></Grid>
+                  <Grid item xs={6}><Typography variant="caption" color="textSecondary">Target</Typography><Typography variant="body2">{selectedEntry.target_field}</Typography></Grid>
+                  {selectedEntry.shots_updated > 0 && <Grid item xs={12}><Typography variant="caption" color="textSecondary">Updated</Typography><Typography variant="body2">{selectedEntry.shots_updated} shots in {selectedEntry.games_updated} games</Typography></Grid>}
+                </Grid>
+              </Box>
+
+              {selectedEntry.model_config && (
+                <Box sx={{ p: 2, backgroundColor: mode === 'dark' ? '#1a1a2e' : '#f5f5f5', borderRadius: '12px' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>🔧 Model Config</Typography>
+                  {selectedEntry.model_config.description && <Typography variant="body2" sx={{ mb: 1, color: '#888' }}>{selectedEntry.model_config.description}</Typography>}
+                  <Typography variant="caption" color="textSecondary">Features:</Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5, mb: 1 }}>
+                    {selectedEntry.model_config.features?.map((f, i) => <Chip key={i} label={f} size="small" sx={{ fontSize: '0.7rem', height: 20 }} />)}
+                  </Box>
+                  {selectedEntry.model_config.params && Object.keys(selectedEntry.model_config.params).length > 0 && (
+                    <>
+                      <Typography variant="caption" color="textSecondary">Parameters:</Typography>
+                      <Box component="pre" sx={{ fontFamily: 'monospace', fontSize: '11px', mt: 0.5, p: 1, backgroundColor: mode === 'dark' ? '#0d0d12' : '#e0e0e0', borderRadius: '8px', overflow: 'auto' }}>
+                        {JSON.stringify(selectedEntry.model_config.params, null, 2)}
+                      </Box>
+                    </>
+                  )}
+                </Box>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfigDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

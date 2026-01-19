@@ -178,6 +178,87 @@ def api_test_model():
         
         execution_time = round(time.time() - start_time, 2)
         
+        # Save to leaderboard (even for test runs)
+        try:
+            from firebase_admin import firestore as fs
+            
+            # Get model info for storing
+            model_instance = get_model(model_key)
+            model_info = model_instance.get_info()
+            
+            run_name = f"Test: {result['model_name']} - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
+            
+            db = get_db()
+            db.collection('modelLabLeaderboard').add({
+                'uid': uid,
+                'year': '2026',  # Default to current year for tests
+                'run_type': 'test',  # Mark as test run
+                'model_key': model_key,
+                'model_name': result['model_name'],
+                'run_name': run_name,
+                'training_dataset': training_dataset,
+                'target_dataset': target_dataset,
+                'target_field': target_field,
+                'metrics': {
+                    'brier_score': result['metrics'].get('brier_score'),
+                    'calibration_error': result['metrics'].get('calibration_error'),
+                    'auc_roc': result['metrics'].get('auc_roc'),
+                    'f1_score': result['metrics'].get('f1_score'),
+                    'accuracy': result['metrics'].get('accuracy'),
+                },
+                'model_config': {
+                    'features': model_info.get('features', []),
+                    'params': model_info.get('params', {}),
+                    'description': model_info.get('description', ''),
+                },
+                'execution_time': execution_time,
+                'timestamp': fs.SERVER_TIMESTAMP
+            })
+            logger.info(f"Saved test run to leaderboard")
+        except Exception as save_err:
+            logger.warning(f"Could not save test run to leaderboard: {save_err}")
+        
+        # Save to leaderboard (as test run)
+        try:
+            from firebase_admin import firestore as fs
+            
+            # Get model info for storing
+            model_instance = get_model(model_key)
+            model_info = model_instance.get_info()
+            
+            run_name = f"[Test] {result['model_name']} - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
+            
+            db = get_db()
+            db.collection('modelLabLeaderboard').add({
+                'uid': uid,
+                'year': '2026',  # Default to current year
+                'run_type': 'test',  # Mark as test run
+                'model_key': model_key,
+                'model_name': result['model_name'],
+                'run_name': run_name,
+                'training_dataset': training_dataset,
+                'target_dataset': target_dataset,
+                'target_field': target_field,
+                'metrics': {
+                    'brier_score': result['metrics'].get('brier_score'),
+                    'calibration_error': result['metrics'].get('calibration_error'),
+                    'auc_roc': result['metrics'].get('auc_roc'),
+                    'f1_score': result['metrics'].get('f1_score'),
+                    'accuracy': result['metrics'].get('accuracy'),
+                },
+                'model_config': {
+                    'features': model_info.get('features', []),
+                    'target': model_info.get('target', 'scored'),
+                    'params': model_info.get('params', {}),
+                    'description': model_info.get('description', ''),
+                },
+                'execution_time': execution_time,
+                'timestamp': fs.SERVER_TIMESTAMP
+            })
+            logger.info(f"Saved test run to leaderboard")
+        except Exception as save_err:
+            logger.warning(f"Could not save test run to leaderboard: {save_err}")
+        
         return jsonify({
             'success': True,
             'test_run': True,  # Flag that this was a test
@@ -303,12 +384,17 @@ def api_run_model():
         try:
             from firebase_admin import firestore as fs
             
+            # Get model info for storing
+            model_instance = get_model(model_key)
+            model_info = model_instance.get_info()
+            
             if not run_name:
                 run_name = f"{result['model_name']} - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
             
             db.collection('modelLabLeaderboard').add({
                 'uid': uid,
                 'year': leaderboard_year,
+                'run_type': 'applied',  # Mark as applied run
                 'model_key': model_key,
                 'model_name': result['model_name'],
                 'run_name': run_name,
@@ -321,6 +407,11 @@ def api_run_model():
                     'auc_roc': metrics.get('auc_roc'),
                     'f1_score': metrics.get('f1_score'),
                     'accuracy': metrics.get('accuracy'),
+                },
+                'model_config': {
+                    'features': model_info.get('features', []),
+                    'params': model_info.get('params', {}),
+                    'description': model_info.get('description', ''),
                 },
                 'shots_updated': shots_updated,
                 'games_updated': games_updated,

@@ -1,66 +1,29 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                    SCORELECT CUSTOM MODELS - COMPLETE GUIDE                   ║
+║                    SCORELECT CUSTOM MODELS - SIMPLIFIED                       ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
-║  Version: 4.0                                                                 ║
-║  Author: Scorelect Team                                                       ║
-║  Purpose: Create, train, and evaluate custom xP/xG models for GAA analytics  ║
+║  Version: 5.0 (Simplified)                                                   ║
+║  Purpose: Create custom xP/xG models for GAA analytics                       ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
-================================================================================
-🎯 WHAT IS THIS FILE?
-================================================================================
-This file lets you create your own machine learning models to predict:
-  - xP (Expected Points): Probability that a shot results in a score (point or goal)
-  - xG (Expected Goals): Probability that a shot results in a goal specifically
+HOW TO USE THIS FILE:
+====================
+1. Look at the EXAMPLE MODEL below (ExampleModel class)
+2. Copy it to the "YOUR CUSTOM MODELS" section
+3. Rename the class and customize it
+4. Add your model to AVAILABLE_MODELS at the bottom
+5. Restart your server
+6. Select your model in the Model Lab UI!
 
-Your models will appear in the Model Lab's "Custom Models" tab where you can
-run them on any dataset and see how they perform.
-
-================================================================================
-📚 TABLE OF CONTENTS
-================================================================================
-1. QUICK START (Line ~80)          - Get a model running in 5 minutes
-2. HOW MODELS WORK (Line ~150)     - Understanding the prediction pipeline
-3. FEATURE REFERENCE (Line ~200)   - All available features explained
-4. CUSTOM SCORING (Line ~300)      - Define what counts as "scored"
-5. CUSTOM EVALUATION (Line ~380)   - Create your own accuracy metrics
-6. MODEL TEMPLATES (Line ~480)     - Copy-paste templates for common models
-7. BUILT-IN MODELS (Line ~600)     - Reference implementations
-8. REGISTRATION (Line ~900)        - How to add your model to the system
-
-================================================================================
-⚡ QUICK START - CREATE A MODEL IN 5 MINUTES
-================================================================================
-
-Step 1: Copy this template class
-Step 2: Change the name and features
-Step 3: Add to AVAILABLE_MODELS at the bottom
-Step 4: Restart your server
-Step 5: Select your model in the Model Lab UI!
-
-MINIMAL EXAMPLE:
-----------------
-class MyFirstModel(BaseCustomModel):
-    name = "My First Model"
-    description = "A simple distance-based model"
-    
-    def get_feature_list(self):
-        return ['dist', 'angle_abs', 'is_setplay']
-    
-    def train(self, X, y):
-        from sklearn.linear_model import LogisticRegression
-        model = LogisticRegression(max_iter=1000)
-        model.fit(X, y)
-        return model
-
-# Then add at the bottom:
-AVAILABLE_MODELS = {
-    ...
-    'my_first': MyFirstModel,  # <-- Add this line!
-}
-
-================================================================================
+AVAILABLE FEATURES (auto-generated, use in get_feature_list):
+=============================================================
+Distance:    dist, dist_squared, dist_log
+Angle:       angle, angle_abs, goal_angle
+Zones:       close_range, mid_range, long_range, beyond_40m, beyond_50m
+Position:    central_zone, penalty_area, danger_zone, on_left_side
+Context:     pressure_value (0-3), position_value (0-3), foot_value (0-2)
+Set Pieces:  is_setplay, is_penalty, is_free, is_45
+Existing:    existing_xP, existing_xG (previous model values)
 """
 
 import numpy as np
@@ -70,11 +33,10 @@ from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import (
     accuracy_score, f1_score, precision_score, recall_score, 
-    roc_auc_score, confusion_matrix, log_loss, brier_score_loss,
-    mean_squared_error
+    roc_auc_score, confusion_matrix, log_loss, brier_score_loss
 )
 import logging
 
@@ -82,491 +44,133 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# 📖 HOW MODELS WORK - THE PREDICTION PIPELINE
-# =============================================================================
-"""
-When you run a model, here's what happens:
-
-1. LOAD DATA
-   - Raw shot data is loaded from Firestore
-   - Each shot has: x, y coordinates, action type, player info, etc.
-
-2. FEATURE ENGINEERING (base_features + your engineer_features)
-   - Raw data is converted to numeric features
-   - Distance, angle, zones, etc. are calculated
-   - Your custom features are added
-
-3. SCORING (your custom_scoring or default)
-   - Each shot is labeled as "scored" (1) or "missed" (0)
-   - For xG: "is_goal" (1) or "not a goal" (0)
-
-4. TRAIN/TEST SPLIT
-   - Data is split (default 80% train, 20% test)
-   - Stratified to maintain class balance
-
-5. TRAINING (your train method)
-   - Your model learns patterns from training data
-
-6. EVALUATION (your custom_evaluation or default)
-   - Model is tested on held-out test data
-   - Metrics like accuracy, F1, AUC are calculated
-
-7. PREDICTIONS (if apply_to_target=True)
-   - Model predicts probabilities for all shots
-   - Values are saved back to the database
-"""
-
-
-# =============================================================================
-# 📊 FEATURE REFERENCE - ALL AVAILABLE FEATURES
-# =============================================================================
-"""
-These features are automatically generated by base_features() and available
-for use in your get_feature_list() method:
-
-DISTANCE FEATURES:
-------------------
-dist              - Distance to goal in meters (most important feature!)
-dist_squared      - Distance squared (captures non-linear relationship)
-dist_log          - Log of distance (reduces impact of extreme values)
-
-ANGLE FEATURES:
----------------
-angle             - Angle to goal center (can be negative)
-angle_abs         - Absolute angle to goal (0 = straight on, 90 = sideline)
-
-DISTANCE ZONES (binary 0/1):
-----------------------------
-close_range       - Shot is < 20m from goal
-mid_range         - Shot is 20-35m from goal
-long_range        - Shot is 35-50m from goal
-beyond_40m        - Shot is >= 40m from goal
-beyond_50m        - Shot is >= 50m from goal
-
-POSITIONAL ZONES (binary 0/1):
-------------------------------
-central_zone      - Shot is in central corridor (y: 30-58)
-penalty_area      - Shot is in close to goal (x > 125)
-danger_zone       - Shot is central AND close (high value area)
-
-PRESSURE/CONTEXT:
------------------
-pressure_value    - Defensive pressure (0=none, 1=low, 2=medium, 3=high)
-position_value    - Player position (0=GK, 1=back, 2=mid, 3=forward)
-foot_value        - Foot used (0=right, 1=left, 2=hand)
-
-SET PIECE FLAGS (binary 0/1):
------------------------------
-is_setplay        - Any set piece (free, 45, penalty, etc.)
-is_penalty        - Penalty kick
-is_free           - Free kick (not 45)
-is_45             - 45m free
-
-EXISTING MODEL VALUES:
-----------------------
-existing_xP       - Previous xP value (for ensemble models)
-existing_xG       - Previous xG value (for ensemble models)
-
-TARGET VARIABLES (what you're predicting):
-------------------------------------------
-scored            - Did the shot score? (1 = point or goal, 0 = miss)
-is_goal           - Was it a goal specifically? (1 = goal, 0 = not)
-
-You can also create YOUR OWN features in engineer_features()!
-"""
-
-
-# =============================================================================
-# 🎯 CUSTOM SCORING - DEFINE WHAT COUNTS AS "SCORED"
-# =============================================================================
-"""
-By default, a shot is "scored" if the action contains:
-  - "point", "goal", "over", "scores"
-
-But you might want different rules! For example:
-  - Exclude penalties from xG calculations
-  - Only count certain types of scores
-  - Create weighted scoring
-
-Override the custom_scoring() method in your model class:
-
-class MyModel(BaseCustomModel):
-    def custom_scoring(self, df):
-        '''
-        Define what counts as a score.
-        
-        Parameters:
-            df: DataFrame with 'action' column
-            
-        Returns:
-            df: DataFrame with 'scored' and 'is_goal' columns set
-        '''
-        action_lower = df['action'].astype(str).str.lower()
-        
-        # Example: Only count points, not goals
-        df['scored'] = action_lower.str.contains('point|over', regex=True, na=False).astype(int)
-        df['is_goal'] = 0  # Never count goals
-        
-        return df
-
-COMMON SCORING RULES:
----------------------
-# Standard GAA (default):
-df['scored'] = action_lower.str.contains(r'point|goal|over|scores', regex=True).astype(int)
-df['is_goal'] = action_lower.str.contains(r'goal', regex=True).astype(int)
-
-# Exclude penalties:
-df.loc[action_lower.str.contains('penalty'), 'scored'] = 0
-
-# Points only (no goals):
-df['scored'] = action_lower.str.contains(r'point|over', regex=True).astype(int)
-
-# Goals only (for pure xG):
-df['scored'] = action_lower.str.contains(r'goal', regex=True).astype(int)
-
-# Custom weighted (goals worth more):
-# Note: This requires modifying training logic too
-"""
-
-
-# =============================================================================
-# 📈 CUSTOM EVALUATION - CREATE YOUR OWN ACCURACY METRICS  
-# =============================================================================
-"""
-By default, models are evaluated with:
-  - Accuracy: % of correct predictions
-  - F1 Score: Balance of precision and recall
-  - Precision: Of predicted scores, how many actually scored?
-  - Recall: Of actual scores, how many did we predict?
-  - AUC-ROC: Overall ranking ability
-
-But you might want DIFFERENT metrics! Override custom_evaluation():
-
-class MyModel(BaseCustomModel):
-    def custom_evaluation(self, y_true, y_pred, y_proba):
-        '''
-        Calculate your own evaluation metrics.
-        
-        Parameters:
-            y_true: Actual outcomes (0 or 1)
-            y_pred: Predicted classes (0 or 1)
-            y_proba: Predicted probabilities (0.0 to 1.0)
-            
-        Returns:
-            dict: Your custom metrics
-        '''
-        metrics = {}
-        
-        # Standard metrics
-        metrics['accuracy'] = accuracy_score(y_true, y_pred)
-        
-        # Your custom metrics
-        metrics['brier_score'] = brier_score_loss(y_true, y_proba)
-        metrics['log_loss'] = log_loss(y_true, y_proba)
-        
-        # Calibration check: average predicted vs actual
-        metrics['avg_predicted'] = np.mean(y_proba)
-        metrics['avg_actual'] = np.mean(y_true)
-        metrics['calibration_error'] = abs(metrics['avg_predicted'] - metrics['avg_actual'])
-        
-        # Distance-based analysis (if you have access to features)
-        # ... add your own analysis here
-        
-        return metrics
-
-USEFUL CUSTOM METRICS:
-----------------------
-# Brier Score (lower is better, measures probability calibration):
-from sklearn.metrics import brier_score_loss
-brier = brier_score_loss(y_true, y_proba)
-
-# Log Loss (lower is better, penalizes confident wrong predictions):
-from sklearn.metrics import log_loss
-logloss = log_loss(y_true, y_proba)
-
-# Confusion Matrix (see exactly what's happening):
-from sklearn.metrics import confusion_matrix
-tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
-metrics['true_negatives'] = int(tn)
-metrics['false_positives'] = int(fp)
-metrics['false_negatives'] = int(fn)
-metrics['true_positives'] = int(tp)
-
-# Calibration (are probabilities accurate?):
-calibration_error = abs(np.mean(y_proba) - np.mean(y_true))
-
-# Expected vs Actual Total:
-expected_total = np.sum(y_proba)
-actual_total = np.sum(y_true)
-metrics['expected_vs_actual'] = expected_total / actual_total if actual_total > 0 else 0
-"""
-
-
-# =============================================================================
-# BASE CLASS - THE FOUNDATION FOR ALL MODELS
+# BASE CLASS - DO NOT MODIFY
 # =============================================================================
 
 class BaseCustomModel:
     """
-    Base class for all custom models. Inherit from this to create your own.
-    
-    Required overrides:
-      - name: Display name in UI
-      - description: What your model does
-      - get_feature_list(): Features to use
-      - train(X, y): Training logic
-    
-    Optional overrides:
-      - engineer_features(df): Add custom features
-      - get_target_column(): What to predict ('scored' or 'is_goal')
-      - custom_scoring(df): Define what counts as scored
-      - custom_evaluation(y_true, y_pred, y_proba): Custom metrics
-      - get_model_params(): Parameters for display
+    Base class for all custom models. 
+    Inherit from this to create your own model.
     """
     
-    # =========================================================================
-    # MODEL IDENTITY - Override these!
-    # =========================================================================
+    # Model identity
     name = "Base Model"
-    description = "Base model class - override this"
+    description = "Base model class"
     version = "1.0"
     
-    # =========================================================================
-    # GAA PITCH CONSTANTS - Standard dimensions
-    # =========================================================================
-    GOAL_X = 145        # Goal line x-coordinate
-    GOAL_Y = 44         # Goal center y-coordinate (middle of pitch)
-    PITCH_WIDTH = 145   # Full pitch length
-    PITCH_HEIGHT = 88   # Full pitch width
-    GOAL_WIDTH = 7.32   # Width of goal posts
+    # GAA pitch constants
+    GOAL_X = 145
+    GOAL_Y = 44
+    GOAL_WIDTH = 7.32
     
     def __init__(self):
-        """Initialize model state."""
         self.model = None
         self.scaler = StandardScaler()
         self.is_trained = False
         self.feature_names = []
         self.metrics = {}
-        self._training_df = None  # Store for custom evaluation access
     
     # =========================================================================
-    # METHODS YOU SHOULD OVERRIDE
+    # METHODS TO OVERRIDE IN YOUR MODEL
     # =========================================================================
     
     def get_feature_list(self):
-        """
-        🔧 OVERRIDE THIS: Return the list of features your model uses.
-        
-        Example:
-            return ['dist', 'angle_abs', 'pressure_value', 'is_setplay']
-        
-        Available features (see FEATURE REFERENCE above):
-            Distance: dist, dist_squared, dist_log
-            Angle: angle, angle_abs
-            Zones: close_range, mid_range, long_range, central_zone, etc.
-            Context: pressure_value, position_value, is_setplay, etc.
-        """
+        """Return list of features your model uses."""
         return ['dist', 'angle_abs', 'pressure_value', 'is_setplay']
     
     def train(self, X, y):
-        """
-        🔧 OVERRIDE THIS: Train your model and return it.
-        
-        Parameters:
-            X: Training features (numpy array, already scaled)
-            y: Training labels (0 or 1)
-            
-        Returns:
-            Trained model with predict_proba() method
-            
-        Example:
-            def train(self, X, y):
-                from sklearn.ensemble import RandomForestClassifier
-                model = RandomForestClassifier(n_estimators=100)
-                model.fit(X, y)
-                return model
-        """
+        """Train and return your model. X is scaled features, y is target."""
         model = LogisticRegression(max_iter=1000, random_state=42)
         model.fit(X, y)
         return model
     
-    def engineer_features(self, df):
-        """
-        🔧 OPTIONAL: Add your own custom features.
-        
-        Base features are already calculated. Add yours on top!
-        
-        Parameters:
-            df: DataFrame with base features already added
-            
-        Returns:
-            df: DataFrame with your custom features added
-            
-        Example:
-            def engineer_features(self, df):
-                # Interaction feature
-                df['dist_x_angle'] = df['dist'] * df['angle_abs']
-                
-                # Custom zone
-                df['sweet_spot'] = ((df['dist'] > 20) & (df['dist'] < 30)).astype(int)
-                
-                return df
-        """
-        return df
-    
     def get_target_column(self):
-        """
-        🔧 OPTIONAL: What should the model predict?
-        
-        Returns:
-            'scored' for xP models (points + goals)
-            'is_goal' for xG models (goals only)
-        """
+        """What to predict: 'scored' for xP, 'is_goal' for xG."""
         return 'scored'
     
+    def engineer_features(self, df):
+        """Optional: Add custom features to the dataframe."""
+        return df
+    
     def custom_scoring(self, df):
-        """
-        🔧 OPTIONAL: Define what counts as a successful score.
-        
-        Override this to change how shots are labeled.
-        Must set df['scored'] and df['is_goal'] columns.
-        
-        Parameters:
-            df: DataFrame with 'action' column
-            
-        Returns:
-            df: DataFrame with scoring columns set
-        """
-        return None  # Return None to use default scoring
+        """Optional: Define custom scoring rules. Return None for default."""
+        return None
     
     def custom_evaluation(self, y_true, y_pred, y_proba):
-        """
-        🔧 OPTIONAL: Calculate your own evaluation metrics.
-        
-        Override this to add custom metrics beyond the defaults.
-        
-        Parameters:
-            y_true: Actual outcomes (numpy array of 0s and 1s)
-            y_pred: Predicted classes (numpy array of 0s and 1s)
-            y_proba: Predicted probabilities (numpy array of floats 0-1)
-            
-        Returns:
-            dict: Your custom metrics (will be merged with defaults)
-        """
-        return None  # Return None to use only default metrics
+        """Optional: Add custom metrics. Return dict or None."""
+        return None
     
     def get_model_params(self):
-        """
-        🔧 OPTIONAL: Return parameters for display in UI.
-        
-        Example:
-            return {
-                'algorithm': 'RandomForest',
-                'n_estimators': 100,
-                'max_depth': 10
-            }
-        """
+        """Optional: Return parameters for display."""
         return {}
     
     # =========================================================================
-    # INTERNAL METHODS - Don't override unless you really know what you're doing
+    # INTERNAL METHODS - DO NOT MODIFY
     # =========================================================================
     
     def base_features(self, df):
-        """
-        Generate standard features that all models can use.
-        This is called automatically before engineer_features().
-        """
-        # Ensure numeric coordinates
+        """Generate standard features from raw data."""
         df['x'] = pd.to_numeric(df.get('x', 0), errors='coerce').fillna(0)
         df['y'] = pd.to_numeric(df.get('y', 0), errors='coerce').fillna(0)
         
-        # === DISTANCE FEATURES ===
+        # Distance features
         df['dist'] = np.sqrt((self.GOAL_X - df['x'])**2 + (self.GOAL_Y - df['y'])**2)
         df['dist_squared'] = df['dist'] ** 2
         df['dist_log'] = np.log1p(df['dist'])
         
-        # === ANGLE FEATURES ===
+        # Angle features
         df['angle'] = np.degrees(np.arctan2(np.abs(df['y'] - self.GOAL_Y), self.GOAL_X - df['x']))
         df['angle_abs'] = df['angle'].abs()
-        
-        # Goal angle (angle subtended by goal posts - more accurate)
         df['goal_angle'] = np.degrees(np.abs(
             np.arctan2(self.GOAL_Y + self.GOAL_WIDTH/2 - df['y'], self.GOAL_X - df['x']) -
             np.arctan2(self.GOAL_Y - self.GOAL_WIDTH/2 - df['y'], self.GOAL_X - df['x'])
         ))
         
-        # === DISTANCE BANDS ===
+        # Distance zones
         df['close_range'] = (df['dist'] < 20).astype(int)
         df['mid_range'] = ((df['dist'] >= 20) & (df['dist'] < 35)).astype(int)
         df['long_range'] = ((df['dist'] >= 35) & (df['dist'] < 50)).astype(int)
         df['beyond_40m'] = (df['dist'] >= 40).astype(int)
         df['beyond_50m'] = (df['dist'] >= 50).astype(int)
         
-        # === POSITIONAL ZONES ===
+        # Position zones
         df['central_zone'] = ((df['y'] > 30) & (df['y'] < 58)).astype(int)
         df['penalty_area'] = (df['x'] > 125).astype(int)
         df['danger_zone'] = ((df['x'] > 110) & (df['central_zone'] == 1)).astype(int)
         df['on_left_side'] = (df['y'] < self.GOAL_Y).astype(int)
         
-        # === SET PIECE DETECTION ===
+        # Set piece detection
         if 'action' in df.columns:
             action_str = df['action'].astype(str).str.lower()
-            df['is_setplay'] = action_str.str.contains(
-                r'free|penalty|45|fortyfive|sideline|mark', regex=True, na=False
-            ).astype(int)
+            df['is_setplay'] = action_str.str.contains(r'free|penalty|45|fortyfive|sideline|mark', regex=True, na=False).astype(int)
             df['is_penalty'] = action_str.str.contains(r'penalty', regex=True, na=False).astype(int)
             df['is_free'] = action_str.str.contains(r'free', regex=True, na=False).astype(int)
             df['is_45'] = action_str.str.contains(r'45|fortyfive', regex=True, na=False).astype(int)
         else:
-            df['is_setplay'] = 0
-            df['is_penalty'] = 0
-            df['is_free'] = 0
-            df['is_45'] = 0
+            df['is_setplay'] = df['is_penalty'] = df['is_free'] = df['is_45'] = 0
         
-        # === PRESSURE/CONTEXT ENCODING ===
+        # Context encoding
         pressure_map = {'high': 3, 'medium': 2, 'low': 1, 'none': 0, 'y': 2, 'n': 0, '': 0}
-        if 'pressure' in df.columns:
-            df['pressure_value'] = df['pressure'].astype(str).str.lower().map(pressure_map).fillna(0)
-        else:
-            df['pressure_value'] = 0
+        df['pressure_value'] = df.get('pressure', pd.Series([''] * len(df))).astype(str).str.lower().map(pressure_map).fillna(0)
         
         position_map = {'forward': 3, 'midfielder': 2, 'midfield': 2, 'back': 1, 'defender': 1, 'goalkeeper': 0}
-        if 'position' in df.columns:
-            df['position_value'] = df['position'].astype(str).str.lower().map(position_map).fillna(2)
-        else:
-            df['position_value'] = 2
+        df['position_value'] = df.get('position', pd.Series([''] * len(df))).astype(str).str.lower().map(position_map).fillna(2)
         
         foot_map = {'right': 0, 'left': 1, 'hand': 2}
-        if 'foot' in df.columns:
-            df['foot_value'] = df['foot'].astype(str).str.lower().map(foot_map).fillna(0)
-            df['is_right_foot'] = (df['foot_value'] == 0).astype(int)
-            df['is_left_foot'] = (df['foot_value'] == 1).astype(int)
-        else:
-            df['foot_value'] = 0
-            df['is_right_foot'] = 1
-            df['is_left_foot'] = 0
+        df['foot_value'] = df.get('foot', pd.Series([''] * len(df))).astype(str).str.lower().map(foot_map).fillna(0)
         
-        # === SCORING OUTCOMES ===
-        # First, apply custom scoring if defined
+        # Scoring outcomes
         custom_result = self.custom_scoring(df)
-        
         if custom_result is not None:
             df = custom_result
         elif 'action' in df.columns:
-            # Default scoring logic
             action_str = df['action'].astype(str).str.lower()
-            df['scored'] = action_str.str.contains(
-                r'point|goal|scores|over', regex=True, na=False
-            ).astype(int)
-            df['is_goal'] = action_str.str.contains(
-                r'goal', regex=True, na=False
-            ).astype(int)
+            df['scored'] = action_str.str.contains(r'point|goal|scores|over', regex=True, na=False).astype(int)
+            df['is_goal'] = action_str.str.contains(r'goal', regex=True, na=False).astype(int)
         else:
-            df['scored'] = 0
-            df['is_goal'] = 0
+            df['scored'] = df['is_goal'] = 0
         
-        # === EXISTING MODEL VALUES (for ensemble models) ===
+        # Existing model values
         df['existing_xP'] = pd.to_numeric(df.get('xP', 0), errors='coerce').fillna(0)
         df['existing_xG'] = pd.to_numeric(df.get('xG', 0), errors='coerce').fillna(0)
         
@@ -579,131 +183,54 @@ class BaseCustomModel:
         return df
     
     def fit(self, df, test_size=0.2):
-        """
-        Full training pipeline with evaluation.
-        
-        Parameters:
-            df: Raw DataFrame with shot data
-            test_size: Fraction of data to use for testing (default 0.2 = 20%)
-            
-        Returns:
-            dict: Evaluation metrics
-        """
-        # Prepare features
+        """Train model and return metrics."""
         df = self.prepare_data(df)
-        self._training_df = df  # Store for custom evaluation
         
-        # Get features and target
-        self.feature_names = self.get_feature_list()
-        available_features = [f for f in self.feature_names if f in df.columns]
+        self.feature_names = [f for f in self.get_feature_list() if f in df.columns]
+        if not self.feature_names:
+            raise ValueError(f"No valid features found. Requested: {self.get_feature_list()}")
         
-        if not available_features:
-            raise ValueError(f"No valid features found. Requested: {self.feature_names}, Available: {list(df.columns)}")
-        
-        self.feature_names = available_features
         X = df[self.feature_names].fillna(0).values
         y = df[self.get_target_column()].values
         
-        # Validate target
         if len(set(y)) < 2:
-            raise ValueError(f"Target column '{self.get_target_column()}' has only one class. Need both 0 and 1.")
+            raise ValueError(f"Target '{self.get_target_column()}' has only one class.")
         
-        # Train/test split with stratification
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=42, stratify=y
         )
         
-        # Scale features
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_test_scaled = self.scaler.transform(X_test)
         
-        # Train the model
         self.model = self.train(X_train_scaled, y_train)
         self.is_trained = True
         
-        # Generate predictions for evaluation
         y_pred = self.model.predict(X_test_scaled)
         y_proba = self.model.predict_proba(X_test_scaled)[:, 1]
         
-        # =================================================================
-        # PRIMARY METRICS: Brier Score & Calibration
-        # =================================================================
-        # For probability models like xP/xG, we use BRIER SCORE as the 
-        # primary metric. Unlike accuracy (which treats 0.51 vs 0.49 as
-        # completely different), Brier Score measures how close your
-        # predicted probabilities are to actual outcomes.
-        #
-        # Brier Score = mean((predicted_prob - actual_outcome)^2)
-        #   - Range: 0 to 1
-        #   - Lower is better (0 = perfect predictions)
-        #   - A model predicting 0.5 for everything scores ~0.25
-        #
-        # We also calculate calibration metrics to check if predictions
-        # match reality (e.g., do 70% predictions actually score 70%?)
-        # =================================================================
-        
-        # Primary metric: Brier Score (lower is better)
+        # Calculate metrics
         brier = float(brier_score_loss(y_test, y_proba))
-        
-        # Calibration metrics
         avg_predicted = float(np.mean(y_proba))
         avg_actual = float(np.mean(y_test))
-        calibration_error = abs(avg_predicted - avg_actual)
-        
-        # Expected vs Actual totals (useful for xP analysis)
-        expected_total = float(np.sum(y_proba))
-        actual_total = float(np.sum(y_test))
-        expected_vs_actual_ratio = expected_total / actual_total if actual_total > 0 else 1.0
-        
-        # Log loss (another probability metric - penalises confident wrong predictions)
-        try:
-            logloss = float(log_loss(y_test, y_proba))
-        except:
-            logloss = None
         
         self.metrics = {
-            # PRIMARY METRICS (for ranking/comparison)
             'brier_score': brier,
-            'calibration_error': calibration_error,
-            'log_loss': logloss,
-            
-            # Calibration details
-            'avg_predicted_prob': avg_predicted,
-            'avg_actual_outcome': avg_actual,
-            'expected_total': expected_total,
-            'actual_total': actual_total,
-            'expected_vs_actual_ratio': expected_vs_actual_ratio,
-            
-            # Secondary metrics (still useful but not for ranking probability models)
+            'calibration_error': abs(avg_predicted - avg_actual),
+            'log_loss': float(log_loss(y_test, y_proba)) if len(set(y_test)) > 1 else None,
             'auc_roc': float(roc_auc_score(y_test, y_proba)) if len(set(y_test)) > 1 else 0.5,
             'f1_score': float(f1_score(y_test, y_pred, zero_division=0)),
             'precision': float(precision_score(y_test, y_pred, zero_division=0)),
             'recall': float(recall_score(y_test, y_pred, zero_division=0)),
-            
-            # Legacy accuracy (kept for reference but NOT for ranking)
             'accuracy': float(accuracy_score(y_test, y_pred)),
-            'accuracy_note': 'Not recommended for probability models - use Brier Score instead',
-            
-            # Dataset info
+            'avg_predicted_prob': avg_predicted,
+            'avg_actual_outcome': avg_actual,
             'train_samples': len(X_train),
             'test_samples': len(X_test),
             'features_used': self.feature_names,
-            'target_column': self.get_target_column(),
-            'positive_rate_train': float(np.mean(y_train)),
-            'positive_rate_test': float(np.mean(y_test)),
         }
         
-        # Add confusion matrix details
-        try:
-            tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
-            self.metrics['true_negatives'] = int(tn)
-            self.metrics['false_positives'] = int(fp)
-            self.metrics['false_negatives'] = int(fn)
-            self.metrics['true_positives'] = int(tp)
-        except:
-            pass
-        
-        # Add custom metrics if defined
+        # Add custom metrics
         custom_metrics = self.custom_evaluation(y_test, y_pred, y_proba)
         if custom_metrics:
             self.metrics.update(custom_metrics)
@@ -714,11 +241,9 @@ class BaseCustomModel:
         """Generate predictions for a dataframe."""
         if not self.is_trained:
             raise ValueError("Model not trained. Call fit() first.")
-        
         df = self.prepare_data(df)
         X = df[self.feature_names].fillna(0).values
         X_scaled = self.scaler.transform(X)
-        
         return self.model.predict_proba(X_scaled)[:, 1]
     
     def get_info(self):
@@ -730,506 +255,226 @@ class BaseCustomModel:
             'features': self.get_feature_list(),
             'target': self.get_target_column(),
             'params': self.get_model_params(),
-            'is_trained': self.is_trained,
-            'metrics': self.metrics
         }
 
 
 # =============================================================================
-# 📋 MODEL TEMPLATES - COPY THESE TO CREATE YOUR OWN
+# EXAMPLE MODEL - COPY THIS AS A TEMPLATE
 # =============================================================================
 
-class SimpleTemplate(BaseCustomModel):
+class ExampleModel(BaseCustomModel):
     """
     ╔═══════════════════════════════════════════════════════════════════════╗
-    ║  TEMPLATE: Simple Model                                                ║
-    ║  Copy this class and modify it to create your own model!              ║
+    ║  EXAMPLE MODEL - Copy this to create your own!                        ║
+    ║                                                                        ║
+    ║  This model uses Random Forest with basic features.                   ║
+    ║  Copy this class, rename it, and customize the methods below.         ║
     ╚═══════════════════════════════════════════════════════════════════════╝
-    
-    Instructions:
-    1. Copy this entire class
-    2. Rename it (e.g., class MyAwesomeModel)
-    3. Change name and description
-    4. Modify get_feature_list() with your features
-    5. Modify train() with your algorithm
-    6. Add to AVAILABLE_MODELS at the bottom
     """
     
-    name = "Simple Template"
-    description = "A simple template model - copy and modify this!"
+    # Step 1: Give your model a name and description
+    name = "Example Model"
+    description = "A simple Random Forest model - use as a template!"
     version = "1.0"
     
+    # Step 2: Choose your features
     def get_feature_list(self):
-        """List the features you want to use."""
+        """
+        Choose which features your model uses.
+        See the list at the top of this file for all available features.
+        """
         return [
             'dist',           # Distance to goal (most important!)
-            'angle_abs',      # Angle to goal
-            'pressure_value', # Defensive pressure
+            'angle_abs',      # Absolute angle to goal
+            'pressure_value', # Defensive pressure (0-3)
             'is_setplay',     # Is it a set piece?
+            'central_zone',   # Is shooter in central corridor?
         ]
     
+    # Step 3: Choose your algorithm
     def train(self, X, y):
-        """Train your model."""
-        model = LogisticRegression(
-            C=1.0,              # Regularization (lower = more regularization)
-            max_iter=1000,      # Max training iterations
-            random_state=42     # For reproducibility
-        )
-        model.fit(X, y)
-        return model
-
-
-class AdvancedTemplate(BaseCustomModel):
-    """
-    ╔═══════════════════════════════════════════════════════════════════════╗
-    ║  TEMPLATE: Advanced Model with Custom Features & Evaluation           ║
-    ║  Shows all the things you can customize!                              ║
-    ╚═══════════════════════════════════════════════════════════════════════╝
-    """
-    
-    name = "Advanced Template"
-    description = "Full-featured template with custom features, scoring, and evaluation"
-    version = "1.0"
-    
-    def engineer_features(self, df):
-        """Add your own custom features here."""
-        
-        # Example 1: Interaction feature (distance × angle)
-        df['dist_x_angle'] = df['dist'] * df['angle_abs'] / 90
-        
-        # Example 2: Sweet spot zone (mid-distance, central)
-        df['sweet_spot'] = (
-            (df['dist'] > 20) & (df['dist'] < 35) & 
-            (df['angle_abs'] < 25)
-        ).astype(int)
-        
-        # Example 3: Difficulty score (combined metric)
-        df['difficulty'] = (df['dist'] / 50) + (df['angle_abs'] / 90) + (df['pressure_value'] / 3)
-        
-        # Example 4: Preferred foot analysis
-        df['on_preferred_side'] = (
-            ((df['on_left_side'] == 1) & (df['is_right_foot'] == 1)) |
-            ((df['on_left_side'] == 0) & (df['is_left_foot'] == 1))
-        ).astype(int)
-        
-        return df
-    
-    def get_feature_list(self):
-        """All features including custom ones."""
-        return [
-            # Base features
-            'dist', 'dist_squared', 'dist_log', 'angle_abs', 'goal_angle',
-            'close_range', 'mid_range', 'long_range', 'central_zone',
-            'pressure_value', 'is_setplay',
-            # Custom features (from engineer_features)
-            'dist_x_angle', 'sweet_spot', 'difficulty', 'on_preferred_side',
-        ]
-    
-    def get_target_column(self):
-        """What to predict - 'scored' for xP, 'is_goal' for xG."""
-        return 'scored'
-    
-    def custom_scoring(self, df):
         """
-        Custom scoring rules.
-        Example: Exclude penalties from training data.
+        Train your model. X is the feature matrix, y is the target.
+        
+        Popular algorithms:
+        - LogisticRegression(max_iter=1000) - Simple, fast
+        - RandomForestClassifier(n_estimators=100) - Good balance
+        - GradientBoostingClassifier(n_estimators=100) - Often best accuracy
+        - MLPClassifier(hidden_layer_sizes=(64, 32)) - Neural network
         """
-        action_str = df['action'].astype(str).str.lower()
-        
-        # Standard scoring
-        df['scored'] = action_str.str.contains(r'point|goal|over|scores', regex=True, na=False).astype(int)
-        df['is_goal'] = action_str.str.contains(r'goal', regex=True, na=False).astype(int)
-        
-        # Custom rule: Don't count penalties as scores (for fairness analysis)
-        # Uncomment the line below to enable:
-        # df.loc[action_str.str.contains('penalty', na=False), 'scored'] = 0
-        
-        return df
-    
-    def train(self, X, y):
-        """Use Gradient Boosting for better performance."""
-        model = GradientBoostingClassifier(
+        model = RandomForestClassifier(
             n_estimators=100,
-            learning_rate=0.1,
-            max_depth=4,
-            min_samples_split=10,
+            max_depth=10,
             random_state=42
         )
         model.fit(X, y)
         return model
     
+    # Step 4: (Optional) Choose what to predict
+    def get_target_column(self):
+        """
+        What to predict:
+        - 'scored' for xP (points + goals)
+        - 'is_goal' for xG (goals only)
+        """
+        return 'scored'
+    
+    # Step 5: (Optional) Add custom features
+    def engineer_features(self, df):
+        """
+        Add your own custom features here.
+        These are calculated AFTER base features, so you can use them.
+        """
+        # Example: Interaction feature
+        df['dist_x_angle'] = df['dist'] * df['angle_abs'] / 90
+        
+        # Example: Custom zone
+        df['sweet_spot'] = ((df['dist'] > 15) & (df['dist'] < 30) & (df['angle_abs'] < 25)).astype(int)
+        
+        return df
+    
+    # Step 6: (Optional) Add custom evaluation metrics
     def custom_evaluation(self, y_true, y_pred, y_proba):
         """
         Add your own evaluation metrics.
-        These will be added to the standard metrics.
+        These will be shown alongside the standard metrics.
+        
+        Parameters:
+            y_true: Actual outcomes (0 or 1)
+            y_pred: Predicted classes (0 or 1)  
+            y_proba: Predicted probabilities (0.0 to 1.0)
         """
         metrics = {}
         
-        # Calibration: Is average predicted ≈ average actual?
-        metrics['my_calibration'] = abs(np.mean(y_proba) - np.mean(y_true))
+        # Example: Expected vs Actual total
+        metrics['expected_total'] = float(np.sum(y_proba))
+        metrics['actual_total'] = float(np.sum(y_true))
         
-        # Expected total vs actual total
-        expected = np.sum(y_proba)
-        actual = np.sum(y_true)
-        metrics['expected_total'] = float(expected)
-        metrics['actual_total'] = float(actual)
-        metrics['total_ratio'] = float(expected / actual) if actual > 0 else 0
-        
-        # High confidence accuracy (when model is >70% sure)
-        high_conf_mask = y_proba > 0.7
-        if np.sum(high_conf_mask) > 0:
-            metrics['high_conf_accuracy'] = float(np.mean(y_true[high_conf_mask]))
-        
-        # Low probability accuracy (when model is <30% sure)
-        low_conf_mask = y_proba < 0.3
-        if np.sum(low_conf_mask) > 0:
-            metrics['low_conf_miss_rate'] = float(1 - np.mean(y_true[low_conf_mask]))
+        # Example: High confidence accuracy
+        high_conf = y_proba > 0.7
+        if np.sum(high_conf) > 0:
+            metrics['high_conf_accuracy'] = float(np.mean(y_true[high_conf]))
         
         return metrics
     
-    def get_model_params(self):
-        """Return algorithm parameters for display."""
-        return {
-            'algorithm': 'GradientBoostingClassifier',
-            'n_estimators': 100,
-            'learning_rate': 0.1,
-            'max_depth': 4,
-            'custom_features': ['dist_x_angle', 'sweet_spot', 'difficulty']
-        }
-
-
-# =============================================================================
-# 🏆 BUILT-IN MODELS - REFERENCE IMPLEMENTATIONS
-# =============================================================================
-
-class CMCv3Model(BaseCustomModel):
-    """
-    CMC v3 - The model that achieved 87.5% accuracy!
-    
-    Uses:
-    - Logistic Regression with balanced classes
-    - 19 carefully selected features
-    - Player quality estimation with Bayesian smoothing
-    """
-    
-    name = "CMC v3"
-    description = "Logistic Regression with 20 features, class balancing - 87.5% accuracy benchmark"
-    version = "3.0"
-    
-    def engineer_features(self, df):
-        """Add CMC v3 specific features."""
-        
-        # Preferred side calculation (right-footers on left, left-footers on right)
-        df['preferred_side'] = (
-            ((df['on_left_side'] == 1) & (df['is_right_foot'] == 1)) |
-            ((df['on_left_side'] == 0) & (df['is_left_foot'] == 1))
-        ).astype(int)
-        
-        # Player quality with Bayesian smoothing
-        if 'playerName' in df.columns and 'scored' in df.columns:
-            try:
-                overall_rate = df['scored'].mean()
-                player_stats = df.groupby('playerName')['scored'].agg(['mean', 'count'])
-                # Bayesian smoothing: blend player rate with overall rate based on sample size
-                player_stats['quality'] = (
-                    (player_stats['mean'] * player_stats['count'] + overall_rate * 15) / 
-                    (player_stats['count'] + 15)
-                )
-                df['player_quality'] = df['playerName'].map(player_stats['quality']).fillna(overall_rate)
-            except:
-                df['player_quality'] = 0.5
-        else:
-            df['player_quality'] = 0.5
-        
-        return df
-    
-    def get_feature_list(self):
-        return [
-            'dist', 'dist_squared', 'dist_log',
-            'angle_abs', 'goal_angle',
-            'close_range', 'mid_range', 'long_range', 'beyond_40m', 'beyond_50m',
-            'central_zone', 'penalty_area', 'danger_zone',
-            'preferred_side', 'pressure_value', 'position_value', 'foot_value',
-            'is_setplay', 'player_quality'
-        ]
-    
-    def train(self, X, y):
-        model = LogisticRegression(
-            C=0.5,
-            max_iter=2000,
-            class_weight='balanced',
-            random_state=42
-        )
-        model.fit(X, y)
-        return model
-    
-    def get_model_params(self):
-        return {
-            'algorithm': 'LogisticRegression',
-            'C': 0.5,
-            'class_weight': 'balanced'
-        }
-
-
-class CMCv3GoalsModel(BaseCustomModel):
-    """
-    CMC v3 Goals - xG (Expected Goals) version.
-    
-    Predicts probability of a GOAL specifically (not points).
-    Uses higher class weights since goals are rarer.
-    """
-    
-    name = "CMC v3 Goals (xG)"
-    description = "xG model for predicting goal probability specifically"
-    version = "3.0"
-    
-    def engineer_features(self, df):
-        """Same features as CMC v3 but for goals."""
-        df['preferred_side'] = (
-            ((df['on_left_side'] == 1) & (df['is_right_foot'] == 1)) |
-            ((df['on_left_side'] == 0) & (df['is_left_foot'] == 1))
-        ).astype(int)
-        
-        # Goal-specific player quality
-        if 'playerName' in df.columns and 'is_goal' in df.columns:
-            try:
-                overall_rate = df['is_goal'].mean()
-                player_stats = df.groupby('playerName')['is_goal'].agg(['mean', 'count'])
-                player_stats['quality'] = (
-                    (player_stats['mean'] * player_stats['count'] + overall_rate * 20) / 
-                    (player_stats['count'] + 20)
-                )
-                df['player_goal_quality'] = df['playerName'].map(player_stats['quality']).fillna(overall_rate)
-            except:
-                df['player_goal_quality'] = 0.1
-        else:
-            df['player_goal_quality'] = 0.1
-        
-        return df
-    
-    def get_feature_list(self):
-        return [
-            'dist', 'dist_squared', 'dist_log',
-            'angle_abs', 'goal_angle',
-            'close_range', 'mid_range', 'long_range',
-            'central_zone', 'penalty_area', 'danger_zone',
-            'preferred_side', 'pressure_value', 'position_value',
-            'is_setplay', 'player_goal_quality'
-        ]
-    
-    def get_target_column(self):
-        return 'is_goal'  # Predict goals only
-    
-    def train(self, X, y):
-        model = LogisticRegression(
-            C=0.3,
-            max_iter=2000,
-            class_weight={0: 1, 1: 5},  # Weight goals more since they're rarer
-            random_state=42
-        )
-        model.fit(X, y)
-        return model
-
-
-class RandomForestModel(BaseCustomModel):
-    """
-    Random Forest - Good for capturing non-linear patterns.
-    
-    Ensemble of decision trees that votes on predictions.
-    Handles complex feature interactions automatically.
-    """
-    
-    name = "Random Forest"
-    description = "Ensemble of 100 decision trees - handles non-linear patterns"
-    version = "1.0"
-    
-    def get_feature_list(self):
-        return [
-            'dist', 'dist_squared', 'angle_abs',
-            'close_range', 'mid_range', 'long_range', 'beyond_40m',
-            'central_zone', 'penalty_area', 'danger_zone',
-            'pressure_value', 'position_value', 'foot_value',
-            'is_setplay'
-        ]
-    
-    def train(self, X, y):
-        model = RandomForestClassifier(
-            n_estimators=100,
-            max_depth=8,
-            min_samples_split=10,
-            class_weight='balanced',
-            random_state=42,
-            n_jobs=-1  # Use all CPU cores
-        )
-        model.fit(X, y)
-        return model
-    
+    # Step 7: (Optional) Return model parameters for display
     def get_model_params(self):
         return {
             'algorithm': 'RandomForestClassifier',
             'n_estimators': 100,
-            'max_depth': 8
+            'max_depth': 10,
         }
 
 
-class GradientBoostModel(BaseCustomModel):
-    """
-    Gradient Boosting - Often the best for tabular data.
-    
-    Builds trees sequentially, each correcting the previous.
-    Usually achieves highest accuracy but slower to train.
-    """
-    
-    name = "Gradient Boosting"
-    description = "Sequential tree ensemble - often highest accuracy"
-    version = "1.0"
-    
-    def get_feature_list(self):
-        return [
-            'dist', 'dist_squared', 'dist_log', 'angle_abs',
-            'close_range', 'mid_range', 'long_range', 'beyond_40m',
-            'central_zone', 'penalty_area', 'danger_zone',
-            'pressure_value', 'position_value', 'foot_value',
-            'is_setplay'
-        ]
-    
-    def train(self, X, y):
-        model = GradientBoostingClassifier(
-            n_estimators=150,
-            learning_rate=0.05,
-            max_depth=4,
-            min_samples_split=10,
-            subsample=0.8,
-            random_state=42
-        )
-        model.fit(X, y)
-        return model
-    
-    def get_model_params(self):
-        return {
-            'algorithm': 'GradientBoostingClassifier',
-            'n_estimators': 150,
-            'learning_rate': 0.05,
-            'max_depth': 4
-        }
+# =============================================================================
+# BUILT-IN MODELS
+# =============================================================================
 
-
-class NeuralNetModel(BaseCustomModel):
-    """
-    Neural Network (MLP) - For complex pattern learning.
-    
-    Multi-layer perceptron with 2 hidden layers.
-    Good for capturing complex non-linear relationships.
-    """
-    
-    name = "Neural Network"
-    description = "Multi-layer Perceptron with 2 hidden layers (64, 32 neurons)"
-    version = "1.0"
-    
-    def get_feature_list(self):
-        return [
-            'dist', 'dist_squared', 'dist_log', 'angle_abs',
-            'close_range', 'mid_range', 'long_range', 'beyond_40m',
-            'central_zone', 'penalty_area', 'danger_zone',
-            'pressure_value', 'position_value', 'foot_value',
-            'is_setplay'
-        ]
-    
-    def train(self, X, y):
-        model = MLPClassifier(
-            hidden_layer_sizes=(64, 32),
-            learning_rate_init=0.001,
-            max_iter=500,
-            early_stopping=True,
-            validation_fraction=0.1,
-            random_state=42
-        )
-        model.fit(X, y)
-        return model
-    
-    def get_model_params(self):
-        return {
-            'algorithm': 'MLPClassifier',
-            'hidden_layers': '(64, 32)',
-            'learning_rate': 0.001
-        }
-
-
-class DistanceOnlyModel(BaseCustomModel):
-    """
-    Distance Only - Simple baseline for comparison.
-    
-    Uses only distance features. Compare your model against this
-    to see if your added complexity is actually helping!
-    """
-    
-    name = "Distance Only (Baseline)"
-    description = "Baseline using only distance - compare your model against this!"
+class DistanceBaseline(BaseCustomModel):
+    """Simple baseline using only distance - compare your model against this!"""
+    name = "Distance Baseline"
+    description = "Baseline model using only distance (compare against this)"
     version = "1.0"
     
     def get_feature_list(self):
         return ['dist', 'dist_squared']
     
     def train(self, X, y):
-        model = LogisticRegression(max_iter=1000, random_state=42)
+        return LogisticRegression(max_iter=1000, random_state=42).fit(X, y)
+
+
+class GradientBoostModel(BaseCustomModel):
+    """Gradient Boosting - often the best accuracy."""
+    name = "Gradient Boost"
+    description = "Gradient Boosting Classifier - high accuracy"
+    version = "1.0"
+    
+    def get_feature_list(self):
+        return ['dist', 'dist_squared', 'angle_abs', 'pressure_value', 
+                'close_range', 'mid_range', 'long_range', 'central_zone', 
+                'is_setplay', 'position_value']
+    
+    def train(self, X, y):
+        model = GradientBoostingClassifier(
+            n_estimators=150, learning_rate=0.05, max_depth=4, random_state=42
+        )
         model.fit(X, y)
         return model
+    
+    def get_model_params(self):
+        return {'algorithm': 'GradientBoosting', 'n_estimators': 150, 'learning_rate': 0.05}
+
+
+class RandomForestModel(BaseCustomModel):
+    """Random Forest - good balance of speed and accuracy."""
+    name = "Random Forest"
+    description = "Random Forest Classifier - balanced performance"
+    version = "1.0"
+    
+    def get_feature_list(self):
+        return ['dist', 'angle_abs', 'pressure_value', 'is_setplay',
+                'close_range', 'mid_range', 'central_zone', 'position_value']
+    
+    def train(self, X, y):
+        model = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42)
+        model.fit(X, y)
+        return model
+    
+    def get_model_params(self):
+        return {'algorithm': 'RandomForest', 'n_estimators': 100, 'max_depth': 10}
 
 
 # =============================================================================
-# 🔧 YOUR CUSTOM MODELS - ADD THEM HERE!
+# YOUR CUSTOM MODELS - ADD THEM HERE!
 # =============================================================================
 """
-Copy one of the templates above and paste it here.
-Then add it to AVAILABLE_MODELS below.
+Copy the ExampleModel class above, paste it here, and customize it.
 
 Example:
 
 class MyAwesomeModel(BaseCustomModel):
     name = "My Awesome Model"
-    description = "The best model ever!"
+    description = "My custom xP model"
     
     def get_feature_list(self):
-        return ['dist', 'angle_abs', 'pressure_value', 'is_setplay', 'central_zone']
+        return ['dist', 'angle_abs', 'pressure_value', 'my_custom_feature']
+    
+    def engineer_features(self, df):
+        df['my_custom_feature'] = df['dist'] * df['pressure_value']
+        return df
     
     def train(self, X, y):
-        from sklearn.ensemble import RandomForestClassifier
-        model = RandomForestClassifier(n_estimators=200, max_depth=10)
+        model = GradientBoostingClassifier(n_estimators=200)
         model.fit(X, y)
         return model
+
+Then add to AVAILABLE_MODELS below:
+    'my_awesome': MyAwesomeModel,
 """
 
 
 # =============================================================================
-# 📝 AVAILABLE MODELS REGISTRY
+# AVAILABLE MODELS REGISTRY - ADD YOUR MODELS HERE
 # =============================================================================
-# Add your custom model classes here to make them available in the Model Lab
 
 AVAILABLE_MODELS = {
     # Built-in models
-    'cmc_v3': CMCv3Model,
-    'cmc_v3_goals': CMCv3GoalsModel,
-    'random_forest': RandomForestModel,
+    'example': ExampleModel,
+    'distance_baseline': DistanceBaseline,
     'gradient_boost': GradientBoostModel,
-    'neural_net': NeuralNetModel,
-    'distance_baseline': DistanceOnlyModel,
-    
-    # Templates (for learning)
-    'simple_template': SimpleTemplate,
-    'advanced_template': AdvancedTemplate,
+    'random_forest': RandomForestModel,
     
     # === ADD YOUR CUSTOM MODELS HERE ===
     # 'my_awesome': MyAwesomeModel,
-    # 'custom_xg': MyCustomXGModel,
 }
 
 
 # =============================================================================
-# 🔌 HELPER FUNCTIONS - Used by modelbuilder.py
+# HELPER FUNCTIONS (used by modelbuilder.py)
 # =============================================================================
 
 def get_available_models():
-    """Return list of available models with their info for the API."""
+    """Return list of available models with their info."""
     models = []
     for key, model_class in AVAILABLE_MODELS.items():
         try:
@@ -1258,20 +503,8 @@ def get_model(model_key):
 def run_custom_model(model_key, train_df, target_df=None, apply_to_target=True, target_field='xP'):
     """
     Run a custom model: train on train_df, optionally apply to target_df.
-    
-    Args:
-        model_key: Key from AVAILABLE_MODELS
-        train_df: DataFrame to train on
-        target_df: DataFrame to apply predictions to (optional, defaults to train_df)
-        apply_to_target: Whether to generate predictions
-        target_field: 'xP' or 'xG'
-    
-    Returns:
-        dict with metrics and predictions
     """
     model = get_model(model_key)
-    
-    # Train
     metrics = model.fit(train_df)
     
     result = {
@@ -1281,7 +514,6 @@ def run_custom_model(model_key, train_df, target_df=None, apply_to_target=True, 
         'predictions': None
     }
     
-    # Apply to target
     if apply_to_target:
         predict_df = target_df if target_df is not None else train_df
         predictions = model.predict(predict_df)
@@ -1292,29 +524,37 @@ def run_custom_model(model_key, train_df, target_df=None, apply_to_target=True, 
 
 
 # =============================================================================
-# 🧪 TEST YOUR MODEL LOCALLY
+# TEST YOUR MODEL LOCALLY
 # =============================================================================
-"""
-You can test your model without running the full server:
 
 if __name__ == '__main__':
-    import pandas as pd
-    
-    # Create some test data
+    # Create test data
     test_data = pd.DataFrame({
-        'x': [120, 100, 80, 130, 110],
-        'y': [44, 30, 60, 44, 50],
-        'action': ['Point', 'Wide', 'Goal', 'Short', 'Point'],
-        'pressure': ['low', 'high', 'medium', 'none', 'low'],
-        'position': ['forward', 'midfielder', 'forward', 'back', 'forward'],
-        'foot': ['right', 'left', 'right', 'right', 'left'],
+        'x': [120, 100, 80, 130, 110, 90, 125, 85, 95, 115],
+        'y': [44, 30, 60, 44, 50, 35, 40, 55, 48, 42],
+        'action': ['Point', 'Wide', 'Goal', 'Short', 'Point', 'Wide', 'Goal', 'Point', 'Short', 'Point'],
+        'pressure': ['low', 'high', 'medium', 'none', 'low', 'high', 'low', 'medium', 'high', 'none'],
+        'position': ['forward', 'midfielder', 'forward', 'back', 'forward', 'midfielder', 'forward', 'back', 'midfielder', 'forward'],
     })
     
-    # Test a model
-    model = CMCv3Model()
+    print("Testing ExampleModel...")
+    print("-" * 50)
+    
+    model = ExampleModel()
     metrics = model.fit(test_data)
-    print("Metrics:", metrics)
+    
+    print(f"Model: {model.name}")
+    print(f"Features: {model.feature_names}")
+    print(f"\nMetrics:")
+    print(f"  Brier Score: {metrics['brier_score']:.4f} (lower is better)")
+    print(f"  AUC-ROC: {metrics['auc_roc']:.4f}")
+    print(f"  Accuracy: {metrics['accuracy']:.4f}")
     
     predictions = model.predict(test_data)
-    print("Predictions:", predictions)
-"""
+    print(f"\nPredictions: {predictions[:5].round(3)}...")
+    
+    print("\n" + "=" * 50)
+    print("Available models:")
+    for key, model_class in AVAILABLE_MODELS.items():
+        m = model_class()
+        print(f"  {key}: {m.name}")

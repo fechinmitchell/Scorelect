@@ -67,7 +67,10 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 def load_dataset_raw(uid, dataset_name):
-    """Load dataset from Firestore without feature engineering."""
+    """
+    Load dataset from Firestore without feature engineering.
+    Memory optimized - loads one game at a time.
+    """
     db = get_db()
     games_ref = db.collection("savedGames").document(uid).collection("games")\
         .where("datasetName", "==", dataset_name)
@@ -78,20 +81,29 @@ def load_dataset_raw(uid, dataset_name):
     for game_doc in games_ref.stream():
         game_data = game_doc.to_dict()
         game_shots = game_data.get('gameData', [])
+        
         game_docs.append({
             'id': game_doc.id,
-            'data': game_data,
             'shot_indices': list(range(len(all_shots), len(all_shots) + len(game_shots)))
         })
+        
         for idx, shot in enumerate(game_shots):
             shot['_game_id'] = game_doc.id
             shot['_shot_idx'] = idx
             all_shots.append(shot)
+        
+        # Don't keep full game_data in memory - we only need shot_indices and id
+        del game_data
     
     if not all_shots:
         raise ValueError(f"No shots found in dataset '{dataset_name}'")
     
-    return pd.DataFrame(all_shots), game_docs
+    df = pd.DataFrame(all_shots)
+    
+    # Clear the list to free memory
+    del all_shots
+    
+    return df, game_docs
 
 
 # =============================================================================
@@ -252,8 +264,15 @@ def api_run_model():
         if predictions:
             logger.info(f"Applying {len(predictions)} predictions to {target_dataset}")
             
+            # Re-fetch games one at a time to apply predictions (memory efficient)
             for game_info in target_game_docs:
-                game_data = game_info['data']
+                game_ref = db.collection("savedGames").document(uid).collection("games").document(game_info['id'])
+                game_doc = game_ref.get()
+                
+                if not game_doc.exists:
+                    continue
+                
+                game_data = game_doc.to_dict()
                 game_shots = game_data.get('gameData', [])
                 updated = False
                 
@@ -264,7 +283,7 @@ def api_run_model():
                         updated = True
                 
                 if updated:
-                    db.collection("savedGames").document(uid).collection("games").document(game_info['id']).update({
+                    game_ref.update({
                         'gameData': game_shots,
                         'lastModelUpdate': datetime.utcnow().isoformat(),
                         'modelConfig': {
@@ -274,6 +293,9 @@ def api_run_model():
                         }
                     })
                     games_updated += 1
+                
+                # Free memory after each game
+                del game_data, game_shots
         
         execution_time = round(time.time() - start_time, 2)
         
@@ -334,7 +356,7 @@ def api_run_model():
 
 @model_lab_bp.route('/datasets', methods=['GET'])
 def api_get_datasets():
-    """Get list of user's datasets."""
+    """Get list of user's datasets with basic info (no full game data loaded)."""
     try:
         uid = request.args.get('uid')
         if not uid:
@@ -343,17 +365,16 @@ def api_get_datasets():
         db = get_db()
         games_ref = db.collection("savedGames").document(uid).collection("games")
         
+        # Only select fields we need - NOT the full gameData array
         datasets = {}
-        for game_doc in games_ref.stream():
+        for game_doc in games_ref.select(['datasetName']).stream():
             game_data = game_doc.to_dict()
             dataset_name = game_data.get('datasetName', 'Unnamed')
-            shot_count = len(game_data.get('gameData', []))
             
             if dataset_name not in datasets:
-                datasets[dataset_name] = {'name': dataset_name, 'games': 0, 'shots': 0}
+                datasets[dataset_name] = {'name': dataset_name, 'games': 0}
             
             datasets[dataset_name]['games'] += 1
-            datasets[dataset_name]['shots'] += shot_count
         
         return jsonify({
             'success': True,
@@ -446,7 +467,7 @@ def api_delete_leaderboard_entry(entry_id):
 
 @model_lab_bp.route('/datasets-quick', methods=['GET'])
 def api_get_datasets_quick():
-    """Quick endpoint - just returns dataset names."""
+    """Quick endpoint - just returns dataset names WITHOUT loading game data."""
     try:
         uid = request.args.get('uid')
         if not uid:
@@ -455,8 +476,9 @@ def api_get_datasets_quick():
         db = get_db()
         games_ref = db.collection("savedGames").document(uid).collection("games")
         
+        # Only select the datasetName field - don't load gameData!
         dataset_names = set()
-        for game_doc in games_ref.stream():
+        for game_doc in games_ref.select(['datasetName']).stream():
             game_data = game_doc.to_dict()
             dataset_name = game_data.get('datasetName')
             if dataset_name:

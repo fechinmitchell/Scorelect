@@ -190,11 +190,13 @@ const ModelLab = ({ mode = 'dark' }) => {
       const response = await axios.post(`${BASE_API_URL}/api/model-lab/test-model`, {
         uid: user.uid, model_key: selectedModel, training_dataset: trainingDataset,
         target_dataset: useSameDataset ? trainingDataset : targetDataset, target_field: targetField,
+        leaderboard_year: leaderboardYear,
       }, { timeout: 120000 });
       if (response.data.success) {
         setResult(response.data);
         fetchLeaderboard(); // Refresh leaderboard after test
-        Swal.fire({ title: 'Test Complete! ✅', html: `<p><strong>Brier Score:</strong> ${response.data.metrics.brier_score?.toFixed(4) || 'N/A'}</p><p><strong>AUC-ROC:</strong> ${((response.data.metrics.auc_roc || 0) * 100).toFixed(1)}%</p><p style="color:#888;font-size:0.9em">Added to leaderboard as "Test"</p>`, icon: 'success' });
+        const savedMsg = response.data.leaderboard_saved ? '<p style="color:#22c55e;font-size:0.9em">✅ Saved to leaderboard</p>' : '<p style="color:#f59e0b;font-size:0.9em">⚠️ Could not save to leaderboard</p>';
+        Swal.fire({ title: 'Test Complete! ✅', html: `<p><strong>Brier Score:</strong> ${response.data.metrics.brier_score?.toFixed(4) || 'N/A'}</p><p><strong>AUC-ROC:</strong> ${((response.data.metrics.auc_roc || 0) * 100).toFixed(1)}%</p>${savedMsg}`, icon: 'success' });
       } else throw new Error(response.data.error);
     } catch (error) {
       let msg = error.response?.data?.error || error.message;

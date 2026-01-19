@@ -127,7 +127,7 @@ def api_get_custom_models():
 @model_lab_bp.route('/test-model', methods=['POST'])
 def api_test_model():
     """
-    Test run a model - train and evaluate but DON'T update database.
+    Test run a model - train and evaluate, also saves to leaderboard.
     
     Request body:
     {
@@ -135,7 +135,8 @@ def api_test_model():
         "model_key": "example",
         "training_dataset": "dataset_name",
         "target_dataset": "dataset_name" (optional),
-        "target_field": "xP" or "xG"
+        "target_field": "xP" or "xG",
+        "leaderboard_year": "2026" (optional)
     }
     """
     try:
@@ -148,6 +149,7 @@ def api_test_model():
         training_dataset = data.get('training_dataset')
         target_dataset = data.get('target_dataset', training_dataset)
         target_field = data.get('target_field', 'xP')
+        leaderboard_year = data.get('leaderboard_year', '2026')
         
         if not all([uid, model_key, training_dataset]):
             return jsonify({'error': 'uid, model_key, and training_dataset required'}), 400
@@ -179,6 +181,7 @@ def api_test_model():
         execution_time = round(time.time() - start_time, 2)
         
         # Save to leaderboard (even for test runs)
+        leaderboard_saved = False
         try:
             from firebase_admin import firestore as fs
             
@@ -191,7 +194,7 @@ def api_test_model():
             db = get_db()
             db.collection('modelLabLeaderboard').add({
                 'uid': uid,
-                'year': '2026',  # Default to current year for tests
+                'year': leaderboard_year,
                 'run_type': 'test',  # Mark as test run
                 'model_key': model_key,
                 'model_name': result['model_name'],
@@ -214,9 +217,12 @@ def api_test_model():
                 'execution_time': execution_time,
                 'timestamp': fs.SERVER_TIMESTAMP
             })
-            logger.info(f"Saved test run to leaderboard")
+            leaderboard_saved = True
+            logger.info(f"Saved test run to {leaderboard_year} leaderboard")
         except Exception as save_err:
-            logger.warning(f"Could not save test run to leaderboard: {save_err}")
+            logger.error(f"Could not save test run to leaderboard: {save_err}")
+            import traceback
+            logger.error(traceback.format_exc())
         
         # Save to leaderboard (as test run)
         try:
@@ -262,6 +268,8 @@ def api_test_model():
         return jsonify({
             'success': True,
             'test_run': True,  # Flag that this was a test
+            'leaderboard_saved': leaderboard_saved,
+            'leaderboard_year': leaderboard_year,
             'model_key': model_key,
             'model_name': result['model_name'],
             'metrics': result['metrics'],

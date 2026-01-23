@@ -267,8 +267,8 @@ const AdminSettings = () => {
               <Tab label="Datasets" />
               <Tab label="Admin Users" />
               <Tab label="Model Runner" />
-              <Tab label="📊 Data Preview" />
-              <Tab label="🧪 Model Lab" />
+              <Tab label="Data Preview" />
+              <Tab label="Model Lab" />
             </Tabs>
           </Card>
 

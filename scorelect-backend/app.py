@@ -6209,18 +6209,17 @@ def fix_y_coordinates():
         return jsonify({'error': str(e)}), 500
 
 # Add this endpoint to app.py for the Dataset Preview feature
-
 @app.route('/preview-dataset', methods=['POST'])
 def preview_dataset():
     """
     Get a preview of dataset contents for the admin panel.
-    Returns game metadata and event data for viewing before running models.
+    Returns ALL game metadata and event data for viewing before running models.
     """
     try:
         data = request.json
         uid = data.get('uid')
         dataset_name = data.get('datasetName')
-        limit = data.get('limit', 500)  # Max events to return
+        limit = data.get('limit', 2000)  # Max events to return
         
         if not uid or not dataset_name:
             return jsonify({'error': 'UID and datasetName are required'}), 400
@@ -6235,7 +6234,13 @@ def preview_dataset():
         all_events = []
         total_events = 0
         events_with_xp = 0
+        events_with_xg = 0
         xp_sum = 0
+        xg_sum = 0
+        
+        # GAA pitch dimensions for distance calculation
+        GOAL_X = 145.0
+        GOAL_Y = 44.0
         
         for doc in query.stream():
             game_data = doc.to_dict()
@@ -6249,6 +6254,7 @@ def preview_dataset():
                 'sport': game_data.get('sport', 'Unknown'),
                 'analysisType': game_data.get('analysisType', 'pitch'),
                 'teamsData': game_data.get('teamsData'),
+                'youtubeUrl': game_data.get('youtubeUrl'),
                 'eventCount': 0
             }
             
@@ -6260,8 +6266,27 @@ def preview_dataset():
             game_info['eventCount'] = len(game_events)
             total_events += len(game_events)
             
-            # Process events
+            # Process events - include ALL fields
             for event in game_events:
+                # Get coordinates
+                x = event.get('x')
+                y = event.get('y')
+                
+                # Calculate distance and angle if we have coordinates
+                distance = None
+                angle = None
+                if x is not None and y is not None:
+                    try:
+                        x_float = float(x)
+                        y_float = float(y)
+                        # Distance to goal
+                        distance = ((GOAL_X - x_float) ** 2 + (GOAL_Y - y_float) ** 2) ** 0.5
+                        # Angle to goal (in degrees)
+                        import math
+                        angle = math.degrees(math.atan2(GOAL_Y - y_float, GOAL_X - x_float))
+                    except (ValueError, TypeError):
+                        pass
+                
                 # Track xP stats
                 xp_value = event.get('xP') or event.get('xp')
                 if xp_value is not None and xp_value != 0:
@@ -6270,30 +6295,67 @@ def preview_dataset():
                         events_with_xp += 1
                         xp_sum += xp_float
                     except (ValueError, TypeError):
-                        pass
+                        xp_value = None
+                
+                # Track xG stats
+                xg_value = event.get('xG') or event.get('xg')
+                if xg_value is not None and xg_value != 0:
+                    try:
+                        xg_float = float(xg_value)
+                        events_with_xg += 1
+                        xg_sum += xg_float
+                    except (ValueError, TypeError):
+                        xg_value = None
                 
                 # Only add to preview if under limit
                 if len(all_events) < limit:
                     all_events.append({
+                        # Identifiers
                         'gameId': game_id,
                         'gameName': game_id,
+                        
+                        # Core event data
                         'action': event.get('action') or event.get('type'),
                         'playerName': event.get('playerName') or event.get('player'),
+                        'playerNumber': event.get('playerNumber') or event.get('player'),
                         'team': event.get('team'),
-                        'x': event.get('x'),
-                        'y': event.get('y'),
-                        'xP': event.get('xP') or event.get('xp'),
-                        'outcome': event.get('outcome'),
+                        
+                        # Position/Location
+                        'position': event.get('position'),
+                        'x': x,
+                        'y': y,
+                        'distance': distance,
+                        'angle': angle,
+                        
+                        # Context fields
                         'pressure': event.get('pressure'),
                         'foot': event.get('foot'),
                         'minute': event.get('minute'),
+                        'half': event.get('half') or event.get('period'),
                         'timestamp': event.get('timestamp'),
+                        
+                        # Model predictions
+                        'xP': xp_value,
+                        'xG': xg_value,
+                        'xPoints': event.get('xPoints'),
+                        
+                        # Outcome
+                        'outcome': event.get('outcome'),
+                        
+                        # Additional fields that might exist
+                        'notes': event.get('notes'),
+                        'category': event.get('category'),
+                        
+                        # Pass/shot endpoints (if available)
+                        'from': event.get('from'),
+                        'to': event.get('to'),
                     })
             
             games.append(game_info)
         
-        # Calculate average xP
+        # Calculate averages
         avg_xp = xp_sum / events_with_xp if events_with_xp > 0 else None
+        avg_xg = xg_sum / events_with_xg if events_with_xg > 0 else None
         
         logging.info(f"Dataset preview: {len(games)} games, {total_events} total events, {len(all_events)} in preview")
         
@@ -6302,8 +6364,11 @@ def preview_dataset():
             'datasetName': dataset_name,
             'gameCount': len(games),
             'totalEvents': total_events,
+            'eventsInPreview': len(all_events),
             'eventsWithXP': events_with_xp,
+            'eventsWithXG': events_with_xg,
             'avgXP': avg_xp,
+            'avgXG': avg_xg,
             'games': games,
             'events': all_events,
         }), 200

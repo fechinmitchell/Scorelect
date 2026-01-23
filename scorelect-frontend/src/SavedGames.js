@@ -22,7 +22,8 @@ async function parseJSONNoNaN(response) {
 }
 
 const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
-  const { datasets, loading, fetchError, fetchSavedGames, fetchFullGameData } = useContext(SavedGamesContext);
+  // Using the context with lazy loading - datasets only contain metadata
+  const { datasets, loading, fetchError, fetchSavedGames, fetchFullGameData, clearGameCache } = useContext(SavedGamesContext);
   const { fetchPublishedDatasets } = useContext(SportsDataHubContext);
   const auth = getAuth();
   const { setLoadedCoords } = useContext(GameContext);
@@ -35,6 +36,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
   const [selectedGameToMove, setSelectedGameToMove] = useState(null);
   const [sourceDataset, setSourceDataset] = useState(null);
+  const [loadingGame, setLoadingGame] = useState(null); // Track which game is currently loading
 
   const handlePublishSuccess = () => {
     Swal.fire('Published!', 'Dataset has been published successfully.', 'success');
@@ -43,22 +45,25 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     fetchPublishedDatasets();
   };
 
-  // Helper function to determine analysis type
+  // Helper function to determine analysis type from metadata
   const getAnalysisType = (game) => {
-    // Check for explicit analysisType field
     if (game.analysisType) {
       return game.analysisType;
     }
-    // Check for youtubeUrl to determine if it's video analysis
     if (game.youtubeUrl) {
       return 'video';
     }
-    // Default to pitch analysis
     return 'pitch';
   };
 
-  // Updated handleLoadGame function with proper routing and data handling
+  /**
+   * Handle loading a game - fetches full data on demand
+   * This is the key change: we only fetch full gameData when the user clicks Load
+   */
   const handleLoadGame = async (game) => {
+    const gameId = game.gameId || game.gameName;
+    setLoadingGame(gameId);
+    
     try {
       Swal.fire({
         title: 'Loading Game...',
@@ -71,7 +76,8 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
         },
       });
 
-      const fullGameData = await fetchFullGameData(game.gameId || game.gameName);
+      // Fetch the full game data on demand (this is the lazy load)
+      const fullGameData = await fetchFullGameData(gameId);
       Swal.close();
 
       // Normalize the game data array
@@ -97,21 +103,16 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
 
         // Process tags for ManualTagging with proper position handling
         const processedTags = normalizedData.map((tag) => {
-          // Determine position coordinates
           let x = 50, y = 50;
           
-          // First check if position is an object with x,y coordinates
           if (tag.position && typeof tag.position === 'object' && tag.position.x !== undefined && tag.position.y !== undefined) {
             x = tag.position.x;
             y = tag.position.y;
-          }
-          // Then check direct x,y properties
-          else if (tag.x !== undefined && tag.y !== undefined) {
+          } else if (tag.x !== undefined && tag.y !== undefined) {
             x = tag.x;
             y = tag.y;
           }
 
-          // Determine position type (forward, midfield, etc.)
           let positionType = 'forward';
           if (typeof tag.position === 'string') {
             positionType = tag.position;
@@ -121,22 +122,17 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
 
           return {
             ...tag,
-            // Ensure position is stored as an object for the pitch selector
             position: { x, y },
-            // Keep direct x,y for compatibility
             x: x,
             y: y,
-            // Player data
             playerName: tag.playerName || tag.player || '',
             playerNumber: tag.playerNumber || '',
-            // Event data
             timestamp: tag.timestamp || 0,
             category: tag.category || '',
             action: tag.action || '',
             team: tag.team || 'home',
             outcome: tag.outcome || '',
             notes: tag.notes || '',
-            // GAA-specific fields
             pressure: tag.pressure || '0',
             foot: tag.foot || 'Right',
             minute: tag.minute || '',
@@ -163,9 +159,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
       } else if (fullGameData.sport === 'GAA') {
         console.log('Loading GAA pitch game:', fullGameData.gameName);
 
-        // Process data for PitchGraphic - position should be a string, not an object
         const processedData = normalizedData.map((item) => {
-          // Determine position type
           let positionType = 'forward';
           if (typeof item.position === 'string') {
             positionType = item.position;
@@ -173,7 +167,6 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
             positionType = item.position.type;
           }
 
-          // Get coordinates
           let x = 50, y = 50;
           if (item.x !== undefined && item.y !== undefined) {
             x = item.x;
@@ -188,7 +181,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
             team: item.team || 'Unknown',
             playerName: item.playerName || item.player || '',
             player: item.player || item.playerNumber || '',
-            position: positionType, // This should be a string for PitchGraphic
+            position: positionType,
             pressure: item.pressure || '0',
             foot: item.foot || 'Right',
             minute: item.minute || '',
@@ -200,10 +193,7 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
           };
         });
 
-        // Set coords in context for PitchGraphic
         setLoadedCoords(processedData);
-
-        // Navigate to PitchGraphic
         navigate('/pitch');
 
         Swal.fire({
@@ -249,6 +239,8 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
         background: 'var(--dark-card)',
         confirmButtonColor: 'var(--primary)',
       });
+    } finally {
+      setLoadingGame(null);
     }
   };
 
@@ -298,6 +290,9 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
           }
 
           if (response.ok) {
+            // Clear the game from cache
+            clearGameCache(gameId);
+            
             Swal.fire({
               title: 'Deleted!',
               text: `Game "${gameName}" has been deleted.`,
@@ -368,6 +363,9 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
 
       const resultData = await parseJSONNoNaN(response);
       if (response.ok) {
+        // Clear cache for this game as it moved
+        clearGameCache(selectedGameToMove.gameId || selectedGameToMove.gameName);
+        
         Swal.fire({
           title: 'Moved!',
           text: `Game "${selectedGameToMove.gameName}" has been moved to dataset "${targetDatasetName}".`,
@@ -405,6 +403,17 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
         });
         return;
       }
+
+      Swal.fire({
+        title: 'Downloading...',
+        text: 'Preparing your dataset for download.',
+        allowOutsideClick: false,
+        background: 'var(--dark-card)',
+        color: 'var(--light)',
+        didOpen: () => {
+          Swal.showLoading();
+        },
+      });
 
       const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
       const token = await user.getIdToken();
@@ -490,6 +499,9 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
 
           const resultData = await parseJSONNoNaN(response);
           if (response.ok) {
+            // Clear all cache when dataset is deleted
+            clearGameCache();
+            
             Swal.fire({
               title: 'Deleted!',
               text: `Dataset "${datasetName}" and all its games have been deleted.`,
@@ -542,7 +554,6 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
 
   const handleRefresh = async () => {
     try {
-      const db = getFirestore();
       const user = auth.currentUser;
       if (!user) {
         Swal.fire({
@@ -554,8 +565,10 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
         });
         return;
       }
-      const datasetsRef = collection(db, 'datasets');
-      const snapshot = await getDocs(datasetsRef);
+      
+      // Clear cache on refresh
+      clearGameCache();
+      
       fetchSavedGames();
       fetchPublishedDatasets();
 
@@ -567,10 +580,10 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
         confirmButtonColor: 'var(--primary)',
       });
     } catch (error) {
-      console.error('Error refreshing from Firebase:', error);
+      console.error('Error refreshing:', error);
       Swal.fire({
         title: 'Error',
-        text: 'Failed to refresh data from Firebase.',
+        text: 'Failed to refresh data.',
         icon: 'error',
         background: 'var(--dark-card)',
         confirmButtonColor: 'var(--primary)',
@@ -591,22 +604,38 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
     fetchPublishedDatasets();
   };
 
+  // Show loading state
   if (loading) {
     return (
       <div className="saved-games-container">
+        <div className="header-container">
+          <h2>Saved Games for {selectedSport}</h2>
+        </div>
         <p>Loading saved games...</p>
       </div>
     );
   }
 
+  // Show error state
   if (fetchError) {
     return (
       <div className="saved-games-container">
+        <div className="header-container">
+          <h2>Saved Games for {selectedSport}</h2>
+        </div>
         <p className="error">{fetchError}</p>
+        <button 
+          className="refresh-button" 
+          onClick={handleRefresh}
+          style={{ margin: '20px auto', display: 'block' }}
+        >
+          <FaSync /> Try Again
+        </button>
       </div>
     );
   }
 
+  // Filter datasets by selected sport
   const filteredDatasets = Object.entries(datasets).reduce((acc, [datasetName, datasetInfo]) => {
     const { games, isPublished } = datasetInfo;
     const sportFilteredGames = games.filter((g) => g.sport === selectedSport);
@@ -770,43 +799,52 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
                     <p>No games {analysisFilter !== 'all' ? `of type ${analysisFilter}` : ''} in this dataset for {selectedSport}.</p>
                   ) : (
                     <ul className="saved-games-list">
-                      {filteredGames.map((game) => (
-                        <li key={game.gameId || game.gameName} className={`saved-game-item ${getAnalysisType(game)}`}>
-                          <div className="game-info">
-                            <span className="game-name-saved-games">{game.gameName}</span>
-                            {getAnalysisType(game) === 'video' ? (
-                              <FaVideo className="analysis-icon video" title="Video Analysis" />
-                            ) : (
-                              <FaMap className="analysis-icon pitch" title="Pitch Analysis" />
-                            )}
-                            <span className="game-date">
-                              {game.sport ? `${game.sport} - ` : ''}
-                              {game.matchDate ? new Date(game.matchDate).toLocaleDateString() : 'N/A'}
-                            </span>
-                          </div>
-                          <div className="game-actions">
-                            <button
-                              className="load-button"
-                              onClick={() => handleLoadGame(game)}
-                            >
-                              Load
-                            </button>
-                            <button
-                              className="move-button"
-                              onClick={() => handleMoveGame(game, datasetName)}
-                              title="Move to different dataset"
-                            >
-                              <FaExchangeAlt />
-                            </button>
-                            <button
-                              className="delete-button"
-                              onClick={() => handleDeleteGame(game.gameId || game.gameName, game.gameName)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </li>
-                      ))}
+                      {filteredGames.map((game) => {
+                        const gameId = game.gameId || game.gameName;
+                        const isCurrentlyLoading = loadingGame === gameId;
+                        
+                        return (
+                          <li key={gameId} className={`saved-game-item ${getAnalysisType(game)}`}>
+                            <div className="game-info">
+                              <span className="game-name-saved-games">{game.gameName}</span>
+                              {getAnalysisType(game) === 'video' ? (
+                                <FaVideo className="analysis-icon video" title="Video Analysis" />
+                              ) : (
+                                <FaMap className="analysis-icon pitch" title="Pitch Analysis" />
+                              )}
+                              <span className="game-date">
+                                {game.sport ? `${game.sport} - ` : ''}
+                                {game.matchDate ? new Date(game.matchDate).toLocaleDateString() : 'N/A'}
+                                {game.gameDataCount ? ` (${game.gameDataCount} events)` : ''}
+                              </span>
+                            </div>
+                            <div className="game-actions">
+                              <button
+                                className="load-button"
+                                onClick={() => handleLoadGame(game)}
+                                disabled={isCurrentlyLoading}
+                              >
+                                {isCurrentlyLoading ? 'Loading...' : 'Load'}
+                              </button>
+                              <button
+                                className="move-button"
+                                onClick={() => handleMoveGame(game, datasetName)}
+                                title="Move to different dataset"
+                                disabled={isCurrentlyLoading}
+                              >
+                                <FaExchangeAlt />
+                              </button>
+                              <button
+                                className="delete-button"
+                                onClick={() => handleDeleteGame(gameId, game.gameName)}
+                                disabled={isCurrentlyLoading}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </div>

@@ -391,6 +391,15 @@ CACHE_TTL = 300  # 5 minutes
 
 @app.route('/load-games', methods=['POST'])
 def load_games():
+    """
+    Load saved games metadata for a user.
+    
+    OPTIMIZATION: Uses Firestore select() to only fetch metadata fields,
+    avoiding the slow read of large gameData arrays.
+    
+    The gameDataCount field is stored separately when games are saved,
+    so we don't need to read the full gameData to get the count.
+    """
     try:
         data = request.json
         user_id = data.get('uid')
@@ -413,62 +422,88 @@ def load_games():
         
         saved_games = []
         
-        # OPTIMIZATION: Stream documents one by one instead of loading all into memory
-        for doc in saved_games_ref.limit(100).stream():
-            try:
-                # Only convert to dict once
-                game_data = doc.to_dict()
-                if not game_data:
+        if include_game_data:
+            # If full data is needed, fetch everything (rare case)
+            for doc in saved_games_ref.limit(100).stream():
+                try:
+                    game_data = doc.to_dict()
+                    if not game_data:
+                        continue
+                    
+                    game_data['gameId'] = doc.id
+                    game_data['gameName'] = doc.id
+                    saved_games.append(game_data)
+                    
+                except Exception as e:
+                    logging.error(f"Error processing game document {doc.id}: {str(e)}")
                     continue
-                
-                # Build lightweight game object efficiently
-                lightweight_game = {
-                    'gameId': doc.id,
-                    'gameName': doc.id,
-                    'sport': game_data.get('sport', 'Unknown'),
-                    'matchDate': game_data.get('matchDate') or game_data.get('date'),
-                    'datasetName': game_data.get('datasetName', 'Uncategorized'),
-                    'analysisType': game_data.get('analysisType', 'pitch'),
-                }
-                
-                # Only check fields that are likely to exist
-                if 'createdAt' in game_data:
-                    lightweight_game['createdAt'] = game_data['createdAt']
-                if 'updatedAt' in game_data:
-                    lightweight_game['updatedAt'] = game_data['updatedAt']
-                if 'youtubeUrl' in game_data:
-                    lightweight_game['youtubeUrl'] = game_data['youtubeUrl']
-                if 'teamsData' in game_data:
-                    lightweight_game['teamsData'] = game_data['teamsData']
-                
-                # Fast counting without processing the data
-                if 'gameData' in game_data:
-                    game_data_field = game_data['gameData']
-                    lightweight_game['gameDataCount'] = len(game_data_field) if isinstance(game_data_field, (list, dict)) else 0
-                elif 'coordinates' in game_data:
-                    coords_field = game_data['coordinates']
-                    lightweight_game['gameDataCount'] = len(coords_field) if isinstance(coords_field, list) else 0
-                else:
-                    lightweight_game['gameDataCount'] = 0
-                
-                # Only include full data if specifically requested
-                if include_game_data:
-                    if 'gameData' in game_data:
-                        lightweight_game['gameData'] = game_data['gameData']
-                    elif 'coordinates' in game_data:
-                        lightweight_game['gameData'] = game_data['coordinates']
-                
-                saved_games.append(lightweight_game)
-                
-            except Exception as e:
-                logging.error(f"Error processing game document {doc.id}: {str(e)}")
-                continue
+        else:
+            # OPTIMIZATION: Only fetch metadata fields using select()
+            # This avoids reading the large gameData array from Firestore
+            metadata_fields = [
+                'sport',
+                'matchDate', 
+                'date',
+                'datasetName',
+                'analysisType',
+                'createdAt',
+                'updatedAt',
+                'youtubeUrl',
+                'teamsData',
+                'gameDataCount',  # Pre-computed count stored when game is saved
+                'eventCount'      # Alternative field name for count
+            ]
+            
+            # Use select() to only fetch specific fields
+            query = saved_games_ref.select(metadata_fields).limit(100)
+            
+            for doc in query.stream():
+                try:
+                    game_data = doc.to_dict()
+                    if not game_data:
+                        continue
+                    
+                    # Build lightweight game object
+                    lightweight_game = {
+                        'gameId': doc.id,
+                        'gameName': doc.id,
+                        'sport': game_data.get('sport', 'Unknown'),
+                        'matchDate': game_data.get('matchDate') or game_data.get('date'),
+                        'datasetName': game_data.get('datasetName', 'Uncategorized'),
+                        'analysisType': game_data.get('analysisType', 'pitch'),
+                        'gameDataCount': game_data.get('gameDataCount') or game_data.get('eventCount', 0),
+                    }
+                    
+                    # Add optional fields if they exist
+                    if 'createdAt' in game_data:
+                        lightweight_game['createdAt'] = game_data['createdAt']
+                    if 'updatedAt' in game_data:
+                        lightweight_game['updatedAt'] = game_data['updatedAt']
+                    if 'youtubeUrl' in game_data:
+                        lightweight_game['youtubeUrl'] = game_data['youtubeUrl']
+                    if 'teamsData' in game_data:
+                        lightweight_game['teamsData'] = game_data['teamsData']
+                    
+                    saved_games.append(lightweight_game)
+                    
+                except Exception as e:
+                    logging.error(f"Error processing game document {doc.id}: {str(e)}")
+                    continue
         
-        # Empty published datasets for now
+        # Get published datasets
         published_datasets = []
+        try:
+            # Check if user has published any datasets
+            published_ref = db.collection('publishedDatasets').where('creatorUid', '==', user_id)
+            for doc in published_ref.stream():
+                pub_data = doc.to_dict()
+                if pub_data and 'name' in pub_data:
+                    published_datasets.append(pub_data['name'])
+        except Exception as e:
+            logging.warning(f"Could not fetch published datasets: {str(e)}")
         
-        # Sort only if we have createdAt field
-        if saved_games and 'createdAt' in saved_games[0]:
+        # Sort by createdAt if available
+        if saved_games and saved_games[0].get('createdAt'):
             saved_games.sort(key=lambda x: x.get('createdAt', ''), reverse=True)
         
         response_data = {
@@ -489,6 +524,87 @@ def load_games():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+
+# Also update your save-game endpoint to store gameDataCount
+# Add this to your existing save_game function where you save the game:
+#
+# game_doc_ref.set({
+#     'gameData': game_data,
+#     'gameDataCount': len(game_data) if isinstance(game_data, list) else 0,  # <-- ADD THIS
+#     'datasetName': dataset_name,
+#     'matchDate': match_date,
+#     'sport': sport
+# }, merge=True)
+
+@app.route('/migrate-game-counts', methods=['POST'])
+def migrate_game_counts():
+    """
+    One-time migration to add gameDataCount to existing games.
+    Run this once to backfill the count field for all existing games.
+    """
+    try:
+        data = request.json
+        user_id = data.get('uid')
+        
+        if not user_id:
+            return jsonify({'error': 'User ID is required'}), 400
+        
+        logging.info(f"Starting gameDataCount migration for user {user_id}")
+        
+        games_ref = db.collection('savedGames').document(user_id).collection('games')
+        
+        batch = db.batch()
+        updated_count = 0
+        batch_count = 0
+        
+        for doc in games_ref.stream():
+            game_data = doc.to_dict()
+            
+            # Skip if already has gameDataCount
+            if game_data.get('gameDataCount') is not None:
+                continue
+            
+            # Calculate count from gameData
+            count = 0
+            if 'gameData' in game_data:
+                gd = game_data['gameData']
+                count = len(gd) if isinstance(gd, (list, dict)) else 0
+            elif 'coordinates' in game_data:
+                coords = game_data['coordinates']
+                count = len(coords) if isinstance(coords, list) else 0
+            
+            # Update the document
+            batch.update(doc.reference, {'gameDataCount': count})
+            updated_count += 1
+            batch_count += 1
+            
+            # Commit batch every 400 documents (Firestore limit is 500)
+            if batch_count >= 400:
+                batch.commit()
+                batch = db.batch()
+                batch_count = 0
+                logging.info(f"Committed batch, {updated_count} games updated so far")
+        
+        # Commit any remaining updates
+        if batch_count > 0:
+            batch.commit()
+        
+        # Clear cache after migration
+        cache_key = f"{user_id}:False"
+        if cache_key in games_cache:
+            del games_cache[cache_key]
+        
+        logging.info(f"Migration complete: {updated_count} games updated for user {user_id}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Updated {updated_count} games with gameDataCount',
+            'updatedCount': updated_count
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error during migration: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/load-game-by-id', methods=['POST'])
 def load_game_by_id():

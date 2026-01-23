@@ -1,8 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Card, Typography, Slider, Button, IconButton, CssBaseline, Tabs, Tab, CircularProgress, Grid, FormControl, InputLabel, Select, MenuItem, Radio, RadioGroup, FormControlLabel, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip, Switch, Accordion, AccordionSummary, AccordionDetails, Alert } from '@mui/material';
+import { 
+  Box, Card, Typography, Slider, Button, IconButton, CssBaseline, Tabs, Tab, 
+  CircularProgress, Grid, FormControl, InputLabel, Select, MenuItem, Radio, RadioGroup, 
+  FormControlLabel, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, 
+  Chip, Switch, Accordion, AccordionSummary, AccordionDetails, Alert, Dialog, DialogTitle,
+  DialogContent, DialogActions, TextField, Tooltip, Pagination
+} from '@mui/material';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { Brightness4, Brightness7, Refresh as RefreshIcon, ExpandMore as ExpandMoreIcon, RestartAlt as ResetIcon, Science as ScienceIcon, Tune as TuneIcon, PlayArrow as PlayIcon } from '@mui/icons-material';
+import { 
+  Brightness4, Brightness7, Refresh as RefreshIcon, ExpandMore as ExpandMoreIcon, 
+  RestartAlt as ResetIcon, Science as ScienceIcon, Tune as TuneIcon, PlayArrow as PlayIcon,
+  Visibility as ViewIcon, Search as SearchIcon, FilterList as FilterIcon,
+  SportsSoccer as SportsIcon, Close as CloseIcon
+} from '@mui/icons-material';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { getAuth } from 'firebase/auth';
@@ -42,6 +53,394 @@ const getTheme = (mode) => createTheme({
     MuiTab: { styleOverrides: { root: { textTransform: 'none', fontWeight: 600, fontSize: '0.95rem' } } },
   },
 });
+
+// Dataset Preview Component
+const DatasetPreview = ({ mode, datasets, onRefresh }) => {
+  const auth = getAuth();
+  const [selectedDataset, setSelectedDataset] = useState('');
+  const [previewData, setPreviewData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [page, setPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterAction, setFilterAction] = useState('all');
+  const [selectedGame, setSelectedGame] = useState(null);
+  const [gameDialogOpen, setGameDialogOpen] = useState(false);
+  
+  const rowsPerPage = 20;
+
+  const fetchDatasetPreview = useCallback(async (datasetName) => {
+    if (!datasetName) return;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      const user = auth.currentUser;
+      if (!user) throw new Error('Not authenticated');
+      
+      const token = await user.getIdToken();
+      const response = await axios.post(`${BASE_API_URL}/preview-dataset`, {
+        uid: user.uid,
+        datasetName: datasetName,
+        limit: 500 // Get up to 500 events for preview
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 30000
+      });
+      
+      setPreviewData(response.data);
+      setPage(1);
+    } catch (err) {
+      console.error('Error fetching dataset preview:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to load dataset');
+    } finally {
+      setLoading(false);
+    }
+  }, [auth]);
+
+  useEffect(() => {
+    if (selectedDataset) {
+      fetchDatasetPreview(selectedDataset);
+    }
+  }, [selectedDataset, fetchDatasetPreview]);
+
+  // Filter and search logic
+  const filteredEvents = previewData?.events?.filter(event => {
+    const matchesSearch = searchTerm === '' || 
+      (event.playerName?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (event.team?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (event.action?.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    const matchesFilter = filterAction === 'all' || event.action === filterAction;
+    
+    return matchesSearch && matchesFilter;
+  }) || [];
+
+  const paginatedEvents = filteredEvents.slice((page - 1) * rowsPerPage, page * rowsPerPage);
+  const totalPages = Math.ceil(filteredEvents.length / rowsPerPage);
+
+  // Get unique actions for filter
+  const uniqueActions = [...new Set(previewData?.events?.map(e => e.action).filter(Boolean))];
+
+  const handleViewGame = (gameId) => {
+    const game = previewData?.games?.find(g => g.gameId === gameId);
+    if (game) {
+      setSelectedGame(game);
+      setGameDialogOpen(true);
+    }
+  };
+
+  const getActionColor = (action) => {
+    const colors = {
+      'point': '#22c55e',
+      'goal': '#f59e0b',
+      'wide': '#ef4444',
+      'miss': '#ef4444',
+      'block': '#3b82f6',
+      'save': '#8b5cf6',
+      'pass': '#06b6d4',
+      'shot': '#ec4899',
+    };
+    return colors[action?.toLowerCase()] || '#888';
+  };
+
+  return (
+    <Card sx={{ p: 4 }}>
+      <Typography variant="h6" sx={{ mb: 1, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+        <ViewIcon sx={{ color: '#7c3aed' }} />
+        Dataset Preview
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        View your dataset contents before running models
+      </Typography>
+
+      {/* Dataset Selection */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={6}>
+          <FormControl fullWidth>
+            <InputLabel>Select Dataset</InputLabel>
+            <Select
+              value={selectedDataset}
+              onChange={(e) => setSelectedDataset(e.target.value)}
+              label="Select Dataset"
+            >
+              {datasets.map((ds) => (
+                <MenuItem key={ds} value={ds}>{ds}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+        <Grid item xs={12} md={6} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={() => fetchDatasetPreview(selectedDataset)}
+            disabled={!selectedDataset || loading}
+          >
+            Refresh
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={onRefresh}
+          >
+            Refresh Datasets
+          </Button>
+        </Grid>
+      </Grid>
+
+      {datasets.length === 0 && (
+        <Alert severity="info" sx={{ mb: 3, borderRadius: '12px' }}>
+          No datasets found. Create some games first.
+        </Alert>
+      )}
+
+      {loading && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <CircularProgress sx={{ color: '#7c3aed' }} />
+        </Box>
+      )}
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 3, borderRadius: '12px' }}>
+          {error}
+        </Alert>
+      )}
+
+      {previewData && !loading && (
+        <>
+          {/* Stats Summary */}
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={6} sm={3}>
+              <Paper sx={{ p: 2, textAlign: 'center', borderRadius: '12px', borderTop: '3px solid #7c3aed' }}>
+                <Typography variant="caption" color="text.secondary">Games</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>{previewData.gameCount || 0}</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Paper sx={{ p: 2, textAlign: 'center', borderRadius: '12px', borderTop: '3px solid #22c55e' }}>
+                <Typography variant="caption" color="text.secondary">Total Events</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>{previewData.totalEvents || 0}</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Paper sx={{ p: 2, textAlign: 'center', borderRadius: '12px', borderTop: '3px solid #f59e0b' }}>
+                <Typography variant="caption" color="text.secondary">With xP</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>{previewData.eventsWithXP || 0}</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Paper sx={{ p: 2, textAlign: 'center', borderRadius: '12px', borderTop: '3px solid #ec4899' }}>
+                <Typography variant="caption" color="text.secondary">Avg xP</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                  {previewData.avgXP ? previewData.avgXP.toFixed(3) : 'N/A'}
+                </Typography>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          {/* Games List */}
+          {previewData.games && previewData.games.length > 0 && (
+            <Accordion sx={{ mb: 3, borderRadius: '12px !important', '&:before': { display: 'none' } }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <SportsIcon /> Games in Dataset ({previewData.games.length})
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <TableContainer sx={{ maxHeight: 300 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 700 }}>Game Name</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }} align="right">Events</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {previewData.games.map((game) => (
+                        <TableRow key={game.gameId} hover>
+                          <TableCell>{game.gameName || game.gameId}</TableCell>
+                          <TableCell>{game.matchDate ? new Date(game.matchDate).toLocaleDateString() : 'N/A'}</TableCell>
+                          <TableCell align="right">{game.eventCount || 0}</TableCell>
+                          <TableCell>
+                            <Tooltip title="View Details">
+                              <IconButton size="small" onClick={() => handleViewGame(game.gameId)}>
+                                <ViewIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </AccordionDetails>
+            </Accordion>
+          )}
+
+          {/* Search and Filter */}
+          <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+            <TextField
+              size="small"
+              placeholder="Search player, team, action..."
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+              InputProps={{
+                startAdornment: <SearchIcon sx={{ color: '#888', mr: 1 }} />,
+              }}
+              sx={{ minWidth: 250 }}
+            />
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>Action</InputLabel>
+              <Select
+                value={filterAction}
+                onChange={(e) => { setFilterAction(e.target.value); setPage(1); }}
+                label="Action"
+              >
+                <MenuItem value="all">All Actions</MenuItem>
+                {uniqueActions.map(action => (
+                  <MenuItem key={action} value={action}>{action}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Typography variant="body2" sx={{ alignSelf: 'center', color: '#888' }}>
+              Showing {filteredEvents.length} of {previewData.events?.length || 0} events
+            </Typography>
+          </Box>
+
+          {/* Events Table */}
+          <TableContainer component={Paper} sx={{ borderRadius: '12px', maxHeight: 400, mb: 2 }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a3a' : '#f5f5f5' }}>#</TableCell>
+                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a3a' : '#f5f5f5' }}>Action</TableCell>
+                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a3a' : '#f5f5f5' }}>Player</TableCell>
+                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a3a' : '#f5f5f5' }}>Team</TableCell>
+                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a3a' : '#f5f5f5' }} align="right">X</TableCell>
+                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a3a' : '#f5f5f5' }} align="right">Y</TableCell>
+                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a3a' : '#f5f5f5' }} align="right">xP</TableCell>
+                  <TableCell sx={{ fontWeight: 700, backgroundColor: mode === 'dark' ? '#2a2a3a' : '#f5f5f5' }}>Outcome</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {paginatedEvents.map((event, idx) => (
+                  <TableRow key={idx} hover>
+                    <TableCell sx={{ color: '#888' }}>{(page - 1) * rowsPerPage + idx + 1}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={event.action || 'N/A'} 
+                        size="small" 
+                        sx={{ 
+                          backgroundColor: `${getActionColor(event.action)}20`,
+                          color: getActionColor(event.action),
+                          fontWeight: 600,
+                          fontSize: '0.75rem'
+                        }} 
+                      />
+                    </TableCell>
+                    <TableCell>{event.playerName || event.player || '-'}</TableCell>
+                    <TableCell>{event.team || '-'}</TableCell>
+                    <TableCell align="right" sx={{ fontFamily: 'monospace' }}>{event.x?.toFixed(1) || '-'}</TableCell>
+                    <TableCell align="right" sx={{ fontFamily: 'monospace' }}>{event.y?.toFixed(1) || '-'}</TableCell>
+                    <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 600, color: event.xP ? '#22c55e' : '#888' }}>
+                      {event.xP ? event.xP.toFixed(3) : '-'}
+                    </TableCell>
+                    <TableCell>
+                      {event.outcome && (
+                        <Chip 
+                          label={event.outcome} 
+                          size="small" 
+                          sx={{ 
+                            backgroundColor: event.outcome === 'score' ? '#22c55e20' : '#ef444420',
+                            color: event.outcome === 'score' ? '#22c55e' : '#ef4444',
+                            fontSize: '0.7rem'
+                          }} 
+                        />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+              <Pagination 
+                count={totalPages} 
+                page={page} 
+                onChange={(e, p) => setPage(p)}
+                color="primary"
+              />
+            </Box>
+          )}
+        </>
+      )}
+
+      {/* Game Details Dialog */}
+      <Dialog open={gameDialogOpen} onClose={() => setGameDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <SportsIcon sx={{ color: '#7c3aed' }} />
+            Game Details
+          </Box>
+          <IconButton onClick={() => setGameDialogOpen(false)}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          {selectedGame && (
+            <Box>
+              <Typography variant="h6" sx={{ mb: 2 }}>{selectedGame.gameName || selectedGame.gameId}</Typography>
+              
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={6} sm={3}>
+                  <Typography variant="caption" color="text.secondary">Date</Typography>
+                  <Typography variant="body2">{selectedGame.matchDate ? new Date(selectedGame.matchDate).toLocaleDateString() : 'N/A'}</Typography>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Typography variant="caption" color="text.secondary">Sport</Typography>
+                  <Typography variant="body2">{selectedGame.sport || 'N/A'}</Typography>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Typography variant="caption" color="text.secondary">Events</Typography>
+                  <Typography variant="body2">{selectedGame.eventCount || 0}</Typography>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Typography variant="caption" color="text.secondary">Analysis Type</Typography>
+                  <Typography variant="body2">{selectedGame.analysisType || 'pitch'}</Typography>
+                </Grid>
+              </Grid>
+
+              {selectedGame.teamsData && (
+                <Box sx={{ p: 2, backgroundColor: mode === 'dark' ? '#1a1a2e' : '#f5f5f5', borderRadius: '12px', mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>Teams</Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <Typography variant="caption" color="text.secondary">Home Team</Typography>
+                      <Typography variant="body2">{selectedGame.teamsData.home?.name || 'N/A'}</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="caption" color="text.secondary">Away Team</Typography>
+                      <Typography variant="body2">{selectedGame.teamsData.away?.name || 'N/A'}</Typography>
+                    </Grid>
+                  </Grid>
+                </Box>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setGameDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+    </Card>
+  );
+};
 
 const AdminSettings = () => {
   const [featurePermissions, setFeaturePermissions] = useState({});
@@ -189,6 +588,7 @@ const AdminSettings = () => {
               <Tab label="Datasets" />
               <Tab label="Admin Users" />
               <Tab label="Model Runner" />
+              <Tab label="📊 Data Preview" />
               <Tab label="🧪 Model Lab" />
             </Tabs>
           </Card>
@@ -303,7 +703,9 @@ const AdminSettings = () => {
             </Card>
           )}
 
-          {activeTab === 4 && <ModelLab mode={mode} />}
+          {activeTab === 4 && <DatasetPreview mode={mode} datasets={userDatasets} onRefresh={fetchUserDatasets} />}
+
+          {activeTab === 5 && <ModelLab mode={mode} />}
         </Box>
       </Box>
     </ThemeProvider>

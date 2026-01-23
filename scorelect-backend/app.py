@@ -6207,3 +6207,109 @@ def fix_y_coordinates():
     except Exception as e:
         logging.error(f"Error converting coordinates: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+# Add this endpoint to app.py for the Dataset Preview feature
+
+@app.route('/preview-dataset', methods=['POST'])
+def preview_dataset():
+    """
+    Get a preview of dataset contents for the admin panel.
+    Returns game metadata and event data for viewing before running models.
+    """
+    try:
+        data = request.json
+        uid = data.get('uid')
+        dataset_name = data.get('datasetName')
+        limit = data.get('limit', 500)  # Max events to return
+        
+        if not uid or not dataset_name:
+            return jsonify({'error': 'UID and datasetName are required'}), 400
+        
+        logging.info(f"Fetching dataset preview for {dataset_name} for user {uid}")
+        
+        # Get all games in the dataset
+        games_ref = db.collection('savedGames').document(uid).collection('games')
+        query = games_ref.where('datasetName', '==', dataset_name)
+        
+        games = []
+        all_events = []
+        total_events = 0
+        events_with_xp = 0
+        xp_sum = 0
+        
+        for doc in query.stream():
+            game_data = doc.to_dict()
+            game_id = doc.id
+            
+            # Get game metadata
+            game_info = {
+                'gameId': game_id,
+                'gameName': game_id,
+                'matchDate': game_data.get('matchDate') or game_data.get('date'),
+                'sport': game_data.get('sport', 'Unknown'),
+                'analysisType': game_data.get('analysisType', 'pitch'),
+                'teamsData': game_data.get('teamsData'),
+                'eventCount': 0
+            }
+            
+            # Get events from gameData
+            game_events = game_data.get('gameData', [])
+            if isinstance(game_events, dict):
+                game_events = list(game_events.values())
+            
+            game_info['eventCount'] = len(game_events)
+            total_events += len(game_events)
+            
+            # Process events
+            for event in game_events:
+                # Track xP stats
+                xp_value = event.get('xP') or event.get('xp')
+                if xp_value is not None and xp_value != 0:
+                    try:
+                        xp_float = float(xp_value)
+                        events_with_xp += 1
+                        xp_sum += xp_float
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Only add to preview if under limit
+                if len(all_events) < limit:
+                    all_events.append({
+                        'gameId': game_id,
+                        'gameName': game_id,
+                        'action': event.get('action') or event.get('type'),
+                        'playerName': event.get('playerName') or event.get('player'),
+                        'team': event.get('team'),
+                        'x': event.get('x'),
+                        'y': event.get('y'),
+                        'xP': event.get('xP') or event.get('xp'),
+                        'outcome': event.get('outcome'),
+                        'pressure': event.get('pressure'),
+                        'foot': event.get('foot'),
+                        'minute': event.get('minute'),
+                        'timestamp': event.get('timestamp'),
+                    })
+            
+            games.append(game_info)
+        
+        # Calculate average xP
+        avg_xp = xp_sum / events_with_xp if events_with_xp > 0 else None
+        
+        logging.info(f"Dataset preview: {len(games)} games, {total_events} total events, {len(all_events)} in preview")
+        
+        return jsonify({
+            'success': True,
+            'datasetName': dataset_name,
+            'gameCount': len(games),
+            'totalEvents': total_events,
+            'eventsWithXP': events_with_xp,
+            'avgXP': avg_xp,
+            'games': games,
+            'events': all_events,
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error fetching dataset preview: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500

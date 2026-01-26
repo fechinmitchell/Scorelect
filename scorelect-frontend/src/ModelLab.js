@@ -12,13 +12,16 @@ import {
   CheckCircle as CheckIcon, TrendingUp as TrendingUpIcon,
   Delete as DeleteIcon, Info as InfoIcon, Warning as WarningIcon,
   CloudOff as CloudOffIcon, HourglassEmpty as HourglassIcon,
-  Visibility as ViewIcon,
+  Visibility as ViewIcon, Computer as LocalIcon, Cloud as CloudIcon,
 } from '@mui/icons-material';
 import { getAuth } from 'firebase/auth';
 import Swal from 'sweetalert2';
 import axios from 'axios';
 
-const BASE_API_URL = process.env.REACT_APP_API_URL || 'https://scorelect.onrender.com';
+// Auto-detect local development
+const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const CLOUD_API_URL = process.env.REACT_APP_API_URL || 'https://scorelect.onrender.com';
+const LOCAL_API_URL = 'http://localhost:5001'; // Your local Flask backend
 
 const glassCard = (mode) => ({
   background: mode === 'dark' 
@@ -48,6 +51,13 @@ const gradientButton = (disabled = false) => ({
   boxShadow: disabled ? 'none' : '0 4px 20px rgba(124, 58, 237, 0.4)',
   '&:hover': disabled ? {} : { transform: 'translateY(-2px)' },
   '&:disabled': { background: 'linear-gradient(135deg, #555 0%, #444 100%)', boxShadow: 'none' },
+});
+
+const localModeChip = (isLocal, mode) => ({
+  backgroundColor: isLocal ? 'rgba(34, 197, 94, 0.2)' : (mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'),
+  color: isLocal ? '#22c55e' : (mode === 'dark' ? '#888' : '#666'),
+  fontWeight: 600, cursor: 'pointer', border: isLocal ? '1px solid rgba(34, 197, 94, 0.4)' : 'none',
+  '&:hover': { backgroundColor: isLocal ? 'rgba(34, 197, 94, 0.3)' : (mode === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)') },
 });
 
 const MetricCard = ({ label, value, icon, color, mode, isLowerBetter = false, isRawNumber = false }) => (
@@ -104,6 +114,16 @@ const ModelLab = ({ mode = 'dark' }) => {
   const [result, setResult] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
   
+  // Local mode - auto-enable on localhost, remember preference
+  const [runLocally, setRunLocally] = useState(() => {
+    const saved = localStorage.getItem('modelLabRunLocally');
+    return saved !== null ? saved === 'true' : isLocalDev;
+  });
+  const [localServerOnline, setLocalServerOnline] = useState(null);
+  
+  // Get the API URL based on mode
+  const getBaseUrl = useCallback(() => runLocally ? LOCAL_API_URL : CLOUD_API_URL, [runLocally]);
+  
   // Dialog for viewing model config
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState(null);
@@ -114,17 +134,23 @@ const ModelLab = ({ mode = 'dark' }) => {
       setDatasetsError(null);
       const user = auth.currentUser;
       if (!user) { setLoadingDatasets(false); return; }
-      const response = await axios.get(`${BASE_API_URL}/api/model-lab/datasets-quick`, { params: { uid: user.uid }, timeout: 30000 });
+      const baseUrl = runLocally ? LOCAL_API_URL : CLOUD_API_URL;
+      const response = await axios.get(`${baseUrl}/api/model-lab/datasets-quick`, { params: { uid: user.uid }, timeout: runLocally ? 10000 : 30000 });
       const datasetNames = response.data.datasets || [];
       setDatasets(datasetNames);
       setRetryCount(0);
+      if (runLocally) setLocalServerOnline(true);
       if (datasetNames.length > 0 && !trainingDataset) {
         setTrainingDataset(datasetNames[0]);
         setTargetDataset(datasetNames[0]);
       }
     } catch (error) {
       console.error('Error fetching datasets:', error);
-      const isWaking = error.code === 'ECONNABORTED' || error.response?.status === 503 || error.response?.status === 502;
+      if (runLocally && (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error'))) {
+        setDatasetsError('❌ Local server not running. Run: python app.py');
+        setLocalServerOnline(false);
+      } else {
+        const isWaking = error.code === 'ECONNABORTED' || error.response?.status === 503 || error.response?.status === 502;
       if (isWaking && retryCount < 3) {
         setDatasetsError('⏳ Backend starting up... auto-retrying in 5s');
         setRetryCount(prev => prev + 1);
@@ -134,38 +160,47 @@ const ModelLab = ({ mode = 'dark' }) => {
       } else {
         setDatasetsError(isWaking ? '⏳ Backend waking up (free tier). Wait 30-60s and click Retry.' : '❌ Could not load datasets. Click Retry.');
       }
+      }
     } finally {
       setLoadingDatasets(false);
     }
-  }, [auth, trainingDataset, retryCount]);
+  }, [auth, trainingDataset, retryCount, runLocally]);
 
   const fetchCustomModels = useCallback(async () => {
     try {
       setLoadingModels(true);
       setModelsError(null);
-      const response = await axios.get(`${BASE_API_URL}/api/model-lab/custom-models`, { timeout: 30000 });
+      const baseUrl = runLocally ? LOCAL_API_URL : CLOUD_API_URL;
+      const response = await axios.get(`${baseUrl}/api/model-lab/custom-models`, { timeout: runLocally ? 10000 : 30000 });
       const models = response.data.models || [];
       setCustomModels(models);
       if (models.length > 0 && !selectedModel) setSelectedModel(models[0].key);
+      if (runLocally) setLocalServerOnline(true);
     } catch (error) {
       console.error('Error fetching models:', error);
-      const isWaking = error.code === 'ECONNABORTED' || error.response?.status === 503 || error.response?.status === 502;
-      if (error.response?.status === 500) {
-        setModelsError('⚠️ Server ran out of memory. Wait 1-2 mins and click Retry.');
+      if (runLocally && (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error'))) {
+        setModelsError('❌ Local server not running. Run: python app.py');
+        setLocalServerOnline(false);
       } else {
-        setModelsError(isWaking ? '⏳ Backend waking up. Wait 30-60s and click Retry.' : '❌ Could not load models. Click Retry.');
+        const isWaking = error.code === 'ECONNABORTED' || error.response?.status === 503 || error.response?.status === 502;
+        if (error.response?.status === 500) {
+          setModelsError('⚠️ Server ran out of memory. Wait 1-2 mins and click Retry.');
+        } else {
+          setModelsError(isWaking ? '⏳ Backend waking up. Wait 30-60s and click Retry.' : '❌ Could not load models. Click Retry.');
+        }
       }
     } finally {
       setLoadingModels(false);
     }
-  }, [selectedModel]);
+  }, [selectedModel, runLocally]);
 
   const fetchLeaderboard = useCallback(async () => {
     try {
       setLoadingLeaderboard(true);
       const user = auth.currentUser;
       if (!user) return;
-      const response = await axios.get(`${BASE_API_URL}/api/model-lab/leaderboard`, { params: { uid: user.uid, year: leaderboardYear }, timeout: 15000 });
+      const baseUrl = runLocally ? LOCAL_API_URL : CLOUD_API_URL;
+      const response = await axios.get(`${baseUrl}/api/model-lab/leaderboard`, { params: { uid: user.uid, year: leaderboardYear }, timeout: 15000 });
       setLeaderboard(response.data.entries || []);
     } catch (error) {
       console.error('Error fetching leaderboard:', error);
@@ -173,10 +208,18 @@ const ModelLab = ({ mode = 'dark' }) => {
     } finally {
       setLoadingLeaderboard(false);
     }
-  }, [auth, leaderboardYear]);
+  }, [auth, leaderboardYear, runLocally]);
 
-  useEffect(() => { fetchDatasets(); fetchCustomModels(); }, []);
-  useEffect(() => { fetchLeaderboard(); }, [leaderboardYear]);
+  useEffect(() => { fetchDatasets(); fetchCustomModels(); }, [runLocally]);
+  useEffect(() => { fetchLeaderboard(); }, [leaderboardYear, runLocally]);
+
+  // Toggle local/cloud mode
+  const handleToggleLocalMode = () => {
+    const newValue = !runLocally;
+    setRunLocally(newValue);
+    localStorage.setItem('modelLabRunLocally', newValue.toString());
+    setLocalServerOnline(null); // Reset status
+  };
 
   const handleTestRun = async () => {
     const user = auth.currentUser;
@@ -185,48 +228,56 @@ const ModelLab = ({ mode = 'dark' }) => {
       return;
     }
     setIsRunning(true); setResult(null); setRunError(null);
-    Swal.fire({ title: 'Running Test...', html: '<p>Training on <strong>' + trainingDataset + '</strong></p><p style="color:#888">This may take 30-60 seconds</p>', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+    const modeText = runLocally ? '🖥️ Running locally' : '☁️ Running on cloud';
+    Swal.fire({ title: 'Running Test...', html: `<p>${modeText}</p><p>Training on <strong>${trainingDataset}</strong></p><p style="color:#888">${runLocally ? 'Should be fast!' : 'This may take 30-60 seconds'}</p>`, allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
     try {
-      const response = await axios.post(`${BASE_API_URL}/api/model-lab/test-model`, {
+      const baseUrl = runLocally ? LOCAL_API_URL : CLOUD_API_URL;
+      const response = await axios.post(`${baseUrl}/api/model-lab/test-model`, {
         uid: user.uid, model_key: selectedModel, training_dataset: trainingDataset,
         target_dataset: useSameDataset ? trainingDataset : targetDataset, target_field: targetField,
         leaderboard_year: leaderboardYear,
-      }, { timeout: 120000 });
+      }, { timeout: runLocally ? 300000 : 120000 });
       if (response.data.success) {
-        setResult(response.data);
-        fetchLeaderboard(); // Refresh leaderboard after test
+        setResult({ ...response.data, run_locally: runLocally });
+        fetchLeaderboard();
         const savedMsg = response.data.leaderboard_saved ? '<p style="color:#22c55e;font-size:0.9em">✅ Saved to leaderboard</p>' : '<p style="color:#f59e0b;font-size:0.9em">⚠️ Could not save to leaderboard</p>';
-        Swal.fire({ title: 'Test Complete! ✅', html: `<p><strong>Brier Score:</strong> ${response.data.metrics.brier_score?.toFixed(4) || 'N/A'}</p><p><strong>AUC-ROC:</strong> ${((response.data.metrics.auc_roc || 0) * 100).toFixed(1)}%</p>${savedMsg}`, icon: 'success' });
+        const localMsg = runLocally ? '<p style="color:#22c55e;font-size:0.85em">🖥️ Ran locally</p>' : '';
+        Swal.fire({ title: 'Test Complete! ✅', html: `<p><strong>Brier Score:</strong> ${response.data.metrics.brier_score?.toFixed(4) || 'N/A'}</p><p><strong>AUC-ROC:</strong> ${((response.data.metrics.auc_roc || 0) * 100).toFixed(1)}%</p>${savedMsg}${localMsg}`, icon: 'success' });
       } else throw new Error(response.data.error);
     } catch (error) {
       let msg = error.response?.data?.error || error.message;
-      if (error.code === 'ECONNABORTED') msg = 'Timeout - server busy. Try again in a minute.';
+      if (error.code === 'ECONNABORTED') msg = runLocally ? 'Timeout - check terminal' : 'Timeout - server busy. Try again in a minute.';
+      else if (error.code === 'ERR_NETWORK') msg = 'Cannot connect. Is your backend running?';
       else if (error.response?.status === 502 || error.response?.status === 503 || error.response?.status === 500) msg = 'Server restarting (memory). Wait 1-2 mins and retry.';
       setRunError(msg);
-      Swal.fire({ title: 'Error', text: msg, icon: 'error', footer: '<small>💡 Wait 1-2 mins if this keeps happening</small>' });
+      Swal.fire({ title: 'Error', text: msg, icon: 'error', footer: runLocally ? '<small>💡 Check terminal for errors</small>' : '<small>💡 Wait 1-2 mins if this keeps happening</small>' });
     } finally { setIsRunning(false); }
   };
 
   const handleRunAndApply = async () => {
     const user = auth.currentUser;
     if (!user || !selectedModel || !trainingDataset) return;
-    const confirm = await Swal.fire({ title: 'Run & Apply?', html: `<p>Train on <strong>${trainingDataset}</strong>, update ${targetField}, save to ${leaderboardYear} leaderboard</p><p style="color:#f59e0b">⚠️ May take 1-2 minutes</p>`, showCancelButton: true, confirmButtonText: 'Run & Apply', confirmButtonColor: '#7c3aed' });
+    const modeText = runLocally ? '🖥️ locally' : '☁️ on cloud';
+    const confirm = await Swal.fire({ title: 'Run & Apply?', html: `<p>Train ${modeText} on <strong>${trainingDataset}</strong>, update ${targetField}, save to ${leaderboardYear} leaderboard</p><p style="color:#f59e0b">⚠️ May take ${runLocally ? '30s-2 mins' : '1-2 minutes'}</p>`, showCancelButton: true, confirmButtonText: 'Run & Apply', confirmButtonColor: '#7c3aed' });
     if (!confirm.isConfirmed) return;
     setIsRunning(true); setResult(null); setRunError(null);
-    Swal.fire({ title: 'Running & Applying...', html: '<p>Please wait...</p>', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+    Swal.fire({ title: 'Running & Applying...', html: `<p>${runLocally ? '🖥️ Running locally' : '☁️ Running on cloud'}</p><p>Please wait...</p>`, allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
     try {
-      const response = await axios.post(`${BASE_API_URL}/api/model-lab/run-model`, {
+      const baseUrl = runLocally ? LOCAL_API_URL : CLOUD_API_URL;
+      const response = await axios.post(`${baseUrl}/api/model-lab/run-model`, {
         uid: user.uid, model_key: selectedModel, training_dataset: trainingDataset,
         target_dataset: useSameDataset ? trainingDataset : targetDataset, target_field: targetField,
         run_name: runName, leaderboard_year: leaderboardYear,
-      }, { timeout: 180000 });
+      }, { timeout: runLocally ? 600000 : 180000 });
       if (response.data.success) {
-        setResult(response.data); setRunName(''); fetchLeaderboard();
-        Swal.fire({ title: 'Success! 🎉', html: `<p>✅ Updated ${response.data.shots_updated} shots</p><p>📊 Brier: ${response.data.metrics.brier_score?.toFixed(4)}</p>`, icon: 'success' });
+        setResult({ ...response.data, run_locally: runLocally }); setRunName(''); fetchLeaderboard();
+        const localMsg = runLocally ? '<p style="color:#22c55e;font-size:0.85em">🖥️ Ran locally</p>' : '';
+        Swal.fire({ title: 'Success! 🎉', html: `<p>✅ Updated ${response.data.shots_updated} shots</p><p>📊 Brier: ${response.data.metrics.brier_score?.toFixed(4)}</p>${localMsg}`, icon: 'success' });
       } else throw new Error(response.data.error);
     } catch (error) {
       let msg = error.response?.data?.error || error.message;
       if (error.response?.status >= 500) msg = 'Server error. Wait 1-2 mins and retry.';
+      else if (error.code === 'ERR_NETWORK') msg = 'Cannot connect. Is your backend running?';
       setRunError(msg);
       Swal.fire({ title: 'Error', text: msg, icon: 'error' });
     } finally { setIsRunning(false); }
@@ -238,7 +289,8 @@ const ModelLab = ({ mode = 'dark' }) => {
     const confirm = await Swal.fire({ title: 'Delete?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444' });
     if (!confirm.isConfirmed) return;
     try {
-      await axios.delete(`${BASE_API_URL}/api/model-lab/leaderboard/${entryId}`, { params: { uid: user.uid } });
+      const baseUrl = runLocally ? LOCAL_API_URL : CLOUD_API_URL;
+      await axios.delete(`${baseUrl}/api/model-lab/leaderboard/${entryId}`, { params: { uid: user.uid } });
       fetchLeaderboard();
     } catch (e) { Swal.fire('Error', 'Could not delete', 'error'); }
   };
@@ -253,7 +305,7 @@ const ModelLab = ({ mode = 'dark' }) => {
 
   return (
     <Box sx={{ p: 3, minHeight: '100vh' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 4 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <ScienceIcon sx={{ fontSize: 40, color: '#7c3aed' }} />
           <Box>
@@ -261,10 +313,41 @@ const ModelLab = ({ mode = 'dark' }) => {
             <Typography variant="body2" sx={{ color: mode === 'dark' ? '#888' : '#666' }}>Train and evaluate custom xP/xG models</Typography>
           </Box>
         </Box>
-        <Tooltip title="Refresh"><IconButton onClick={() => { setRetryCount(0); fetchDatasets(); fetchCustomModels(); fetchLeaderboard(); }} sx={{ color: '#888' }}><RefreshIcon /></IconButton></Tooltip>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {/* Local/Cloud Mode Toggle */}
+          <Tooltip title={runLocally ? 'Using local backend (localhost:5001) - no timeouts!' : 'Using Render cloud - click to switch to local'}>
+            <Chip
+              icon={runLocally ? <LocalIcon /> : <CloudIcon />}
+              label={runLocally ? 'Local' : 'Cloud'}
+              onClick={handleToggleLocalMode}
+              sx={localModeChip(runLocally, mode)}
+            />
+          </Tooltip>
+          {runLocally && localServerOnline !== null && (
+            <Chip
+              size="small"
+              icon={localServerOnline ? <CheckIcon /> : <WarningIcon />}
+              label={localServerOnline ? 'Online' : 'Offline'}
+              sx={{ backgroundColor: localServerOnline ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)', color: localServerOnline ? '#22c55e' : '#ef4444', fontSize: '0.75rem' }}
+            />
+          )}
+          <Tooltip title="Refresh"><IconButton onClick={() => { setRetryCount(0); fetchDatasets(); fetchCustomModels(); fetchLeaderboard(); }} sx={{ color: '#888' }}><RefreshIcon /></IconButton></Tooltip>
+        </Box>
       </Box>
 
-      {isBackendLoading && <StatusBanner type="loading" message="⏳ Connecting to backend... May take 30-60s if server is waking up (free tier)" mode={mode} />}
+      {/* Local Mode Banner */}
+      {runLocally && localServerOnline && (
+        <Alert severity="success" icon={<LocalIcon />} sx={{ mb: 2, borderRadius: '12px', backgroundColor: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)' }}>
+          <strong>Local Mode</strong> — Connected to localhost:5001. No timeouts!
+        </Alert>
+      )}
+      {runLocally && localServerOnline === false && (
+        <Alert severity="error" icon={<WarningIcon />} sx={{ mb: 2, borderRadius: '12px' }}>
+          <strong>Local Server Offline</strong> — Run <code style={{ backgroundColor: 'rgba(0,0,0,0.2)', padding: '2px 6px', borderRadius: '4px' }}>python app.py</code> in scorelect-backend
+        </Alert>
+      )}
+
+      {isBackendLoading && !runLocally && <StatusBanner type="loading" message="⏳ Connecting to backend... May take 30-60s if server is waking up (free tier)" mode={mode} />}
 
       <Grid container spacing={3}>
         <Grid item xs={12} lg={7}>
@@ -423,8 +506,14 @@ const ModelLab = ({ mode = 'dark' }) => {
           </Card>
 
           <Card sx={{ ...glassCard(mode), p: 2, mt: 2 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#888' }}>⚡ Server Tips</Typography>
-            <Typography variant="caption" sx={{ color: '#666' }}>• Free tier sleeps after 15 mins<br/>• First request takes 30-60s<br/>• Memory errors = wait 1-2 mins<br/>• Large datasets may timeout</Typography>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#888' }}>{runLocally ? '🖥️ Local Mode Tips' : '⚡ Server Tips'}</Typography>
+            <Typography variant="caption" sx={{ color: '#666' }}>
+              {runLocally ? (
+                <>• Backend at localhost:5001<br/>• No timeouts or memory limits<br/>• Edit custom_models.py, restart Flask<br/>• Same Firebase data as production</>
+              ) : (
+                <>• Free tier sleeps after 15 mins<br/>• First request takes 30-60s<br/>• Memory errors = wait 1-2 mins<br/>• Large datasets may timeout</>
+              )}
+            </Typography>
           </Card>
         </Grid>
       </Grid>

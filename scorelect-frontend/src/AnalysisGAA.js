@@ -282,7 +282,7 @@ const DatasetAnalysis = () => {
                 x: normalizedX,
                 y: normalizedY,
                 distMeters: distToGoal,
-                side: isLeftSide ? 'Left' : 'Right',
+                //side: isLeftSide ? 'Left' : 'Right',
                 distanceFromGoal: distToGoal,
                 pressure: tag.pressure || '0',
                 foot: tag.foot || 'Right'

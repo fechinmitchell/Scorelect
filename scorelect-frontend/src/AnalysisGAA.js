@@ -252,10 +252,16 @@ const DatasetAnalysis = () => {
               const normalizedY = (rawY / 100) * pitchHeight;
               
               // Determine which goal the shot is targeting based on x position
-              const isLeftSide = normalizedX <= halfLineX;
-              const targetGoalX = isLeftSide ? 0 : pitchWidth;
+              //const isLeftSide = normalizedX <= halfLineX;
+              //const targetGoalX = isLeftSide ? 0 : pitchWidth;
               
+              if (normalizedX > halfLineX) {
+                normalizedX = pitchWidth - normalizedX;
+                normalizedY = pitchHeight - normalizedY;
+              }
+
               // Calculate distance to goal - required for proper positioning in analysis
+              const targetGoalX = 0;
               const dx = normalizedX - targetGoalX;
               const dy = normalizedY - goalY;
               const distToGoal = Math.sqrt(dx * dx + dy * dy);

@@ -69,11 +69,21 @@ const buildVideoNavState = (game) => {
       const rawX = parseFloat(tag.x) || 50;
       const rawY = parseFloat(tag.y) || 50;
       
-      const normalizedX = (rawX / 100) * pitchWidth;
-      const normalizedY = (rawY / 100) * pitchHeight;
+      //const normalizedX = (rawX / 100) * pitchWidth;
+      //const normalizedY = (rawY / 100) * pitchHeight;
       
-      const isLeftSide = normalizedX <= halfLineX;
-      const targetGoalX = isLeftSide ? 0 : pitchWidth;
+      let normalizedX = (rawX / 100) * pitchWidth;
+      let normalizedY = (rawY / 100) * pitchHeight;
+
+      if (normalizedX > halfLineX) {
+        normalizedX = pitchWidth - normalizedX;
+        normalizedY = pitchHeight - normalizedY;
+      }
+
+      const targetGoalX = 0;
+
+      //const isLeftSide = normalizedX <= halfLineX;
+      //const targetGoalX = isLeftSide ? 0 : pitchWidth;
       
       const dx = normalizedX - targetGoalX;
       const dy = normalizedY - goalY;
@@ -361,7 +371,7 @@ const RecentGameItem = ({ game, onSelect }) => {
               team: tag.team || 'Unknown',
               action: tag.action || '',
               minute: tag.minute || 0,
-              touchedInFlight: tag.touchedInFlight || false,
+              //touchedInFlight: tag.touchedInFlight || false,
               pointValue: tag.pointValue,
               xP: tag.xP,
               xPoints: tag.xPoints,

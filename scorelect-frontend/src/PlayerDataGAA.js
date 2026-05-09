@@ -873,7 +873,7 @@ export default function PlayerDataGAA() {
 
     const agg = shotsFiltered.reduce((acc, shot) => {
       const name = shot.playerName || 'Unknown';
-      if (!acc[name]) acc[name] = { player: name, team: shot.team || 'Unknown', points: 0, goals: 0, xPoints: 0, xGoals: 0, positionPerformance: {}, shootingAttempts: 0, shootingScored: 0, goalAttempts: 0 };
+      if (!acc[name]) acc[name] = { player: name, team: shot.team || 'Unknown', points: 0, goals: 0, xPoints: 0, xGoals: 0, positionPerformance: {}, shootingAttempts: 0, shootingScored: 0, goalAttempts: 0, pointAttempts: 0};
       const p = acc[name];
       const pos = shot.position || 'Unknown';
       if (!p.positionPerformance[pos]) p.positionPerformance[pos] = { shots: 0, points: 0, goals: 0 };
@@ -894,9 +894,16 @@ export default function PlayerDataGAA() {
 
       if (isScore) p.shootingScored += 1;
       if (isGoalAttempt) p.goalAttempts += 1;
-      if (isPointAction) { p.points += 1; p.positionPerformance[pos].points += 1; }
-      else if (isGoalAction) { p.goals += 1; p.positionPerformance[pos].goals += 1; }
-      else if (isSetPlayScore) p.points += 1;
+      if (isPointAttempt) p.pointAttempts += 1;
+
+      // Calculate point value (2 if ≥40m, else 1; but 45s always = 1)
+      const isFortyFive = actionLower === '45' || actionLower === 'fortyfive';
+      const isTwoPointer = !isFortyFive && !isGoalAction && translated.distMeters >= 40;
+      const pointValue = isTwoPointer ? 2 : 1;
+
+      if (isGoalAction) { p.goals += 1; p.positionPerformance[pos].goals += 1; }
+      else if (isPointAction) { p.points += pointValue; p.positionPerformance[pos].points += pointValue; }
+      else if (isSetPlayScore) {p.points += pointValue; p.positionPerformance[pos].points += pointValue; }
 
       // xP: Only for point attempts (non-goal shots)
       // xG: Only for goal attempts
@@ -911,7 +918,7 @@ export default function PlayerDataGAA() {
 
     return Object.values(agg).map(p => {
       const accuracy = p.shootingAttempts > 0 ? (p.shootingScored / p.shootingAttempts) * 100 : 0;
-      const pointsPerShot = p.shootingAttempts > 0 ? p.points / p.shootingAttempts : 0;
+      const pointsPerShot = p.pointAttempts > 0 ? p.points / p.pointAttempts : 0;
       const goalsPerAttempt = p.goalAttempts > 0 ? p.goals / p.goalAttempts : 0;
       const positionPerformance = Object.entries(p.positionPerformance).map(([pos, stats]) => ({ position: pos, ...stats, efficiency: stats.shots > 0 ? ((stats.points + stats.goals * 3) / stats.shots) * 100 : 0 }));
       return { ...p, positionPerformance, Total_Points: p.points, accuracy, pointsPerShot, goalsPerAttempt };
@@ -919,7 +926,7 @@ export default function PlayerDataGAA() {
   }, [combinedData, selectedYear, selectedTeam, calibrationModel]);
 
   const goalsData = useMemo(() => formattedLeaderboard.map(p => ({ player: p.player, goals: p.goals, xGoals: p.xGoals, goalAttempts: p.goalAttempts, goalsPerAttempt: p.goalsPerAttempt })), [formattedLeaderboard]);
-  const pointsData = useMemo(() => formattedLeaderboard.map(p => ({ player: p.player, points: p.points, xPoints: p.xPoints, shots: p.shootingAttempts, pointsPerShot: p.pointsPerShot })), [formattedLeaderboard]);
+  const pointsData = useMemo(() => formattedLeaderboard.map(p => ({ player: p.player, points: p.points, xPoints: p.xPoints, shots: p.pointAttempts, pointsPerShot: p.pointsPerShot })), [formattedLeaderboard]);
   const accuracyData = useMemo(() => formattedLeaderboard.map(p => ({ player: p.player, accuracy: p.accuracy, scored: p.shootingScored, attempts: p.shootingAttempts })), [formattedLeaderboard]);
 
   const availableYears = useMemo(() => { const years = new Set(); combinedData.forEach(s => { if (s.matchDate) years.add(new Date(s.matchDate).getFullYear()); }); return Array.from(years).sort((a, b) => b - a); }, [combinedData]);

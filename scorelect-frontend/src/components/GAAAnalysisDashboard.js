@@ -1028,12 +1028,8 @@ export default function GAAAnalysisDashboard() {
             </select>
             <select
               className="gaa-filter-select"
-              multiple
               value={appliedFilters.action}
-              onChange={e => {
-                const selected = Array.from(e.target.selectedOptions, opt => opt.value);
-                setAppliedFilters(prev => ({ ...prev, action: e.target.value }));
-              }}
+              onChange={e => setAppliedFilters(prev => ({ ...prev, action: e.target.value }))}
             >
               <option value="">All Actions</option>
               {filterOptions.actions.map(a => <option key={a} value={a}>{a}</option>)}

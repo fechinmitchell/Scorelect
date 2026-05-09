@@ -129,10 +129,10 @@ const calculateTwoPointerValue = (shot, pitchWidth = 145, pitchHeight = 88) => {
   const isAtOrOutsideArc = distanceFromGoal >= 40;
   
   // Check if touched in flight
-  const touchedInFlight = shot.touchedInFlight || false;
+  //const touchedInFlight = shot.touchedInFlight || false;
   
   // Apply two-pointer logic for points and frees (excluding 45s)
-  if (isAtOrOutsideArc && !touchedInFlight && !isFrom45) {
+  if (isAtOrOutsideArc && !isFrom45) {
     return 2; // Two-pointer
   }
   
@@ -185,7 +185,7 @@ function PitchView({ allShots, xScale, yScale, halfLineX, goalX, goalY, onShotCl
         </Stage>
       </div>
       
-      {/* Two-pointer legend */}
+      {/*{/* Two-pointer legend
       <div className="two-pointer-legend">
         <div className="legend-item">
           <div className="legend-circle untouched"></div>
@@ -199,15 +199,14 @@ function PitchView({ allShots, xScale, yScale, halfLineX, goalX, goalY, onShotCl
           <div className="legend-circle two-pointer"></div>
           <span>Two-Pointer (≥40m, Untouched)</span>
         </div>
-      </div>
+      </div>*/}
       
       <div className="touch-instructions">
         <h4>Two-Pointer Rules:</h4>
         <ul>
           <li>Click any shot to view details and toggle touch status in the modal</li>
-          <li>Shots ≥40m from goal and untouched = 2 points</li>
+          <li>Shots ≥40m from goal = 2 points</li>
           <li>45-yard frees are always 1 point regardless of distance</li>
-          <li>Touched shots are always 1 point</li>
         </ul>
       </div>
     </div>
@@ -814,7 +813,7 @@ export default function GAAAnalysisDashboard() {
   };
 
   // Toggle touch status for a specific shot
-  const toggleShotTouchStatus = (shot) => {
+  {/*const toggleShotTouchStatus = (shot) => {
     const updatedShot = {
       ...shot,
       touchedInFlight: !shot.touchedInFlight,
@@ -822,16 +821,16 @@ export default function GAAAnalysisDashboard() {
         ...shot,
         touchedInFlight: !shot.touchedInFlight
       })
-    };
+    };*/}
     
     updateShotInGames(updatedShot);
     setSelectedShot(translateShotToOneSide(updatedShot, halfLineX, goalX, goalY));
     
     // Show notification
-    const touchStatus = updatedShot.touchedInFlight ? 'touched' : 'untouched';
+    //const touchStatus = updatedShot.touchedInFlight ? 'touched' : 'untouched';
     const pointValue = updatedShot.pointValue;
     
-    Swal.fire({
+    {/*Swal.fire({
       title: `Shot marked as ${touchStatus}`,
       text: `This shot is now worth ${pointValue} point(s)`,
       icon: 'info',
@@ -840,7 +839,7 @@ export default function GAAAnalysisDashboard() {
       background: 'var(--dark-card)',
       color: 'var(--light)'
     });
-  };
+  };*/}
 
   // RENDER SELECTED SHOT DETAILS
   function renderSelectedShotDetails() {
@@ -884,7 +883,7 @@ export default function GAAAnalysisDashboard() {
           
           {isScoring && (
             <>
-              <div className={`gaa-stat-row ${selectedShot.touchedInFlight ? 'highlight-touched' : ''}`}>
+              {/*<div className={`gaa-stat-row ${selectedShot.touchedInFlight ? 'highlight-touched' : ''}`}>
                 <span className="gaa-stat-label">Touch Status:</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span className="gaa-stat-value" style={{ 
@@ -900,7 +899,7 @@ export default function GAAAnalysisDashboard() {
                     {selectedShot.touchedInFlight ? 'MARK UNTOUCHED' : 'MARK TOUCHED'}
                   </button>
                 </div>
-              </div>
+              </div>*/}
               <div className={`gaa-stat-row ${pointValue === 2 ? 'highlight-two-pointer' : pointValue === 3 ? 'highlight-goal' : ''}`}>
                 <span className="gaa-stat-label">Point Value:</span>
                 <span className="gaa-stat-value" style={{ 

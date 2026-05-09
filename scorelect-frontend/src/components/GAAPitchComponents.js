@@ -18,7 +18,8 @@ export const translateShotToOneSide = (shot, halfLineX, goalX, goalY) => {
   // If the shot is from the right side (past the halfway line),
   // we need to mirror its X coordinate to show it on the left side
   if (!isLeftSide) {
-    result.x = 2 * halfLineX - x;
+    result.x = 145 - x;
+    result.y = 88 - y;
     result.originalSide = 'Right';
   } else {
     result.originalSide = 'Left';
@@ -35,10 +36,13 @@ export const translateShotToOneSide = (shot, halfLineX, goalX, goalY) => {
 
 export function translateShotToLeftSide(shot, halfLineX) {
   let newX = shot.x;
+  let newY = shot.y;
+
   if (shot.x > halfLineX) {
-    newX = 2 * halfLineX - shot.x;
+    newX = 145 - shot.x;
+    newY = 88 - shot.y;
   }
-  return { ...shot, x: newX };
+  return { ...shot, x: newX, y: newY};
 }
 
 export function getShotCategory(actionStr) {
@@ -204,8 +208,8 @@ export function renderOneSidePitchShots({
 
       {/* Plot each translated shot */}
       {shots.map((shot, i) => {
-        const mirroredShot = translateShotToLeftSide(shot, halfLineX);
-        const translated = translateShotToOneSide(mirroredShot, halfLineX, goalX, goalY);
+        //const mirroredShot = translateShotToLeftSide(shot, halfLineX);
+        const translated = translateShotToOneSide(shot, halfLineX, goalX, goalY);
         const shotX = translated.x * xScale;
         const shotY = translated.y * yScale;
         const baseRadius = 5;

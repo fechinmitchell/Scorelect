@@ -395,7 +395,7 @@ export default function GAAAnalysisDashboard() {
   const goalX = pitchWidth, goalY = pitchHeight / 2;
 
   // Function to update a specific shot using unique identifier
-  const updateShotInGames = (updatedShot) => {
+  const updateShotInGames = (translated) => {
     setGames(prevGames => 
       prevGames.map(game => ({
         ...game,
@@ -405,7 +405,7 @@ export default function GAAAnalysisDashboard() {
                          shot.minute === selectedShot.minute && 
                          shot.playerName === selectedShot.playerName &&
                          shot.action === selectedShot.action;
-          return isMatch ? updatedShot : shot;
+          return isMatch ? translated : shot;
         })
       }))
     );
@@ -822,24 +822,21 @@ export default function GAAAnalysisDashboard() {
         touchedInFlight: !shot.touchedInFlight
       })
     };*/}
+
+    // Toggle or Update status for a specific shot
+  const toggleShotTouchStatus = (shot) => {
+    // 1. Define 'translated' here so the lines below can see it
+    const translated = translateShotToOneSide(shot, halfLineX, goalX, goalY);
     
-    updateShotInGames(updatedShot);
-    setSelectedShot(translateShotToOneSide(updatedShot, halfLineX, goalX, goalY));
+    // 2. Update the main data state
+    updateShotInGames(translated);
     
-    // Show notification
-    //const touchStatus = updatedShot.touchedInFlight ? 'touched' : 'untouched';
-    const pointValue = updatedShot.pointValue;
+    // 3. Update the modal/sidebar view
+    setSelectedShot(translated);
     
-    {/*Swal.fire({
-      title: `Shot marked as ${touchStatus}`,
-      text: `This shot is now worth ${pointValue} point(s)`,
-      icon: 'info',
-      timer: 1500,
-      showConfirmButton: false,
-      background: 'var(--dark-card)',
-      color: 'var(--light)'
-    });
-  };*/}
+    // 4. Get the point value for any logic below
+    const pointValue = translated.pointValue;
+  };
 
   // RENDER SELECTED SHOT DETAILS
   function renderSelectedShotDetails() {

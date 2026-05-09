@@ -7,7 +7,7 @@ import PropTypes from 'prop-types';
 export const translateShotToOneSide = (shot, halfLineX, goalX, goalY) => {
 
   // Prevent double-translation
-  if (shot.originalSide) return shot;
+  //if (shot.originalSide) return shot;
 
   // Make a copy of the shot to avoid mutating the original
   const result = { ...shot };
@@ -27,7 +27,7 @@ export const translateShotToOneSide = (shot, halfLineX, goalX, goalY) => {
   // we need to mirror its X coordinate to show it on the left side
    if (x > pitchWidth / 2) {
     result.x = pitchWidth - x;      // flip across x midpoint
-    result.y = pitchHeight - y;     // flip across y midpoint
+    result.y = y;     // flip across y midpoint
     result.originalSide = 'Right';
   } else {
     result.x = x;

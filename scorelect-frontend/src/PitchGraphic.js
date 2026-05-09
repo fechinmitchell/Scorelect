@@ -743,8 +743,8 @@ const handleSaveToDataset = async () => {
 };
 
   const initialActionCodes = [
-    'point', 'wide', 'goal', 'goal miss', 'free', 'missed free', 'short', 'blocked', 'offensive mark', 'offensive mark wide', 'post',
-    'free short', 'free wide', 'mark wide', 'missed 45', 'penalty goal', 'pen miss', 'successful pass', 'unsuccessful pass', 'successful kickout', 'unsuccessful kickout'
+    'point', 'wide', 'goal', 'free', 'free wide', 'goal miss', 'short', 'blocked', 'offensive mark', 'offensive mark wide', 'post',
+    'free short', 'free post', 'mark wide', 'fortyfive', 'fortyfive wide', 'fortyfive short', 'fortyfive post', 'penalty goal', 'pen miss'
   ];
 
   const initialPositions = [

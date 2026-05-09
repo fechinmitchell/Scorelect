@@ -17,18 +17,20 @@ export const translateShotToOneSide = (shot, halfLineX, goalX, goalY) => {
   
   // If the shot is from the right side (past the halfway line),
   // we need to mirror its X coordinate to show it on the left side
-  if (!isLeftSide) {
+  if (x > 72.5) {
     result.x = 145 - x;
     result.y = 88 - y;
     result.originalSide = 'Right';
   } else {
+    result.x = x;
+    result.y = y;
     result.originalSide = 'Left';
   }
   
   // Calculate distance to goal
   // For shots from the left side, the goal is at (0, goalY)
   const dx = result.x - 0;  // Distance from x to left goal (at x=0)
-  const dy = result.y - goalY;
+  const dy = result.y - 44;
   result.distMeters = Math.sqrt(dx * dx + dy * dy);
   
   return result;
@@ -263,7 +265,7 @@ export function renderOneSidePitchShots({
             stroke={strokeColor}
             strokeWidth={strokeWidth}
             opacity={0.85}
-            onClick={() => onShotClick(shot)}
+            onClick={() => onShotClick(translated)}
           />
         );
       })}

@@ -5,12 +5,18 @@ import PropTypes from 'prop-types';
 // Utility Functions (unchanged)
 // In GAAPitchComponents.js, update this function:
 export const translateShotToOneSide = (shot, halfLineX, goalX, goalY) => {
+
+  // Prevent double-translation
+  if (shot.originalSide) return shot;
+  
   // Make a copy of the shot to avoid mutating the original
   const result = { ...shot };
   
   // Parse coordinates or use defaults
   const x = parseFloat(shot.x) || 0;
   const y = parseFloat(shot.y) || 0;
+
+  console.log('raw x:', shot.x, 'parsed:', parseFloat(shot.x), 'raw y:', shot.y, 'parsed:', parseFloat(shot.y));
   
   // Determine which side the shot is from based on X position
   const isLeftSide = x <= halfLineX;

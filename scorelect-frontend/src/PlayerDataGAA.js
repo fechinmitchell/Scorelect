@@ -884,12 +884,15 @@ export default function PlayerDataGAA() {
 
       const actionLower = (shot.action || '').toLowerCase();
       const typeLower = (shot.type || '').toLowerCase();
+
       const isPointAction = actionLower === 'point';
-      const isGoalAction = actionLower === 'goal';
-      const isSetPlay = ['free', 'fortyfive', '45', 'offensive mark', 'mark'].includes(actionLower);
-      const isSetPlayScore = isSetPlay && typeLower === 'score';
+      const isGoalAction = actionLower === 'goal' || actionLower === 'penalty goal';
+      const isFortyFive = actionLower === '45' || actionLower === 'fortyfive';
+
+      const isSetPlayScore = ['free', 'fortyfive', '45', 'offensive mark', 'mark'].includes(actionLower);
+
       const isScore = isPointAction || isGoalAction || isSetPlayScore;
-      const isGoalAttempt = isGoalAction || typeLower === 'goal' || typeLower === 'saved';
+      const isGoalAttempt = isGoalAction || actionLower === 'goal miss' || actionLower === 'pen miss' || typeLower === 'goal' || typeLower === 'saved';
       const isPointAttempt = !isGoalAttempt; // All non-goal shots are point attempts
 
       if (isScore) p.shootingScored += 1;
@@ -897,13 +900,12 @@ export default function PlayerDataGAA() {
       if (isPointAttempt) p.pointAttempts += 1;
 
       // Calculate point value (2 if ≥40m, else 1; but 45s always = 1)
-      const isFortyFive = actionLower === '45' || actionLower === 'fortyfive';
+      
       const isTwoPointer = !isFortyFive && !isGoalAction && translated.distMeters >= 40;
       const pointValue = isTwoPointer ? 2 : 1;
 
       if (isGoalAction) { p.goals += 1; p.positionPerformance[pos].goals += 1; }
-      else if (isPointAction) { p.points += pointValue; p.positionPerformance[pos].points += pointValue; }
-      else if (isSetPlayScore) {p.points += pointValue; p.positionPerformance[pos].points += pointValue; }
+      else if (isPointAction || isSetPlayScore) { p.points += pointValue; p.positionPerformance[pos].points += pointValue; }
 
       // xP: Only for point attempts (non-goal shots)
       // xG: Only for goal attempts

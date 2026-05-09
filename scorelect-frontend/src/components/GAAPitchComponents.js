@@ -7,10 +7,12 @@ import PropTypes from 'prop-types';
 export const translateShotToOneSide = (shot, halfLineX, goalX, goalY) => {
 
   // Prevent double-translation
-  if (shot.originalSide) return shot;
-  
+  //if (shot.originalSide) return shot;
+
   // Make a copy of the shot to avoid mutating the original
   const result = { ...shot };
+  const pitchWidth = 145;
+  const pitchHeight = 88;
   
   // Parse coordinates or use defaults
   const x = parseFloat(shot.x) || 0;
@@ -23,20 +25,20 @@ export const translateShotToOneSide = (shot, halfLineX, goalX, goalY) => {
   
   // If the shot is from the right side (past the halfway line),
   // we need to mirror its X coordinate to show it on the left side
-  if (x > 72.5) {
-    result.x = 145 - x;
-    result.y = 88 - y;
+   if (x > pitchWidth / 2) {
+    result.x = pitchWidth - x;      // flip across x midpoint
+    result.y = y;     // flip across y midpoint
     result.originalSide = 'Right';
   } else {
     result.x = x;
-    result.y = y;
+    result.y = pitchHeight - y;     // correct for coordinate system
     result.originalSide = 'Left';
   }
   
   // Calculate distance to goal
   // For shots from the left side, the goal is at (0, goalY)
-  const dx = result.x - 0;  // Distance from x to left goal (at x=0)
-  const dy = result.y - 44;
+  const dx = result.x;
+  const dy = result.y - pitchHeight / 2;
   result.distMeters = Math.sqrt(dx * dx + dy * dy);
   
   return result;

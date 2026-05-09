@@ -204,9 +204,9 @@ function PitchView({ allShots, xScale, yScale, halfLineX, goalX, goalY, onShotCl
       <div className="touch-instructions">
         <h4>Two-Pointer Rules:</h4>
         <ul>
-          <li>Click any shot to view details and toggle touch status in the modal</li>
+          <li>Click any shot to view details</li>
           <li>Shots ≥40m from goal = 2 points</li>
-          <li>45-yard frees are always 1 point regardless of distance</li>
+          <li>Fortyfives are always 1 point regardless of distance</li>
         </ul>
       </div>
     </div>
@@ -1028,8 +1028,12 @@ export default function GAAAnalysisDashboard() {
             </select>
             <select
               className="gaa-filter-select"
+              multiple
               value={appliedFilters.action}
-              onChange={e => setAppliedFilters(prev => ({ ...prev, action: e.target.value }))}
+              onChange={e => {
+                const selected = Array.from(e.target.selectedOptions, opt => opt.value);
+                setAppliedFilters(prev => ({ ...prev, action: e.target.value }));
+              }}
             >
               <option value="">All Actions</option>
               {filterOptions.actions.map(a => <option key={a} value={a}>{a}</option>)}

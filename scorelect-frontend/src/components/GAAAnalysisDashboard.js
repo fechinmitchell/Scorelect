@@ -612,152 +612,124 @@ export default function GAAAnalysisDashboard() {
   const aggregatedData = useMemo(() => {
     const agg = {}, scorerMap = {}, distAcc = {};
     
-    flattenShots(games).forEach(sh => {
-      const team = sh.team || 'Unknown';
-      const act = (sh.action || '').toString().toLowerCase().trim();
-      const name = sh.playerName || 'Unknown';
+  flattenShots(games).forEach(sh => {
+    const team = sh.team || 'Unknown';
+    const act = (sh.action || '').toString().toLowerCase().trim();
+    const name = sh.playerName || 'Unknown';
+    
+    // Initialize team if needed
+    if (!agg[team]) {
+      agg[team] = {
+        totalShots: 0,
+        successfulShots: 0,
+        points: 0,
+        goals: 0,
+        misses: 0,
+        freeAttempts: 0,
+        freeScored: 0,
+        offensiveMarkAttempts: 0,
+        offensiveMarkScored: 0,
+        fortyFiveAttempts: 0,
+        fortyFiveScored: 0,
+        twoPointerAttempts: 0,
+        twoPointerScored: 0,
+        totalTwoPointers: 0,
+        totalOnePointers: 0,
+        totalXP: 0,
+        totalXG: 0
+      };
+      distAcc[team] = 0;
+      scorerMap[team] = {};
+    }
+    
+    // Initialize player if needed
+    if (!scorerMap[team][name]) {
+      scorerMap[team][name] = {
+        goals: 0,
+        points: 0,
+        twoPointers: 0,
+        xP: 0,
+        xG: 0
+      };
+    }
+    
+    // Update shot count and distance (ONCE)
+    agg[team].totalShots++;
+    const tShot = translateShotToOneSide(sh, halfLineX, goalX, goalY);
+    distAcc[team] += tShot.distMeters || 0;
+    
+    // Determine attempt type
+    const isGoalAttempt = act.includes('goal');
+    const isPointAttempt = !isGoalAttempt;
+    
+    // ALWAYS add expected values (regardless of outcome)
+    if (isPointAttempt) {
+      const xpVal = calculateXP(sh, tShot.distMeters, calibrationModel);
+      agg[team].totalXP += xpVal;
+      scorerMap[team][name].xP += xpVal;
+    } else {
+      const xgVal = calculateXG(sh, tShot.distMeters, calibrationModel);
+      agg[team].totalXG += xgVal;
+      scorerMap[team][name].xG += xgVal;
+    }
+    
+    // Determine if this is a scoring shot or miss
+    const scoringActions = ['point', 'free', 'offensive mark', '45', 'fortyfive', 'goal', 'penalty goal'];
+    const isScoring = scoringActions.some(action => act.includes(action));
+    const isMiss = /miss|wide|short|blocked|post/.test(act);
+    
+    // Handle GOALS scored
+    if (act.includes('goal') && !isMiss) {
+      agg[team].goals++;
+      agg[team].successfulShots++;
+      scorerMap[team][name].goals++;
+    }
+    // Handle POINTS scored (everything except goals)
+    else if (isScoring && !isMiss && !act.includes('goal')) {
+      const pointValue = sh.pointValue || calculateTwoPointerValue(sh);
       
-      // Initialize team if needed
-      if (!agg[team]) {
-        agg[team] = {
-          totalShots: 0,
-          successfulShots: 0,
-          points: 0,  // Points only (no goals)
-          goals: 0,
-          misses: 0,
-          freeAttempts: 0,
-          freeScored: 0,
-          offensiveMarkAttempts: 0,
-          offensiveMarkScored: 0,
-          fortyFiveAttempts: 0,
-          fortyFiveScored: 0,
-          twoPointerAttempts: 0,
-          twoPointerScored: 0,
-          totalTwoPointers: 0,
-          totalOnePointers: 0,
-          totalXP: 0,  // Expected POINTS only
-          totalXG: 0   // Expected GOALS only
-        };
-        distAcc[team] = 0;
-        scorerMap[team] = {};
+      agg[team].successfulShots++;
+      agg[team].points += pointValue;
+      scorerMap[team][name].points += pointValue;
+      
+      // Track point types
+      if (pointValue === 2) {
+        agg[team].totalTwoPointers++;
+        scorerMap[team][name].twoPointers++;
+      } else {
+        agg[team].totalOnePointers++;
       }
       
-      // Initialize player if needed
-      if (!scorerMap[team][name]) {
-        scorerMap[team][name] = {
-          goals: 0,
-          points: 0,
-          twoPointers: 0,
-          xP: 0,  // Expected points only
-          xG: 0   // Expected goals only
-        };
+      // Track specific shot types
+      if (act === 'free') {
+        agg[team].freeScored++;
+      } else if (act === 'offensive mark') {
+        agg[team].offensiveMarkScored++;
+      } else if (act === '45' || act === 'fortyfive') {
+        agg[team].fortyFiveScored++;
       }
-      
-      // Update shot count and distance
-      agg[team].totalShots++;
-      const tShot = translateShotToOneSide(sh, halfLineX, goalX, goalY);
-      distAcc[team] += tShot.distMeters || 0;
-      
-      // Determine if this is a scoring shot
-      const scoringActions = ['point', 'free', 'offensive mark', '45', 'fortyfive', 'goal', 'penalty goal'];
-      const isScoring = scoringActions.some(action => act.includes(action));
-      const isMiss = /miss|wide|short|blocked|post/.test(act);
-      
-      // Handle GOALS separately
-      if (act.includes('goal') && !isMiss) {
-        agg[team].goals++;
-        agg[team].successfulShots++;
-        scorerMap[team][name].goals++;
-        
-        // Use backend xG values - check multiple possible fields
-        {/*if (typeof sh.xGoals === 'number' && sh.xGoals > 0) {
-          agg[team].totalXG += sh.xGoals;
-          scorerMap[team][name].xG += sh.xGoals;
-        } else if (typeof sh.xP === 'number' && act.includes('goal')) {
-          // For goals, xP represents the probability of scoring
-          agg[team].totalXG += sh.xP;
-          scorerMap[team][name].xG += sh.xP;*/
-        }
-        const xgVal = calculateXG(sh, tShot.distMeters, calibrationModel);
-        agg[team].totalXG += xgVal;
-        scorerMap[team][name].xG += xgVal;
-      }
-      // Handle POINTS separately (everything except goals)
-      else if (isScoring && !isMiss && !act.includes('goal')) {
-        // Calculate point value
-        const pointValue = sh.pointValue || calculateTwoPointerValue(sh);
-        
-        agg[team].successfulShots++;
-        agg[team].points += pointValue;  // Only points, no goals
-        scorerMap[team][name].points += pointValue;
-        
-        // Use backend xP values
-        {/*if (typeof sh.xPoints === 'number') {
-          agg[team].totalXP += sh.xPoints;
-          scorerMap[team][name].xP += sh.xPoints;
-        }*/}
-
-        const xpVal = calculateXP(sh, tShot.distMeters, calibrationModel);
-        agg[team].totalXP += xpVal;
-        scorerMap[team][name].xP += xpVal;
-        
-        // Track point types
-        if (pointValue === 2) {
-          agg[team].totalTwoPointers++;
-          scorerMap[team][name].twoPointers++;
-        } else {
-          agg[team].totalOnePointers++;
-        }
-        
-        // Track specific shot types
-        if (act === 'free') {
-          agg[team].freeScored++;
-        } else if (act === 'offensive mark') {
-          agg[team].offensiveMarkScored++;
-        } else if (act === '45' || act === 'fortyfive') {
-          agg[team].fortyFiveScored++;
-        }
-      }
-      else {
-        // Misses - still use backend expected values
-        if (isMiss) {
-          agg[team].misses++;
-          
-          // Add expected values for missed shots
-          if (act.includes('goal')) {
-            if (typeof sh.xGoals === 'number' && sh.xGoals > 0) {
-              agg[team].totalXG += sh.xGoals;
-              scorerMap[team][name].xG += sh.xGoals;
-            } else if (typeof sh.xP === 'number') {
-              // For missed goal attempts, xP represents the probability
-              agg[team].totalXG += sh.xP;
-              scorerMap[team][name].xG += sh.xP;
-            }
-          } else {
-            if (typeof sh.xPoints === 'number') {
-              agg[team].totalXP += sh.xPoints;
-              scorerMap[team][name].xP += sh.xPoints;
-            }
-          }
+    }
+    // Handle misses
+    else if (isMiss) {
+      agg[team].misses++;
+    }
+    
+    // Track attempts (including misses)
+    if (act.includes('free')) agg[team].freeAttempts++;
+    if (act.includes('offensive mark')) agg[team].offensiveMarkAttempts++;
+    if (act.includes('45') || act.includes('fortyfive')) agg[team].fortyFiveAttempts++;
+    
+    // Track 2-point attempts (must be ≥40m and not a 45 and not a goal)
+    if (tShot.distMeters >= 40 && !act.includes('45') && !act.includes('fortyfive') && !act.includes('goal')) {
+      const eligibleActions = ['point', 'free', 'offensive mark'];
+      if (eligibleActions.some(a => act.includes(a))) {
+        agg[team].twoPointerAttempts++;
+        if (!isMiss) {
+          agg[team].twoPointerScored++;
         }
       }
-      
-      // Track attempts (including misses)
-      if (act.includes('free')) agg[team].freeAttempts++;
-      if (act.includes('offensive mark')) agg[team].offensiveMarkAttempts++;
-      if (act.includes('45') || act.includes('fortyfive')) agg[team].fortyFiveAttempts++;
-      
-      // Track 2-point attempts (must be ≥40m and not a 45 and not a goal)
-      if (tShot.distMeters >= 40 && !act.includes('45') && !act.includes('fortyfive') && !act.includes('goal')) {
-        const eligibleActions = ['point', 'free', 'offensive mark'];
-        if (eligibleActions.some(a => act.includes(a))) {
-          agg[team].twoPointerAttempts++;
-          if (!isMiss) {
-            agg[team].twoPointerScored++;
-          }
-        }
-      }
-    });
+    }
+  });
     
     // Calculate averages
     Object.keys(agg).forEach(team => {

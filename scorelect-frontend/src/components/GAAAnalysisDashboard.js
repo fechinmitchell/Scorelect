@@ -7,6 +7,7 @@ import axios from 'axios';
 import { useAuth } from '../AuthContext';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { useCalibrationModel, calculateXP, calculateXG } from './Model2026';
 
 // Import pitch rendering & translation functions
 import {
@@ -346,6 +347,7 @@ export default function GAAAnalysisDashboard() {
   const { file, sport, filters } = state || {};
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const { calibrationModel } = useCalibrationModel();
 
   // persistent user settings
   const [actionMapping, setActionMapping] = useState(
@@ -668,14 +670,17 @@ export default function GAAAnalysisDashboard() {
         scorerMap[team][name].goals++;
         
         // Use backend xG values - check multiple possible fields
-        if (typeof sh.xGoals === 'number' && sh.xGoals > 0) {
+        {/*if (typeof sh.xGoals === 'number' && sh.xGoals > 0) {
           agg[team].totalXG += sh.xGoals;
           scorerMap[team][name].xG += sh.xGoals;
         } else if (typeof sh.xP === 'number' && act.includes('goal')) {
           // For goals, xP represents the probability of scoring
           agg[team].totalXG += sh.xP;
-          scorerMap[team][name].xG += sh.xP;
+          scorerMap[team][name].xG += sh.xP;*/
         }
+        const xgVal = calculateXG(sh, tShot.distMeters, calibrationModel);
+        agg[team].totalXG += xgVal;
+        scorerMap[team][name].xG += xgVal;
       }
       // Handle POINTS separately (everything except goals)
       else if (isScoring && !isMiss && !act.includes('goal')) {
@@ -687,10 +692,14 @@ export default function GAAAnalysisDashboard() {
         scorerMap[team][name].points += pointValue;
         
         // Use backend xP values
-        if (typeof sh.xPoints === 'number') {
+        {/*if (typeof sh.xPoints === 'number') {
           agg[team].totalXP += sh.xPoints;
           scorerMap[team][name].xP += sh.xPoints;
-        }
+        }*/}
+
+        const xpVal = calculateXP(sh, tShot.distMeters, calibrationModel);
+        agg[team].totalXP += xpVal;
+        scorerMap[team][name].xP += xpVal;
         
         // Track point types
         if (pointValue === 2) {
@@ -758,7 +767,7 @@ export default function GAAAnalysisDashboard() {
     });
     
     return { aggregator: agg, scorersMap: scorerMap };
-  }, [games, halfLineX, goalX, goalY]);
+  }, [games, halfLineX, goalX, goalY, calibrationModel]);
 
   useEffect(() => {
     setTeamAggregatedData(aggregatedData.aggregator);

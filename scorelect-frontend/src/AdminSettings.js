@@ -18,6 +18,7 @@ import Swal from 'sweetalert2';
 import axios from 'axios';
 import ModelLab from './ModelLab';
 import DatasetPreview from './components/DatasetPreview';
+import DatasetImporter from './DatasetImporter';
 
 const BASE_API_URL = process.env.REACT_APP_API_URL || 'https://scorelect.onrender.com';
 
@@ -291,20 +292,23 @@ const AdminSettings = () => {
           )}
 
           {activeTab === 1 && (
-            <Card sx={{ p: 4 }}>
-              <Typography variant="h6" sx={{ mb: 3, fontWeight: 700, textAlign: 'center' }}>Dataset Permissions</Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                {datasetPermissions.map((perm) => (
-                  <Box key={perm.id} sx={{ my: 3, width: '100%', maxWidth: 500 }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, textAlign: 'center' }}>{perm.name}</Typography>
-                    <Slider value={datasetPerms[perm.id] ?? (perm.id === 'datasetPublishing' ? 3 : 0)} onChange={(e, v) => setDatasetPerms(p => ({ ...p, [perm.id]: v }))} step={1} marks={perm.id === 'datasetPublishing' ? datasetPublishingMarks : featureMarks} min={0} max={perm.id === 'datasetPublishing' ? 3 : 2} valueLabelDisplay="auto" />
-                  </Box>
-                ))}
-              </Box>
-              <Box sx={{ mt: 4, textAlign: 'center' }}>
-                <Button variant="contained" onClick={handleSaveSettings} sx={{ background: 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)', px: 4, py: 1.5 }}>Save Settings</Button>
-              </Box>
-            </Card>
+            <>
+              <DatasetImporter mode={mode} apiUrl={BASE_API_URL} onImported={fetchUserDatasets} />
+              <Card sx={{ p: 4 }}>
+                <Typography variant="h6" sx={{ mb: 3, fontWeight: 700, textAlign: 'center' }}>Dataset Permissions</Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  {datasetPermissions.map((perm) => (
+                    <Box key={perm.id} sx={{ my: 3, width: '100%', maxWidth: 500 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, textAlign: 'center' }}>{perm.name}</Typography>
+                      <Slider value={datasetPerms[perm.id] ?? (perm.id === 'datasetPublishing' ? 3 : 0)} onChange={(e, v) => setDatasetPerms(p => ({ ...p, [perm.id]: v }))} step={1} marks={perm.id === 'datasetPublishing' ? datasetPublishingMarks : featureMarks} min={0} max={perm.id === 'datasetPublishing' ? 3 : 2} valueLabelDisplay="auto" />
+                    </Box>
+                  ))}
+                </Box>
+                <Box sx={{ mt: 4, textAlign: 'center' }}>
+                  <Button variant="contained" onClick={handleSaveSettings} sx={{ background: 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)', px: 4, py: 1.5 }}>Save Settings</Button>
+                </Box>
+              </Card>
+            </>
           )}
 
           {activeTab === 2 && (

@@ -30,7 +30,7 @@ from imblearn.over_sampling import SMOTE  # SMOTE for handling class imbalance
 from sklearn.calibration import calibration_curve
 
 from modelbuilder import model_lab_bp, init_firebase
-
+from dataset_import import dataset_import_bp, init_dataset_import
 
 # Optional: Stripe (if used elsewhere in your application)
 import stripe  # Stripe's Python library for payments and subscriptions
@@ -157,6 +157,8 @@ firebase_admin.initialize_app(cred)
 db = firestore.client()
 init_firebase(db)
 app.register_blueprint(model_lab_bp)
+init_dataset_import(db)
+app.register_blueprint(dataset_import_bp)
 
 # Initialize OpenAI client with the API key loaded from environment variables
 client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))

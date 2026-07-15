@@ -163,6 +163,12 @@ function flattenShots(games = []) {
   return games.flatMap(g => g.gameData || []);
 }
 
+// Derive MatchTeams: take all characters up to (not including) the second underscore
+function getMatchTeams(matchId = '') {
+  const parts = matchId.split('_');
+  return parts.length >= 2 ? `${parts[0]}_${parts[1]}` : matchId;
+}
+
 const getRenderType = (raw, map) =>
   map[raw?.toLowerCase().trim()] || raw?.toLowerCase().trim();
 
@@ -364,13 +370,14 @@ export default function GAAAnalysisDashboard() {
   // UI state
   const [isGearModalOpen, setIsGearModalOpen] = useState(false);
   const [appliedFilters, setAppliedFilters] = useState({
+    matchTeams: filters?.matchTeams || '',  
     match: filters?.match || '',
     team: filters?.team || '',
     player: filters?.player || '',
     action: filters?.action || ''
   });
   const [filterOptions, setFilterOptions] = useState({
-    matches: [], teams: [], players: [], actions: []
+    matchTeams: [], matches: [], teams: [], players: [], actions: []
   });
   const [matchesData, setMatchesData] = useState([]);
 
@@ -415,38 +422,49 @@ export default function GAAAnalysisDashboard() {
 
   // Dynamic filter options updater
   const updateFilterOptions = (gamesData, currentFilters) => {
-    const m = new Set(), t = new Set(), p = new Set(), a = new Set();
+    const mt = new Set(), m = new Set(), t = new Set(), p = new Set(), a = new Set();
     const matchMap = new Map();
-    
-    // Filter games based on selected match
-    let filteredGames = gamesData;
-    if (currentFilters.match) {
-      filteredGames = gamesData.filter(g => {
-        const matchId = g.gameId || g.gameName;
-        return matchId === currentFilters.match;
-      });
-    }
-    
-    // Collect all matches (unfiltered)
+
+    // Collect all MatchTeams (unfiltered) + build match map
     gamesData.forEach(g => {
       const matchId = g.gameId || g.gameName;
       if (matchId) {
-        m.add(matchId);
-        matchMap.set(matchId, {
-          id: matchId,
-          name: g.gameName || matchId,
-          date: g.matchDate
-        });
+        mt.add(getMatchTeams(matchId));
       }
     });
-    
-    // Now collect teams, players, and actions from filtered games
+
+    // Halves list respects the selected MatchTeams
+    let gamesForMatches = gamesData;
+    if (currentFilters.matchTeams) {
+      gamesForMatches = gamesData.filter(g =>
+        getMatchTeams(g.gameId || g.gameName) === currentFilters.matchTeams
+      );
+    }
+    gamesForMatches.forEach(g => {
+      const matchId = g.gameId || g.gameName;
+      if (matchId) {
+        m.add(matchId);
+        matchMap.set(matchId, { id: matchId, name: g.gameName || matchId, date: g.matchDate });
+      }
+    });
+
+    // Filter games for teams/players/actions by matchTeams AND match
+    let filteredGames = gamesData;
+    if (currentFilters.matchTeams) {
+      filteredGames = filteredGames.filter(g =>
+        getMatchTeams(g.gameId || g.gameName) === currentFilters.matchTeams
+      );
+    }
+    if (currentFilters.match) {
+      filteredGames = filteredGames.filter(g =>
+        (g.gameId || g.gameName) === currentFilters.match
+      );
+    }
+
     filteredGames.forEach(g => {
       (g.gameData || []).forEach(sh => {
         if (currentFilters.team) {
-          if (sh.team === currentFilters.team) {
-            sh.playerName && p.add(sh.playerName);
-          }
+          if (sh.team === currentFilters.team) sh.playerName && p.add(sh.playerName);
           sh.team && t.add(sh.team);
           sh.action && a.add(sh.action);
         } else {
@@ -456,13 +474,13 @@ export default function GAAAnalysisDashboard() {
         }
       });
     });
-    
-    // If a player is selected but no longer in the filtered list, keep it
+
     if (currentFilters.player && !p.has(currentFilters.player)) {
       p.add(currentFilters.player);
     }
-    
+
     setFilterOptions({
+      matchTeams: Array.from(mt).sort(),
       matches: Array.from(m),
       teams: Array.from(t).sort(),
       players: Array.from(p).sort(),
@@ -529,11 +547,17 @@ export default function GAAAnalysisDashboard() {
   useEffect(() => {
     if (!file?.games) return;
     updateFilterOptions(file.games, appliedFilters);
-  }, [appliedFilters.match, appliedFilters.team, file?.games]);
+  }, [appliedFilters.matchTeams, appliedFilters.match, appliedFilters.team, file?.games]);
 
   // APPLY FILTERS & SUMMARY
   useEffect(() => {
     let filtered = file?.games || [];
+
+    if (appliedFilters.matchTeams) {
+      filtered = filtered.filter(g =>
+        getMatchTeams(g.gameId || g.gameName) === appliedFilters.matchTeams
+      );
+    }
     
     if (appliedFilters.match) {
       filtered = filtered.filter(g => {
@@ -961,6 +985,26 @@ export default function GAAAnalysisDashboard() {
 
         <div className="gaa-controls-bar">
           <div className="gaa-controls-group">
+                    {/* NEW: Match filter (MatchTeams) */}
+            <select
+              className="gaa-filter-select"
+              value={appliedFilters.matchTeams}
+              onChange={e => {
+                const newMatchTeams = e.target.value;
+                setAppliedFilters(prev => ({
+                  ...prev,
+                  matchTeams: newMatchTeams,
+                  match: '',
+                  player: ''
+                }));
+              }}
+            >
+              <option value="">All Matches</option>
+              {filterOptions.matchTeams.map(mt => (
+                <option key={mt} value={mt}>{mt}</option>
+              ))}
+            </select>
+
             <select
               className="gaa-filter-select"
               value={appliedFilters.match}
@@ -973,7 +1017,7 @@ export default function GAAAnalysisDashboard() {
                 }));
               }}
             >
-              <option value="">All Matches</option>
+              <option value="">All Halves</option>
               {matchesData.map((match) => (
                 <option key={match.id} value={match.id}>
                   {match.name || match.id}

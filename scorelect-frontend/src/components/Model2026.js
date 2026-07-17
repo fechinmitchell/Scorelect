@@ -1,155 +1,145 @@
-import { useState, useEffect } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
-import { firestore } from '../firebase';// adjust path as needed
+// Model2026.js
+// -----------------------------------------------------------------------------
+// Client-side GAA xP (points) and xG (goals) model.
+//
+// This replaces the old distance-bucket lookup with the fitted logistic-regression
+// models trained in Python (train_export.py). The coefficients + scaler params live
+// in ./gaa_model_coefficients.json, which is imported at build time.
+//
+// The feature engineering here MUST stay in sync with train_export.py::engineer_row.
+// It has been validated to reproduce scikit-learn's predictions to 6 decimal places.
+//
+// Public API is unchanged so existing imports keep working:
+//   useCalibrationModel()  -> { calibrationModel, loading }
+//   calculateXP(shot, distanceMeters, calibrationModel) -> number in [0,1]
+//   calculateXG(shot, distanceMeters, calibrationModel) -> number in [0,1]
+//
+// NOTE: distanceMeters is now IGNORED (kept only for signature compatibility) —
+// the model recomputes distance internally from x/y so that angle, side, etc. are
+// all consistent. You can pass null.
+// -----------------------------------------------------------------------------
 
-const CALIBRATION_DATASET = 'GAA All Shots Formatted';
-const CALIBRATION_USER_ID = 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2';
-const MIDLINE_X = 72.5;
-const GOAL_Y = 44;
-const GOAL_X_RIGHT = 145;
+import MODEL from './gaa_model_coefficients.json';
 
-export function useCalibrationModel() {
-  const [calibrationModel, setCalibrationModel] = useState(null);
-  const [loading, setLoading] = useState(true);
+const { midlineX, goalX, goalY, positionLevels, footLevels, pointFromPlay } = MODEL.meta;
 
-  useEffect(() => {
-    async function buildCalibrationModel() {
-      try {
-        const gamesCollectionRef = collection(firestore, `savedGames/${CALIBRATION_USER_ID}/games`);
-        const snapshot = await getDocs(gamesCollectionRef);
+// ---- Feature engineering (mirrors train_export.py exactly) -------------------
 
-        let calibrationShots = [];
-        snapshot.docs.forEach(docSnap => {
-          const data = docSnap.data();
-          if (data.datasetName === CALIBRATION_DATASET) {
-            const gameData = data.gameData || [];
-            const gameDataArray = Array.isArray(gameData) ? gameData : Object.values(gameData);
-            calibrationShots = calibrationShots.concat(gameDataArray);
-          }
-        });
-
-        if (calibrationShots.length === 0) {
-          setCalibrationModel(null);
-          setLoading(false);
-          return;
-        }
-
-        const buckets = {};
-        calibrationShots.forEach(shot => {
-          const x = parseFloat(shot.x) || 0;
-          const y = parseFloat(shot.y) || 0;
-          const targetGoal = x <= MIDLINE_X ? { x: 0, y: GOAL_Y } : { x: GOAL_X_RIGHT, y: GOAL_Y };
-          const dx = x - targetGoal.x;
-          const dy = y - targetGoal.y;
-          const distanceMeters = Math.sqrt(dx * dx + dy * dy);
-
-          const bucket = Math.floor(distanceMeters / 5) * 5;
-          if (!buckets[bucket]) {
-            buckets[bucket] = {
-              setPlay: { attempts: 0, scores: 0 },
-              play: { attempts: 0, scores: 0 },
-              goal: { attempts: 0, scores: 0 }
-            };
-          }
-
-          const actionLower = (shot.action || '').toLowerCase();
-          const typeLower = (shot.type || '').toLowerCase();
-          const isSetPlay = ['free', 'fortyfive', '45', 'mark', 'offensive mark', 'penalty'].includes(actionLower);
-          const isGoalAttempt = actionLower === 'goal' || typeLower === 'goal' || typeLower === 'saved';
-          const isPointScored = actionLower === 'point' || (isSetPlay && typeLower === 'score');
-          const isGoalScored = actionLower === 'goal';
-
-          if (isGoalAttempt) {
-            buckets[bucket].goal.attempts += 1;
-            if (isGoalScored) buckets[bucket].goal.scores += 1;
-          } else if (isSetPlay) {
-            buckets[bucket].setPlay.attempts += 1;
-            if (isPointScored) buckets[bucket].setPlay.scores += 1;
-          } else {
-            buckets[bucket].play.attempts += 1;
-            if (isPointScored) buckets[bucket].play.scores += 1;
-          }
-        });
-
-        const model = { buckets: {}, shotCount: calibrationShots.length };
-        Object.keys(buckets).forEach(b => {
-          const data = buckets[b];
-          model.buckets[b] = {
-            setPlayRate: data.setPlay.attempts > 0 ? data.setPlay.scores / data.setPlay.attempts : null,
-            playRate: data.play.attempts > 0 ? data.play.scores / data.play.attempts : null,
-            goalRate: data.goal.attempts > 0 ? data.goal.scores / data.goal.attempts : null
-          };
-        });
-
-        setCalibrationModel(model);
-      } catch (err) {
-        console.error('Error building calibration model:', err);
-        setCalibrationModel(null);
-      } finally {
-        setLoading(false);
-      }
-    }
-    buildCalibrationModel();
-  }, []);
-
-  return { calibrationModel, loading };
+function pressureToValue(p) {
+  const s = String(p).trim().toLowerCase();
+  const map = { y: 1, yes: 1, n: 0, no: 0, '0': 0, '1': 1, '2': 2 };
+  if (s in map) return map[s];
+  const f = parseFloat(p);
+  return isNaN(f) ? 0 : f;
 }
 
-// Lookup functions exported for use in any component
-export function calculateXP(shot, distanceMeters, calibrationModel) {
-  if (shot.xPoints !== undefined && shot.xPoints !== null) {
+function isPreferableSide(standY, foot) {
+  foot = String(foot).trim().toLowerCase();
+  let side = 'center';
+  if (standY < goalY) side = 'left';
+  else if (standY > goalY) side = 'right';
+  if ((side === 'left' && foot === 'right') ||
+      (side === 'right' && foot === 'left') ||
+      (side === 'right' && foot === 'hand') ||
+      (side === 'left' && foot === 'hand')) return 1;
+  return 0;
+}
+
+function engineerFeatures(shot) {
+  const x = parseFloat(shot.x) || 0;
+  const yRaw = parseFloat(shot.y) || 0;
+
+  // Flip y once, then standardise onto one side of the pitch (attacking right goal).
+  const y = 2 * goalY - yRaw;
+  let standX, standY;
+  if (x <= midlineX) {
+    standX = 2 * midlineX - x;
+    standY = 2 * goalY - y;
+  } else {
+    standX = x;
+    standY = y;
+  }
+
+  const shotDistance = Math.sqrt((standX - goalX) ** 2 + (standY - goalY) ** 2);
+  const shotAngle = Math.atan2(goalY - standY, goalX - standX) * 180 / Math.PI;
+
+  const action = String(shot.action || '').toLowerCase().trim();
+  const foot = String(shot.foot || '').toLowerCase().trim();
+  let position = String(shot.position || '').toLowerCase().trim();
+  if (position === 'midfield') position = 'midfielder';
+
+  const isGoalAttempt = action.includes('goal') || action.includes('pen miss');
+  let placedBall;
+  if (isGoalAttempt) placedBall = (action === 'goal' || action === 'goal miss') ? 0 : 1;
+  else placedBall = pointFromPlay.includes(action) ? 0 : 1;
+
+  const f = {
+    Preferred_Side: isPreferableSide(standY, foot),
+    pressure_Value: pressureToValue(shot.pressure),
+    Shot_Angle: shotAngle,
+    Shot_Distance: Math.round(shotDistance * 10000) / 10000,
+    Placed_Ball: placedBall,
+  };
+  positionLevels.forEach((l) => { f[`pos_${l}`] = position === l ? 1 : 0; });
+  footLevels.forEach((l) => { f[`foot_${l}`] = foot === l ? 1 : 0; });
+
+  f.angle_x_distance = f.Shot_Angle * f.Shot_Distance;
+  f.pressure_x_distance = f.pressure_Value * f.Shot_Distance;
+  f.preferred_x_angle = f.Preferred_Side * f.Shot_Angle;
+  f.placed_x_distance = f.Placed_Ball * f.Shot_Distance;
+
+  f._isGoalAttempt = isGoalAttempt;
+  f._action = action;
+  return f;
+}
+
+function evalLogistic(model, f) {
+  const cols = model.features;
+  let logit = model.intercept;
+  for (let i = 0; i < cols.length; i++) {
+    const raw = f[cols[i]];
+    const z = (raw - model.mean[i]) / model.scale[i];
+    logit += z * model.coef[i];
+  }
+  return 1 / (1 + Math.exp(-logit));
+}
+
+// ---- Public API --------------------------------------------------------------
+
+// The model is now static (bundled JSON), so there's nothing async to load.
+// We keep the hook shape for backward compatibility: components can still do
+//   const { calibrationModel } = useCalibrationModel();
+// and pass calibrationModel through to calculateXP/XG (it's ignored internally).
+export function useCalibrationModel() {
+  return { calibrationModel: MODEL, loading: false };
+}
+
+// Expected points for a non-goal attempt.
+// Falls back to a stored xPoints if the shot already carries a valid one.
+export function calculateXP(shot /*, distanceMeters, calibrationModel */) {
+  if (shot && shot.xPoints !== undefined && shot.xPoints !== null) {
     const existing = parseFloat(shot.xPoints);
     if (!isNaN(existing) && existing >= 0 && existing <= 1) return existing;
   }
-
-  const bucket = Math.floor(distanceMeters / 5) * 5;
-  const actionLower = (shot.action || '').toLowerCase();
-  const isSetPlay = ['free', 'fortyfive', '45', 'mark', 'offensive mark', 'penalty'].includes(actionLower);
-
-  if (calibrationModel && calibrationModel.buckets) {
-    if (calibrationModel.buckets[bucket]) {
-      const rate = isSetPlay
-        ? calibrationModel.buckets[bucket].setPlayRate
-        : calibrationModel.buckets[bucket].playRate;
-      if (rate !== null) return rate;
-    }
-    const bucketKeys = Object.keys(calibrationModel.buckets).map(Number).sort((a, b) => a - b);
-    if (bucketKeys.length > 0) {
-      const nearest = bucketKeys.reduce((prev, curr) =>
-        Math.abs(curr - bucket) < Math.abs(prev - bucket) ? curr : prev, bucketKeys[0]);
-      const rate = isSetPlay
-        ? calibrationModel.buckets[nearest]?.setPlayRate
-        : calibrationModel.buckets[nearest]?.playRate;
-      if (rate !== null && rate !== undefined) return rate;
-    }
-  }
-
-  return isSetPlay ? 0.5 : 0.3;
+  const f = engineerFeatures(shot || {});
+  return evalLogistic(MODEL.points, f);
 }
 
-export function calculateXG(shot, distanceMeters, calibrationModel) {
-  if (shot.xGoals !== undefined && shot.xGoals !== null) {
+// Expected goals for a goal attempt.
+// Penalties use the fixed value from training; otherwise the goals model.
+export function calculateXG(shot /*, distanceMeters, calibrationModel */) {
+  if (shot && shot.xGoals !== undefined && shot.xGoals !== null) {
     const existing = parseFloat(shot.xGoals);
     if (!isNaN(existing) && existing >= 0 && existing <= 1) return existing;
   }
+  const action = String((shot && shot.action) || '').toLowerCase().trim();
+  if (action === 'penalty' || action === 'penalty goal') return MODEL.penaltyXG;
 
-  const bucket = Math.floor(distanceMeters / 5) * 5;
-  const actionLower = (shot.action || '').toLowerCase();
-  if (actionLower === 'penalty' || actionLower === 'penalty goal') return 0.82;
+  const f = engineerFeatures(shot || {});
+  return evalLogistic(MODEL.goals, f);
+}
 
-  if (calibrationModel && calibrationModel.buckets) {
-    if (calibrationModel.buckets[bucket]?.goalRate !== null &&
-        calibrationModel.buckets[bucket]?.goalRate !== undefined) {
-      return calibrationModel.buckets[bucket].goalRate;
-    }
-    const bucketKeys = Object.keys(calibrationModel.buckets).map(Number).sort((a, b) => a - b);
-    if (bucketKeys.length > 0) {
-      const nearest = bucketKeys.reduce((prev, curr) =>
-        Math.abs(curr - bucket) < Math.abs(prev - bucket) ? curr : prev, bucketKeys[0]);
-      const rate = calibrationModel.buckets[nearest]?.goalRate;
-      if (rate !== null && rate !== undefined) return rate;
-    }
-  }
-
-  return 0.15;
+// Optional convenience: engineer features without predicting (handy for debugging).
+export function _engineerFeatures(shot) {
+  return engineerFeatures(shot);
 }

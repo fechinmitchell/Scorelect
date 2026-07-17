@@ -945,10 +945,10 @@ export default function GAAAnalysisDashboard() {
             <span className="gaa-stat-label">xP:</span>
             <span className="gaa-stat-value">{typeof selectedShot.xP === 'number' ? selectedShot.xP.toFixed(2) : (typeof selectedShot.xPoints === 'number' ? selectedShot.xPoints.toFixed(2) : 'N/A')}</span>
           </div>
-          <div className="gaa-stat-row">
+          {/*<div className="gaa-stat-row">
             <span className="gaa-stat-label">xPoints:</span>
             <span className="gaa-stat-value">{typeof selectedShot.xPoints === 'number' ? selectedShot.xPoints.toFixed(2) : 'N/A'}</span>
-          </div>
+          </div>*/}
           {(selectedShot.action || '').toLowerCase().includes('goal') && (
             <div className="gaa-stat-row">
               <span className="gaa-stat-label">xG (Goal Probability):</span>
@@ -977,9 +977,9 @@ export default function GAAAnalysisDashboard() {
             marginBottom: '15px',
             textAlign: 'center'
           }}>
-            <small style={{ color: 'var(--gray-dark)' }}>
+            {/*<small style={{ color: 'var(--gray-dark)' }}>
               Use the toggle button above to mark whether this shot was touched in flight
-            </small>
+            </small>*/}
           </div>
         )}
       </div>

@@ -814,8 +814,20 @@ export default function GAAAnalysisDashboard() {
 
   // SHOT CLICK HANDLER
   const handleShotClick = (shot) => {
-    setSelectedShot(translateShotToOneSide(shot, halfLineX, goalX, goalY));
+    const translated = translateShotToOneSide(shot, halfLineX, goalX, goalY);
+    const act = (translated.action || '').toString().toLowerCase().trim();
+    const isGoalAttempt = act.includes('goal');
+
+    // Compute xP / xG the same way the aggregated Stats section does
+    if (isGoalAttempt) {
+      translated.xGoals = calculateXG(translated, translated.distMeters, calibrationModel);
+    } else {
+      translated.xP = calculateXP(translated, translated.distMeters, calibrationModel);
+    }
+
+    setSelectedShot(translated);
   };
+    //setSelectedShot(translateShotToOneSide(shot, halfLineX, goalX, goalY));
 
   // Toggle touch status for a specific shot
   {/*const toggleShotTouchStatus = (shot) => {

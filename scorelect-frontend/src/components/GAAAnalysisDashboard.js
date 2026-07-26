@@ -688,7 +688,11 @@ export default function GAAAnalysisDashboard() {
     
     // ALWAYS add expected values (regardless of outcome)
     if (isPointAttempt) {
-      const xpVal = calculateXP(sh, tShot.distMeters, calibrationModel);
+         // Base probability from the model (0-1), then scale by the SAME
+      // two-pointer multiplier used for actual points so xP is expressed
+      // in expected *points* and matches the actual point values.
+      const baseXP = calculateXP(sh, tShot.distMeters, calibrationModel);
+      const xpVal = baseXP * calculateTwoPointerValue(sh); // ×2 for ≥40m non-45, else ×1
       agg[team].totalXP += xpVal;
       scorerMap[team][name].xP += xpVal;
     } else {
@@ -822,7 +826,8 @@ export default function GAAAnalysisDashboard() {
     if (isGoalAttempt) {
       translated.xGoals = calculateXG(translated, translated.distMeters, calibrationModel);
     } else {
-      translated.xP = calculateXP(translated, translated.distMeters, calibrationModel);
+      const baseXP = calculateXP(translated, translated.distMeters, calibrationModel);
+      translated.xP = baseXP * calculateTwoPointerValue(translated); // ×2 for two-pointers
     }
 
     setSelectedShot(translated);

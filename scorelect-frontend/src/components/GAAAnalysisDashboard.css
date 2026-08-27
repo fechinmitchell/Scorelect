@@ -982,3 +982,34 @@
     font-size: 0.8em;
   }
 }
+
+.gaa-table-container { margin-top: 1.5rem; }
+.gaa-table-scroll { overflow-x: auto; }
+.gaa-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  color: var(--light, #e6e6fa);
+}
+.gaa-stats-table th,
+.gaa-stats-table td {
+  padding: 0.5rem 0.75rem;
+  text-align: right;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  white-space: nowrap;
+}
+.gaa-stats-table th:first-child,
+.gaa-stats-table td:first-child,
+.gaa-stats-table th:nth-child(2),
+.gaa-stats-table td:nth-child(2) {
+  text-align: left;
+}
+.gaa-stats-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--dark-card, #1a1229);
+}
+.gaa-table-team-row {
+  font-weight: bold;
+  background: rgba(115, 63, 170, 0.15);
+}

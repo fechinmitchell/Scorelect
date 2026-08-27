@@ -148,7 +148,8 @@ const processGamesData = games =>
       // Calculate distance
       const t = translateShotToOneSide(s, pitchWidth/2, pitchWidth, pitchHeight/2);
       s.distMeters = t.distMeters;
-      
+      s.match = g.gameName || g.gameId;
+      s.matchTeams = getMatchTeams(g.gameName || g.gameId); 
       // Calculate point value for display
       if (typeof s.pointValue !== 'number') {
         s.pointValue = calculateTwoPointerValue(s);
@@ -344,6 +345,147 @@ function SettingsModal({ isOpen, onRequestClose, markerColors, setMarkerColors }
         </button>
       </div>
     </Modal>
+  );
+}
+
+// Player/Team stats table
+function StatsTable({ teamAggregatedData, teamScorers }) {
+  const [sortKey, setSortKey] = useState('score');
+  const [sortDir, setSortDir] = useState('desc');
+
+  // Build player rows only (team totals handled separately so they stay grouped)
+  const buildRows = () => {
+    const out = [];
+    Object.entries(teamAggregatedData).forEach(([team, stats]) => {
+      const scorers = teamScorers[team] || {};
+      const players = Object.entries(scorers).map(([player, v]) => ({
+        team,
+        player,
+        shots: Number(v.shots) || 0,
+        xG: Number(v.xG) || 0,
+        goals: Number(v.goals) || 0,
+        xP: Number(v.xP) || 0,
+        points: Number(v.points) || 0,
+        xScore: (Number(v.xP) || 0) + (Number(v.xG) || 0) * 3,
+        score: (Number(v.goals) || 0) * 3 + (Number(v.points) || 0),
+        diff: ((Number(v.goals) || 0) * 3 + (Number(v.points) || 0)) - ((Number(v.xP) || 0) + (Number(v.xG) || 0) * 3),
+        twoPointers: Number(v.twoPointers) || 0,
+        onePointers: Number(v.onePointers) || 0,
+        avgDist: Number(v.avgDist) || 0,
+        misses: Number(v.misses) || 0,
+        isTeam: false
+      }));
+
+      // Sort players within the team
+      players.sort((a, b) => {
+        const av = a[sortKey];
+        const bv = b[sortKey];
+        if (typeof av === 'string' || typeof bv === 'string') {
+          return sortDir === 'asc'
+            ? String(av).localeCompare(String(bv))
+            : String(bv).localeCompare(String(av));
+        }
+        return sortDir === 'asc' ? av - bv : bv - av;
+      });
+
+      out.push(...players);
+
+      // Team total row, always pinned after its players
+      out.push({
+        team,
+        player: 'TEAM TOTAL',
+        shots: stats.totalShots,
+        xG: stats.totalXG || 0,
+        goals: stats.goals || 0,
+        xP: stats.totalXP || 0,
+        points: stats.points || 0,
+        xScore: (stats.totalXP || 0) + (stats.totalXG || 0) * 3,
+        score: (stats.goals * 3) + stats.points,
+        diff: ((stats.goals * 3) + stats.points) - ((stats.totalXP || 0) + (stats.totalXG || 0) * 3),
+        twoPointers: stats.totalTwoPointers || 0,
+        onePointers: stats.totalOnePointers || 0,
+        avgDist: stats.avgDistance,
+        misses: stats.misses || 0,
+        isTeam: true
+      });
+    });
+    return out;
+  };
+
+  const rows = buildRows();
+  if (rows.length === 0) return null;
+
+  const handleSort = (key) => {
+    if (key === sortKey) {
+      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('desc');
+    }
+  };
+
+  const columns = [
+    { key: 'team', label: 'Team' },
+    { key: 'player', label: 'Player' },
+    { key: 'shots', label: 'Shots' },
+    { key: 'xG', label: 'xG' },
+    { key: 'goals', label: 'Goals' },
+    { key: 'xP', label: 'xP' },
+    { key: 'points', label: 'Points' },
+    { key: 'xScore', label: 'xScore' },
+    { key: 'score', label: 'Score' },
+    { key: 'diff', label: 'Diff' },
+    { key: 'twoPointers', label: '2PT' },
+    { key: 'onePointers', label: '1PT' },
+    { key: 'avgDist', label: 'Avg Dist (m)' },
+    { key: 'misses', label: 'Misses' }
+  ];
+
+  const arrow = (key) => (key === sortKey ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
+
+  return (
+    <div className="gaa-table-container">
+      <h3 className="gaa-team-header">Player & Team Breakdown</h3>
+      <div className="gaa-table-scroll">
+        <table className="gaa-stats-table">
+          <thead>
+            <tr>
+              {columns.map(col => (
+                <th
+                  key={col.key}
+                  onClick={() => handleSort(col.key)}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                >
+                  {col.label}{arrow(col.key)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={`${r.team}-${r.player}-${i}`} className={r.isTeam ? 'gaa-table-team-row' : ''}>
+                <td>{r.team}</td>
+                <td>{r.player}</td>
+                <td>{r.shots}</td>
+                <td>{Number(r.xG).toFixed(2)}</td>
+                <td>{r.goals}</td>
+                <td>{Number(r.xP).toFixed(2)}</td>
+                <td>{r.points}</td>
+                <td>{Number(r.xScore).toFixed(2)}</td>
+                <td>{r.score}</td>
+                <td style={{ color: r.diff >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                  {r.diff >= 0 ? '+' : ''}{Number(r.diff).toFixed(2)}
+                </td>
+                <td>{r.twoPointers}</td>
+                <td>{r.onePointers}</td>
+                <td>{r.avgDist}</td>
+                <td>{r.misses}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -579,6 +721,15 @@ export default function GAAAnalysisDashboard() {
       }
     });
     
+    filtered = filtered.map(g => ({
+      ...g,
+      gameData: (g.gameData || []).map(sh => ({
+        ...sh,
+        match: g.gameName || g.gameId,
+        matchTeams: getMatchTeams(g.gameName || g.gameId)
+      }))
+    }));
+
     filtered = filtered.filter(g => (g.gameData||[]).length);
     setGames(filtered);
 
@@ -672,6 +823,10 @@ export default function GAAAnalysisDashboard() {
         goals: 0,
         points: 0,
         twoPointers: 0,
+        onePointers: 0,
+        shots: 0,
+        misses: 0,
+        distAcc: 0,
         xP: 0,
         xG: 0
       };
@@ -681,6 +836,10 @@ export default function GAAAnalysisDashboard() {
     agg[team].totalShots++;
     const tShot = translateShotToOneSide(sh, halfLineX, goalX, goalY);
     distAcc[team] += tShot.distMeters || 0;
+
+    // per-player shot count + distance
+    scorerMap[team][name].shots++;
+    scorerMap[team][name].distAcc += tShot.distMeters || 0;
     
     // Determine attempt type
     const isGoalAttempt = act.includes('goal');
@@ -726,6 +885,7 @@ export default function GAAAnalysisDashboard() {
         scorerMap[team][name].twoPointers++;
       } else {
         agg[team].totalOnePointers++;
+        scorerMap[team][name].onePointers++;
       }
       
       // Track specific shot types
@@ -740,6 +900,7 @@ export default function GAAAnalysisDashboard() {
     // Handle misses
     else if (isMiss) {
       agg[team].misses++;
+      scorerMap[team][name].misses++;
     }
     
     // Track attempts (including misses)
@@ -764,6 +925,10 @@ export default function GAAAnalysisDashboard() {
       agg[team].avgDistance = agg[team].totalShots > 0
         ? (distAcc[team] / agg[team].totalShots).toFixed(2)
         : '0.00';
+      Object.keys(scorerMap[team]).forEach(name => {
+        const sp = scorerMap[team][name];
+        sp.avgDist = sp.shots > 0 ? (sp.distAcc / sp.shots).toFixed(2) : '0.00';
+      });
     });
     
     return { aggregator: agg, scorersMap: scorerMap };
@@ -819,6 +984,8 @@ export default function GAAAnalysisDashboard() {
   // SHOT CLICK HANDLER
   const handleShotClick = (shot) => {
     const translated = translateShotToOneSide(shot, halfLineX, goalX, goalY);
+    translated.match = shot.match;              // <-- preserve
+    translated.matchTeams = shot.matchTeams;
     const act = (translated.action || '').toString().toLowerCase().trim();
     const isGoalAttempt = act.includes('goal');
 
@@ -882,6 +1049,10 @@ export default function GAAAnalysisDashboard() {
           <div className="gaa-stat-row">
             <span className="gaa-stat-label">Team:</span>
             <span className="gaa-stat-value">{selectedShot.team || 'N/A'}</span>
+          </div>
+          <div className="gaa-stat-row">
+            <span className="gaa-stat-label">Match:</span>
+            <span className="gaa-stat-value">{selectedShot.match || 'N/A'}</span>
           </div>
           <div className="gaa-stat-row">
             <span className="gaa-stat-label">Player:</span>
@@ -1329,7 +1500,11 @@ export default function GAAAnalysisDashboard() {
             </div>
           </div>
         </div>
-
+        <StatsTable
+          teamAggregatedData={teamAggregatedData}
+          teamScorers={teamScorers}
+        />
+        {/*
         <div className="gaa-recalc-container">
           <button 
             className="gaa-recalc-button"

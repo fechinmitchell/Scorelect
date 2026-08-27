@@ -35,3 +35,21 @@ firebase_credentials.json
 # Environment variables
 .env
 
+# create/append gitignore
+cat >> .gitignore << 'EOF'
+# Python virtual environment
+venv/
+scorelect-backend/venv/
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# Duplicate "* 2" files from cloud-sync (Dropbox/iCloud)
+*\ 2.*
+*\ 2
+
+# Test data
+Bective2026_games*.json
+EOF

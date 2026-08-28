@@ -38,6 +38,11 @@ const SavedGames = ({ userType, onLoadGame, selectedSport }) => {
   const [sourceDataset, setSourceDataset] = useState(null);
   const [loadingGame, setLoadingGame] = useState(null); // Track which game is currently loading
 
+  useEffect(() => {
+  const total = Object.values(datasets).reduce((n, d) => n + (d.games?.length || 0), 0);
+  console.log('games returned:', total);
+}, [datasets]);
+
   const handlePublishSuccess = () => {
     Swal.fire('Published!', 'Dataset has been published successfully.', 'success');
     setIsPublishModalOpen(false);

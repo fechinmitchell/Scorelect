@@ -62,6 +62,10 @@ function calculateTwoPointerValue(action, distanceMeters) {
   return 1;
 }
 
+function getMatchTeams(gameName = '') {
+  const parts = String(gameName).split('_');
+  return parts.length >= 2 ? `${parts[0]}_${parts[1]}` : gameName;
+}
 
 /*******************************************
  * MODEL SELECTOR COMPONENT
@@ -78,6 +82,7 @@ function ModelSelector({
   const [selectedModelId, setSelectedModelId] = useState('default');
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
+
 
   // Fetch available models
   const fetchModels = useCallback(async () => {
@@ -462,6 +467,9 @@ function TeamDataGAA() {
   const [searchTerm, setSearchTerm] = useState('');
   const [gamesCollapsed, setGamesCollapsed] = useState(true);
   const tableRef = useRef(null);
+  const [perGame, setPerGame] = useState(false);
+  const [sortKey, setSortKey] = useState('points');
+  const [sortDir, setSortDir] = useState('desc');
 
   // Model selector state
   const [modelPredictions, setModelPredictions] = useState(null);
@@ -567,18 +575,26 @@ function TeamDataGAA() {
       if (!teams[teamName]) {
         teams[teamName] = {
           team: teamName,
+          expectedPoints: 0,
           points: 0,
+          expectedGoals: 0,
           goals: 0,
           miss: 0,
           attempts: 0,
           successfulShots: 0,
           accuracy: 0,
-          expectedPoints: 0,
-          expectedGoals: 0,
+          gamesSet: new Set(),
         };
       }
 
       teams[teamName].attempts += 1;
+
+      if (shot.gameName) {
+        const key = `${getMatchTeams(shot.gameName)}__${shot.matchDate || ''}`;
+        teams[teamName].gamesSet.add(key);
+      }
+
+
 
       // Distance from the SAME engineered features the model uses
       const feats = _engineerFeatures(shot);
@@ -621,6 +637,8 @@ function TeamDataGAA() {
       team.accuracy = team.attempts > 0
         ? (team.successfulShots / team.attempts) * 100
         : 0;
+      team.games = team.gamesSet.size;   // <-- final count
+      delete team.gamesSet;
     });
 
     return Object.values(teams);
@@ -632,6 +650,66 @@ function TeamDataGAA() {
       team.team.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [teamStats, searchTerm]);
+
+    // Divide by games when in per-game mode; guard against divide-by-zero
+  const perGameVal = (value, games, decimals = 1) => {
+    if (!perGame) {
+      return typeof value === 'number' && !Number.isInteger(value)
+        ? value.toFixed(decimals)
+        : value;
+    }
+    const g = games || 1;
+    return (value / g).toFixed(decimals);
+  };
+
+  const handleSort = (key) => {
+    if (key === sortKey) {
+      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('desc');
+    }
+  };
+
+  const columns = [
+    { key: 'games', label: 'Games' },
+    { key: 'expectedPoints', label: 'xP' },
+    { key: 'points', label: 'Points' },
+    { key: 'expectedGoals', label: 'xG' },
+    { key: 'goals', label: 'Goals' },
+    { key: 'miss', label: 'Misses' },
+    { key: 'attempts', label: 'Attempts' },
+    { key: 'accuracy', label: 'Accuracy' },
+  ];
+
+  const arrow = (key) => (key === sortKey ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
+
+  // Value used for sorting a given team on a given key, respecting per-game mode
+  const sortValue = (team, key) => {
+    if (key === 'team') return team.team;
+    if (key === 'score') {
+      const raw = team.points + team.goals * 3;
+      return perGame ? raw / (team.games || 1) : raw;
+    }
+    if (key === 'games' || key === 'accuracy') return team[key];
+    const v = team[key] || 0;
+    return perGame ? v / (team.games || 1) : v;
+  };
+
+  const sortedTeams = useMemo(() => {
+    const arr = [...filteredTeams];
+    arr.sort((a, b) => {
+      const av = sortValue(a, sortKey);
+      const bv = sortValue(b, sortKey);
+      if (typeof av === 'string' || typeof bv === 'string') {
+        return sortDir === 'asc'
+          ? String(av).localeCompare(String(bv))
+          : String(bv).localeCompare(String(av));
+      }
+      return sortDir === 'asc' ? av - bv : bv - av;
+    });
+    return arr;
+  }, [filteredTeams, sortKey, sortDir, perGame]);
 
   // Available years for filter
   const availableYears = useMemo(() => {
@@ -652,8 +730,8 @@ function TeamDataGAA() {
     const totalGoals = filteredTeams.reduce((sum, t) => sum + t.goals, 0);
     const totalXP = filteredTeams.reduce((sum, t) => sum + t.expectedPoints, 0);
     const totalXG = filteredTeams.reduce((sum, t) => sum + t.expectedGoals, 0);
-    const avgAccuracy = totalTeams > 0 
-      ? filteredTeams.reduce((sum, t) => sum + t.accuracy, 0) / totalTeams 
+    const avgAccuracy = totalTeams > 0
+      ? filteredTeams.reduce((sum, t) => sum + t.accuracy, 0) / totalTeams
       : 0;
 
     return {
@@ -830,8 +908,8 @@ function TeamDataGAA() {
               <div className="team-stat-label">Avg Accuracy</div>
             </div>
           </section>
-
-          {/* Mini Leaderboards */}
+          
+          {/* Mini Leaderboards 
           <div className="mini-leaderboards-row">
             <MiniLeaderboard
               title="Most Points"
@@ -852,20 +930,28 @@ function TeamDataGAA() {
               expectedKey="attempts"
               hideCalcColumn={true}
             />
-          </div>
+          </div>*/}
 
           {/* Main Team Leaderboard */}
           <div className="leaderboard-container">
             <div className="leaderboard-header">
-              <h2>Team Leaderboard</h2>
-              <div className="search-container">
-                <input
-                  type="text"
-                  className="search-input"
-                  placeholder="Search teams..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+              <h2>Team Leaderboard {perGame ? '(Per Game)' : '(Totals)'}</h2>
+              <div className="leaderboard-header-actions">
+                <button
+                  className={`pdg-pergame-toggle ${perGame ? 'active' : ''}`}
+                  onClick={() => setPerGame(p => !p)}
+                >
+                  {perGame ? 'Show Totals' : 'Show Per Game'}
+                </button>
+                <div className="search-container">
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder="Search teams..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
               </div>
             </div>
             <div className="table-wrapper" ref={tableRef}>
@@ -873,34 +959,40 @@ function TeamDataGAA() {
                 <thead>
                   <tr>
                     <th>Rank</th>
-                    <th>Team</th>
-                    <th>Points</th>
-                    <th>Goals</th>
-                    <th>Misses</th>
-                    <th>Attempts</th>
-                    <th>Accuracy</th>
-                    <th>xPoints</th>
-                    <th>xGoals</th>
+                    <th
+                      onClick={() => handleSort('team')}
+                      style={{ cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      Team{arrow('team')}
+                    </th>
+                    {columns.map(col => (
+                      <th
+                        key={col.key}
+                        onClick={() => handleSort(col.key)}
+                        style={{ cursor: 'pointer', userSelect: 'none' }}
+                      >
+                        {col.label}{arrow(col.key)}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredTeams
-                    .sort((a, b) => b.points + b.goals * 3 - (a.points + a.goals * 3))
-                    .map((team, index) => (
-                      <tr key={team.team} className="team-row">
-                        <td>{index + 1}</td>
-                        <td>
-                          <Link to={`/team/${team.team}`}>{team.team}</Link>
-                        </td>
-                        <td>{team.points}</td>
-                        <td>{team.goals}</td>
-                        <td>{team.miss}</td>
-                        <td>{team.attempts}</td>
-                        <td>{team.accuracy.toFixed(1)}%</td>
-                        <td>{team.expectedPoints.toFixed(1)}</td>
-                        <td>{team.expectedGoals.toFixed(1)}</td>
-                      </tr>
-                    ))}
+                  {sortedTeams.map((team, index) => (
+                    <tr key={team.team} className="team-row">
+                      <td>{index + 1}</td>
+                      <td>
+                        <Link to={`/team/${team.team}`}>{team.team}</Link>
+                      </td>
+                      <td>{team.games}</td>
+                      <td>{perGameVal(team.expectedPoints, team.games)}</td>
+                      <td>{perGameVal(team.points, team.games)}</td>
+                      <td>{perGameVal(team.expectedGoals, team.games)}</td>
+                      <td>{perGameVal(team.goals, team.games)}</td>
+                      <td>{perGameVal(team.miss, team.games)}</td>
+                      <td>{perGameVal(team.attempts, team.games)}</td>
+                      <td>{team.accuracy.toFixed(1)}%</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

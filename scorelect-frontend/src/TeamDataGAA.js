@@ -6,6 +6,7 @@ import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { getAuth } from 'firebase/auth';
 import axios from 'axios';
+import { useCalibrationModel, calculateXP, calculateXG, _engineerFeatures } from './components/Model2026';
 
 import './TeamDataGAA.css';
 
@@ -47,63 +48,20 @@ function translateShotToOneSide(shot, halfLineX, goalX, goalY) {
   return { ...shot, distMeters: Math.max(0, distMeters) };
 }
 
-/*******************************************
- * xP CALCULATION (Expected Points)
- * Returns the probability of scoring a point (0-1)
- *******************************************/
-function calculateXP(shot, distanceMeters) {
-  // First check if shot already has xPoints from backend
-  if (shot.xPoints !== undefined && shot.xPoints !== null) {
-    const existing = parseFloat(shot.xPoints);
-    if (!isNaN(existing) && existing >= 0 && existing <= 1) {
-      return existing;
-    }
-  }
-  
-  const actionLower = (shot.action || '').toLowerCase();
-  const isSetPlay = ['free', 'fortyfive', '45', 'mark', 'offensive mark', 'penalty'].includes(actionLower);
-  
-  // Conservative default rates based on GAA research
-  if (isSetPlay) {
-    if (distanceMeters <= 20) return 0.82;
-    if (distanceMeters <= 30) return 0.68;
-    if (distanceMeters <= 40) return 0.52;
-    if (distanceMeters <= 45) return 0.42;
-    return 0.30;
-  } else {
-    if (distanceMeters <= 15) return 0.58;
-    if (distanceMeters <= 20) return 0.48;
-    if (distanceMeters <= 25) return 0.40;
-    if (distanceMeters <= 30) return 0.32;
-    if (distanceMeters <= 35) return 0.25;
-    if (distanceMeters <= 40) return 0.18;
-    return 0.12;
-  }
+
+
+function calculateTwoPointerValue(action, distanceMeters) {
+  const act = String(action || '').toLowerCase().trim();
+  if (act === 'goal' || act === 'penalty goal') return 3;
+  const scoringActions = ['point', 'free', 'offensive mark', '45', 'fortyfive'];
+  const isScoringShot = scoringActions.some(a => act.includes(a));
+  if (!isScoringShot) return 1;
+  const isFrom45 = act.includes('45') || act.includes('fortyfive');
+  if (isFrom45) return 1;
+  if (distanceMeters >= 40) return 2;
+  return 1;
 }
 
-/*******************************************
- * xG CALCULATION (Expected Goals)
- * Returns the probability of scoring a goal (0-1)
- *******************************************/
-function calculateXG(shot, distanceMeters) {
-  // First check if shot already has xGoals from backend
-  if (shot.xGoals !== undefined && shot.xGoals !== null) {
-    const existing = parseFloat(shot.xGoals);
-    if (!isNaN(existing) && existing >= 0 && existing <= 1) {
-      return existing;
-    }
-  }
-  
-  const actionLower = (shot.action || '').toLowerCase();
-  
-  if (actionLower === 'penalty') return 0.82;
-  
-  if (distanceMeters <= 6) return 0.45;
-  if (distanceMeters <= 10) return 0.32;
-  if (distanceMeters <= 14) return 0.22;
-  if (distanceMeters <= 20) return 0.12;
-  return 0.05;
-}
 
 /*******************************************
  * MODEL SELECTOR COMPONENT
@@ -493,6 +451,7 @@ function MiniLeaderboard({
 function TeamDataGAA() {
   const auth = getAuth();
   const currentUser = auth.currentUser;
+  const { calibrationModel } = useCalibrationModel();
   const isAdmin = currentUser && ADMIN_USERS.includes(currentUser.uid);
   
   const { config: publicConfig, loading: configLoading } = useFetchPublicConfig();
@@ -603,14 +562,16 @@ function TeamDataGAA() {
 
     combinedData.forEach((shot, shotIndex) => {
       const teamName = shot.team || 'Unknown';
-      
+      const act = (shot.action || '').toString().toLowerCase().trim();
+
       if (!teams[teamName]) {
         teams[teamName] = {
           team: teamName,
           points: 0,
           goals: 0,
-          wides: 0,
+          miss: 0,
           attempts: 0,
+          successfulShots: 0,
           accuracy: 0,
           expectedPoints: 0,
           expectedGoals: 0,
@@ -619,58 +580,55 @@ function TeamDataGAA() {
 
       teams[teamName].attempts += 1;
 
-      const actionLower = (shot.action || '').toLowerCase();
-      const typeLower = (shot.type || '').toLowerCase();
+      // Distance from the SAME engineered features the model uses
+      const feats = _engineerFeatures(shot);
+      const distanceMeters = feats.Shot_Distance;
 
-      // Count actual scores
-      const isPointScored = actionLower === 'point';
-      const isGoalScored = actionLower === 'goal';
-      const isWide = typeLower === 'wide' || actionLower === 'wide';
-      const isSetPlay = ['free', 'fortyfive', '45', 'mark', 'offensive mark'].includes(actionLower);
-      const isSetPlayScore = isSetPlay && typeLower === 'score';
-      
-      if (isPointScored || isSetPlayScore) teams[teamName].points += 1;
-      else if (isGoalScored) teams[teamName].goals += 1;
-      else if (isWide) teams[teamName].wides += 1;
+      // Classification — mirrors GAAAnalysisDashboard exactly
+      const scoringActions = ['point', 'free', 'offensive mark', '45', 'fortyfive', 'goal', 'penalty goal'];
+      const isScoring = scoringActions.some(a => act.includes(a));
+      const isMiss = /miss|wide|short|blocked|post/.test(act);
+      const isGoalAttempt = act.includes('goal');
+      const isPointAttempt = !isGoalAttempt;
 
-      // Calculate distance for expected values
-      const x = parseFloat(shot.x) || 0;
-      const y = parseFloat(shot.y) || 0;
-      const targetGoal = x <= MIDLINE_X ? { x: 0, y: GOAL_Y } : { x: GOAL_X, y: GOAL_Y };
-      const dx = x - targetGoal.x;
-      const dy = y - targetGoal.y;
-      const distanceMeters = Math.sqrt(dx * dx + dy * dy);
-
-      // Determine if it's a goal attempt or point attempt
-      const isGoalAttempt = actionLower === 'goal' || typeLower === 'goal' || typeLower === 'saved';
-      const isPointAttempt = !isGoalAttempt && !isWide;
-
-      // Calculate expected values - USE MODEL PREDICTIONS IF AVAILABLE
-      if (isGoalAttempt) {
-        const xG = calculateXG(shot, distanceMeters);
-        teams[teamName].expectedGoals += xG;
-      } else if (isPointAttempt) {
-        // Check if we have model predictions for xP
+      // Expected values (always added, regardless of outcome)
+      if (isPointAttempt) {
+        const twoPtValue = calculateTwoPointerValue(act, distanceMeters);
         if (modelPredictions && modelPredictions[shotIndex] !== undefined) {
-          teams[teamName].expectedPoints += modelPredictions[shotIndex];
+          teams[teamName].expectedPoints += modelPredictions[shotIndex] * twoPtValue;
         } else {
-          teams[teamName].expectedPoints += calculateXP(shot, distanceMeters);
+          const baseXP = calculateXP(shot, null, calibrationModel);
+          teams[teamName].expectedPoints += baseXP * twoPtValue;
         }
+      } else {
+        teams[teamName].expectedGoals += calculateXG(shot, null, calibrationModel);
+      }
+
+      // Actual outcomes — mirrors dashboard
+      if (act.includes('goal') && !isMiss) {
+        teams[teamName].goals += 1;
+        teams[teamName].successfulShots += 1;
+      } else if (isScoring && !isMiss && !act.includes('goal')) {
+        teams[teamName].points += calculateTwoPointerValue(act, distanceMeters);
+        teams[teamName].successfulShots += 1;
+      } else if (isMiss) {
+        teams[teamName].miss += 1;
       }
     });
 
-    // Calculate accuracy
+    // Accuracy (successful shots / attempts)
     Object.values(teams).forEach(team => {
-      const scores = team.points + team.goals;
-      team.accuracy = team.attempts > 0 ? (scores / team.attempts) * 100 : 0;
+      team.accuracy = team.attempts > 0
+        ? (team.successfulShots / team.attempts) * 100
+        : 0;
     });
 
     return Object.values(teams);
-  }, [combinedData, modelPredictions]);
+  }, [combinedData, modelPredictions, calibrationModel]);
 
   // Filter teams by search
   const filteredTeams = useMemo(() => {
-    return teamStats.filter(team => 
+    return teamStats.filter(team =>
       team.team.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [teamStats, searchTerm]);
@@ -754,7 +712,7 @@ function TeamDataGAA() {
         </div>
       </section>
 
-      {/* MODEL SELECTOR - NEW */}
+      {/* MODEL SELECTOR - commented out: always use default Model2026
       {currentUser && combinedData.length > 0 && (
         <ModelSelector
           onModelApplied={handleModelApplied}
@@ -764,6 +722,7 @@ function TeamDataGAA() {
           activeModel={activeModel}
         />
       )}
+      */}
 
       {/* Active Model Indicator */}
       {activeModel && (
@@ -917,7 +876,7 @@ function TeamDataGAA() {
                     <th>Team</th>
                     <th>Points</th>
                     <th>Goals</th>
-                    <th>Wides</th>
+                    <th>Misses</th>
                     <th>Attempts</th>
                     <th>Accuracy</th>
                     <th>xPoints</th>
@@ -935,7 +894,7 @@ function TeamDataGAA() {
                         </td>
                         <td>{team.points}</td>
                         <td>{team.goals}</td>
-                        <td>{team.wides}</td>
+                        <td>{team.miss}</td>
                         <td>{team.attempts}</td>
                         <td>{team.accuracy.toFixed(1)}%</td>
                         <td>{team.expectedPoints.toFixed(1)}</td>

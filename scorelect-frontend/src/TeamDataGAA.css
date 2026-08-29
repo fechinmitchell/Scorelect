@@ -661,7 +661,7 @@
 
 .table-wrapper {
   overflow-x: auto;
-  max-height: 500px;
+  max-height: 800px;   /* was 500px */
 }
 
 .leaderboard {
@@ -978,4 +978,37 @@ a:focus-visible {
   .leaderboard td {
     border: 1px solid #ddd;
   }
+}
+
+/* Leaderboard header actions: toggle + search side by side */
+.leaderboard-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* Prominent per-game toggle */
+.pdg-pergame-toggle {
+  padding: 0.6rem 1.25rem;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  color: white;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  box-shadow: 0 2px 10px rgba(139, 92, 246, 0.4);
+  transition: var(--transition);
+}
+
+.pdg-pergame-toggle:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.55);
+}
+
+.pdg-pergame-toggle.active {
+  background: linear-gradient(135deg, var(--secondary), #c026a6);
+  box-shadow: 0 2px 10px rgba(236, 72, 153, 0.45);
 }

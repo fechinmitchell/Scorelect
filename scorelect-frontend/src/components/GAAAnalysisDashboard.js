@@ -847,11 +847,13 @@ export default function GAAAnalysisDashboard() {
     
     // ALWAYS add expected values (regardless of outcome)
     if (isPointAttempt) {
-         // Base probability from the model (0-1), then scale by the SAME
-      // two-pointer multiplier used for actual points so xP is expressed
-      // in expected *points* and matches the actual point values.
+  // Base probability from the model (0-1), scaled to expected *points*.
+  // Multiplier is based on DISTANCE/type, not on whether the shot scored —
+  // so a 40m+ wide/short/post/blocked still contributes doubled expected points.
       const baseXP = calculateXP(sh, tShot.distMeters, calibrationModel);
-      const xpVal = baseXP * calculateTwoPointerValue(sh); // ×2 for ≥40m non-45, else ×1
+      const isFrom45 = act.includes('45') || act.includes('fortyfive');
+      const twoPtMultiplier = (tShot.distMeters >= 40 && !isFrom45) ? 2 : 1;
+      const xpVal = baseXP * twoPtMultiplier;
       agg[team].totalXP += xpVal;
       scorerMap[team][name].xP += xpVal;
     } else {
@@ -910,7 +912,7 @@ export default function GAAAnalysisDashboard() {
     
     // Track 2-point attempts (must be ≥40m and not a 45 and not a goal)
     if (tShot.distMeters >= 40 && !act.includes('45') && !act.includes('fortyfive') && !act.includes('goal')) {
-      const eligibleActions = ['point', 'free', 'offensive mark'];
+      const eligibleActions = ['point', 'free', 'wide', 'short', 'post', 'blocked'];
       if (eligibleActions.some(a => act.includes(a))) {
         agg[team].twoPointerAttempts++;
         if (!isMiss) {
@@ -991,10 +993,15 @@ export default function GAAAnalysisDashboard() {
 
     // Compute xP / xG the same way the aggregated Stats section does
     if (isGoalAttempt) {
-      translated.xGoals = calculateXG(translated, translated.distMeters, calibrationModel);
+      const baseXG = calculateXG(translated, translated.distMeters, calibrationModel);
+      translated.xScore = baseXG * 3;    // expected points from the goal attempt
+      translated.xGoals = baseXG;   
     } else {
       const baseXP = calculateXP(translated, translated.distMeters, calibrationModel);
-      translated.xP = baseXP * calculateTwoPointerValue(translated); // ×2 for two-pointers
+      translated.xP = baseXP;
+      const isFrom45 = act.includes('45') || act.includes('fortyfive');
+      const twoPtMultiplier = (translated.distMeters >= 40 && !isFrom45) ? 2 : 1;
+      translated.xScore = baseXP * twoPtMultiplier;
     }
 
     setSelectedShot(translated);
@@ -1119,7 +1126,11 @@ export default function GAAAnalysisDashboard() {
           </div>
           <div className="gaa-stat-row">
             <span className="gaa-stat-label">xP:</span>
-            <span className="gaa-stat-value">{typeof selectedShot.xP === 'number' ? selectedShot.xP.toFixed(2) : (typeof selectedShot.xPoints === 'number' ? selectedShot.xPoints.toFixed(2) : 'N/A')}</span>
+            <span className="gaa-stat-value">
+              {typeof selectedShot.xP === 'number'
+                ? selectedShot.xP.toFixed(2)
+                : (typeof selectedShot.xPoints === 'number' ? selectedShot.xPoints.toFixed(2) : 'N/A')}
+            </span>
           </div>
           {/*<div className="gaa-stat-row">
             <span className="gaa-stat-label">xPoints:</span>
@@ -1127,16 +1138,18 @@ export default function GAAAnalysisDashboard() {
           </div>*/}
           {(selectedShot.action || '').toLowerCase().includes('goal') && (
             <div className="gaa-stat-row">
-              <span className="gaa-stat-label">xG (Goal Probability):</span>
+              <span className="gaa-stat-label">xG:</span>
               <span className="gaa-stat-value">
-                {typeof selectedShot.xGoals === 'number' && selectedShot.xGoals > 0 
-                  ? selectedShot.xGoals.toFixed(2) 
-                  : typeof selectedShot.xP === 'number' 
-                    ? selectedShot.xP.toFixed(2) 
-                    : 'N/A'}
+                {typeof selectedShot.xGoals === 'number' ? selectedShot.xGoals.toFixed(2) : 'N/A'}
               </span>
             </div>
           )}
+          <div className="gaa-stat-row">
+            <span className="gaa-stat-label">xScore:</span>
+            <span className="gaa-stat-value">
+              {typeof selectedShot.xScore === 'number' ? selectedShot.xScore.toFixed(2) : 'N/A'}
+            </span>
+          </div>
           {selectedShot.model_type && (
             <div className="gaa-stat-row">
               <span className="gaa-stat-label">Model:</span>
@@ -1512,7 +1525,7 @@ export default function GAAAnalysisDashboard() {
           >
             <FaCalculator style={{ marginRight: '0.5rem' }} /> Recalculate xP/xG
           </button>
-        </div>
+        </div>*/}
 
         {/* Shot Details Modal */}
         <Modal

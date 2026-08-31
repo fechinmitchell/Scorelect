@@ -103,7 +103,6 @@
   flex-grow: 1;
   padding: 12px;
   text-align: center;
-  background: linear-gradient(135deg, #007bff, #0056b3);
   color: white;
   border: none;
   border-radius: 8px;
@@ -115,7 +114,6 @@
 }
 
 .team-players button:hover {
-  background: linear-gradient(135deg, #0069d9, #0062cc);
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
@@ -1040,4 +1038,63 @@ input:not(:checked) + .toggle-slider:before {
     width: 100%;
     margin: 5px 0;
   }
+}
+
+.scoreboard-container {
+  background: linear-gradient(145deg, #323232, #2a2a2a);
+  padding: 20px;
+  margin-top: 20px;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 1000px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+  color: white;
+}
+
+.scoreboard-container h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #9254de;
+  margin: 0 0 15px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.scoreboard-teams {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.scoreboard-team {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.scoreboard-team-name {
+  flex: 1;
+  padding-left: 10px;
+  font-weight: 500;
+}
+
+.scoreboard-score {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.scoreboard-total {
+  color: #b0b0b0;
+  font-size: 13px;
+  min-width: 60px;
+  text-align: right;
+}
+
+.scoreboard-detail {
+  color: #9254de;
+  font-size: 13px;
+  min-width: 70px;
+  text-align: right;
 }

@@ -241,7 +241,7 @@ const PitchGraphic = () => {
       boxShadow: isActive ? '0 0 8px 2px rgba(0, 255, 0, 0.4)' : 'none', // Green glow when active
       paddingRight: action.type === 'line' ? '40px' : '10px' // Extra padding for line actions
     });
-
+    /*
     // Updated renderActionButtons function
     const renderActionButtons = () => (
       <div className="action-buttons">
@@ -257,46 +257,46 @@ const PitchGraphic = () => {
           >
             {action.label}
             
-            {/* Line action state indicators - only show when this action is selected */}
-            {action.type === 'line' && actionType && actionType.value === action.value && (
-              <div style={{
-                position: 'absolute',
-                top: '50%',
-                right: '10px',
-                transform: 'translateY(-50%)',
-                display: 'flex',
-                gap: '5px'
-              }}>
-                <span style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  backgroundColor: currentCoords.length >= 1 ? '#00ff00' : '#555',
-                  border: '1px solid #333',
-                  display: 'inline-block'
-                }}></span>
-                <span style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  backgroundColor: lineCompleted ? '#00ff00' : '#555',
-                  border: '1px solid #333',
-                  display: 'inline-block'
-                }}></span>
-              </div>
-            )}
-          </button>
-        ))}
-        <button 
-          className="button"
-          onClick={() => setIsAddActionModalOpen(true)}
-          style={{ marginTop: '12px' }}
-        >
-          Add Action
-        </button>
-      </div>
-    );
-
+    //         {/* Line action state indicators - only show when this action is selected 
+    //         {action.type === 'line' && actionType && actionType.value === action.value && (
+    //           <div style={{
+    //             position: 'absolute',
+    //             top: '50%',
+    //             right: '10px',
+    //             transform: 'translateY(-50%)',
+    //             display: 'flex',
+    //             gap: '5px'
+    //           }}>
+    //             <span style={{
+    //               width: '8px',
+    //               height: '8px',
+    //               borderRadius: '50%',
+    //               backgroundColor: currentCoords.length >= 1 ? '#00ff00' : '#555',
+    //               border: '1px solid #333',
+    //               display: 'inline-block'
+    //             }}></span>
+    //             <span style={{
+    //               width: '8px',
+    //               height: '8px',
+    //               borderRadius: '50%',
+    //               backgroundColor: lineCompleted ? '#00ff00' : '#555',
+    //               border: '1px solid #333',
+    //               display: 'inline-block'
+    //             }}></span>
+    //           </div>
+    //         )}
+    //       </button>
+    //     ))}
+    //     <button 
+    //       className="button"
+    //       onClick={() => setIsAddActionModalOpen(true)}
+    //       style={{ marginTop: '12px' }}
+    //     >
+    //       Add Action
+    //     </button>
+    //   </div>
+    // ); */
+    
     // 2) "Download Data" (custom modal) – respects free‑user limits, uses uploadedDataset if present
     const handleCustomDownload = async () => {
       // free‑user quota check
@@ -885,8 +885,8 @@ const handleSaveToDataset = async () => {
     } else {
       // No action type selected
       Swal.fire({
-        title: 'Select an Action',
-        text: 'Please select an action type before clicking on the pitch.',
+        title: 'Select a Player',
+        text: 'Please select a player before clicking on the pitch.',
         icon: 'warning',
         timer: 2000,
         showConfirmButton: false
@@ -1571,7 +1571,7 @@ const handleSaveToDataset = async () => {
           <button
             key={`${teamName}-${index}`}
             onClick={() => handlePlayerClick(teamName, player.name, index + 1)}
-            style={playerButtonStyle(player, teamName, index)}
+            style={playerButtonStyle(player, teamName, index, teamColor)}
             className="player-button"
           >
             {displayPlayerNumber && (index + 1)} {displayPlayerName && player.name}
@@ -1641,25 +1641,92 @@ const handleUploadRawData = (event) => {
   };
 
   // Add this style function for player buttons
-  const playerButtonStyle = (player, teamName, index) => {
-    // Check if this player button is selected by comparing team and player number
-    const isSelected = selectedPlayer && 
-      selectedPlayer.team === teamName && 
+  const playerButtonStyle = (player, teamName, index, teamColor) => {
+    const isSelected = selectedPlayer &&
+      selectedPlayer.team === teamName &&
       selectedPlayer.playerNumber === (index + 1);
-    
-    const teamColor = teamName === team1 ? team1Color : team2Color;
-    
+
     return {
       backgroundColor: isSelected ? '#a020f0' : teamColor.main,
       color: isSelected ? '#fff' : teamColor.secondary,
-      boxShadow: isSelected ? '0 0 8px 2px rgba(0, 255, 0, 0.4)' : 'none', // Green glow when active
+      boxShadow: isSelected ? '0 0 8px 2px rgba(0, 255, 0, 0.4)' : 'none',
       border: isSelected ? '2px solid #00ff00' : `2px solid ${teamColor.secondary}`,
       padding: '10px',
       borderRadius: '5px',
       marginBottom: '5px',
       cursor: 'pointer',
-      transition: 'all 0.3s'
+      transition: 'all 0.3s',
     };
+  };
+    // Action codes that count as scores
+  // Action codes that count as scores
+  const GOAL_ACTIONS = ['goal', 'penalty goal'];
+  const POINT_ACTIONS = ['point', 'free', 'fortyfive', 'offensive mark', 'mark'];
+  // Explicitly tagged two-pointers (add any custom codes you create here)
+  const TWO_POINT_ACTIONS = ['two pointer', 'two point free', 'twopointer'];
+
+  const ARC_RADIUS = 40;      // metres, matches the arcs drawn on the pitch
+  const GOAL_Y = 44;          // centre of the goal line
+
+  // A point is worth 2 if it was struck from outside either 40m arc
+  const isOutsideArc = (coord) => {
+    if (typeof coord.x !== 'number' || typeof coord.y !== 'number') return false;
+    const distLeft = Math.hypot(coord.x - 0, coord.y - GOAL_Y);
+    const distRight = Math.hypot(coord.x - pitchWidth, coord.y - GOAL_Y);
+    return Math.min(distLeft, distRight) > ARC_RADIUS;
+  };
+
+  const scoreboard = coords.reduce((acc, c) => {
+    const team = c.team || 'Unknown';
+    const action = (c.action || '').toLowerCase();
+    if (!acc[team]) acc[team] = { goals: 0, points: 0, twoPointers: 0 };
+
+    if (GOAL_ACTIONS.includes(action)) {
+      acc[team].goals++;
+    } else if (TWO_POINT_ACTIONS.includes(action)) {
+      acc[team].twoPointers++;
+    } else if (POINT_ACTIONS.includes(action)) {
+      if (isOutsideArc(c)) acc[team].twoPointers++;
+      else acc[team].points++;
+    }
+    return acc;
+  }, {});
+
+  const renderScoreboard = () => {
+    const entries = Object.entries(scoreboard);
+    if (entries.length === 0) return null;
+
+    const colourFor = (team) =>
+      team === team1 ? team1Color.main : team === team2 ? team2Color.main : '#555';
+
+    return (
+      <div className="scoreboard-container">
+        <h3>Score</h3>
+        <div className="scoreboard-teams">
+          {entries.map(([team, { goals, points, twoPointers }]) => {
+            const totalPoints = points + twoPointers * 2;
+            const total = goals * 3 + totalPoints;
+            return (
+              <div key={team} className="scoreboard-team">
+                <span
+                  className="scoreboard-team-name"
+                  style={{ borderLeft: `4px solid ${colourFor(team)}` }}
+                >
+                  {team}
+                </span>
+                <span className="scoreboard-score">
+                  {goals}-{String(totalPoints).padStart(2, '0')}
+                </span>
+                <span className="scoreboard-detail">
+                  {twoPointers > 0 ? `${twoPointers} × 2pt` : ''}
+                </span>
+                <span className="scoreboard-total">({total} pts)</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -1701,8 +1768,8 @@ const handleUploadRawData = (event) => {
       <div className="content">
         <div className="instructions-container">
           <h3>Instructions</h3>
-          {renderActionButtons()}
-          <p>Click on an action then on the pitch to record action at that location. Use the buttons above to specify the type of action. For actions (g, b), you will be prompted to enter additional details.</p>
+      
+          <p>Click on a player then on the pitch to record action at that location. You will be prompted to provide more details</p>
           <div className="display-options-container">
           <h4>Display Options</h4>
           <div className="toggle-switches">
@@ -1756,7 +1823,7 @@ const handleUploadRawData = (event) => {
             <button className="button" onClick={() => handleResize(600, 389.6)}>iPad</button>
             <button className="button" onClick={() => handleResize(800, 600)}>Computer</button>
           </div>
-          <div className="custom-slider-container">
+          {/*<div className="custom-slider-container">
             <label htmlFor="customZoom">Custom:</label>
             <input
               type="range"
@@ -1770,7 +1837,7 @@ const handleUploadRawData = (event) => {
                 handleResize(canvasSize.width * e.target.value, canvasSize.height * e.target.value);
               }}
             />
-          </div>
+          </div>*/}
         </div>
         </div>
 
@@ -1855,6 +1922,7 @@ const handleUploadRawData = (event) => {
           })}
         </Layer>
 </Stage>
+{renderScoreboard()}
 <div className="aggregated-data-container">
       <AggregatedData data={aggregateData} />
     </div>

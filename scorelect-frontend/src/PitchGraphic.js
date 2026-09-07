@@ -97,6 +97,11 @@ const PitchGraphic = () => {
   const yScale = canvasSize.height / pitchHeight;
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [gameName, setGameName] = useState('');
+  const [saveTeamName, setSaveTeamName] = useState('');
+  const [saveOpposition, setSaveOpposition] = useState('');
+  const [saveCompetition, setSaveCompetition] = useState('');
+
+  const COMPETITIONS = ['League', 'Cup', 'Championship', 'Friendly'];
   const [showSetupTeamsContainer, setShowSetupTeamsContainer] = useState(false);
   const [userType, setUserType] = useState('free'); // Initialize userType state
   const lightStripeColor = '#228B22'; // Light green
@@ -326,7 +331,7 @@ const PitchGraphic = () => {
       const finalData = {
         dataset: datasetPayload,
         games: [{
-          gameName: gameName || 'Unnamed Game',
+          gameName: buildGameName() || 'Unnamed_Game',
           matchDate: matchDate || null,
           sport: 'GAA',
           gameData: coords
@@ -449,6 +454,12 @@ const PitchGraphic = () => {
       }
     }, [isSaveModalOpen, user]);
 
+    useEffect(() => {
+      if (isSaveModalOpen) {
+      if (!saveTeamName && team1) setSaveTeamName(team1);
+      if (!saveOpposition && team2) setSaveOpposition(team2);
+      }
+    }, [isSaveModalOpen, team1, team2]);
 
     const handlePremiumFeatureAccess = (featureName) => {
     Swal.fire({
@@ -523,16 +534,28 @@ const handleSaveGame = async () => {
     return;
   }
 
-  if (!gameName.trim()) {
-    Swal.fire('Invalid Game Name', 'Please enter a valid game name.', 'warning');
+  // if (!gameName.trim()) {
+  //   Swal.fire('Invalid Game Name', 'Please enter a valid game name.', 'warning');
+  //   return;
+  // }
+    if (!saveTeamName.trim()) {
+    Swal.fire('Missing Team', 'Please enter your team name.', 'warning');
+    return;
+  }
+  if (!saveOpposition.trim()) {
+    Swal.fire('Missing Opposition', 'Please enter the opposition name.', 'warning');
+    return;
+  }
+  if (!saveCompetition) {
+    Swal.fire('Missing Competition', 'Please select a competition.', 'warning');
+    return;
+  }
+  if (!matchDate) {
+    Swal.fire('Missing Date', 'Please choose a match date.', 'warning');
     return;
   }
 
-  // require a date
-  if (!matchDate) {
-    Swal.fire('Missing Date', 'Please choose a match date before saving.', 'warning');
-    return;
-  }
+
 
   if (saveToDataset && selectedDataset === 'new' && !newDatasetName.trim()) {
     Swal.fire('Invalid Dataset Name', 'Please enter a valid dataset name.', 'warning');
@@ -550,12 +573,17 @@ const handleSaveGame = async () => {
       setSaveButtonStatus('error');
       return;
     }
+    const generatedName = buildGameName();
 
     const token = await user.getIdToken();
+    
     const payload = {
       uid: user.uid,
-      gameName,
-      matchDate,      // ← now guaranteed non‑empty
+      gameName: generatedName,
+      teamName: saveTeamName.trim(),
+      opposition: saveOpposition.trim(),
+      competition: saveCompetition,
+      matchDate,
       gameData: coords,
       sport: 'GAA',
     };
@@ -634,8 +662,10 @@ const handleSaveGame = async () => {
       }
       // Reset modal state
       setIsSaveModalOpen(false);
-      setGameName('');
-      setMatchDate(''); // Reset match date
+      setSaveTeamName('');
+      setSaveOpposition('');
+      setSaveCompetition('');
+      setMatchDate('');
       setSaveToDataset(false);
       setSelectedDataset('');
       setNewDatasetName('');
@@ -657,89 +687,96 @@ const handleSaveGame = async () => {
 };
 
 // Function to handle saving to dataset separately (if needed)
-const handleSaveToDataset = async () => {
-  if (!gameName.trim()) {
-    Swal.fire('Invalid Game Name', 'Please enter a valid game name.', 'warning');
-    return;
-  }
+// const handleSaveToDataset = async () => {
+//   if (!gameName.trim()) {
+//     Swal.fire('Invalid Game Name', 'Please enter a valid game name.', 'warning');
+//     return;
+//   }
 
-  if (!selectedDataset && selectedDataset !== 'new') {
-    Swal.fire('Select Dataset', 'Please select or create a dataset to save the game.', 'warning');
-    return;
-  }
+//   if (!selectedDataset && selectedDataset !== 'new') {
+//     Swal.fire('Select Dataset', 'Please select or create a dataset to save the game.', 'warning');
+//     return;
+//   }
 
-  setSaveDatasetButtonStatus('loading');
+//   setSaveDatasetButtonStatus('loading');
 
-  try {
-    const token = await user.getIdToken();
-    const payload = {
-      uid: user.uid,
-      gameName,
-      gameData: coords,
-      sport: 'GAA',
-      datasetName: selectedDataset === 'new' ? newDatasetName : selectedDataset
-    };
+//   try {
+//     const token = await user.getIdToken();
+//     const payload = {
+//       uid: user.uid,
+//       gameName,
+//       gameData: coords,
+//       sport: 'GAA',
+//       datasetName: selectedDataset === 'new' ? newDatasetName : selectedDataset
+//     };
 
-    // Save the game (reuse the save-game endpoint)
-    const saveResponse = await fetch(`${process.env.REACT_APP_API_URL}/save-game`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(payload),
-    });
+//     // Save the game (reuse the save-game endpoint)
+//     const saveResponse = await fetch(`${process.env.REACT_APP_API_URL}/save-game`, {
+//       method: 'POST',
+//       headers: {
+//         'Content-Type': 'application/json',
+//         'Authorization': `Bearer ${token}`
+//       },
+//       body: JSON.stringify(payload),
+//     });
 
-    const saveData = await saveResponse.json();
+//     const saveData = await saveResponse.json();
 
-    if (saveResponse.ok) {
-      if (selectedDataset === 'new') {
-        // Create a new dataset
-        const createResponse = await fetch(`${process.env.REACT_APP_API_URL}/create-dataset`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            uid: user.uid,
-            datasetName: newDatasetName
-          }),
-        });
+//     if (saveResponse.ok) {
+//       if (selectedDataset === 'new') {
+//         // Create a new dataset
+//         const createResponse = await fetch(`${process.env.REACT_APP_API_URL}/create-dataset`, {
+//           method: 'POST',
+//           headers: {
+//             'Content-Type': 'application/json',
+//             'Authorization': `Bearer ${token}`
+//           },
+//           body: JSON.stringify({
+//             uid: user.uid,
+//             datasetName: newDatasetName
+//           }),
+//         });
 
-        const createData = await createResponse.json();
+//         const createData = await createResponse.json();
 
-        if (createResponse.ok) {
-          setSaveDatasetButtonStatus('success');
-          Swal.fire('Dataset Created', `New dataset "${newDatasetName}" has been created and the game has been added.`, 'success');
-        } else {
-          setSaveDatasetButtonStatus('error');
-          Swal.fire('Error Creating Dataset', createData.error || 'Failed to create dataset.', 'error');
-        }
-      } else {
-        // Append to existing dataset
-        setSaveDatasetButtonStatus('success');
-        Swal.fire('Success', 'Game has been saved successfully to the dataset!', 'success');
-      }
-      // Reset modal state
-      setIsSaveModalOpen(false);
-      setGameName('');
-      setSaveToDataset(false);
-      setSelectedDataset('');
-      setNewDatasetName('');
-    } else {
-      setSaveDatasetButtonStatus('error');
-      Swal.fire('Error Saving Game', saveData.error || 'Failed to save game.', 'error');
-    }
-  } catch (error) {
-    setSaveDatasetButtonStatus('error');
-    Swal.fire('Error', 'Network error while saving to dataset.', 'error');
-  } finally {
-    // Reset button status after a short delay to show the success/error state
-    setTimeout(() => {
-      setSaveDatasetButtonStatus('idle');
-    }, 2000);
-  }
+//         if (createResponse.ok) {
+//           setSaveDatasetButtonStatus('success');
+//           Swal.fire('Dataset Created', `New dataset "${newDatasetName}" has been created and the game has been added.`, 'success');
+//         } else {
+//           setSaveDatasetButtonStatus('error');
+//           Swal.fire('Error Creating Dataset', createData.error || 'Failed to create dataset.', 'error');
+//         }
+//       } else {
+//         // Append to existing dataset
+//         setSaveDatasetButtonStatus('success');
+//         Swal.fire('Success', 'Game has been saved successfully to the dataset!', 'success');
+//       }
+//       // Reset modal state
+//       setIsSaveModalOpen(false);
+//       setGameName('');
+//       setSaveToDataset(false);
+//       setSelectedDataset('');
+//       setNewDatasetName('');
+//     } else {
+//       setSaveDatasetButtonStatus('error');
+//       Swal.fire('Error Saving Game', saveData.error || 'Failed to save game.', 'error');
+//     }
+//   } catch (error) {
+//     setSaveDatasetButtonStatus('error');
+//     Swal.fire('Error', 'Network error while saving to dataset.', 'error');
+//   } finally {
+//     // Reset button status after a short delay to show the success/error state
+//     setTimeout(() => {
+//       setSaveDatasetButtonStatus('idle');
+//     }, 2000);
+//   }
+// };
+
+const sanitise = (s) => (s || '').trim().replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+
+const buildGameName = () => {
+  const parts = [saveTeamName, saveOpposition, saveCompetition, matchDate].map(sanitise);
+  return parts.every(Boolean) ? parts.join('_') : '';
 };
 
   const initialActionCodes = [
@@ -1428,10 +1465,12 @@ const handleSaveToDataset = async () => {
       updated_at: null
     };
 
+    const fileBase = buildGameName() || 'Unnamed_Game';
+
     const payload = {
       dataset: ds,
       games: [{
-        gameName: gameName || 'Unnamed Game',
+        gameName: buildGameName() || 'Unnamed_Game',
         matchDate: matchDate || null,
         sport: 'GAA',
         gameData: coords
@@ -1443,7 +1482,7 @@ const handleSaveToDataset = async () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${ds.name.replace(/\s+/g,'_')}_${(gameName||'Unnamed_Game').replace(/\s+/g,'_')}.json`;
+    a.download = `${ds.name.replace(/\s+/g,'_')}_${fileBase}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1473,15 +1512,18 @@ const handleSaveToDataset = async () => {
       updated_at: null
     };
 
+    const fileBase = buildGameName() || 'Unnamed_Game';
+
     const payload = {
       dataset: ds,
       games: [{
-        gameName: gameName || 'Unnamed Game',
+        gameName: fileBase,
         matchDate: matchDate || null,
         sport: 'GAA',
         gameData: filteredCoords
       }]
     };
+
 
     const fileNameSafe = filteredFileName.replace(/\s+/g, '_');
     let fileBlob, ext = filteredFormat;
@@ -2594,7 +2636,7 @@ const handleUploadRawData = (event) => {
       </div>
     )}
 
-    {/* Game Name Input */}
+    {/* Game Name Input
     <div style={{ marginBottom: '20px' }}>
       <label
         htmlFor="gameName"
@@ -2615,7 +2657,7 @@ const handleUploadRawData = (event) => {
           border: '1px solid #ccc',
         }}
       />
-    </div>
+    </div> */}
 
     {/* Match Date Input */}
     <div style={{ marginBottom: '20px' }}>
@@ -2637,6 +2679,61 @@ const handleUploadRawData = (event) => {
           border: '1px solid #ccc',
         }}
       />
+    </div>
+
+        {/* Team Name */}
+    <div style={{ marginBottom: '20px' }}>
+      <label htmlFor="saveTeamName" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#fff' }}>
+        Team Name: <span style={{ color: '#dc3545' }}>*</span>
+      </label>
+      <input
+        type="text"
+        id="saveTeamName"
+        value={saveTeamName}
+        onChange={(e) => setSaveTeamName(e.target.value)}
+        placeholder="e.g. Louth"
+        style={{ width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}
+      />
+    </div>
+
+    {/* Opposition */}
+    <div style={{ marginBottom: '20px' }}>
+      <label htmlFor="saveOpposition" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#fff' }}>
+        Opposition: <span style={{ color: '#dc3545' }}>*</span>
+      </label>
+      <input
+        type="text"
+        id="saveOpposition"
+        value={saveOpposition}
+        onChange={(e) => setSaveOpposition(e.target.value)}
+        placeholder="e.g. Meath"
+        style={{ width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}
+      />
+    </div>
+
+    {/* Competition */}
+    <div style={{ marginBottom: '20px' }}>
+      <label htmlFor="saveCompetition" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#fff' }}>
+        Competition: <span style={{ color: '#dc3545' }}>*</span>
+      </label>
+      <select
+        id="saveCompetition"
+        value={saveCompetition}
+        onChange={(e) => setSaveCompetition(e.target.value)}
+        style={{ width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}
+      >
+        <option value="">-- Select a Competition --</option>
+        {COMPETITIONS.map((c) => (
+          <option key={c} value={c}>{c}</option>
+        ))}
+      </select>
+    </div>
+
+    <div style={{ marginBottom: '20px', color: '#b0b0b0', fontSize: '13px' }}>
+      Will be saved as:{' '}
+      <strong style={{ color: '#9254de' }}>
+        {buildGameName() ? `${buildGameName()}.json` : '—'}
+      </strong>
     </div>
 
     {/* Save to Dataset Section with Refresh Button */}

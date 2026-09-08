@@ -102,6 +102,9 @@ const PitchGraphic = () => {
   const [saveCompetition, setSaveCompetition] = useState('');
 
   const COMPETITIONS = ['League', 'Cup', 'Championship', 'Friendly'];
+  const [currentHalf, setCurrentHalf] = useState('1');
+  const [halfFilter, setHalfFilter] = useState('current'); // 'current' | 'all'
+  const HALVES = ['1', '2', 'ET1', 'ET2'];
   const [showSetupTeamsContainer, setShowSetupTeamsContainer] = useState(false);
   const [userType, setUserType] = useState('free'); // Initialize userType state
   const lightStripeColor = '#228B22'; // Light green
@@ -351,10 +354,11 @@ const PitchGraphic = () => {
         fileBlob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' });
 
       } else if (extension === 'xlsx') {
-        const header = ['action','foot','from','minute','player','playerName','position','pressure','team','to','type','x','y'];
+        const header = ['action','foot','from','half', 'minute','player','playerName','position','pressure','team','to','type','x','y'];
         const dataRows = coords.map(c => [
           c.action, c.foot,
           c.from ? JSON.stringify(c.from) : '',
+          c.half,
           c.minute, c.player, c.playerName,
           c.position, c.pressure,
           c.team,
@@ -1016,6 +1020,7 @@ const buildGameName = () => {
       pressure: formData.pressure || pressures[0],
       foot: formData.foot || feet[0],
       minute: formData.minute || '',
+      half: currentHalf,
       x: formData.x,
       y: formData.y,
       type: formData.type,
@@ -1075,11 +1080,14 @@ const buildGameName = () => {
   };
 
   const handleClearMarkers = () => {
-    setCoords([]);
+    setCoords(coords.filter(c => (c.half || '1') !== currentHalf));
   };
 
   const handleUndoLastMarker = () => {
-    setCoords(coords.slice(0, -1));
+    const reverseIdx = [...coords].reverse().findIndex(c => (c.half || '1') === currentHalf);
+    if (reverseIdx === -1) return;
+    const realIdx = coords.length - 1 - reverseIdx;
+    setCoords(coords.filter((_, i) => i !== realIdx));
   };
 
   const handleScreenshot = () => {
@@ -1771,6 +1779,33 @@ const handleUploadRawData = (event) => {
     );
   };
 
+  const handleEndOfHalf = () => {
+    const next = currentHalf === '1' ? '2' : currentHalf === '2' ? 'ET1' : 'ET2';
+    const count = coords.filter(c => (c.half || '1') === currentHalf).length;
+
+    Swal.fire({
+      title: `End of half ${currentHalf}?`,
+      text: `${count} action${count === 1 ? '' : 's'} recorded. They'll be kept in the data and hidden from the pitch. Switching to ${next}.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, next half',
+      cancelButtonText: 'Cancel',
+    }).then((result) => {
+      if (result.isConfirmed) {
+        setCurrentHalf(next);
+        setHalfFilter('current');
+        setSelectedPlayer(null);
+        setActionType('');
+        setCurrentCoords([]);
+        setLineCompleted(false);
+      }
+    });
+  };
+
+  const visibleCoords = halfFilter === 'all'
+    ? coords
+    : coords.filter(c => (c.half || '1') === currentHalf);
+
   return (
   <div className="scroll-container">
     <div className="pitch-graphic-container">
@@ -1835,6 +1870,43 @@ const handleUploadRawData = (event) => {
               <span className="toggle-label">Player Names</span>
             </label>
           </div>
+        </div>
+        <div className="display-options-container">
+          <h4>Half</h4>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {HALVES.map((h) => (
+              <button
+                key={h}
+                onClick={() => setCurrentHalf(h)}
+                style={{
+                  flex: 1,
+                  minHeight: '40px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  color: '#fff',
+                  background: currentHalf === h ? '#9254de' : '#3a3a3a',
+                }}
+              >
+                {h === '1' ? '1st' : h === '2' ? '2nd' : h}
+              </button>
+            ))}
+          </div>
+
+          <button className="button" onClick={handleEndOfHalf} style={{ marginTop: '10px' }}>
+            End of Half → Start {currentHalf === '1' ? '2nd' : 'Next'}
+          </button>
+
+          <label className="toggle-switch" style={{ marginTop: '10px' }}>
+            <input
+              type="checkbox"
+              checked={halfFilter === 'all'}
+              onChange={() => setHalfFilter(halfFilter === 'all' ? 'current' : 'all')}
+            />
+            <span className="toggle-slider"></span>
+            <span className="toggle-label">Show all halves</span>
+          </label>
         </div>
         <div className="button-container">
           <button className="button" onClick={handleClearMarkers}>Clear Markers</button>
@@ -1909,7 +1981,7 @@ const handleUploadRawData = (event) => {
           {renderGAAPitch()}
           {isContextMenuOpen && renderContextMenu()}
           <Layer>
-          {coords.map((coord, index) => {
+          {visibleCoords.map((coord, index) => {
             if (coord.from && coord.to) {
               return (
                 <Arrow
@@ -2072,7 +2144,7 @@ const handleUploadRawData = (event) => {
       </div>
 
       {/* Team & Minute */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
         <div>
           <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Team:</label>
           <select
@@ -2119,6 +2191,18 @@ const handleUploadRawData = (event) => {
             onChange={handleChange}
             style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
           />
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Half:</label>
+          <select
+            value={currentHalf}
+            onChange={(e) => setCurrentHalf(e.target.value)}
+            style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+          >
+            {HALVES.map((h) => (
+              <option key={h} value={h}>{h}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -2382,7 +2466,7 @@ const handleUploadRawData = (event) => {
       </div>
 
       {/* Team & Minute */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
         <div>
           <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Team:</label>
           <select
@@ -2429,6 +2513,18 @@ const handleUploadRawData = (event) => {
             onChange={handleChange}
             style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
           />
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '5px', color: 'white' }}>Half:</label>
+          <select
+            value={currentHalf}
+            onChange={(e) => setCurrentHalf(e.target.value)}
+            style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+          >
+            {HALVES.map((h) => (
+              <option key={h} value={h}>{h}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -3738,6 +3834,7 @@ const handleUploadRawData = (event) => {
               <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>Pressure</th>
               <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>Foot</th>
               <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>Minute</th>
+              <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>Half</th>
               <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>X</th>
               <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>Y</th>
               <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>Delete</th>
@@ -3807,6 +3904,14 @@ const handleUploadRawData = (event) => {
                     type="text"
                     value={coord.minute}
                     onChange={(e) => handleReviewChange(index, 'minute', e.target.value)}
+                    style={{ width: '100%', backgroundColor: '#2e2e2e', color: '#fff', border: '1px solid #555', borderRadius: '3px', padding: '4px' }}
+                  />
+                </td>
+                <td style={{ padding: '8px' }}>
+                  <input
+                    type="text"
+                    value={coord.half || ''}
+                    onChange={(e) => handleReviewChange(index, 'half', e.target.value)}
                     style={{ width: '100%', backgroundColor: '#2e2e2e', color: '#fff', border: '1px solid #555', borderRadius: '3px', padding: '4px' }}
                   />
                 </td>

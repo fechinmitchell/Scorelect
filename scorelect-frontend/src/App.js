@@ -77,7 +77,7 @@ const App = () => {
   const { loadedCoords, setLoadedCoords } = useContext(GameContext);
 
   const [selectedSport, setSelectedSport] = useState(() =>
-    localStorage.getItem('selectedSport') || null
+    localStorage.getItem('selectedSport') || 'GAA'
   );
 
   /* ────────────── auth listener ────────────── */
@@ -111,8 +111,6 @@ const App = () => {
   useEffect(() => {
     if (selectedSport) {
       localStorage.setItem('selectedSport', selectedSport);
-    } else {
-      localStorage.removeItem('selectedSport');
     }
   }, [selectedSport]);
 
@@ -148,8 +146,8 @@ const App = () => {
       toast.error('You are not logged in. Please sign in.');
       navigate('/signin');
     }
-    setSelectedSport(null);
-    localStorage.removeItem('selectedSport');
+    setSelectedSport('GAA');
+    localStorage.removeItem('selectedSport', 'GAA');
   };
 
   /* ────────────── choose correct pitch component ────────────── */

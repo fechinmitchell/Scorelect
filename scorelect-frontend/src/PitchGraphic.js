@@ -776,11 +776,13 @@ const handleSaveGame = async () => {
 //   }
 // };
 
-const sanitise = (s) => (s || '').trim().replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+// new
+const sanitise = (s) => (s || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 
 const buildGameName = () => {
-  const parts = [saveTeamName, saveOpposition, saveCompetition, matchDate].map(sanitise);
-  return parts.every(Boolean) ? parts.join('_') : '';
+  const parts = [saveTeamName, saveOpposition, saveCompetition].map(sanitise);
+  const date = (matchDate || '').trim();
+  return parts.every(Boolean) && date ? [...parts, date].join('_') : '';
 };
 
   const initialActionCodes = [
@@ -1708,37 +1710,56 @@ const handleUploadRawData = (event) => {
       transition: 'all 0.3s',
     };
   };
-    // Action codes that count as scores
-  // Action codes that count as scores
+    // --- Scoring logic (mirrors GAAAnalysisDashboard) ---
   const GOAL_ACTIONS = ['goal', 'penalty goal'];
-  const POINT_ACTIONS = ['point', 'free', 'fortyfive', 'offensive mark', 'mark'];
-  // Explicitly tagged two-pointers (add any custom codes you create here)
-  const TWO_POINT_ACTIONS = ['two pointer', 'two point free', 'twopointer'];
+  const SCORING_ACTIONS = ['point', 'free', 'offensive mark', '45', 'fortyfive'];
 
-  const ARC_RADIUS = 40;      // metres, matches the arcs drawn on the pitch
-  const GOAL_Y = 44;          // centre of the goal line
+  const ARC_RADIUS = 40;   // metres — radius of the two-point arc
+  const GOAL_Y = 44;       // centre of the goal line
+  const ARC_CUTOFF = 20;   // the arc terminates at the 20m line
 
-  // A point is worth 2 if it was struck from outside either 40m arc
-  const isOutsideArc = (coord) => {
-    if (typeof coord.x !== 'number' || typeof coord.y !== 'number') return false;
+  // Distance to the nearer goal, and distance up the pitch from that endline
+  const shotGeometry = (coord) => {
+    if (typeof coord.x !== 'number' || typeof coord.y !== 'number') return null;
     const distLeft = Math.hypot(coord.x - 0, coord.y - GOAL_Y);
     const distRight = Math.hypot(coord.x - pitchWidth, coord.y - GOAL_Y);
-    return Math.min(distLeft, distRight) > ARC_RADIUS;
+    const atLeftEnd = distLeft <= distRight;
+    return {
+      dist: Math.min(distLeft, distRight),
+      fromEndline: atLeftEnd ? coord.x : pitchWidth - coord.x,
+    };
+  };
+
+  // Returns 3 for a goal, 2 for a two-pointer, 1 for a point, 0 for anything else
+  const pointValueFor = (coord) => {
+    const action = (coord.action || '').toString().toLowerCase().trim();
+
+    if (GOAL_ACTIONS.includes(action)) return 3;
+
+    // Wides, shorts, posts, blocks and misses score nothing
+    if (/miss|wide|short|blocked|post/.test(action)) return 0;
+
+    if (!SCORING_ACTIONS.some(a => action.includes(a))) return 0;
+
+    // 45s are always one point, whatever the distance
+    if (action.includes('45') || action.includes('fortyfive')) return 1;
+
+    const g = shotGeometry(coord);
+    if (!g) return 1;
+
+    // Two points only if beyond the arc AND outside the 20m line
+    return (g.dist >= ARC_RADIUS && g.fromEndline >= ARC_CUTOFF) ? 2 : 1;
   };
 
   const scoreboard = coords.reduce((acc, c) => {
     const team = c.team || 'Unknown';
-    const action = (c.action || '').toLowerCase();
     if (!acc[team]) acc[team] = { goals: 0, points: 0, twoPointers: 0 };
 
-    if (GOAL_ACTIONS.includes(action)) {
-      acc[team].goals++;
-    } else if (TWO_POINT_ACTIONS.includes(action)) {
-      acc[team].twoPointers++;
-    } else if (POINT_ACTIONS.includes(action)) {
-      if (isOutsideArc(c)) acc[team].twoPointers++;
-      else acc[team].points++;
-    }
+    const value = pointValueFor(c);
+    if (value === 3) acc[team].goals++;
+    else if (value === 2) acc[team].twoPointers++;
+    else if (value === 1) acc[team].points++;
+
     return acc;
   }, {});
 

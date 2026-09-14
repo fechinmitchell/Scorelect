@@ -224,8 +224,8 @@ const handleAnalysisAccess = () => {
                 <>
                   <div className="select-sport-text">Select Sport:</div>
                   <select value={selectedSport} onChange={(e) => onSportChange(e.target.value)}>
-                    <option value="Soccer">Soccer</option>
                     <option value="GAA">GAA</option>
+                    <option value="Soccer">Soccer</option>
                     <option value="Basketball">Basketball</option>
                     <option value="AmericanFootball">American Football</option>
                   </select>

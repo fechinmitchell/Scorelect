@@ -935,7 +935,12 @@ function TeamDataGAA() {
           {/* Main Team Leaderboard */}
           <div className="leaderboard-container">
             <div className="leaderboard-header">
-              <h2>Team Leaderboard {perGame ? '(Per Game)' : '(Totals)'}</h2>
+              <div>
+                <h2>Team Leaderboard {perGame ? '(Per Game)' : '(Totals)'}</h2>
+                <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#b0b0b0' }}>
+                    Click on a team to view trends
+                  </p>
+              </div>
               <div className="leaderboard-header-actions">
                 <button
                   className={`pdg-pergame-toggle ${perGame ? 'active' : ''}`}
@@ -981,7 +986,17 @@ function TeamDataGAA() {
                     <tr key={team.team} className="team-row">
                       <td>{index + 1}</td>
                       <td>
-                        <Link to={`/team/${team.team}`}>{team.team}</Link>
+                        <Link
+                          to="/team-trends"
+                          state={{
+                            teamName: team.team,
+                            userId: activeUserId,
+                            gameIds: selectedGameIds,
+                            datasetName: selectedDatasetName,
+                          }}
+                        >
+                          {team.team}
+                        </Link>
                       </td>
                       <td>{team.games}</td>
                       <td>{perGameVal(team.expectedPoints, team.games)}</td>

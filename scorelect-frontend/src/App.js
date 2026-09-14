@@ -52,6 +52,7 @@ import GAAAnalysisDashboard from './components/GAAAnalysisDashboard';
 import AdminLogin from './AdminLogin';
 import AdminSettings from './AdminSettings';
 import Sessions from './Sessions';
+import TeamTrends from './components/TeamTrends';
 import SessionEditor from './SessionEditor';
 import SessionDetail from './SessionDetail';
 import ManualTagging from './ManualTagging';
@@ -239,6 +240,7 @@ const App = () => {
                   <Route path="/analysis/soccer-dashboard" element={<SoccerAnalysisDashboard />} />
                   <Route path="/player-data-gaa" element={<PlayerDataGAA />} />
                   <Route path="/player/:playerName" element={<PlayerShotDataGAA />} />
+                  <Route path="/team-trends" element={<TeamTrends />} />
                   <Route path="/analysis/heatmap" element={<HeatmapPage />} />
                   <Route path="/analysis/heatmap-gaa" element={<HeatmapGAA />} />
                   <Route path="/analysis/heatmap-af" element={<HeatmapAF />} />

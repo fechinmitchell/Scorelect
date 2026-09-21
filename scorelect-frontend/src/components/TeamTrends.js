@@ -56,6 +56,7 @@ export default function TeamTrends() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedTeam, setSelectedTeam] = useState(state?.teamName || '');
+  const [selectedPlayer, setSelectedPlayer] = useState(state?.playerName || '');
   const [activeMetrics, setActiveMetrics] = useState(['points', 'xPoints', 'goals']);
 
   const passedUserId = state?.userId || null;
@@ -115,6 +116,20 @@ export default function TeamTrends() {
     if (!selectedTeam && teams.length) setSelectedTeam(teams[0]);
   }, [teams, selectedTeam]);
 
+  const players = useMemo(() => {
+    if (!selectedTeam) return [];
+    const set = new Set();
+    allShots.forEach(s => {
+      if ((s.team || '').toLowerCase() !== selectedTeam.toLowerCase()) return;
+      const name = String(s.playerName ?? '').trim();
+      if (name) set.add(name);
+    });
+    return Array.from(set).sort();
+  }, [allShots, selectedTeam]);
+
+  // Clear the player when the team changes
+
+
   // One row per match, ordered by date
   const chartData = useMemo(() => {
     if (!selectedTeam) return [];
@@ -123,6 +138,7 @@ export default function TeamTrends() {
 
     allShots
       .filter(s => (s.team || '').toLowerCase() === selectedTeam.toLowerCase())
+      .filter(s => !selectedPlayer || String(s.playerName ?? '').trim() === selectedPlayer)
       .forEach(s => {
         const key = `${getMatchTeams(s.gameName || '')}__${s.matchDate || ''}`;
         if (!byMatch[key]) {
@@ -174,7 +190,7 @@ export default function TeamTrends() {
         if (!b.matchDate) return -1;
         return new Date(a.matchDate) - new Date(b.matchDate);
       });
-  }, [allShots, selectedTeam, calibrationModel]);
+  }, [allShots, selectedTeam, selectedPlayer, calibrationModel]);
 
   const toggleMetric = (key) => {
     setActiveMetrics(prev =>
@@ -199,7 +215,9 @@ export default function TeamTrends() {
 
   return (
     <div className="PageContainer">
-      <h2 className="Title">{selectedTeam || 'Team'} — Trends by Match</h2>
+      <h2 className="Title">
+        {selectedPlayer ? `${selectedPlayer} (${selectedTeam})` : (selectedTeam || 'Team')} — Trends by Match
+      </h2>
 
       <div className="Section">
         <div className="FiltersContainer">
@@ -209,9 +227,25 @@ export default function TeamTrends() {
               id="teamSel"
               className="Select"
               value={selectedTeam}
-              onChange={e => setSelectedTeam(e.target.value)}
+              onChange={e => {
+                setSelectedTeam(e.target.value);
+                setSelectedPlayer('');
+              }}
             >
               {teams.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="FilterLabel" htmlFor="playerSel">Player:</label>
+            <select
+              id="playerSel"
+              className="Select"
+              value={selectedPlayer}
+              onChange={e => setSelectedPlayer(e.target.value)}
+              disabled={players.length === 0}
+            >
+              <option value="">All Players</option>
+              {players.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
 

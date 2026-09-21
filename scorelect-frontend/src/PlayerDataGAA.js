@@ -5,6 +5,7 @@ import Swal from 'sweetalert2';
 import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { getAuth } from 'firebase/auth';
+import { useCalibrationModel, calculateXP, calculateXG } from './components/Model2026';
 
 import './PlayerDataGAA.css';
 
@@ -29,215 +30,43 @@ const MIDLINE_X = 72.5;
 
 // The 40m arc is 40m from goal (distance from goal line center)
 const ARC_DISTANCE_METERS = 40;
+const ARC_CUTOFF = 20; // two-point arc stops at the 20m line
+const MISS_REGEX = /miss|wide|short|blocked|post/;
+const POINT_SCORE_ACTIONS = ['point', 'free', 'fortyfive', '45', 'offensive mark', 'mark'];
+
+// Placed balls: frees, 45s, penalties and marks — any outcome
+const isPlacedBall = (act) => /free|fortyfive|\b45\b|penalty|pen miss|mark/.test(act);
+
+function getMatchTeams(gameName = '') {
+  const parts = String(gameName).split('_');
+  return parts.length >= 2 ? `${parts[0]}_${parts[1]}` : gameName;
+}
+
+const LEADERBOARD_COLUMNS = [
+  { key: 'totalShots',  label: 'Shots',        decimals: 0, perGame: true },
+  { key: 'xGoals',      label: 'xG',           decimals: 2, perGame: true },
+  { key: 'goals',       label: 'Goals',        decimals: 0, perGame: true, compareTo: 'xGoals' },
+  { key: 'xPoints',     label: 'xP',           decimals: 1, perGame: true },
+  { key: 'points',      label: 'Points',       decimals: 0, perGame: true, compareTo: 'xPoints' },
+  { key: 'xScore',      label: 'xScore',       decimals: 1, perGame: true },
+  { key: 'score',       label: 'Score',        decimals: 0, perGame: true, compareTo: 'xScore' },
+  { key: 'diff',        label: 'Diff',         decimals: 1, perGame: true, signed: true },
+  { key: 'twoPointers', label: '2PT',          decimals: 0, perGame: true },
+  { key: 'onePointers', label: '1PT',          decimals: 0, perGame: true },
+  { key: 'avgDist',     label: 'Avg Dist (m)', decimals: 1, perGame: false },
+  { key: 'misses',      label: 'Misses',       decimals: 0, perGame: true },
+  { key: 'accuracy',    label: 'Accuracy',     decimals: 0, perGame: false },
+];
+
+const GREEN = '#50FA7B';
+const RED = '#FF5555';
+const WHITE = '#FFFFFF';
 
 /*******************************************
  * CALIBRATION DATA HOOK
  * Builds probability model from historical data
  *******************************************/
-function useCalibrationData() {
-  const [calibrationModel, setCalibrationModel] = useState(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function buildCalibrationModel() {
-      try {
-        const gamesCollectionRef = collection(firestore, `savedGames/${DEFAULT_USER_ID}/games`);
-        const snapshot = await getDocs(gamesCollectionRef);
-        
-        let calibrationShots = [];
-        
-        snapshot.docs.forEach(docSnap => {
-          const data = docSnap.data();
-          if (data.datasetName === CALIBRATION_DATASET) {
-            const gameData = data.gameData || [];
-            const gameDataArray = Array.isArray(gameData) ? gameData : Object.values(gameData);
-            calibrationShots = calibrationShots.concat(gameDataArray);
-          }
-        });
-
-        if (calibrationShots.length === 0) {
-          console.log('No calibration data found, using defaults');
-          setCalibrationModel(null);
-          setLoading(false);
-          return;
-        }
-
-        console.log(`Building calibration model from ${calibrationShots.length} shots`);
-
-        // Build conversion rate model by distance bucket (5m intervals)
-        // Track separate rates for: set plays, play from hand, and goals
-        const buckets = {};
-        
-        calibrationShots.forEach(shot => {
-          // Calculate distance to goal
-          const x = parseFloat(shot.x) || 0;
-          const y = parseFloat(shot.y) || 0;
-          const targetGoal = x <= MIDLINE_X ? { x: 0, y: GOAL_Y } : { x: GOAL_X, y: GOAL_Y };
-          const dx = x - targetGoal.x;
-          const dy = y - targetGoal.y;
-          const distanceMeters = Math.sqrt(dx * dx + dy * dy);
-          
-          const bucket = Math.floor(distanceMeters / 5) * 5;
-          if (!buckets[bucket]) {
-            buckets[bucket] = {
-              setPlay: { attempts: 0, scores: 0 },
-              play: { attempts: 0, scores: 0 },
-              goal: { attempts: 0, scores: 0 }
-            };
-          }
-          
-          const actionLower = (shot.action || '').toLowerCase();
-          const typeLower = (shot.type || '').toLowerCase();
-          
-          const isSetPlay = ['free', 'fortyfive', '45', 'mark', 'offensive mark', 'penalty'].includes(actionLower);
-          const isGoalAttempt = actionLower === 'goal' || typeLower === 'goal' || typeLower === 'saved';
-          const isPointScored = actionLower === 'point' || (isSetPlay && typeLower === 'score');
-          const isGoalScored = actionLower === 'goal';
-          
-          if (isGoalAttempt) {
-            buckets[bucket].goal.attempts += 1;
-            if (isGoalScored) buckets[bucket].goal.scores += 1;
-          } else if (isSetPlay) {
-            buckets[bucket].setPlay.attempts += 1;
-            if (isPointScored) buckets[bucket].setPlay.scores += 1;
-          } else {
-            buckets[bucket].play.attempts += 1;
-            if (isPointScored) buckets[bucket].play.scores += 1;
-          }
-        });
-
-        // Calculate rates
-        const model = { buckets: {}, shotCount: calibrationShots.length };
-        
-        Object.keys(buckets).forEach(b => {
-          const data = buckets[b];
-          model.buckets[b] = {
-            setPlayRate: data.setPlay.attempts > 0 ? data.setPlay.scores / data.setPlay.attempts : null,
-            playRate: data.play.attempts > 0 ? data.play.scores / data.play.attempts : null,
-            goalRate: data.goal.attempts > 0 ? data.goal.scores / data.goal.attempts : null
-          };
-        });
-
-        console.log('Calibration model built:', model);
-        setCalibrationModel(model);
-      } catch (err) {
-        console.error('Error building calibration model:', err);
-        setCalibrationModel(null);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    buildCalibrationModel();
-  }, []);
-
-  return { calibrationModel, loading };
-}
-
-/*******************************************
- * xP CALCULATION (Expected Points for point attempts)
- * Returns the probability of scoring a point (0-1)
- *******************************************/
-function calculateXP(shot, distanceMeters, calibrationModel) {
-  // First check if shot already has xPoints from backend
-  if (shot.xPoints !== undefined && shot.xPoints !== null) {
-    const existing = parseFloat(shot.xPoints);
-    if (!isNaN(existing) && existing >= 0 && existing <= 1) {
-      return existing;
-    }
-  }
-  
-  const bucket = Math.floor(distanceMeters / 5) * 5;
-  const actionLower = (shot.action || '').toLowerCase();
-  const isSetPlay = ['free', 'fortyfive', '45', 'mark', 'offensive mark', 'penalty'].includes(actionLower);
-  
-  // Try calibration model first
-  if (calibrationModel && calibrationModel.buckets) {
-    // Look for exact bucket
-    if (calibrationModel.buckets[bucket]) {
-      const rate = isSetPlay 
-        ? calibrationModel.buckets[bucket].setPlayRate 
-        : calibrationModel.buckets[bucket].playRate;
-      if (rate !== null) return rate;
-    }
-    
-    // Try nearest bucket
-    const bucketKeys = Object.keys(calibrationModel.buckets).map(Number).sort((a, b) => a - b);
-    if (bucketKeys.length > 0) {
-      const nearest = bucketKeys.reduce((prev, curr) => 
-        Math.abs(curr - bucket) < Math.abs(prev - bucket) ? curr : prev, bucketKeys[0]);
-      const rate = isSetPlay 
-        ? calibrationModel.buckets[nearest]?.setPlayRate 
-        : calibrationModel.buckets[nearest]?.playRate;
-      if (rate !== null && rate !== undefined) return rate;
-    }
-  }
-  
-  // Fallback: Conservative default rates based on GAA research
-  // These are approximate conversion rates from various GAA studies
-  if (isSetPlay) {
-    // Set plays (frees, 45s, marks) - higher success rates
-    if (distanceMeters <= 20) return 0.82;  // Close frees ~82%
-    if (distanceMeters <= 30) return 0.68;  // Medium frees ~68%
-    if (distanceMeters <= 40) return 0.52;  // Long frees ~52%
-    if (distanceMeters <= 45) return 0.42;  // 45s ~42%
-    return 0.30;  // Very long ~30%
-  } else {
-    // Play from hand - lower success rates
-    if (distanceMeters <= 15) return 0.58;  // Close range ~58%
-    if (distanceMeters <= 20) return 0.48;  // Medium close ~48%
-    if (distanceMeters <= 25) return 0.40;  // Medium ~40%
-    if (distanceMeters <= 30) return 0.32;  // Medium long ~32%
-    if (distanceMeters <= 35) return 0.25;  // Long ~25%
-    if (distanceMeters <= 40) return 0.18;  // Very long ~18%
-    return 0.12;  // Beyond 40m ~12%
-  }
-}
-
-/*******************************************
- * xG CALCULATION (Expected Goals for goal attempts)
- * Returns the probability of scoring a goal (0-1)
- *******************************************/
-function calculateXG(shot, distanceMeters, calibrationModel) {
-  // First check if shot already has xGoals from backend
-  if (shot.xGoals !== undefined && shot.xGoals !== null) {
-    const existing = parseFloat(shot.xGoals);
-    if (!isNaN(existing) && existing >= 0 && existing <= 1) {
-      return existing;
-    }
-  }
-  
-  const bucket = Math.floor(distanceMeters / 5) * 5;
-  const actionLower = (shot.action || '').toLowerCase();
-  
-  // Penalties have high conversion rate
-  if (actionLower === 'penalty') return 0.82;
-  
-  // Try calibration model
-  if (calibrationModel && calibrationModel.buckets) {
-    if (calibrationModel.buckets[bucket]?.goalRate !== null && 
-        calibrationModel.buckets[bucket]?.goalRate !== undefined) {
-      return calibrationModel.buckets[bucket].goalRate;
-    }
-    
-    // Try nearest bucket
-    const bucketKeys = Object.keys(calibrationModel.buckets).map(Number).sort((a, b) => a - b);
-    if (bucketKeys.length > 0) {
-      const nearest = bucketKeys.reduce((prev, curr) => 
-        Math.abs(curr - bucket) < Math.abs(prev - bucket) ? curr : prev, bucketKeys[0]);
-      const rate = calibrationModel.buckets[nearest]?.goalRate;
-      if (rate !== null && rate !== undefined) return rate;
-    }
-  }
-  
-  // Fallback: Conservative goal conversion rates
-  // Goals are much harder to score than points
-  if (distanceMeters <= 6) return 0.45;   // Very close ~45%
-  if (distanceMeters <= 10) return 0.32;  // Close ~32%
-  if (distanceMeters <= 14) return 0.22;  // Medium ~22%
-  if (distanceMeters <= 20) return 0.12;  // Long ~12%
-  return 0.05;  // Very long ~5%
-}
 
 /*******************************************
  * HOOKS
@@ -327,7 +156,12 @@ function useFetchMultipleGames(userId, selectedGameIds) {
             const data = docSnap.data();
             const gameData = data.gameData || [];
             const gameDataArray = Array.isArray(gameData) ? gameData : Object.values(gameData);
-            gameDataArray.forEach(shot => allShots.push({ ...shot, _gameId: gameId }));
+            gameDataArray.forEach(shot => allShots.push({
+              ...shot,
+              _gameId: gameId,
+              gameName: data.gameName || gameId,
+              matchDate: shot.matchDate || data.matchDate || null,
+            }));
           }
         }
         setCombinedData(allShots);
@@ -403,107 +237,113 @@ function GameSelector({ games, selectedGameIds, onToggleGame, onSelectAll, onDes
   );
 }
 
-function MiniLeaderboard({ title, data, sortKey, columns }) {
-  const sortedData = useMemo(() => [...data].sort((a, b) => (b[sortKey] || 0) - (a[sortKey] || 0)).slice(0, 10), [data, sortKey]);
-
-  return (
-    <div className="pdg-mini-board">
-      <div className="pdg-mini-header"><h4>{title}</h4></div>
-      <div className="pdg-mini-table-wrap">
-        <table className="pdg-mini-table">
-          <thead>
-            <tr>
-              <th>Rank</th>
-              <th>Player</th>
-              {columns.map(col => <th key={col.key}>{col.label}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {sortedData.map((item, idx) => (
-              <tr key={item.player}>
-                <td className="pdg-rank">{idx + 1}</td>
-                <td className="pdg-player-name"><Link to={`/player/${encodeURIComponent(item.player)}`}>{item.player}</Link></td>
-                {columns.map(col => <td key={col.key}>{col.format ? col.format(item[col.key], item) : item[col.key]?.toFixed(2)}</td>)}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function MainLeaderboard({ data }) {
-  const [sortKey, setSortKey] = useState('Total_Points');
+function MainLeaderboard({ data, userId, gameIds }) {
+  const [sortKey, setSortKey] = useState('score');
   const [sortDir, setSortDir] = useState('desc');
   const [search, setSearch] = useState('');
-  const [expanded, setExpanded] = useState(new Set());
+  const [perGame, setPerGame] = useState(false);
+
+  const valueFor = (p, col) => {
+    const v = p[col.key] || 0;
+    return perGame && col.perGame ? v / (p.games || 1) : v;
+  };
 
   const sorted = useMemo(() => {
-    let filtered = data.filter(p => p.player.toLowerCase().includes(search.toLowerCase()));
-    return filtered.sort((a, b) => sortDir === 'desc' ? (b[sortKey] || 0) - (a[sortKey] || 0) : (a[sortKey] || 0) - (b[sortKey] || 0));
-  }, [data, sortKey, sortDir, search]);
+    const filtered = data.filter(p =>
+      String(p.player ?? '').toLowerCase().includes(search.toLowerCase())
+    );
+    return [...filtered].sort((a, b) => {
+      if (sortKey === 'player' || sortKey === 'team') {
+        const cmp = String(a[sortKey]).localeCompare(String(b[sortKey]));
+        return sortDir === 'asc' ? cmp : -cmp;
+      }
+      const col = LEADERBOARD_COLUMNS.find(c => c.key === sortKey);
+      if (!col) return 0;
+      const div = (p) => (perGame && col.perGame ? (p.games || 1) : 1);
+      const av = (a[col.key] || 0) / div(a);
+      const bv = (b[col.key] || 0) / div(b);
+      return sortDir === 'asc' ? av - bv : bv - av;
+    });
+  }, [data, sortKey, sortDir, search, perGame]);
 
   const handleSort = (key) => {
-    if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
+    if (sortKey === key) setSortDir(d => (d === 'desc' ? 'asc' : 'desc'));
     else { setSortKey(key); setSortDir('desc'); }
   };
 
-  const SortHeader = ({ k, children }) => (
-    <th onClick={() => handleSort(k)} className="pdg-sortable">
-      {children}{sortKey === k && <span className="pdg-sort-arrow">{sortDir === 'desc' ? ' ↓' : ' ↑'}</span>}
-    </th>
-  );
+  const arrow = (key) => sortKey === key
+    ? <span className="pdg-sort-arrow">{sortDir === 'desc' ? ' ↓' : ' ↑'}</span>
+    : null;
+
+  const fmt = (p, col) => {
+    if (col.key === 'accuracy') return `${(p.accuracy || 0).toFixed(0)}%`;
+    const d = perGame && col.perGame ? Math.max(col.decimals, 1) : col.decimals;
+    const text = valueFor(p, col).toFixed(d);
+    return col.signed && Number(text) > 0 ? `+${text}` : text;
+  };
+
+  const cellColour = (p, col) => {
+    if (col.compareTo) {
+      return (p[col.compareTo] || 0) > (p[col.key] || 0) ? RED : GREEN;
+    }
+    if (col.signed) {
+      const v = Number(valueFor(p, col).toFixed(col.decimals));
+      return v > 0 ? GREEN : v < 0 ? RED : WHITE;
+    }
+    return WHITE;
+  };
 
   return (
     <div className="pdg-main-board">
       <div className="pdg-board-header">
-        <h3>Full Leaderboard</h3>
-        <div className="pdg-search"><input type="text" placeholder="Search players..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+        <div>
+          <h3>Full Leaderboard {perGame ? '(Per Game)' : '(Totals)'}</h3>
+          <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#b0b0b0' }}>
+            Click on a player to view trends
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="pdg-toggle-group">
+            <button className={`pdg-toggle ${!perGame ? 'active' : ''}`} onClick={() => setPerGame(false)}>Totals</button>
+            <button className={`pdg-toggle ${perGame ? 'active' : ''}`} onClick={() => setPerGame(true)}>Per Game</button>
+          </div>
+          <div className="pdg-search">
+            <input type="text" placeholder="Search players..." value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+        </div>
       </div>
       <div className="pdg-table-wrap">
         <table className="pdg-table">
           <thead>
             <tr>
-              <th></th><th>Player</th><th>Team</th>
-              <SortHeader k="Total_Points">Pts</SortHeader>
-              <SortHeader k="goals">Goals</SortHeader>
-              <SortHeader k="xPoints">xP</SortHeader>
-              <SortHeader k="xGoals">xG</SortHeader>
-              <SortHeader k="shootingAttempts">Shots</SortHeader>
-              <SortHeader k="accuracy">Acc%</SortHeader>
+              <th onClick={() => handleSort('team')} className="pdg-sortable">Team{arrow('team')}</th>
+              <th onClick={() => handleSort('player')} className="pdg-sortable">Player{arrow('player')}</th>
+              {LEADERBOARD_COLUMNS.map(col => (
+                <th key={col.key} onClick={() => handleSort(col.key)} className="pdg-sortable">
+                  {col.label}{arrow(col.key)}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {sorted.map(p => (
-              <React.Fragment key={p.player}>
-                <tr onClick={() => setExpanded(prev => { const n = new Set(prev); n.has(p.player) ? n.delete(p.player) : n.add(p.player); return n; })} className={expanded.has(p.player) ? 'pdg-row-expanded' : ''}>
-                  <td className="pdg-expand-cell"><span className={`pdg-expand-icon ${expanded.has(p.player) ? 'open' : ''}`}>&#9654;</span></td>
-                  <td><Link to={`/player/${encodeURIComponent(p.player)}`} onClick={e => e.stopPropagation()}>{p.player}</Link></td>
-                  <td className="pdg-team">{p.team}</td>
-                  <td className="pdg-highlight">{p.Total_Points}</td>
-                  <td>{p.goals}</td>
-                  <td className="pdg-dim">{p.xPoints?.toFixed(1)}</td>
-                  <td className="pdg-dim">{p.xGoals?.toFixed(2)}</td>
-                  <td>{p.shootingAttempts}</td>
-                  <td><span className={`pdg-acc-badge ${p.accuracy >= 60 ? 'high' : p.accuracy >= 40 ? 'med' : 'low'}`}>{p.accuracy?.toFixed(0)}%</span></td>
-                </tr>
-                {expanded.has(p.player) && (
-                  <tr className="pdg-detail-row">
-                    <td colSpan="9">
-                      <div className="pdg-position-grid">
-                        {p.positionPerformance.map((pos, j) => (
-                          <div key={j} className="pdg-position-card">
-                            <strong>{pos.position}</strong>
-                            <span>{pos.shots} shots | {pos.points} pts | {pos.goals} gls</span>
-                            <span className="pdg-eff">{pos.efficiency?.toFixed(0)}% eff</span>
-                          </div>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </React.Fragment>
+              <tr key={`${p.team}-${p.player}`}>
+                <td style={{ color: WHITE }}>{p.team}</td>
+                <td>
+                  <Link
+                    to="/team-trends"
+                    state={{ teamName: p.team, playerName: p.player, userId, gameIds }}
+                    style={{ color: WHITE }}
+                  >
+                    {p.player}
+                  </Link>
+                </td>
+                {LEADERBOARD_COLUMNS.map(col => (
+                  <td key={col.key} style={{ color: cellColour(p, col), fontWeight: col.compareTo || col.signed ? 600 : 400 }}>
+                    {fmt(p, col)}
+                  </td>
+                ))}
+              </tr>
             ))}
           </tbody>
         </table>
@@ -809,12 +649,13 @@ export default function PlayerDataGAA() {
   const isAdmin = currentUser && ADMIN_USERS.includes(currentUser.uid);
   
   const { config: publicConfig, loading: configLoading, setConfig: setPublicConfig } = useFetchPublicConfig();
-  const { calibrationModel, loading: calibrationLoading } = useCalibrationData();
+  const { calibrationModel } = useCalibrationModel();
   const [dataSource, setDataSource] = useState('public');
   const [selectedDatasetName, setSelectedDatasetName] = useState('');
   const [selectedGameIds, setSelectedGameIds] = useState([]);
   const [selectedYear, setSelectedYear] = useState('All');
   const [selectedTeam, setSelectedTeam] = useState('All');
+  const [shotType, setShotType] = useState('all');
   const [showAdmin, setShowAdmin] = useState(false);
   const [showCalibration, setShowCalibration] = useState(false);
   
@@ -864,79 +705,99 @@ export default function PlayerDataGAA() {
 
   const formattedLeaderboard = useMemo(() => {
     if (!combinedData || combinedData.length === 0) return [];
+
     const shotsFiltered = combinedData.filter(shot => {
-      const matchesYear = selectedYear === 'All' || new Date(shot.matchDate).getFullYear().toString() === selectedYear;
+      const act = (shot.action || '').toLowerCase().trim();
+      const matchesYear = selectedYear === 'All' ||
+        (shot.matchDate && new Date(shot.matchDate).getFullYear().toString() === selectedYear);
       const matchesTeam = selectedTeam === 'All' || shot.team === selectedTeam;
-      return matchesYear && matchesTeam;
+      const placed = isPlacedBall(act);
+      const matchesType = shotType === 'all' || (shotType === 'placed' ? placed : !placed);
+      return matchesYear && matchesTeam && matchesType;
     });
     if (shotsFiltered.length === 0) return [];
 
-    const agg = shotsFiltered.reduce((acc, shot) => {
-      const name = shot.playerName || 'Unknown';
-      if (!acc[name]) acc[name] = { player: name, team: shot.team || 'Unknown', points: 0, goals: 0, xPoints: 0, xGoals: 0, positionPerformance: {}, shootingAttempts: 0, shootingScored: 0, goalAttempts: 0, pointAttempts: 0};
-      const p = acc[name];
-      const pos = shot.position || 'Unknown';
-      if (!p.positionPerformance[pos]) p.positionPerformance[pos] = { shots: 0, points: 0, goals: 0 };
-      p.positionPerformance[pos].shots += 1;
+    const agg = {};
 
-      const translated = translateShotToOneSide(shot);
-      p.shootingAttempts += 1;
+    shotsFiltered.forEach(shot => {
+      const name = String(shot.playerName ?? '').trim() || 'Unknown';
+      const team = shot.team || 'Unknown';
+      const key = `${team}__${name}`;
+      if (!agg[key]) {
+        agg[key] = {
+          player: name, team,
+          points: 0, goals: 0, xPoints: 0, xGoals: 0,
+          twoPointers: 0, onePointers: 0, misses: 0,
+          totalShots: 0, scored: 0, distAcc: 0,
+          gamesSet: new Set(),
+        };
+      }
+      const p = agg[key];
+      p.totalShots += 1;
+      p.gamesSet.add(`${getMatchTeams(shot.gameName || '')}__${shot.matchDate || ''}`);
 
-      const actionLower = (shot.action || '').toLowerCase();
+      const act = (shot.action || '').toLowerCase().trim();
       const typeLower = (shot.type || '').toLowerCase();
 
-      const isPointAction = actionLower === 'point';
-      const isGoalAction = actionLower === 'goal' || actionLower === 'penalty goal';
-      const isFortyFive = actionLower === '45' || actionLower === 'fortyfive';
+      const translated = translateShotToOneSide(shot);
+      const dist = translated.distMeters;
+      p.distAcc += dist;
+      const x = parseFloat(shot.x) || 0;
+      const fromEndline = x <= MIDLINE_X ? x : GOAL_X - x;
 
-      const isSetPlayScore = ['free', 'fortyfive', '45', 'offensive mark', 'mark'].includes(actionLower);
+      const isMiss = MISS_REGEX.test(act);
+      const isGoalAttempt = act.includes('goal') || act === 'pen miss' || typeLower === 'goal' || typeLower === 'saved';
+      const isFortyFive = act.includes('45') || act.includes('fortyfive');
+      const twoPtZone = !isFortyFive && dist >= ARC_DISTANCE_METERS && fromEndline >= ARC_CUTOFF;
 
-      const isScore = isPointAction || isGoalAction || isSetPlayScore;
-      const isGoalAttempt = isGoalAction || actionLower === 'goal miss' || actionLower === 'pen miss' || typeLower === 'goal' || typeLower === 'saved';
-      const isPointAttempt = !isGoalAttempt; // All non-goal shots are point attempts
-
-      if (isScore) p.shootingScored += 1;
-      if (isGoalAttempt) p.goalAttempts += 1;
-      if (isPointAttempt) p.pointAttempts += 1;
-
-      // Calculate point value (2 if ≥40m, else 1; but 45s always = 1)
-      
-      const isTwoPointer = !isFortyFive && !isGoalAction && translated.distMeters >= 40;
-      const pointValue = isTwoPointer ? 2 : 1;
-
-      if (isGoalAction) { p.goals += 1; p.positionPerformance[pos].goals += 1; }
-      else if (isPointAction || isSetPlayScore) { p.points += pointValue; p.positionPerformance[pos].points += pointValue; }
-
-      // xP: Only for point attempts (non-goal shots)
-      // xG: Only for goal attempts
-      if (isPointAttempt) {
-        p.xPoints += calculateXP(shot, translated.distMeters, calibrationModel);
-      }
+      // Expected values — every attempt contributes
       if (isGoalAttempt) {
-        p.xGoals += calculateXG(shot, translated.distMeters, calibrationModel);
+        p.xGoals += calculateXG(shot, null, calibrationModel);
+      } else {
+        p.xPoints += calculateXP(shot, null, calibrationModel) * (twoPtZone ? 2 : 1);
       }
-      return acc;
-    }, {});
+
+      // Actual outcomes
+      if (!isMiss && (act === 'goal' || act === 'penalty goal')) {
+        p.goals += 1;
+        p.scored += 1;
+      } else if (!isMiss && POINT_SCORE_ACTIONS.includes(act)) {
+        const value = twoPtZone ? 2 : 1;
+        p.points += value;
+        if (value === 2) p.twoPointers += 1;
+        else p.onePointers += 1;
+        p.scored += 1;
+      } else if (isMiss) {
+        p.misses += 1;
+      }
+    });
 
     return Object.values(agg).map(p => {
-      const accuracy = p.shootingAttempts > 0 ? (p.shootingScored / p.shootingAttempts) * 100 : 0;
-      const pointsPerShot = p.pointAttempts > 0 ? p.points / p.pointAttempts : 0;
-      const goalsPerAttempt = p.goalAttempts > 0 ? p.goals / p.goalAttempts : 0;
-      const positionPerformance = Object.entries(p.positionPerformance).map(([pos, stats]) => ({ position: pos, ...stats, efficiency: stats.shots > 0 ? ((stats.points + stats.goals * 3) / stats.shots) * 100 : 0 }));
-      return { ...p, positionPerformance, Total_Points: p.points, accuracy, pointsPerShot, goalsPerAttempt };
+      const games = p.gamesSet.size;
+      delete p.gamesSet;
+      const score = p.goals * 3 + p.points;
+      const xScore = p.xPoints + p.xGoals * 3;
+      return {
+        ...p,
+        games,
+        score,
+        xScore,
+        diff: score - xScore,
+        avgDist: p.totalShots > 0 ? p.distAcc / p.totalShots : 0,
+        accuracy: p.totalShots > 0 ? (p.scored / p.totalShots) * 100 : 0,
+        Total_Points: p.points,
+      };
     });
-  }, [combinedData, selectedYear, selectedTeam, calibrationModel]);
+  }, [combinedData, selectedYear, selectedTeam, shotType, calibrationModel]);
 
-  const goalsData = useMemo(() => formattedLeaderboard.map(p => ({ player: p.player, goals: p.goals, xGoals: p.xGoals, goalAttempts: p.goalAttempts, goalsPerAttempt: p.goalsPerAttempt })), [formattedLeaderboard]);
-  const pointsData = useMemo(() => formattedLeaderboard.map(p => ({ player: p.player, points: p.points, xPoints: p.xPoints, shots: p.pointAttempts, pointsPerShot: p.pointsPerShot })), [formattedLeaderboard]);
-  const accuracyData = useMemo(() => formattedLeaderboard.map(p => ({ player: p.player, accuracy: p.accuracy, scored: p.shootingScored, attempts: p.shootingAttempts })), [formattedLeaderboard]);
 
+ 
   const availableYears = useMemo(() => { const years = new Set(); combinedData.forEach(s => { if (s.matchDate) years.add(new Date(s.matchDate).getFullYear()); }); return Array.from(years).sort((a, b) => b - a); }, [combinedData]);
   const availableTeams = useMemo(() => { const teams = new Set(); combinedData.forEach(s => { if (s.team) teams.add(s.team); }); return Array.from(teams).sort(); }, [combinedData]);
 
   const stats = useMemo(() => {
     const players = formattedLeaderboard.length;
-    const shots = formattedLeaderboard.reduce((s, p) => s + p.shootingAttempts, 0);
+    const shots = formattedLeaderboard.reduce((s, p) => s + p.totalShots, 0);
     const points = formattedLeaderboard.reduce((s, p) => s + p.points, 0);
     const goals = formattedLeaderboard.reduce((s, p) => s + p.goals, 0);
     const totalXP = formattedLeaderboard.reduce((s, p) => s + (p.xPoints || 0), 0);
@@ -952,7 +813,7 @@ export default function PlayerDataGAA() {
     return { players, shots, points, goals, totalXP, totalXG, avgAcc, xpDiff, xgDiff, xpCalibration, xgCalibration };
   }, [formattedLeaderboard]);
 
-  if (configLoading || structureLoading || calibrationLoading) return <div className="pdg-page"><LoadingSpinner message="Loading..." /></div>;
+  if (configLoading || structureLoading) return <div className="pdg-page"><LoadingSpinner message="Loading..." /></div>;
 
   return (
     <div className="pdg-page">
@@ -994,6 +855,16 @@ export default function PlayerDataGAA() {
         <section className="pdg-filters">
           <div className="pdg-select-group"><label>Year</label><select value={selectedYear} onChange={e => setSelectedYear(e.target.value)}><option value="All">All Years</option>{availableYears.map(y => <option key={y} value={y}>{y}</option>)}</select></div>
           <div className="pdg-select-group"><label>Team</label><select value={selectedTeam} onChange={e => setSelectedTeam(e.target.value)}><option value="All">All Teams</option>{availableTeams.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+          <div className="pdg-select-group">
+            <label>Shot Type</label>
+            <div className="pdg-toggle-group">
+              {[['all', 'All'], ['play', 'From Play'], ['placed', 'Placed Balls']].map(([v, l]) => (
+                <button key={v} className={`pdg-toggle ${shotType === v ? 'active' : ''}`} onClick={() => setShotType(v)}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
         </section>
       )}
 
@@ -1011,13 +882,9 @@ export default function PlayerDataGAA() {
             <StatCard label="Avg Accuracy" value={`${stats.avgAcc.toFixed(1)}%`} />
           </section>
 
-          <section className="pdg-mini-grid">
-            <MiniLeaderboard title="Most Points" data={pointsData} sortKey="points" columns={[{ key: 'points', label: 'Pts', format: v => v?.toFixed(0) }, { key: 'xPoints', label: 'xP', format: v => v?.toFixed(1) }, { key: 'shots', label: 'Shots', format: v => v?.toFixed(0) }, { key: 'pointsPerShot', label: 'Pts/Shot', format: v => v?.toFixed(2) }]} />
-            <MiniLeaderboard title="Most Goals" data={goalsData} sortKey="goals" columns={[{ key: 'goals', label: 'Goals', format: v => v?.toFixed(0) }, { key: 'xGoals', label: 'xG', format: v => v?.toFixed(2) }, { key: 'goalAttempts', label: 'Att', format: v => v?.toFixed(0) }, { key: 'goalsPerAttempt', label: 'G/Att', format: v => v?.toFixed(2) }]} />
-            <MiniLeaderboard title="Best Accuracy" data={accuracyData} sortKey="accuracy" columns={[{ key: 'scored', label: 'Scored', format: v => v?.toFixed(0) }, { key: 'attempts', label: 'Att', format: v => v?.toFixed(0) }, { key: 'accuracy', label: '%', format: v => `${v?.toFixed(0)}%` }]} />
-          </section>
+          
 
-          <MainLeaderboard data={formattedLeaderboard} />
+          <MainLeaderboard data={formattedLeaderboard} userId={activeUserId} gameIds={selectedGameIds} />
         </>
       )}
 

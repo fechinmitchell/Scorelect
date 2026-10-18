@@ -11,7 +11,7 @@ import {
   Brightness4, Brightness7, Refresh as RefreshIcon, ExpandMore as ExpandMoreIcon, 
   RestartAlt as ResetIcon, Science as ScienceIcon, Tune as TuneIcon, PlayArrow as PlayIcon
 } from '@mui/icons-material';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, query as fbQuery, where as fbWhere, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { getAuth } from 'firebase/auth';
 import Swal from 'sweetalert2';
@@ -72,6 +72,10 @@ const AdminSettings = () => {
   const [trainSize, setTrainSize] = useState(80);
   const [balanceClasses, setBalanceClasses] = useState(false);
   const [advancedMode, setAdvancedMode] = useState(false);
+  const [sharedList, setSharedList] = useState([]);
+  const [shareOwnerEmail, setShareOwnerEmail] = useState('');
+  const [shareDatasetName, setShareDatasetName] = useState('');
+  const [shareAllowedEmails, setShareAllowedEmails] = useState('');
 
   const navigate = useNavigate();
   const auth = getAuth();
@@ -165,9 +169,21 @@ const AdminSettings = () => {
       }
       fetchUserDatasets();
       fetchModelHistory();
+      fetchShares();
     };
     initializeAdmin();
   }, [auth, checkAdminStatus, fetchUserDatasets, fetchModelHistory]);
+
+  const fetchShares = async () => {
+    try {
+      const colRef = collection(firestore, 'dataset_sharing');
+      const snaps = await getDocs(colRef);
+      const items = snaps.docs.map(d => ({ id: d.id, ...d.data() }));
+      setSharedList(items);
+    } catch (err) {
+      console.error('Error fetching dataset shares:', err);
+    }
+  };
 
   const handleSaveSettings = async () => {
     try {
@@ -178,6 +194,54 @@ const AdminSettings = () => {
       Swal.fire({ title: 'Success', text: 'Settings updated.', icon: 'success', confirmButtonColor: '#7c3aed' });
     } catch (error) {
       Swal.fire({ title: 'Error', text: error.message, icon: 'error', confirmButtonColor: '#7c3aed' });
+    }
+  };
+
+  const handleAddShare = async () => {
+    if (!shareOwnerEmail || !shareDatasetName || !shareAllowedEmails) {
+      Swal.fire({ title: 'Missing fields', text: 'Please fill owner email, dataset name and allowed emails.', icon: 'warning', confirmButtonColor: '#7c3aed' });
+      return;
+    }
+
+    try {
+      // find owner UID by email in users collection
+      const usersRef = collection(firestore, 'users');
+      const q = fbQuery(usersRef, fbWhere('email', '==', shareOwnerEmail));
+      const snaps = await getDocs(q);
+      if (snaps.empty) {
+        Swal.fire({ title: 'Owner not found', text: 'Could not find a user with that email.', icon: 'error', confirmButtonColor: '#7c3aed' });
+        return;
+      }
+      const ownerDoc = snaps.docs[0];
+      const ownerUid = ownerDoc.id;
+
+      const emailsArray = shareAllowedEmails.split(',').map(s => s.trim()).filter(Boolean);
+
+      await addDoc(collection(firestore, 'dataset_sharing'), {
+        ownerUid,
+        ownerEmail: shareOwnerEmail,
+        datasetName: shareDatasetName,
+        allowedEmails: emailsArray,
+        createdAt: serverTimestamp(),
+      });
+
+      setShareOwnerEmail(''); setShareDatasetName(''); setShareAllowedEmails('');
+      await fetchShares();
+      Swal.fire({ title: 'Shared', text: 'Dataset shared successfully.', icon: 'success', confirmButtonColor: '#7c3aed' });
+    } catch (err) {
+      console.error('Error adding share:', err);
+      Swal.fire({ title: 'Error', text: err.message || String(err), icon: 'error', confirmButtonColor: '#7c3aed' });
+    }
+  };
+
+  const handleDeleteShare = async (id) => {
+    try {
+      await deleteDoc(doc(firestore, 'dataset_sharing', id));
+      await fetchShares();
+      Swal.fire({ title: 'Deleted', text: 'Share removed.', icon: 'success', confirmButtonColor: '#7c3aed' });
+    } catch (err) {
+      console.error('Error deleting share:', err);
+      Swal.fire({ title: 'Error', text: err.message || String(err), icon: 'error', confirmButtonColor: '#7c3aed' });
     }
   };
 
@@ -271,6 +335,7 @@ const AdminSettings = () => {
               <Tab label="Model Runner" />
               <Tab label="Data Preview" />
               <Tab label="Model Lab" />
+              <Tab label="Sharing" />
             </Tabs>
           </Card>
 
@@ -437,6 +502,49 @@ const AdminSettings = () => {
                 </Table>
               </TableContainer>
               {modelHistory.length === 0 && <Typography color="text.secondary" align="center" sx={{ py: 3 }}>No model runs yet.</Typography>}
+            </Card>
+          )}
+
+          {activeTab === 6 && (
+            <Card sx={{ p: 4 }}>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Dataset Sharing</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>Share datasets from one user to specific email addresses.</Typography>
+              <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+                <input type="email" placeholder="Owner email" value={shareOwnerEmail} onChange={(e) => setShareOwnerEmail(e.target.value)} style={{ padding: '10px 12px', borderRadius: '10px', border: '1px solid #ddd', flex: '1 1 220px' }} />
+                <input placeholder="Dataset name" value={shareDatasetName} onChange={(e) => setShareDatasetName(e.target.value)} style={{ padding: '10px 12px', borderRadius: '10px', border: '1px solid #ddd', flex: '1 1 220px' }} />
+                <input placeholder="Allowed emails (comma separated)" value={shareAllowedEmails} onChange={(e) => setShareAllowedEmails(e.target.value)} style={{ padding: '10px 12px', borderRadius: '10px', border: '1px solid #ddd', flex: '1 1 320px' }} />
+                <Button variant="contained" onClick={handleAddShare} sx={{ background: 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)' }}>Add Share</Button>
+              </Box>
+
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>Existing Shares</Typography>
+              {sharedList.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">No shares defined.</Typography>
+              ) : (
+                <TableContainer component={Paper} sx={{ mt: 1 }}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Owner Email</TableCell>
+                        <TableCell>Dataset</TableCell>
+                        <TableCell>Allowed Emails</TableCell>
+                        <TableCell>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {sharedList.map((s) => (
+                        <TableRow key={s.id}>
+                          <TableCell>{s.ownerEmail}</TableCell>
+                          <TableCell>{s.datasetName}</TableCell>
+                          <TableCell>{(s.allowedEmails || []).join(', ')}</TableCell>
+                          <TableCell>
+                            <Button variant="outlined" color="error" size="small" onClick={() => handleDeleteShare(s.id)}>Remove</Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
             </Card>
           )}
 

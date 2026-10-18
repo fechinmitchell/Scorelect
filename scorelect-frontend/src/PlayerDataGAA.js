@@ -249,9 +249,12 @@ function MainLeaderboard({ data, userId, gameIds }) {
   };
 
   const sorted = useMemo(() => {
-    const filtered = data.filter(p =>
-      String(p.player ?? '').toLowerCase().includes(search.toLowerCase())
-    );
+    const filtered = data.filter(p => {
+      const name = String(p.player ?? '').trim();
+      if (name.toLowerCase() === 'unknown') return false;
+      if (/\d/.test(name)) return false;
+      return name.toLowerCase().includes(search.toLowerCase());
+    });
     return [...filtered].sort((a, b) => {
       if (sortKey === 'player' || sortKey === 'team') {
         const cmp = String(a[sortKey]).localeCompare(String(b[sortKey]));
@@ -813,7 +816,7 @@ export default function PlayerDataGAA() {
     return { players, shots, points, goals, totalXP, totalXG, avgAcc, xpDiff, xgDiff, xpCalibration, xgCalibration };
   }, [formattedLeaderboard]);
 
-  if (configLoading || structureLoading) return <div className="pdg-page"><LoadingSpinner message="Loading..." /></div>;
+    if (configLoading || structureLoading) return <div className="pdg-page"><LoadingSpinner message="Loading..." /></div>;
 
   return (
     <div className="pdg-page">

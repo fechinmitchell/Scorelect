@@ -14,6 +14,7 @@ from flask_cors import CORS, cross_origin  # CORS handling
 from flask_talisman import Talisman  # Security enhancements
 import firebase_admin  # Firebase Admin SDK
 from firebase_admin import credentials, firestore  # Firebase credentials and Firestore
+from firebase_admin import auth as firebase_auth
 from dotenv import load_dotenv  # Loading environment variables
 import openai  # OpenAI API
 from openai import OpenAI, OpenAIError  # OpenAI classes and error handling
@@ -503,6 +504,69 @@ def load_games():
                     published_datasets.append(pub_data['name'])
         except Exception as e:
             logging.warning(f"Could not fetch published datasets: {str(e)}")
+
+        # Also include datasets that have been explicitly shared with this user's email
+        try:
+            user_email = None
+            try:
+                user_record = firebase_auth.get_user(user_id)
+                user_email = user_record.email
+            except Exception:
+                user_email = None
+
+            if user_email:
+                try:
+                    shared_query = db.collection('dataset_sharing').where('allowedEmails', 'array_contains', user_email)
+                    for sdoc in shared_query.stream():
+                        sdata = sdoc.to_dict() or {}
+                        owner_uid = sdata.get('ownerUid')
+                        dataset_name = sdata.get('datasetName')
+                        owner_email = sdata.get('ownerEmail')
+                        if not owner_uid or not dataset_name:
+                            continue
+
+                        # Fetch lightweight metadata for the owner's games in this dataset
+                        try:
+                            owner_games_ref = db.collection('savedGames').document(owner_uid).collection('games')
+                            owner_query = owner_games_ref.where('datasetName', '==', dataset_name).select(metadata_fields).limit(100)
+                            for doc in owner_query.stream():
+                                try:
+                                    gd = doc.to_dict()
+                                    if not gd:
+                                        continue
+
+                                    lightweight_game = {
+                                        'gameId': doc.id,
+                                        'gameName': doc.id,
+                                        'sport': gd.get('sport', 'Unknown'),
+                                        'matchDate': gd.get('matchDate') or gd.get('date'),
+                                        'datasetName': f"Shared: {dataset_name}",
+                                        'analysisType': gd.get('analysisType', 'pitch'),
+                                        'gameDataCount': gd.get('gameDataCount') or gd.get('eventCount', 0),
+                                        'sharedFromUid': owner_uid,
+                                        'sharedFromEmail': owner_email,
+                                    }
+
+                                    if 'createdAt' in gd:
+                                        lightweight_game['createdAt'] = gd['createdAt']
+                                    if 'updatedAt' in gd:
+                                        lightweight_game['updatedAt'] = gd['updatedAt']
+                                    if 'youtubeUrl' in gd:
+                                        lightweight_game['youtubeUrl'] = gd['youtubeUrl']
+                                    if 'teamsData' in gd:
+                                        lightweight_game['teamsData'] = gd['teamsData']
+
+                                    saved_games.append(lightweight_game)
+                                except Exception as e:
+                                    logging.debug(f"Error processing shared game document {doc.id}: {str(e)}")
+                                    continue
+                        except Exception as e:
+                            logging.warning(f"Could not fetch games for shared dataset {dataset_name} from owner {owner_uid}: {str(e)}")
+                except Exception as e:
+                    logging.warning(f"Could not fetch shared datasets for user {user_id}: {str(e)}")
+        except Exception:
+            # Be resilient: don't fail the whole endpoint if sharing lookup errors
+            pass
         
         # Sort by createdAt if available
         if saved_games and saved_games[0].get('createdAt'):

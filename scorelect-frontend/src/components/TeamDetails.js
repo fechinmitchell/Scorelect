@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { doc, getDoc } from "firebase/firestore";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useCalibrationModel, calculateXP, calculateXG, _engineerFeatures } from "./Model2026";
+import { doc, getDoc, getDocs, collection } from "firebase/firestore";
 import { firestore } from "../firebase";
 import Swal from "sweetalert2";
 import { Stage } from "react-konva";
@@ -166,6 +167,15 @@ function getRenderType(raw, map) {
   return a;
 }
 
+function calculateTwoPointerValue(action, distanceMeters) {
+  const act = String(action || '').toLowerCase().trim();
+  if (act === 'goal' || act === 'penalty goal') return 3;
+  const scoringActions = ['point', 'free', 'offensive mark', '45', 'fortyfive'];
+  if (!scoringActions.some(a => act.includes(a))) return 1;
+  if (act.includes('45') || act.includes('fortyfive')) return 1;
+  return distanceMeters >= 40 ? 2 : 1;
+}
+
 /* ─── PDF helper ───────────────────────────────────────────────────── */
 async function downloadPDFHandler(setBusy, team) {
   setBusy(true);
@@ -200,8 +210,14 @@ async function downloadPDFHandler(setBusy, team) {
 /* ─── Main component ──────────────────────────────────────────────── */
 export default function TeamDetails() {
   const { teamName } = useParams();
-  const navigate      = useNavigate();
-  const stageRef      = useRef(null);
+  const { state } = useLocation();
+  const navigate = useNavigate();
+  const stageRef = useRef(null);
+  const { calibrationModel } = useCalibrationModel();
+
+  // Selection passed from the link; may be undefined on direct navigation
+  const passedUserId = state?.userId || null;
+  const passedGameIds = state?.gameIds || null;
 
   /* state */
   const [markerColors,setMarkerColors]=useState(
@@ -254,43 +270,75 @@ export default function TeamDetails() {
   }),[dynamic]);
 
   /* ───── Fetch & prep shots */
-  useEffect(()=>{
-    (async()=>{
-      try{
+  useEffect(() => {
+    (async () => {
+      try {
         setLoading(true);
-        const snap=await getDoc(
-          doc(firestore,"savedGames/w9ZkqaYVM3dKSqqjWHLDVyh5sVg2/games","All Shots GAA")
-        );
-        if(!snap.exists()) throw new Error("Dataset missing");
-        const list=snap.data().gameData||[];
+
+        // Resolve which user's games to read
+        let userId = passedUserId;
+        if (!userId) {
+          // Fallback: public config
+          const cfgSnap = await getDoc(doc(firestore, 'config/publicDataset'));
+          userId = cfgSnap.exists() ? (cfgSnap.data().userId || 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2') : 'w9ZkqaYVM3dKSqqjWHLDVyh5sVg2';
+        }
+
+        // Resolve which game docs to read
+        let gameIds = passedGameIds;
+        if (!gameIds || gameIds.length === 0) {
+          // Fallback: all games in that user's collection
+          const gamesSnap = await getDocs(collection(firestore, `savedGames/${userId}/games`));
+          gameIds = gamesSnap.docs.map(d => d.id);
+        }
+
+        // Fetch each game doc and combine, enriching each shot like TeamDataGAA does
+        const list = [];
+        for (const gameId of gameIds) {
+          const gSnap = await getDoc(doc(firestore, `savedGames/${userId}/games/${gameId}`));
+          if (gSnap.exists()) {
+            const data = gSnap.data();
+            const gd = data.gameData || [];
+            const arr = Array.isArray(gd) ? gd : Object.values(gd);
+            arr.forEach(item => list.push({
+              ...item,
+              gameName: data.gameName || gameId,
+              matchDate: data.matchDate || null,
+              gameId,
+            }));
+          }
+        }
+
         setAllShots(list);
-        const mine=list.filter(s=>(s.team||"").toLowerCase()===teamName.toLowerCase());
-        if(!mine.length){
+
+        const mine = list.filter(s => (s.team || '').toLowerCase() === teamName.toLowerCase());
+        if (!mine.length) {
           Swal.fire({
-            title: "No Data",
+            title: 'No Data',
             text: `No shots for ${teamName}`,
-            icon: "info",
+            icon: 'info',
             background: 'var(--dark-card)',
             confirmButtonColor: 'var(--primary)',
-          }).then(()=>navigate(-1));
+          }).then(() => navigate(-1));
           return;
         }
 
-        /* build display objects */
-        const prepared=mine.map(s=>{
-          const mirrored=translateShotToLeftSide(s,halfX);
-          const { distMeters }=translateShotToOneSide(mirrored,halfX,goalX,goalY);
+        // Build display objects — distance from the model's own features
+        const prepared = mine.map(s => {
+          const feats = _engineerFeatures(s);
           return {
             ...s,
-            distMeters,
-            renderType:getRenderType(s.action,actionMapping)
+            distMeters: feats.Shot_Distance,
+            renderType: getRenderType(s.action, actionMapping),
           };
         });
         setShotsData(prepared);
-      }catch(e){ setError(e.message); }
-      finally{ setLoading(false); }
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
     })();
-  },[teamName,navigate,actionMapping]);
+  }, [teamName, navigate, actionMapping, passedUserId, passedGameIds]);
 
   /* build dropdown opts */
   useEffect(()=>{
@@ -303,39 +351,74 @@ export default function TeamDetails() {
   },[shotsData]);
 
   /* aggregate stats per team */
-  useEffect(()=>{
-    if(!allShots.length) return;
-    const out={};
-    allShots.forEach(s=>{
-      const tm=s.team||"Unknown";
-      if(!out[tm]) out[tm]={
-        points:0,twoPointers:0,goals:0,offensiveMarks:0,
-        frees:0,fortyFives:0,totalShots:0,successfulShots:0,
-        totalFrees:0,successfulFrees:0,total45s:0,successful45s:0,misses:0
+  useEffect(() => {
+    if (!allShots.length) return;
+    const out = {};
+
+    allShots.forEach(s => {
+      const tm = s.team || 'Unknown';
+      const act = (s.action || '').toString().toLowerCase().trim();
+
+      if (!out[tm]) out[tm] = {
+        points: 0, twoPointers: 0, goals: 0, misses: 0,
+        totalShots: 0, successfulShots: 0,
+        frees: 0, freesScored: 0, fortyFives: 0, fortyFivesScored: 0,
+        offensiveMarks: 0, offensiveMarksScored: 0,
+        expectedPoints: 0, expectedGoals: 0,
       };
-      const a=(s.action||"").toLowerCase().trim();
-      const rec=out[tm]; rec.totalShots++;
+      const rec = out[tm];
+      rec.totalShots++;
 
-      const tr=translateShotToOneSide(
-        translateShotToLeftSide(s,halfX),halfX,goalX,goalY
-      );
+      const feats = _engineerFeatures(s);
+      const dist = feats.Shot_Distance;
 
-      if(a==="point"){ rec.points++; rec.successfulShots++;
-        if(tr.distMeters>=40) rec.twoPointers++;
+      const scoringActions = ['point', 'free', 'offensive mark', '45', 'fortyfive', 'goal', 'penalty goal'];
+      const isScoring = scoringActions.some(a => act.includes(a));
+      const isMiss = /miss|wide|short|blocked|post/.test(act);
+      const isGoalAttempt = act.includes('goal');
+
+      // Expected values
+      if (!isGoalAttempt) {
+        const twoPt = calculateTwoPointerValue(act, dist);
+        rec.expectedPoints += calculateXP(s, null, calibrationModel) * twoPt;
+      } else {
+        rec.expectedGoals += calculateXG(s, null, calibrationModel);
       }
-      if(a==="goal"||a==="penalty goal"){ rec.goals++; rec.successfulShots++; }
-      if(/free/.test(a)){ rec.frees++; rec.totalFrees++; if(a==="free"){ rec.successfulShots++; rec.successfulFrees++; } }
-      if(/45|fortyfive/.test(a)){ rec.fortyFives++; rec.total45s++; if(a==="45"||a==="fortyfive"){ rec.successfulShots++; rec.successful45s++; } }
+
+      // Actual outcomes
+      if (act.includes('goal') && !isMiss) {
+        rec.goals++; rec.successfulShots++;
+      } else if (isScoring && !isMiss && !act.includes('goal')) {
+        const val = calculateTwoPointerValue(act, dist);
+        rec.points += val;
+        rec.successfulShots++;
+        if (val === 2) rec.twoPointers++;
+        if (act === 'free') rec.freesScored++;
+        else if (act === 'offensive mark') rec.offensiveMarksScored++;
+        else if (act === '45' || act === 'fortyfive') rec.fortyFivesScored++;
+      } else if (isMiss) {
+        rec.misses++;
+      }
+
+      // Attempt counts
+      if (act.includes('free')) rec.frees++;
+      if (act.includes('offensive mark')) rec.offensiveMarks++;
+      if (act.includes('45') || act.includes('fortyfive')) rec.fortyFives++;
     });
+
     setAgg(out);
-  },[allShots]);
+  }, [allShots, calibrationModel]);
 
   /* shot‑details modal body */
   function shotDetails() {
     if(!selected) return null;
     const cat=getShotCategory(selected.action);
-    const isGoal=cat==="goal";
-    const dist=typeof selected.distMeters==="number"?selected.distMeters.toFixed(1):"N/A";
+    const isGoal = cat === 'goal';
+    const dist = typeof selected.distMeters === 'number' ? selected.distMeters.toFixed(1) : 'N/A';
+    const twoPt = calculateTwoPointerValue(selected.action, selected.distMeters || 0);
+    const xVal = isGoal
+      ? calculateXG(selected, null, calibrationModel)
+      : calculateXP(selected, null, calibrationModel) * twoPt;
     return (
       <div className="team-details-modal-body">
         <div className="team-details-modal-row">
@@ -363,18 +446,9 @@ export default function TeamDetails() {
           <span className="team-details-modal-value">{selected.position||"N/A"}</span>
         </div>
         <div className="team-details-modal-row">
-          <span className="team-details-modal-label">{isGoal?"xG":"xP"}:</span>
+          <span className="team-details-modal-label">{isGoal ? "xG" : "xP"}:</span>
           <span className="team-details-modal-value">
-            {typeof(isGoal?selected.xGoals:selected.xPoints)==="number"
-              ? (isGoal?selected.xGoals:selected.xPoints).toFixed(2)
-              : "N/A"}
-          </span>
-        </div>
-        <div className="team-details-modal-row">
-          <span className="team-details-modal-label">xP_ADV:</span>
-          <span className="team-details-modal-value">
-            {typeof selected.xP_adv==="number"
-              ? selected.xP_adv.toFixed(2):"N/A"}
+            {typeof xVal === "number" ? xVal.toFixed(2) : "N/A"}
           </span>
         </div>
       </div>
@@ -515,21 +589,17 @@ export default function TeamDetails() {
             {/* stats card */}
             <div className="StatsCard">
               <h3 className="StatsHeading">{teamName} Stats</h3>
-              <p className="StatItem"><strong>Total Shots:</strong> {agg[teamName]?.totalShots||0}</p>
-              <p className="StatItem"><strong>Successful:</strong> {agg[teamName]?.successfulShots||0}</p>
-              <p className="StatItem"><strong>Points:</strong> {agg[teamName]?.points||0}</p>
-              <p className="StatItem"><strong>Goals:</strong> {agg[teamName]?.goals||0}</p>
-              <p className="StatItem"><strong>Misses:</strong> {agg[teamName]?.misses||0}</p>
-              <p className="StatItem"><strong>Off. Marks:</strong> {agg[teamName]?.offensiveMarks||0}</p>
-              <p className="StatItem"><strong>Frees:</strong> {agg[teamName]?.frees||0}</p>
-              <p className="StatItem"><strong>45s:</strong> {agg[teamName]?.fortyFives||0}</p>
-              <p className="StatItem"><strong>2‑Pointers (≥40 m):</strong> {agg[teamName]?.twoPointers||0}</p>
-              <p className="StatItem">
-                <strong>Avg Success:</strong>{" "}
-                {(agg[teamName]?.totalShots
-                  ? (agg[teamName].successfulShots/agg[teamName].totalShots).toFixed(2)
-                  : "0.00")}
-              </p>
+              <p className="StatItem"><strong>Total Shots:</strong> {agg[teamName]?.totalShots || 0}</p>
+              <p className="StatItem"><strong>Successful:</strong> {agg[teamName]?.successfulShots || 0}</p>
+              <p className="StatItem"><strong>Points:</strong> {agg[teamName]?.points || 0}</p>
+              <p className="StatItem"><strong>xP:</strong> {(agg[teamName]?.expectedPoints || 0).toFixed(2)}</p>
+              <p className="StatItem"><strong>Goals:</strong> {agg[teamName]?.goals || 0}</p>
+              <p className="StatItem"><strong>xG:</strong> {(agg[teamName]?.expectedGoals || 0).toFixed(2)}</p>
+              <p className="StatItem"><strong>Two-Pointers:</strong> {agg[teamName]?.twoPointers || 0}</p>
+              <p className="StatItem"><strong>Misses:</strong> {agg[teamName]?.misses || 0}</p>
+              <p className="StatItem"><strong>Off. Marks:</strong> {agg[teamName]?.offensiveMarks || 0} ({agg[teamName]?.offensiveMarksScored || 0} scored)</p>
+              <p className="StatItem"><strong>Frees:</strong> {agg[teamName]?.frees || 0} ({agg[teamName]?.freesScored || 0} scored)</p>
+              <p className="StatItem"><strong>45s:</strong> {agg[teamName]?.fortyFives || 0} ({agg[teamName]?.fortyFivesScored || 0} scored)</p>
             </div>
           </div>
         </div>

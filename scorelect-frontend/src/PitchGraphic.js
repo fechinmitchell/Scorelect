@@ -93,6 +93,7 @@ const PitchGraphic = () => {
   const pitchHeight = 88;
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 484.8 });
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
   const xScale = canvasSize.width / pitchWidth;
   const yScale = canvasSize.height / pitchHeight;
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -1158,7 +1159,7 @@ const buildGameName = () => {
   
 
   const toggleModal = () => {
-    // If opening the modal (i.e. isModalOpen is false), copy current coords into reviewData.
+    // If opening the modal (i.e. isModalOpen is false) then copy current coords into reviewData.
     if (!isModalOpen) {
       setReviewData([...coords]);
     }
@@ -1633,7 +1634,7 @@ const buildGameName = () => {
     </div>
   );
 
-// 1) Upload raw JSON and store both dataset metadata + coords
+  // 1) Upload raw JSON and store both dataset metadata + coords
 const handleUploadRawData = (event) => {
   const file = event.target.files[0];
   if (!file) return;
@@ -3183,7 +3184,7 @@ const handleUploadRawData = (event) => {
       style={{
         width: '97%',
         padding: '10px',
-        marginTop: '5px',
+        margin: '5px 0',
         borderRadius: '5px',
         border: '1px solid #ccc',
       }}
@@ -3208,7 +3209,7 @@ const handleUploadRawData = (event) => {
       style={{
         width: '97%',
         padding: '10px',
-        marginTop: '5px',
+        margin: '5px 0',
         borderRadius: '5px',
         border: '1px solid #ccc',
       }}
@@ -3224,7 +3225,7 @@ const handleUploadRawData = (event) => {
       style={{
         width: '97%',
         padding: '10px',
-        marginTop: '5px',
+        margin: '5px 0',
         borderRadius: '5px',
         border: '1px solid #ccc',
       }}
@@ -3237,46 +3238,7 @@ const handleUploadRawData = (event) => {
       ))}
     </select>
   </div>
-
-  {/* New: File name + File format */}
-  <div className="form-group" style={{ marginBottom: '15px' }}>
-    <label style={{ color: '#fff' }}>File Name:</label>
-    <input
-      type="text"
-      value={filteredFileName}
-      onChange={(e) => setFilteredFileName(e.target.value)}
-      placeholder="filtered_data"
-      style={{
-        width: '97%',
-        padding: '10px',
-        marginTop: '5px',
-        borderRadius: '5px',
-        border: '1px solid #ccc',
-      }}
-    />
-  </div>
-
-  <div className="form-group" style={{ marginBottom: '15px' }}>
-    <label style={{ color: '#fff' }}>File Format:</label>
-    <select
-      value={filteredFormat}
-      onChange={(e) => setFilteredFormat(e.target.value)}
-      style={{
-        width: '97%',
-        padding: '10px',
-        marginTop: '5px',
-        borderRadius: '5px',
-        border: '1px solid #ccc',
-      }}
-    >
-      <option value="json">JSON</option>
-      <option value="csv">CSV</option>
-      <option value="xlsx">Excel (.xlsx)</option>
-    </select>
-  </div>
-
-  {/* Buttons */}
-  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '25px' }}>
+  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
     <button
       onClick={handleDownloadFilteredData}
       style={{

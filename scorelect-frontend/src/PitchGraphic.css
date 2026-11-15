@@ -844,6 +844,40 @@ input:not(:checked) + .toggle-slider:before {
   .form-group label {
     font-size: 13px;
   }
+
+  .main-scroll-container,
+  .scroll-container,
+  .content {
+    flex-direction: column;
+    overflow: visible;
+    white-space: normal;
+  }
+
+  .pitch-graphic-container {
+    padding: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: auto;
+  }
+
+  .pitch-and-data-container {
+    width: 100%;
+  }
+
+  .button-container {
+    width: 100%;
+    gap: 8px;
+  }
+
+  .button {
+    width: 100%;
+    font-size: 0.85rem;
+    padding: 10px 12px;
+  }
+
+  .team-buttons-container {
+    gap: 8px;
+  }
 }
 
 /* Adjustments for screens up to 480px */

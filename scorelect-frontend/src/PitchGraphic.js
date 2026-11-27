@@ -22,6 +22,16 @@ import NewGameSetupModal from './components/NewGameSetupModal';
 import Draggable from 'react-draggable';
 
 
+// Phone detection: the CSS-width check, plus a fallback for phones whose browser
+// reports a desktop-size width (missing viewport meta tag or "Desktop site" mode).
+const isPhoneScreen = () => {
+  if (typeof window === 'undefined') return false;
+  if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) return true;
+  const shortSide = Math.min(window.screen.width, window.screen.height);
+  const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  return touch && shortSide <= 768;
+};
+
 const PitchGraphic = () => {
   const initialActionButtons = [
     { label: 'Point', value: 'point', color: '#048522', type: 'marker' },
@@ -94,7 +104,7 @@ const PitchGraphic = () => {
   const pitchHeight = 88;
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 484.8 });
   const [zoomLevel, setZoomLevel] = useState(1);
-  const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
+  const [isMobileViewport, setIsMobileViewport] = useState(() => isPhoneScreen());
   const xScale = canvasSize.width / pitchWidth;
   const yScale = canvasSize.height / pitchHeight;
 
@@ -132,7 +142,7 @@ const PitchGraphic = () => {
     if (!el) return;
 
     const compute = () => {
-      const portrait = window.innerWidth <= 768;
+      const portrait = isPhoneScreen();
       setIsMobileViewport(portrait);
       const available = portrait
         ? Math.min(el.clientWidth || window.innerWidth, window.innerWidth) - 16
@@ -2492,7 +2502,7 @@ const handleUploadRawData = (event) => {
   };
 
   return (
-  <div className="scroll-container">
+  <div className={`scroll-container ${isMobileViewport ? 'pg-mobile-root' : ''}`}>
     <div className="pitch-graphic-container">
 
       {/* Initial Setup Modal */}

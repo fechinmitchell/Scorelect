@@ -11,14 +11,16 @@
   z-index: 1000;
 }
 
-/* ---------- Overrides for the existing containers on phones ---------- */
-@media (max-width: 768px) {
-  .scroll-container {
-    display: block;
-    overflow: visible;
-  }
+/* ---------- Overrides for the existing containers on phones ----------
+   .pg-mobile-root is added by the component whenever it detects a phone,
+   so these apply even if the browser reports a desktop-size width. */
+.pg-mobile-root.scroll-container {
+  display: block;
+  overflow: visible;
+  white-space: normal;
+}
 
-  .pitch-graphic-container {
+.pg-mobile-root .pitch-graphic-container {
     padding: 0;
     border-radius: 0;
     box-shadow: none;
@@ -28,11 +30,10 @@
     touch-action: manipulation; /* was pinch-zoom, which blocks scrolling */
     align-items: stretch;
     width: 100%;
-  }
+}
 
-  .pitch-graphic-container::after {
-    display: none;
-  }
+.pg-mobile-root .pitch-graphic-container::after {
+  display: none;
 }
 
 /* ---------- Mobile shell ---------- */

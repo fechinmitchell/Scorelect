@@ -10,6 +10,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import './PitchGraphic.css';
 import './SavedGames.css';
+import './PitchGraphicMobile.css';
 import AggregatedData from './AggregatedData';
 import { onSnapshot } from 'firebase/firestore'; // Add this import
 import { GameContext } from './GameContext'; // Import GameContext
@@ -96,6 +97,92 @@ const PitchGraphic = () => {
   const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
   const xScale = canvasSize.width / pitchWidth;
   const yScale = canvasSize.height / pitchHeight;
+
+  // ---------- Mobile layout state ----------
+  const pitchWrapRef = useRef(null);
+  const pitchLayerRef = useRef(null);
+  const [pitchView, setPitchView] = useState('full'); // 'full' | 'top' | 'bottom' (portrait only)
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [activeTeamTab, setActiveTeamTab] = useState(1);
+  const [showSubs, setShowSubs] = useState(false);
+  const [lastSaved, setLastSaved] = useState(null); // { label, color } for the undo toast
+  const toastTimerRef = useRef(null);
+  const lastChoicesRef = useRef({}); // remembers foot/pressure per player
+  const mobileUploadRef = useRef(null);
+  const [sheetType, setSheetType] = useState('play');
+  const [showMoreActions, setShowMoreActions] = useState(false);
+
+  // canvasSize ALWAYS stays in landscape terms (length x width), so xScale/yScale
+  // and the saved coordinates never change. In portrait we just rotate the layers.
+  const isPortrait = isMobileViewport;
+  const halfView = isPortrait && pitchView !== 'full';
+  const stageW = isPortrait ? canvasSize.height : canvasSize.width;
+  const stageH = isPortrait
+    ? (halfView ? canvasSize.width / 2 : canvasSize.width)
+    : canvasSize.height;
+  const layerOffsetY = halfView && pitchView === 'bottom' ? -canvasSize.width / 2 : 0;
+  const layerTransform = isPortrait
+    ? { rotation: 90, x: canvasSize.height, y: layerOffsetY }
+    : { rotation: 0, x: 0, y: 0 };
+  const counterRotation = isPortrait ? -90 : 0;
+
+  // Size the pitch to the space available (replaces the iPhone/iPad/Computer buttons)
+  useEffect(() => {
+    const el = pitchWrapRef.current;
+    if (!el) return;
+
+    const compute = () => {
+      const portrait = window.innerWidth <= 768;
+      setIsMobileViewport(portrait);
+      const available = portrait
+        ? Math.min(el.clientWidth || window.innerWidth, window.innerWidth) - 16
+        : (el.clientWidth || 800);
+
+      if (portrait) {
+        // on screen, the pitch's width is the landscape height
+        let h = available;
+        if (pitchView === 'full') {
+          const reserved = 270; // score bar + player strip + bottom toolbar
+          const maxByHeight = (window.innerHeight - reserved) * (pitchHeight / pitchWidth);
+          h = Math.min(available, Math.max(maxByHeight, 220));
+        }
+        setCanvasSize({ width: h * (pitchWidth / pitchHeight), height: h });
+      } else {
+        const w = Math.min(available, 800);
+        setCanvasSize({ width: w, height: w * (pitchHeight / pitchWidth) });
+      }
+    };
+
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(el);
+    window.addEventListener('resize', compute);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', compute);
+    };
+  }, [pitchView, isMobileViewport]);
+
+  // Pointer position in the pitch layer's own (landscape pixel) coordinates,
+  // whatever the rotation or half-pitch offset.
+  const getPitchPointer = (stage) => {
+    const layer = pitchLayerRef.current;
+    if (layer && typeof layer.getRelativePointerPosition === 'function') {
+      return layer.getRelativePointerPosition();
+    }
+    // Fallback for Konva < 8
+    const p = stage.getPointerPosition();
+    if (!isPortrait) return p;
+    return { x: p.y - layerOffsetY, y: canvasSize.height - p.x };
+  };
+
+  const cyclePitchView = () => {
+    setPitchView(v => (v === 'full' ? 'top' : v === 'top' ? 'bottom' : 'full'));
+  };
+  const pitchViewLabel = pitchView === 'full' ? 'Full pitch' : pitchView === 'top' ? 'Top half' : 'Bottom half';
+
+  // Modal widths that fit a phone
+  const mw = (desktopWidth) => (isMobileViewport ? '92%' : desktopWidth);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [gameName, setGameName] = useState('');
   const [saveTeamName, setSaveTeamName] = useState('');
@@ -230,8 +317,8 @@ const PitchGraphic = () => {
         bottom: 'auto',
         marginRight: '-50%',
         transform: 'translate(-50%, -50%)',
-        width: '50%',
-        maxHeight: '60%',
+        width: mw('50%'),
+        maxHeight: isMobileViewport ? '85%' : '60%',
         overflowY: 'auto',
         background: '#2e2e2e',
         padding: '20px',
@@ -814,6 +901,9 @@ const buildGameName = () => {
 
   useEffect(() => {
     const handleKeyPress = (e) => {
+      // Don't hijack typing in the dialogs (e.g. a player name with a "p" in it)
+      const tag = (e.target && e.target.tagName) || '';
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
       if (e.key === 'p') setActionType('pass');
       if (e.key === 'u') setActionType('badpass');
       if (e.key === 'k') setActionType('kickout');
@@ -885,13 +975,24 @@ const buildGameName = () => {
   // Update the handleClick function to correctly light up indicators without showing messages every time
   const handleClick = (e) => {
     const stage = e.target.getStage();
-    const point = stage.getPointerPosition();
-    const newCoord = { 
-      x: point.x / xScale, 
+    const point = getPitchPointer(stage); // landscape pixels in any orientation
+    const newCoord = {
+      x: point.x / xScale,
       y: pitchHeight - (point.y / yScale)  // Flip Y coordinate
     };
-  
-    if (actionType && actionType.type === 'line') {
+
+    // Ignore taps outside the pitch (e.g. the empty edge of a half-pitch view)
+    if (newCoord.x < 0 || newCoord.x > pitchWidth || newCoord.y < 0 || newCoord.y > pitchHeight) return;
+
+    // Keep the player selected between shots: if an action was reset after the last
+    // save but a player is still highlighted, fall back to the default marker action.
+    let act = actionType;
+    if (!act && selectedPlayer) {
+      act = actionButtons[0];
+      setActionType(act);
+    }
+
+    if (act && act.type === 'line') {
       if (currentCoords.length === 0) {
         // First click for line - store the starting point
         setCurrentCoords([newCoord]);
@@ -917,20 +1018,22 @@ const buildGameName = () => {
           ...formData,
           from: fromCoord,
           to: toCoord,
-          type: actionType.value,
+          type: act.value,
         });
         setLineCompleted(true); // Set line as completed
         setOpenLineDialog(true);
       }
-    } else if (actionType) {
+    } else if (act) {
       // Regular marker action
-      setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: actionType.value });
+      setFormData({ ...formData, x: newCoord.x, y: newCoord.y, type: act.value });
       setOpenDialog(true);
     } else {
       // No action type selected
       Swal.fire({
         title: 'Select a Player',
-        text: 'Please select a player before clicking on the pitch.',
+        text: isMobileViewport
+          ? 'Tap a player number above the pitch first, then tap where the shot was taken.'
+          : 'Please select a player before clicking on the pitch.',
         icon: 'warning',
         timer: 2000,
         showConfirmButton: false
@@ -947,9 +1050,13 @@ const buildGameName = () => {
 
     // Modified handlePlayerClick function - remove Swal notification
     const handlePlayerClick = (teamName, playerName, playerNumber) => {
+      // Pre-fill this player's last foot/pressure, if we've seen them before
+      const remembered = lastChoicesRef.current[`${teamName}|${playerNumber}`] || {};
+
       // Update form data with player info
       setFormData({
         ...formData,
+        ...remembered,
         team: teamName,
         playerName: playerName,
         player: playerNumber,
@@ -971,10 +1078,11 @@ const buildGameName = () => {
   const handleRightClick = (e) => {
     e.evt.preventDefault();
     const stage = e.target.getStage();
-    const point = stage.getPointerPosition();
+    const point = getPitchPointer(stage);
+    const screen = stage.getPointerPosition();
     setCurrentCoords({ x: point.x / xScale, y: point.y / yScale });
     setIsContextMenuOpen(true);
-    setContextMenuPosition({ x: point.x, y: point.y });
+    setContextMenuPosition({ x: screen.x, y: screen.y });
   };
 
   const handleCloseDialog = () => {
@@ -1039,17 +1147,36 @@ const buildGameName = () => {
     setOpenLineDialog(false);
     setRecentActions([formData.action, ...recentActions.filter(action => action !== formData.action)]);
     setRecentTeams([formData.team, ...recentTeams.filter(team => team !== formData.team)]);
+
+    // Remember this player's foot/pressure for next time
+    if (updatedFormData.player !== '') {
+      lastChoicesRef.current[`${updatedFormData.team}|${updatedFormData.player}`] = {
+        foot: updatedFormData.foot,
+        pressure: updatedFormData.pressure,
+      };
+    }
+
+    // Undo toast
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setLastSaved({
+      label: `${updatedFormData.action}${updatedFormData.player !== '' ? ` · #${updatedFormData.player}` : ''}${updatedFormData.playerName ? ` ${updatedFormData.playerName}` : ''}${updatedFormData.minute ? ` · ${updatedFormData.minute}'` : ''}`,
+      color: pointValueFor(updatedFormData) > 0 ? '#0b8a2c' : '#d93025',
+    });
+    toastTimerRef.current = setTimeout(() => setLastSaved(null), 4000);
+
+    // Reset the form, but keep the selected player (still highlighted) and the minute
     setFormData({
       action: 'point',
-      team: 'Armagh',
-      playerName: '',
-      player: '',
+      team: selectedPlayer ? selectedPlayer.team : 'Armagh',
+      playerName: selectedPlayer ? selectedPlayer.playerName : '',
+      player: selectedPlayer ? selectedPlayer.playerNumber : '',
       position: 'forward',
-      pressure: 'Yes',
+      pressure: '0',
       foot: 'Right',
-      minute: '',
+      minute: updatedFormData.minute || '',
       from: null,
-      to: null
+      to: null,
+      ...(selectedPlayer ? (lastChoicesRef.current[`${selectedPlayer.team}|${selectedPlayer.playerNumber}`] || {}) : {}),
     });
     
     // If it was a line action, delay resetting currentCoords and lineCompleted
@@ -1091,6 +1218,7 @@ const buildGameName = () => {
     if (reverseIdx === -1) return;
     const realIdx = coords.length - 1 - reverseIdx;
     setCoords(coords.filter((_, i) => i !== realIdx));
+    setLastSaved(null);
   };
 
   const handleScreenshot = () => {
@@ -1195,7 +1323,7 @@ const buildGameName = () => {
     const stripeWidth = canvasSize.width / numStripes;
 
     return (
-      <Layer>
+      <Layer ref={pitchLayerRef} {...layerTransform}>
         {/* Pitch Background */}
         <Rect
           x={0}
@@ -1828,6 +1956,541 @@ const handleUploadRawData = (event) => {
     ? coords
     : coords.filter(c => (c.half || '1') === currentHalf);
 
+  // =====================================================================
+  //  Pitch stage (shared by desktop and mobile layouts)
+  // =====================================================================
+
+  // Markers are coloured by outcome: goal = blue, score = green, no score = red.
+  // Two-pointers get a gold ring.
+  const markerColor = (coord) => {
+    const v = pointValueFor(coord);
+    if (v === 3) return '#2f6bff';
+    if (v > 0) return '#0b8a2c';
+    return '#d93025';
+  };
+
+  const renderStage = () => (
+    <>
+      <Stage
+        width={stageW}
+        height={stageH}
+        onClick={handleClick}
+        onContextMenu={handleRightClick}
+        onTap={handleTap}
+        ref={stageRef}
+        preventDefault={false}
+        style={{
+          pointerEvents:
+            openDialog ||
+            openLineDialog ||
+            isContextMenuOpen ||
+            isInitialSetupModalOpen ||
+            isNewGameSetupModalOpen ||
+            toolsOpen
+              ? 'none'
+              : 'auto',
+        }}
+      >
+        {renderGAAPitch()}
+        <Layer {...layerTransform}>
+          {visibleCoords.map((coord, index) => {
+            if (coord.from && coord.to) {
+              return (
+                <Arrow
+                  key={index}
+                  points={[
+                    coord.from.x * xScale,
+                    (pitchHeight - coord.from.y) * yScale,  // Flip Y
+                    coord.to.x * xScale,
+                    (pitchHeight - coord.to.y) * yScale     // Flip Y
+                  ]}
+                  stroke={getColor(coord.type)}
+                  strokeWidth={2}
+                  pointerLength={10}
+                  pointerWidth={10}
+                />
+              );
+            }
+            const numberLabel = coord.player !== undefined && coord.player !== null ? String(coord.player) : '';
+            const nameLabel = coord.playerName || '';
+            const nameWidth = Math.max(nameLabel.length * 6, 10);
+            const isTwoPointer = pointValueFor(coord) === 2;
+            const r = isPortrait ? 7 : 6;
+            // The Group sits at the shot and is turned back by the layer's rotation,
+            // so numbers and names stay upright on the vertical pitch.
+            return (
+              <Group
+                key={index}
+                x={coord.x * xScale}
+                y={(pitchHeight - coord.y) * yScale}  // Flip Y
+                rotation={counterRotation}
+              >
+                {isTwoPointer && <Circle radius={r + 4} stroke="#ffd166" strokeWidth={2} />}
+                <Circle radius={r} fill={markerColor(coord)} stroke="#ffffff" strokeWidth={1} />
+                {displayPlayerNumber && numberLabel && (
+                  <Text
+                    text={numberLabel}
+                    fontSize={8}
+                    fontStyle="bold"
+                    fill="white"
+                    align="center"
+                    width={16}
+                    offsetX={8}
+                    offsetY={4}
+                  />
+                )}
+                {displayPlayerName && nameLabel && (
+                  <Text
+                    text={nameLabel}
+                    y={-(r + 12)}
+                    fontSize={10}
+                    fill="black"
+                    align="center"
+                    width={nameWidth}
+                    offsetX={nameWidth / 2}
+                  />
+                )}
+              </Group>
+            );
+          })}
+        </Layer>
+      </Stage>
+      {/* DOM elements can't live inside a Konva Stage, so the menu sits beside it */}
+      {isContextMenuOpen && renderContextMenu()}
+    </>
+  );
+
+  // =====================================================================
+  //  Mobile layout
+  // =====================================================================
+
+  const halfLabel = (h) => (h === '1' ? '1st' : h === '2' ? '2nd' : h);
+
+  const teamScoreText = (team) => {
+    const s = scoreboard[team];
+    if (!s) return '0-00';
+    const pts = s.points + s.twoPointers * 2;
+    return `${s.goals}-${String(pts).padStart(2, '0')}`;
+  };
+
+  const headerNames = [
+    team1 || Object.keys(scoreboard)[0] || 'Team 1',
+    team2 || Object.keys(scoreboard)[1] || 'Team 2',
+  ];
+
+  const renderMobileHeader = () => (
+    <header className="pg-m-header">
+      <div className="pg-m-score pg-m-score-left">
+        <span className="pg-m-team">
+          <span className="pg-m-swatch" style={{ background: team1Color.main }} />
+          {headerNames[0]}
+        </span>
+        <span className="pg-m-points">{teamScoreText(headerNames[0])}</span>
+      </div>
+      <div className="pg-m-half">{halfLabel(currentHalf)} half</div>
+      <div className="pg-m-score pg-m-score-right">
+        <span className="pg-m-team">
+          {headerNames[1]}
+          <span className="pg-m-swatch" style={{ background: team2Color.main }} />
+        </span>
+        <span className="pg-m-points">{teamScoreText(headerNames[1])}</span>
+      </div>
+    </header>
+  );
+
+  const renderMobilePlayerPicker = () => {
+    const teams = [
+      { n: 1, name: team1, label: team1 || 'Team 1', players: team1Players, color: team1Color },
+      { n: 2, name: team2, label: team2 || 'Team 2', players: team2Players, color: team2Color },
+    ];
+    const t = teams[activeTeamTab - 1];
+    const start = showSubs ? 15 : 0;
+    const shown = t.players.slice(start, showSubs ? t.players.length : 15);
+
+    const selectedText = selectedPlayer
+      ? `#${selectedPlayer.playerNumber}${selectedPlayer.playerName ? ` ${selectedPlayer.playerName}` : ''} selected · tap the pitch`
+      : 'Pick a player, then tap the pitch';
+
+    return (
+      <div className="pg-m-picker">
+        <div className="pg-m-team-tabs">
+          {teams.map(team => (
+            <button
+              key={team.n}
+              type="button"
+              onClick={() => { setActiveTeamTab(team.n); setShowSubs(false); }}
+              style={activeTeamTab === team.n
+                ? { background: team.color.main, color: team.color.secondary }
+                : undefined}
+              className={activeTeamTab === team.n ? 'is-active' : ''}
+            >
+              {team.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="pg-m-strip">
+          {shown.map((player, i) => {
+            const number = start + i + 1;
+            const isSelected = selectedPlayer &&
+              selectedPlayer.team === t.name &&
+              selectedPlayer.playerNumber === number;
+            return (
+              <button
+                key={`${t.n}-${number}`}
+                type="button"
+                className={`pg-m-num ${isSelected ? 'is-selected' : ''}`}
+                aria-label={`Player ${number}${player.name ? ` ${player.name}` : ''}`}
+                onClick={() => handlePlayerClick(t.name, player.name, number)}
+              >
+                {number}
+              </button>
+            );
+          })}
+          {t.players.length > 15 && (
+            <button type="button" className="pg-m-subs" onClick={() => setShowSubs(s => !s)}>
+              {showSubs ? 'Starters' : 'Subs'}
+            </button>
+          )}
+        </div>
+
+        <div className="pg-m-caption">
+          <span>{selectedText}</span>
+          {halfView && <span>{pitchViewLabel}</span>}
+        </div>
+      </div>
+    );
+  };
+
+  const Icon = ({ d, children }) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {d && <path d={d} />}
+      {children}
+    </svg>
+  );
+
+  const renderMobileToolbar = () => (
+    <nav className="pg-m-toolbar">
+      <button type="button" onClick={handleUndoLastMarker}>
+        <Icon d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" />Undo
+      </button>
+      <button type="button" onClick={handleEndOfHalf}>
+        <Icon><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Icon>End {halfLabel(currentHalf)}
+      </button>
+      <button type="button" onClick={cyclePitchView} className={halfView ? 'is-on' : ''}>
+        <Icon><rect x="6" y="3" width="12" height="18" rx="1" /><path d="M6 12h12" /></Icon>{pitchViewLabel}
+      </button>
+      <button type="button" onClick={() => setToolsOpen(true)}>
+        <Icon d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"><circle cx="16" cy="6" r="2" /><circle cx="10" cy="12" r="2" /><circle cx="18" cy="18" r="2" /></Icon>Tools
+      </button>
+    </nav>
+  );
+
+  // Close the drawer, then run the action (so modals open on top of a clean screen)
+  const fromTools = (fn) => () => { setToolsOpen(false); fn(); };
+
+  const renderToolsDrawer = () => (
+    <div className="pg-m-overlay" onClick={() => setToolsOpen(false)}>
+      <section className="pg-m-sheet" aria-label="Tools" onClick={(e) => e.stopPropagation()}>
+        <div className="pg-m-handle" />
+        <div className="pg-m-sheet-head">
+          <h2>Tools</h2>
+          <button type="button" className="pg-m-icon-btn" aria-label="Close tools" onClick={() => setToolsOpen(false)}>
+            <Icon d="M6 6l12 12M18 6 6 18" />
+          </button>
+        </div>
+
+        <div className="pg-m-group">
+          <span className="pg-m-label">MATCH</span>
+          <div className="pg-m-seg pg-m-seg-4">
+            {HALVES.map(h => (
+              <button key={h} type="button" className={currentHalf === h ? 'is-on' : ''} onClick={() => setCurrentHalf(h)}>
+                {halfLabel(h)}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="pg-m-btn" onClick={fromTools(handleEndOfHalf)}>
+            End {halfLabel(currentHalf)} half → start next
+          </button>
+          <label className="pg-m-toggle">
+            Show all halves on pitch
+            <input type="checkbox" checked={halfFilter === 'all'}
+                   onChange={() => setHalfFilter(halfFilter === 'all' ? 'current' : 'all')} />
+          </label>
+        </div>
+
+        <div className="pg-m-group">
+          <span className="pg-m-label">DISPLAY</span>
+          <label className="pg-m-toggle">
+            Player numbers on markers
+            <input type="checkbox" checked={displayPlayerNumber} onChange={() => setDisplayPlayerNumber(!displayPlayerNumber)} />
+          </label>
+          <label className="pg-m-toggle">
+            Player names on markers
+            <input type="checkbox" checked={displayPlayerName} onChange={() => setDisplayPlayerName(!displayPlayerName)} />
+          </label>
+        </div>
+
+        <div className="pg-m-group">
+          <span className="pg-m-label">DATA</span>
+          <div className="pg-m-grid">
+            <button type="button" className="pg-m-btn is-primary" onClick={fromTools(handleOpenSaveModal)}>Save game</button>
+            <button type="button" className="pg-m-btn" onClick={fromTools(toggleModal)}>Review data</button>
+            <button type="button" className="pg-m-btn" onClick={fromTools(() => {
+              if (userType === 'free' && downloadsRemaining <= 0) {
+                handlePremiumFeatureAccess('Download Data');
+                return;
+              }
+              setIsCustomDownloadModalOpen(true);
+            })}>
+              Download data
+              <small>{userType === 'free' ? `${downloadsRemaining} left today` : 'Unlimited'}</small>
+            </button>
+            <button type="button" className="pg-m-btn" onClick={fromTools(toggleDownloadModal)}>Filtered download</button>
+            <button type="button" className="pg-m-btn" onClick={fromTools(toggleScreenshotModal)}>Screenshot</button>
+            <button type="button" className="pg-m-btn" onClick={fromTools(() => mobileUploadRef.current && mobileUploadRef.current.click())}>Upload raw data</button>
+          </div>
+        </div>
+
+        <div className="pg-m-group">
+          <span className="pg-m-label">SETUP</span>
+          <div className="pg-m-grid">
+            <button type="button" className="pg-m-btn" onClick={fromTools(() => setIsSetupTeamModalOpen(true))}>Setup teams</button>
+            <button type="button" className="pg-m-btn" onClick={fromTools(() => setIsSettingsModalOpen(true))}>Settings</button>
+            <button type="button" className="pg-m-btn" onClick={fromTools(handleClearMarkers)}>Clear this half</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+
+  const renderMobileLayout = () => (
+    <div className="pg-mobile">
+      {renderMobileHeader()}
+      {renderMobilePlayerPicker()}
+
+      <div ref={pitchWrapRef} className="pg-m-pitch">
+        {renderStage()}
+        {lastSaved && (
+          <div className="pg-m-toast" role="status">
+            <span className="pg-m-dot" style={{ background: lastSaved.color }} />
+            <span className="pg-m-toast-text">{lastSaved.label}</span>
+            <button type="button" onClick={handleUndoLastMarker}>Undo</button>
+          </div>
+        )}
+      </div>
+
+      <div className="pg-m-extra">
+        <AggregatedData data={aggregateData} />
+      </div>
+
+      {renderMobileToolbar()}
+      {toolsOpen && renderToolsDrawer()}
+
+      <input
+        type="file"
+        ref={mobileUploadRef}
+        accept=".json"
+        onChange={handleUploadRawData}
+        className="pg-m-hidden-input"
+        tabIndex={-1}
+        aria-hidden="true"
+      />
+    </div>
+  );
+
+  // =====================================================================
+  //  Mobile shot sheet (replaces the action pop-up on phones)
+  // =====================================================================
+
+  const SHOT_TYPES = [
+    { id: 'play', label: 'From play' },
+    { id: 'free', label: 'Free' },
+    { id: 'mark', label: 'Mark' },
+    { id: '45', label: '45' },
+    { id: 'pen', label: 'Penalty' },
+  ];
+  const OUTCOMES = ['Point', 'Goal', 'Wide', 'Short', 'Post', 'Blocked', 'Saved'];
+  // Outcome x type -> your existing action codes (so scoring and exports are unchanged)
+  const ACTION_MAP = {
+    play: { Point: 'point', Goal: 'goal', Wide: 'wide', Short: 'short', Post: 'post', Blocked: 'blocked', Saved: 'goal miss' },
+    free: { Point: 'free', Wide: 'free wide', Short: 'free short', Post: 'free post' },
+    mark: { Point: 'offensive mark', Wide: 'offensive mark wide' },
+    '45': { Point: 'fortyfive', Wide: 'fortyfive wide', Short: 'fortyfive short', Post: 'fortyfive post' },
+    pen: { Goal: 'penalty goal', Saved: 'pen miss' },
+  };
+  const actionToParts = (action) => {
+    for (const [type, outcomes] of Object.entries(ACTION_MAP)) {
+      for (const [outcome, code] of Object.entries(outcomes)) {
+        if (code === action) return { type, outcome };
+      }
+    }
+    return null;
+  };
+
+  const sheetStyle = {
+    overlay: { backgroundColor: 'rgba(0,0,0,0.55)', zIndex: 1000 },
+    content: {
+      top: 'auto', left: 0, right: 0, bottom: 0,
+      width: '100%', maxHeight: '88vh', overflowY: 'auto',
+      margin: 0, padding: '8px 16px 16px', boxSizing: 'border-box',
+      border: 'none', borderRadius: '20px 20px 0 0',
+      background: '#26242c', color: '#f2f0f5',
+    },
+  };
+
+  const renderMobileShotSheet = () => {
+    const parts = actionToParts(formData.action);
+    const activeType = parts ? parts.type : sheetType;
+    const activeOutcome = parts ? parts.outcome : null;
+    const available = ACTION_MAP[activeType] || {};
+
+    const setType = (typeId) => {
+      setSheetType(typeId);
+      const keep = activeOutcome && ACTION_MAP[typeId][activeOutcome];
+      const fallback = ACTION_MAP[typeId].Point || ACTION_MAP[typeId].Goal || '';
+      setFormData({ ...formData, action: keep || fallback });
+    };
+    const setOutcome = (outcome) => {
+      setShowMoreActions(false);
+      setFormData({ ...formData, action: available[outcome] });
+    };
+    const setField = (name, value) => setFormData({ ...formData, [name]: value });
+    const bumpMinute = (delta) => {
+      const m = parseInt(formData.minute, 10);
+      const next = Math.max(0, (isNaN(m) ? 0 : m) + delta);
+      setField('minute', String(next));
+    };
+
+    const geo = shotGeometry(formData);
+    const value = formData.action ? pointValueFor(formData) : 0;
+    const geoText = geo
+      ? `${Math.round(geo.dist)} m from goal · ${geo.dist >= ARC_RADIUS && geo.fromEndline >= ARC_CUTOFF ? 'outside' : 'inside'} 2-pt arc`
+      : '';
+    const teamColor = formData.team === team2 ? team2Color : team1Color;
+    const saveLabel = activeOutcome
+      ? `Save ${activeOutcome.toLowerCase()}${value === 2 ? ' (2 pts)' : ''}`
+      : formData.action ? `Save ${formData.action}` : 'Pick an outcome';
+
+    return (
+      <Modal
+        isOpen={openDialog}
+        onRequestClose={handleCloseDialog}
+        contentLabel="Shot details"
+        style={sheetStyle}
+      >
+        <div className="pg-m-handle" />
+
+        <div className="pg-m-shot-head">
+          <div className="pg-m-shot-num" style={{ background: teamColor.main, color: teamColor.secondary }}>
+            {formData.player || '–'}
+          </div>
+          <div className="pg-m-shot-who">
+            <strong>{formData.playerName || (formData.player ? `Player ${formData.player}` : 'No player')}{formData.team ? ` · ${formData.team}` : ''}</strong>
+            <span>{geoText}</span>
+          </div>
+          <div className="pg-m-stepper">
+            <button type="button" aria-label="Minute down" onClick={() => bumpMinute(-1)}>−</button>
+            <input
+              aria-label="Minute"
+              inputMode="numeric"
+              value={formData.minute}
+              placeholder="min"
+              onChange={(e) => setField('minute', e.target.value.replace(/[^0-9+]/g, ''))}
+            />
+            <button type="button" aria-label="Minute up" onClick={() => bumpMinute(1)}>+</button>
+          </div>
+        </div>
+
+        <div className="pg-m-group">
+          <span className="pg-m-label">OUTCOME</span>
+          <div className="pg-m-outcomes">
+            {OUTCOMES.map(o => {
+              const enabled = !!available[o];
+              return (
+                <button
+                  key={o}
+                  type="button"
+                  disabled={!enabled}
+                  className={`${activeOutcome === o ? 'is-on' : ''} ${o === 'Point' || o === 'Goal' ? 'is-score' : ''}`}
+                  onClick={() => setOutcome(o)}
+                >
+                  {o}
+                </button>
+              );
+            })}
+            <button type="button" className="is-more" onClick={() => setShowMoreActions(s => !s)}>
+              More
+            </button>
+          </div>
+          {(showMoreActions || (!parts && formData.action)) && (
+            <select
+              name="action"
+              value={formData.action}
+              onChange={handleChange}
+              className="pg-m-select"
+            >
+              {actionCodes.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+          )}
+        </div>
+
+        <div className="pg-m-group">
+          <span className="pg-m-label">TYPE</span>
+          <div className="pg-m-chips">
+            {SHOT_TYPES.map(t => (
+              <button key={t.id} type="button" className={activeType === t.id ? 'is-on' : ''} onClick={() => setType(t.id)}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="pg-m-two-col">
+          <div className="pg-m-group">
+            <span className="pg-m-label">FOOT / HAND</span>
+            <div className="pg-m-seg">
+              {feet.map(f => (
+                <button key={f} type="button" className={formData.foot === f ? 'is-on' : ''} onClick={() => setField('foot', f)}>
+                  {f === 'Right' ? 'R' : f === 'Left' ? 'L' : f}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="pg-m-group">
+            <span className="pg-m-label">PRESSURE</span>
+            <div className="pg-m-seg">
+              {pressures.map(p => (
+                <button key={p} type="button" className={formData.pressure === p ? 'is-on' : ''} onClick={() => setField('pressure', p)}>
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="pg-m-group">
+          <span className="pg-m-label">POSITION</span>
+          <div className="pg-m-chips">
+            {positions.map(p => (
+              <button key={p} type="button" className={formData.position === p ? 'is-on' : ''} onClick={() => setField('position', p)}>
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="pg-m-actions">
+          <button type="button" className="pg-m-cancel" onClick={handleCloseDialog}>Cancel</button>
+          <button type="button" className="pg-m-save" disabled={!formData.action} onClick={handleFormSubmit}>
+            {saveLabel}
+          </button>
+        </div>
+      </Modal>
+    );
+  };
+
   return (
   <div className="scroll-container">
     <div className="pitch-graphic-container">
@@ -1850,7 +2513,7 @@ const handleUploadRawData = (event) => {
         initialTeam2Color={team2Color}
       />
 
-    {showSetupTeamsContainer && (
+    {!isMobileViewport && showSetupTeamsContainer && (
       <div className="setup-team-container">
         <h3>Setup Team</h3>
         <div className="team-buttons-wrapper">
@@ -1864,6 +2527,7 @@ const handleUploadRawData = (event) => {
 
 
 
+      {isMobileViewport ? renderMobileLayout() : (
       <div className="content">
         <div className="instructions-container">
           <h3>Instructions</h3>
@@ -1954,11 +2618,6 @@ const handleUploadRawData = (event) => {
           <button className="button" onClick={() => setIsSettingsModalOpen(true)}>Settings</button> {/* Settings button */}
           <button className="button" onClick={() => setIsSetupTeamModalOpen(true)}>Setup Team</button>
           <button className="button" onClick={() => document.getElementById('uploadRawDataInput').click()}>Upload Raw Data</button><input type="file" id="uploadRawDataInput"style={{ display: 'none' }} accept=".json" onChange={handleUploadRawData}/>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
-            <button className="button" onClick={() => handleResize(375, 243.5)}>iPhone</button>
-            <button className="button" onClick={() => handleResize(600, 389.6)}>iPad</button>
-            <button className="button" onClick={() => handleResize(800, 600)}>Computer</button>
-          </div>
           {/*<div className="custom-slider-container">
             <label htmlFor="customZoom">Custom:</label>
             <input
@@ -1978,95 +2637,21 @@ const handleUploadRawData = (event) => {
         </div>
 
     <div className="pitch-and-data-container">
-      <div className="stage-container"></div>
-      <Stage
-            width={canvasSize.width}
-            height={canvasSize.height}
-            onClick={handleClick}
-            onContextMenu={handleRightClick}
-            onTap={handleTap}
-            ref={stageRef}
-            scaleX={zoomLevel}
-            scaleY={zoomLevel}
-            preventDefault={false}
-            style={{
-              pointerEvents:
-                openDialog ||
-                openLineDialog ||
-                isContextMenuOpen ||
-                isInitialSetupModalOpen ||
-                isNewGameSetupModalOpen
-                  ? 'none'
-                  : 'auto',
-            }}
-          >
-          {renderGAAPitch()}
-          {isContextMenuOpen && renderContextMenu()}
-          <Layer>
-          {visibleCoords.map((coord, index) => {
-            if (coord.from && coord.to) {
-              return (
-                <Arrow
-                  key={index}
-                  points={[
-                    coord.from.x * xScale,
-                    (pitchHeight - coord.from.y) * yScale,  // Flip Y
-                    coord.to.x * xScale,
-                    (pitchHeight - coord.to.y) * yScale     // Flip Y
-                  ]}
-                  stroke={getColor(coord.type)}
-                  strokeWidth={2}
-                  pointerLength={10}
-                  pointerWidth={10}
-                />
-              );
-            }
-            return (
-              <Group key={index}>
-                <Circle
-                  x={coord.x * xScale}
-                  y={(pitchHeight - coord.y) * yScale}  // Flip Y
-                  radius={6}
-                  fill={getColor(coord.type)}
-                />
-                {displayPlayerNumber && (
-                  <Text
-                    x={coord.x * xScale}
-                    y={(pitchHeight - coord.y) * yScale - 4}  // Flip Y
-                    text={coord.player}
-                    fontSize={8}
-                    fill="white"
-                    align="center"
-                    width={10}
-                    offsetX={coord.player.length === 1 ? 4.5 : 4.5}
-                  />
-                )}
-                {displayPlayerName && (
-                  <Text
-                    x={coord.x * xScale}
-                    y={(pitchHeight - coord.y) * yScale - 16}  // Flip Y
-                    text={coord.playerName}
-                    fontSize={10}
-                    fill="black"
-                    align="center"
-                    width={coord.playerName.length * 6}
-                    offsetX={(coord.playerName.length * 6) / 2}
-                  />
-                )}
-              </Group>
-            );
-          })}
-        </Layer>
-</Stage>
+      <div ref={pitchWrapRef} className="pitch-wrap" style={{ position: 'relative', width: '100%' }}>
+        {renderStage()}
+      </div>
 {renderScoreboard()}
 <div className="aggregated-data-container">
       <AggregatedData data={aggregateData} />
     </div>
   </div>
 </div>
+)}
 </div>
 
-{openDialog && (
+{openDialog && isMobileViewport && renderMobileShotSheet()}
+
+{openDialog && !isMobileViewport && (
   <Modal
     isOpen={openDialog}
     onRequestClose={handleCloseDialog}
@@ -2087,7 +2672,7 @@ const handleUploadRawData = (event) => {
         background: '#2e2e2e',
         borderRadius: '10px',
         padding: '20px',
-        width: '500px',
+        width: mw('500px'),
         maxHeight: '90vh',
         overflow: 'auto',
         display: 'flex',
@@ -2409,7 +2994,7 @@ const handleUploadRawData = (event) => {
         background: '#2e2e2e',
         borderRadius: '10px',
         padding: '20px',
-        width: '500px',
+        width: mw('500px'),
         maxHeight: '90vh',
         overflow: 'auto',
         display: 'flex',
@@ -2722,7 +3307,7 @@ const handleUploadRawData = (event) => {
         bottom: 'auto',
         marginRight: '-50%',
         transform: 'translate(-50%, -50%)',
-        width: '80%',
+        width: mw('80%'),
         maxHeight: '80%',
         overflowY: 'auto',
         background: '#2e2e2e',
@@ -3061,7 +3646,7 @@ const handleUploadRawData = (event) => {
             bottom: 'auto',
             marginRight: '-50%',
             transform: 'translate(-50%, -50%)',
-            width: '50%',
+            width: mw('50%'),
             maxHeight: '60%',
             overflowY: 'auto',
             background: '#2e2e2e',
@@ -3163,7 +3748,7 @@ const handleUploadRawData = (event) => {
       bottom: 'auto',
       marginRight: '-50%',
       transform: 'translate(-50%, -50%)',
-      width: '50%',
+      width: mw('50%'),
       maxHeight: '60%',
       overflowY: 'auto',
       background: '#2e2e2e',
@@ -3283,7 +3868,7 @@ const handleUploadRawData = (event) => {
       bottom: 'auto',
       marginRight: '-50%',
       transform: 'translate(-50%, -50%)',
-      width: '50%',
+      width: mw('50%'),
       maxHeight: '60%',
       overflowY: 'auto',
       background: '#2e2e2e',
@@ -3399,7 +3984,7 @@ const handleUploadRawData = (event) => {
             bottom: 'auto',
             marginRight: '-50%',
             transform: 'translate(-50%, -50%)',
-            width: '40%',
+            width: mw('40%'),
             maxHeight: '60%',
             overflowY: 'auto',
             background: '#2e2e2e',
@@ -3473,7 +4058,7 @@ const handleUploadRawData = (event) => {
             bottom: 'auto',
             marginRight: '-50%',
             transform: 'translate(-50%, -50%)',
-            width: '60%',
+            width: mw('60%'),
             maxHeight: '80%',
             overflowY: 'auto',
             background: '#2e2e2e',
@@ -3484,7 +4069,7 @@ const handleUploadRawData = (event) => {
         }}
       >
         <h2 style={{ color: '#fff' }}>Setup Teams</h2>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: isMobileViewport ? 'column' : 'row', justifyContent: 'space-between', gap: '20px' }}>
           <div className="team-setup">
             <h3 style={{ color: '#fff' }}>Team 1</h3>
             <input
@@ -3797,6 +4382,7 @@ const handleUploadRawData = (event) => {
           padding: '20px',
           borderRadius: '10px',
           maxHeight: '80vh',
+          maxWidth: '95vw',
           overflowY: 'auto',
           border: 'none'
         }
@@ -3806,7 +4392,8 @@ const handleUploadRawData = (event) => {
         <h2 className="review-modal-header" style={{ color: '#fff', textAlign: 'center', marginBottom: '15px' }}>
           Review Data
         </h2>
-        <table className="review-table" style={{ width: '100%', borderCollapse: 'collapse', color: '#fff' }}>
+        <div style={{ overflowX: 'auto' }}>
+        <table className="review-table" style={{ width: '100%', minWidth: isMobileViewport ? '900px' : undefined, borderCollapse: 'collapse', color: '#fff' }}>
           <thead>
             <tr>
               <th style={{ padding: '8px', borderBottom: '1px solid #555' }}>Action</th>
@@ -3934,6 +4521,7 @@ const handleUploadRawData = (event) => {
             ))}
           </tbody>
         </table>
+        </div>
         <div style={{ textAlign: 'right', marginTop: '15px' }}>
           <button
             className="review-modal-btn"
